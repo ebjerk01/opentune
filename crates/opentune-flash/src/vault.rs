@@ -25,12 +25,7 @@ fn sanitize(s: &str) -> String {
 
 /// Save `data` read from `region` as a backup in `dir`. Returns the image path.
 /// Writes `<stem>.bin` and a human-readable `<stem>.meta` sidecar.
-pub fn save_backup(
-    dir: &Path,
-    ecu: &EcuId,
-    region: MemoryRegion,
-    data: &[u8],
-) -> Result<PathBuf> {
+pub fn save_backup(dir: &Path, ecu: &EcuId, region: MemoryRegion, data: &[u8]) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let when = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -83,7 +78,9 @@ mod tests {
         assert_eq!(std::fs::read(&p).unwrap(), data);
         let meta = p.with_extension("meta");
         assert!(meta.exists());
-        assert!(std::fs::read_to_string(meta).unwrap().contains("length = 64"));
+        assert!(std::fs::read_to_string(meta)
+            .unwrap()
+            .contains("length = 64"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

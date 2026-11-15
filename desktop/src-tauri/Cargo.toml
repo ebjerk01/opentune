@@ -1,0 +1,34 @@
+[package]
+name = "opentune-desktop"
+version = "0.1.0"
+description = "OpenTune desktop app"
+edition = "2021"
+license = "GPL-3.0-or-later"
+# This crate is intentionally NOT part of the root Cargo workspace; the desktop
+# app builds on its own (`cargo build` / `tauri build` from `desktop/`).
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# The shared OpenTune core and helpers, by relative path into the workspace.
+opentune-core = { path = "../../crates/opentune-core" }
+opentune-checksum = { path = "../../crates/opentune-checksum" }
+opentune-flash = { path = "../../crates/opentune-flash" }
+
+# Interface drivers.
+opentune-driver-mock = { path = "../../crates/drivers/mock" }
+# Add more drivers as they are wired into the desktop registry, e.g.:
+# opentune-driver-socketcan = { path = "../../crates/drivers/socketcan" }
+# opentune-driver-openport2 = { path = "../../crates/drivers/j2534-openport" }
+# opentune-driver-elm327    = { path = "../../crates/drivers/kline-elm327" }
+
+[features]
+# Tauri's default behaviour for a release build.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

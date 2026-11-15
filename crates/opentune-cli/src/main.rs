@@ -9,7 +9,11 @@ use opentune_core::{ConnectConfig, Interface, MemoryRegion, Progress, Registry};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "opentune", version, about = "Open ECU reading/flashing/calibration")]
+#[command(
+    name = "opentune",
+    version,
+    about = "Open ECU reading/flashing/calibration"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Command,
@@ -36,10 +40,7 @@ enum Command {
         out: PathBuf,
     },
     /// Byte-diff two images and summarise changed regions.
-    Diff {
-        a: PathBuf,
-        b: PathBuf,
-    },
+    Diff { a: PathBuf, b: PathBuf },
     /// Verify or correct checksums in an image.
     Checksum {
         #[command(subcommand)]
@@ -165,12 +166,22 @@ fn main() -> Result<()> {
             }
             drv.close()?;
         }
-        Command::Read { conn, addr, len, out } => {
+        Command::Read {
+            conn,
+            addr,
+            len,
+            out,
+        } => {
             let mut drv = open_driver(&reg, &conn)?;
             let region = MemoryRegion::new(parse_num(&addr)?, parse_num(&len)?);
             let data = drv.read_memory(region, &mut noprogress)?;
             std::fs::write(&out, &data)?;
-            println!("Read {} bytes from 0x{:08X} -> {}", data.len(), region.address, out.display());
+            println!(
+                "Read {} bytes from 0x{:08X} -> {}",
+                data.len(),
+                region.address,
+                out.display()
+            );
             drv.close()?;
         }
         Command::Diff { a, b } => {
@@ -211,7 +222,12 @@ fn main() -> Result<()> {
                 }
             }
         },
-        Command::Flash { conn, addr, data, min_mv } => {
+        Command::Flash {
+            conn,
+            addr,
+            data,
+            min_mv,
+        } => {
             let mut drv = open_driver(&reg, &conn)?;
             let bytes = std::fs::read(&data).with_context(|| format!("read {}", data.display()))?;
             let region = MemoryRegion::new(parse_num(&addr)?, bytes.len() as u32);

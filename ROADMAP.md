@@ -16,36 +16,36 @@ The compiling skeleton everything else builds on.
 - [x] `mock`/file driver (operate on local `.bin`, no hardware)
 - [x] `opentune-cli` wired to the mock driver
 - [x] GPL-3.0 licence, README, this roadmap
-- [ ] GitHub Actions CI (fmt + clippy + test)
-- [~] Unit tests for core (NRC parsing, CRC32 done; ISO-TP framing next)
+- [x] GitHub Actions CI (fmt + clippy + test + build)
+- [x] Unit tests for core (ISO-TP framing, NRC parsing, CRC32)
 
 ## M1 — Offline calibration tooling
 Everything you can do with a `.bin` and no car.
 
 - [ ] Binary model: load/save, region map, metadata
-- [~] **Checksum engine**: trait + verify + correct
+- [x] **Checksum engine**: trait + verify + correct
   - [x] generic (CRC32-tail example + CRC32 helper)
-  - [ ] Bosch EDC16 blocks (validated against reference files)
+  - [~] Bosch EDC16: checksum field located + validated (0x7BD7C, 32-bit LE); algorithm still to crack (needs more sample pairs / boot-code)
   - [ ] EDC17, PCR2.1 (later)
 - [x] Map diff (compare stock vs modified, byte and region level)
-- [~] ECU definition format (JSON): id, protocol, memory map, checksum type, seed/key id
+- [x] ECU definition format (JSON) + 5 fleet defs + parse test
 - [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
 
 ## M2 — Read path (hardware)
 Identify and read a real ECU.
 
-- [ ] `opentune-core` protocol layer: ISO-TP, UDS, KWP2000, VW TP2.0
-- [ ] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol, J2534-style)
-- [ ] **SocketCAN driver**
-- [ ] **K-line / ELM327 driver** (+ init: 5-baud / fast)
+- [~] `opentune-core` protocol layer: ISO-TP, UDS, KWP2000 done; VW TP2.0 next
+- [~] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol) — implemented, awaiting hardware test
+- [~] **SocketCAN driver** — implemented, awaiting hardware test
+- [~] **K-line / ELM327 driver** — implemented, awaiting hardware test
 - [ ] ECU identify (part/SW number, VIN)
 - [ ] Full OBD read — Bosch EDC16 first
-- [ ] Battery-voltage read, exposed as a safety gate
+- [x] Battery-voltage read, exposed as a safety gate
 
 ## M3 — Flash path
 Write a calibration back, safely.
 
-- [ ] Programming session + security access (seed/key plugin interface)
+- [~] Security access: `SeedKey` plugin trait in core; driver write paths hook it (TODO: algorithms)
 - [ ] Erase / `requestDownload` / `transferData` / `transferExit`
 - [ ] Calibration-only write (write just the map region where supported)
 - [ ] Read-back verify after write
@@ -55,15 +55,15 @@ Write a calibration back, safely.
 - [x] Flash orchestrator state machine (backup → write → verify)
 - [x] Voltage gate (refuse to flash below threshold)
 - [ ] Resumable / recoverable flash
-- [ ] Backup vault (every read archived with ECU id + timestamp + hash)
+- [x] Backup vault (every read archived with ECU id + timestamp + CRC32)
 - [ ] Structured logging of every session
 
 ## M5 — Desktop app (Tauri)
-- [ ] App shell + core binding
+- [~] App shell + core binding (Tauri scaffold)
 - [ ] Connect / identify / read / backup
 - [ ] Map viewer (read-only first)
 - [ ] Flash wizard with the safety checklist
-- [ ] **Auto-update from GitHub Releases** (signed)
+- [~] **Auto-update from GitHub Releases** (configured; needs signing key)
 
 ## M6 — More ECUs
 - [ ] Bosch EDC17 (checksum + OBD flash)
@@ -72,17 +72,17 @@ Write a calibration back, safely.
 - [ ] Growing community ECU-definition library
 
 ## M7 — Android app
-- [ ] Expose the Rust core via UniFFI
+- [~] UniFFI plan documented (docs/android.md)
 - [ ] Kotlin/Compose shell: connect (USB-OTG / BLE), read, flash
 - [ ] Reuse the same safety rules and ECU defs
 
 ## M8 — Open hardware interface
-- [ ] ESP32-S3 + CAN + K-line reference board (KiCad, CERN-OHL-S)
+- [~] ESP32-S3 + CAN + K-line interface spec (docs/hardware.md); KiCad next
 - [ ] Device firmware (ISO-TP, TP2.0, K-line init, raw UART for boot mode)
 - [ ] USB CDC + optional WiFi/BLE bridge
 - [ ] OpenTune driver for the device
 
 ## Ongoing
-- [ ] Documentation (architecture, driver authoring, ECU-def authoring)
+- [x] Documentation: architecture, driver authoring, ECU-defs, hardware, android
 - [ ] Test fixtures and CI coverage
 - [ ] Reproducible, signed release builds for Linux / Windows / macOS

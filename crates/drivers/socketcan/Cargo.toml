@@ -6,3 +6,8 @@ license.workspace = true
 
 [dependencies]
 opentune-core = { path = "../../opentune-core" }
+
+# SocketCAN is a Linux kernel facility; keep the crate compiling on other OSes
+# (where a stub returns Error::Unsupported) by scoping the dependency to Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan.workspace = true

@@ -16,9 +16,12 @@ impl ChecksumAlgo for Crc32Tail {
         }
         let split = image.len() - 4;
         let computed = crc32(&image[..split]) as u64;
-        let stored =
-            u32::from_le_bytes([image[split], image[split + 1], image[split + 2], image[split + 3]])
-                as u64;
+        let stored = u32::from_le_bytes([
+            image[split],
+            image[split + 1],
+            image[split + 2],
+            image[split + 3],
+        ]) as u64;
         Ok(vec![BlockStatus {
             name: "crc32-tail".into(),
             region: MemoryRegion::new(0, split as u32),

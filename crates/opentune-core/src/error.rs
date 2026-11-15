@@ -14,7 +14,11 @@ pub enum Error {
     #[error("protocol error: {0}")]
     Protocol(String),
     #[error("negative response to service 0x{service:02X}: 0x{code:02X} ({name})")]
-    NegativeResponse { service: u8, code: u8, name: &'static str },
+    NegativeResponse {
+        service: u8,
+        code: u8,
+        name: &'static str,
+    },
     #[error("security access denied")]
     SecurityDenied,
     #[error("verification failed: {0}")]

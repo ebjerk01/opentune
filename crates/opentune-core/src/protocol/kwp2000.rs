@@ -25,7 +25,10 @@ pub struct Kwp2000Client<'a> {
 
 impl<'a> Kwp2000Client<'a> {
     pub fn new(transport: &'a mut dyn DiagTransport) -> Self {
-        Self { transport, timeout_ms: 2000 }
+        Self {
+            transport,
+            timeout_ms: 2000,
+        }
     }
 
     fn call(&mut self, req: &[u8]) -> Result<Vec<u8>> {
@@ -74,7 +77,14 @@ impl<'a> Kwp2000Client<'a> {
         let a = address.to_be_bytes();
         let s = size.to_be_bytes();
         self.call(&[
-            sid::REQUEST_DOWNLOAD, a[1], a[2], a[3], format, s[1], s[2], s[3],
+            sid::REQUEST_DOWNLOAD,
+            a[1],
+            a[2],
+            a[3],
+            format,
+            s[1],
+            s[2],
+            s[3],
         ])
     }
 

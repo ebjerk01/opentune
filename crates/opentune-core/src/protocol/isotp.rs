@@ -67,7 +67,9 @@ impl IsoTp {
         }
         let len = payload.len();
         if len > 0x0FFF {
-            return Err(Error::Protocol("payload too large for classic ISO-TP".into()));
+            return Err(Error::Protocol(
+                "payload too large for classic ISO-TP".into(),
+            ));
         }
         let mut ff = Vec::with_capacity(8);
         ff.push(0x10 | ((len >> 8) & 0x0F) as u8);

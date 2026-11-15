@@ -1,0 +1,28 @@
+{
+  "id": "siemens-pcr21",
+  "name": "Continental/Siemens Simos PCR2.1",
+  "maker": "Continental",
+  "family": "Simos PCR2.1",
+  "notes": "VAG 1.6 TDI common-rail (Infineon TriCore). Diagnostics over CAN (ISO 15765-4, UDS); a complete original typically needs a bench/boot read, while calibration flashing can be done over OBD. Addresses and flash_size are family placeholders and must be confirmed per software variant before any read or write.",
+  "protocol": "iso_tp",
+  "diag_layer": "uds",
+  "bitrate": 500000,
+  "tx_id": 2016,
+  "rx_id": 2024,
+  "flash_size": 4194304,
+  "regions": [
+    {
+      "name": "full",
+      "region": { "address": 2684354560, "length": 4194304 },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": { "address": 2686451712, "length": 1048576 },
+      "writable": true
+    }
+  ],
+  "checksum": null,
+  "seedkey": null,
+  "full_read": "bench_boot"
+}

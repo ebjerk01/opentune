@@ -26,7 +26,10 @@ pub struct UdsClient<'a> {
 
 impl<'a> UdsClient<'a> {
     pub fn new(transport: &'a mut dyn DiagTransport) -> Self {
-        Self { transport, timeout_ms: 2000 }
+        Self {
+            transport,
+            timeout_ms: 2000,
+        }
     }
 
     fn call(&mut self, req: &[u8]) -> Result<Vec<u8>> {
@@ -77,18 +80,18 @@ impl<'a> UdsClient<'a> {
     }
 
     pub fn routine_control(&mut self, kind: u8, routine: u16, data: &[u8]) -> Result<Vec<u8>> {
-        let mut req = vec![sid::ROUTINE_CONTROL, kind, (routine >> 8) as u8, routine as u8];
+        let mut req = vec![
+            sid::ROUTINE_CONTROL,
+            kind,
+            (routine >> 8) as u8,
+            routine as u8,
+        ];
         req.extend_from_slice(data);
         self.call(&req)
     }
 
     /// `requestDownload`: returns the ECU's maximum block length.
-    pub fn request_download(
-        &mut self,
-        data_format: u8,
-        address: u32,
-        size: u32,
-    ) -> Result<usize> {
+    pub fn request_download(&mut self, data_format: u8, address: u32, size: u32) -> Result<usize> {
         let mut req = vec![sid::REQUEST_DOWNLOAD, data_format, 0x44];
         req.extend_from_slice(&address.to_be_bytes());
         req.extend_from_slice(&size.to_be_bytes());

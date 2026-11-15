@@ -24,12 +24,18 @@ pub struct MockDriver {
 
 impl MockDriver {
     pub fn new() -> Self {
-        Self { ecu: "mock-ecu".into(), ..Default::default() }
+        Self {
+            ecu: "mock-ecu".into(),
+            ..Default::default()
+        }
     }
 
     fn offset(&self, address: u32) -> Result<usize> {
         let off = address.checked_sub(self.base).ok_or_else(|| {
-            Error::Config(format!("address 0x{address:08X} below base 0x{:08X}", self.base))
+            Error::Config(format!(
+                "address 0x{address:08X} below base 0x{:08X}",
+                self.base
+            ))
         })?;
         Ok(off as usize)
     }
@@ -107,7 +113,11 @@ impl Interface for MockDriver {
             .checked_add(region.length as usize)
             .filter(|&e| e <= self.data.len())
             .ok_or_else(|| Error::Config("read past end of image".into()))?;
-        progress(Progress { phase: Phase::Read, done: 0, total: region.length as u64 });
+        progress(Progress {
+            phase: Phase::Read,
+            done: 0,
+            total: region.length as u64,
+        });
         let out = self.data[start..end].to_vec();
         progress(Progress {
             phase: Phase::Read,
@@ -134,7 +144,11 @@ impl Interface for MockDriver {
             .checked_add(data.len())
             .filter(|&e| e <= self.data.len())
             .ok_or_else(|| Error::Config("write past end of image".into()))?;
-        progress(Progress { phase: Phase::Write, done: 0, total: data.len() as u64 });
+        progress(Progress {
+            phase: Phase::Write,
+            done: 0,
+            total: data.len() as u64,
+        });
         self.data[start..end].copy_from_slice(data);
         let out = self.out.clone().or_else(|| self.path.clone()).unwrap();
         std::fs::write(out, &self.data)?;

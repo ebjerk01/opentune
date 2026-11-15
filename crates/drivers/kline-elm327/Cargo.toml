@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 opentune-core = { path = "../../opentune-core" }
+serialport.workspace = true

@@ -69,7 +69,11 @@ mod tests {
     fn negative_response_maps_code() {
         let e = check_response(0x27, &[0x7F, 0x27, 0x35]).unwrap_err();
         match e {
-            Error::NegativeResponse { service: 0x27, code: 0x35, name } => {
+            Error::NegativeResponse {
+                service: 0x27,
+                code: 0x35,
+                name,
+            } => {
                 assert_eq!(name, "invalidKey");
             }
             other => panic!("wrong error: {other:?}"),
