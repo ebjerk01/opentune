@@ -1,172 +1,176 @@
-# Bosch EDC16 flash checksum
+# Bosch EDC16 flash checksum — SOLVED (MPC56x family)
 
-Reverse-engineering notes for the EDC16 (Infineon C16x / ST10, little-endian)
-calibration checksum, as implemented in `crates/opentune-checksum/src/edc16.rs`.
+Reverse-engineering notes for the Bosch EDC16 flash checksum, as implemented in
+`crates/opentune-checksum/src/edc16.rs`.
 
 See `docs/BOSCH-CHECKSUM.md` for the general Bosch multi-block checksum structure
 these findings sit inside.
 
+## Headline
+
+The EDC16 variants built on the **Freescale/Motorola MPC56x** core (PowerPC,
+**big-endian**) — `EDC16C35` (BMW), `EDC16C39` (Kia/Hyundai) and siblings — were
+**fully cracked** from complete (boot + program + calibration) dumps. The scheme
+is a **block directory** plus a plain **32-bit big-endian additive checksum to a
+fixed constant**, not a CRC and not an avalanche field:
+
+> For every directory block, `sum32be(flash[start..=end]) == 0xD01FE500`, where
+> `sum32be` is the sum of big-endian 32-bit words over the block, truncated to
+> 32 bits. The **last dword of each block** is the compensation/checksum word:
+> `last = (0xD01FE500 − sum_of_the_rest) mod 2^32`, stored big-endian.
+
+This is `verify()`/`correct()` in the crate today, validated on **14 full dumps**
+(7 stock/tuned pairs, 3 distinct ECUs).
+
 ## Reference material
 
-Three independent, valid EDC16 stock/tuned pairs with a **clean** single
-checksum field were analysed (plus several VAG pairs that use a different
-scheme, see below). Each pair is two valid images of the same ECU — one
-factory-stock, one professionally tuned and re-checksummed.
+Full dumps analysed (all private, not in the repo/CI; placed under
+`$OPENTUNE_FIXTURES/edc16-full/<name>_ori.bin` / `_mod.bin`):
 
-| fixture                         | size   | role                     |
-|---------------------------------|--------|--------------------------|
-| `yaris_90_stock.ori` / `.mod`   | 512 KiB| Toyota Yaris 90, EDC16    |
-| `bmw_e46_318d_376967_2m_*`      | 2 MiB  | BMW E46 318d, EDC16       |
-| `bmw_e46_320d_361811_2m_*`      | 1 MiB  | BMW E46 320d, EDC16       |
+| fixture(s)                          | size   | ECU / core                       |
+|-------------------------------------|--------|----------------------------------|
+| `bmw_318d_376967`                   | 2 MiB  | BMW E46 318d, **EDC16C35** MPC562|
+| `bmw_320d_361811`                   | 1 MiB  | BMW E46 320d, **EDC16C35** MPC562|
+| `kia_sorento_{381743,388042,390051,394237,394261}` | 2 MiB | Kia Sorento CRDi, **EDC16C39** MPC562 |
 
-Yaris ECU identity string at `0x8000`: `TSW V0.70 120701 1025 C9/ESB/G43`.
+ID strings confirm the core, e.g. `BOSCH EDC16C35/C (BMW) MPC562/RevA` and
+`BOSCH EDC16C39/5.4x MPC562/RevD`.
 
-These files are private and **not** in the repository or CI. The `#[ignore]`d
-tests `edc16::tests::reference_known_fields` and `::reference_files` use them
-when `OPENTUNE_FIXTURES` points at the directory holding them (Yaris at the
-root, the harvested pairs under `edc16-pairs/<name>_ori.bin` / `_mod.bin`). Run:
+Run the fixtures tests:
 
 ```
 OPENTUNE_FIXTURES=/path cargo test -p opentune-checksum -- --ignored
 ```
 
-## The calibration checksum field — VERIFIED (3 pairs)
+`reference_mpc_directory` validates the full scheme end-to-end; the older
+`reference_known_fields` / `reference_files` cover the calibration-only
+clean-field facts.
 
-Byte-diffing each valid pair, the only non-calibration difference is a single
-isolated 32-bit **little-endian** word — the calibration checksum the ECU
-verifies. Location, width and byte order are reproduced exactly on all three
-pairs (asserted by `reference_known_fields`):
+## The directory
 
-| ECU       | offset    | stock (LE)   | tuned (LE)   |
-|-----------|-----------|--------------|--------------|
-| Yaris 90  | `0x7BD7C` | `0xDBCCED4D` | `0xDC88782E` |
-| BMW 318d  | `0xFDFF8` | `0x5A1965D7` | `0x70C43539` |
-| BMW 320d  | `0xFEFF8` | `0x309CC08C` | `0xA1B42CB4` |
+A directory of 16-byte records lives in the boot/program and partition-header
+areas:
 
-In every case the field is a lone 32-bit word surrounded by fill bytes
-(`0xC3` on Yaris, `0xFF`/`0x5A` on BMW), with **no** adjacent complement word
-and **no** adjacent `{start,end}` descriptor. Confidence: **high.**
+```
+struct DirRecord {   // 16 bytes, big-endian
+    uint32_t start;      // inclusive CPU address of block start
+    uint32_t end;        // inclusive CPU address of block end
+    uint32_t cs_slot;    // == 0xFADECAFE  (placeholder checksum)
+    uint32_t cmpl_slot;  // == 0xCAFEAFFE  (placeholder complement)
+};
+```
 
-## VAG EDC16 uses a different scheme (out of scope here)
+* The `0xFADECAFE` / `0xCAFEAFFE` magic pair is the directory's structural
+  fingerprint; `parse_directory()` scans for it and reads the two big-endian
+  words immediately before it as `{start, end}`.
+* **CPU → file offset**: mask with `len − 1` (images are 512 KiB / 1 MiB /
+  2 MiB, powers of two). Equivalently, subtract the per-image ROM base — `0` for
+  the 2 MiB BMW/Kia reads, `0x00800000` for the 1 MiB BMW 320d (whose directory
+  stores `0x008E0180` etc.).
+* Some directories carry an off-by-one **duplicate** record (`end+1`); these are
+  rejected by requiring dword alignment (`start % 4 == 0 && (end+1) % 4 == 0`).
 
-The Audi / VW / Mercedes / Land-Rover EDC16 pairs that were harvested do **not**
-have a lone checksum word. Instead each has a ~128-byte **high-entropy block**
-near the end of a bank (e.g. Audi 512 KiB at `0x7DF7C..0x7E000`, 2 MiB at
-`0x1FDF7C..`) whose bytes change *wholesale* between stock and tuned. This is a
-signed/obfuscated checksum container, not a plain 32-bit field, and is not
-addressed by the field-based engine. Documented here so it is not mistaken for
-the clean-field case.
+Each image carries several blocks (program sub-blocks, info blocks and the
+calibration block); the walker treats them all uniformly. For a tune, only the
+calibration block's compensation word needs rewriting.
 
-## The algorithm — NOT yet determined (honest status)
+## The checksum — VERIFIED on 14 images
 
-The algorithm that produces the 32-bit value is **still unidentified**. It was
-re-tested against **all three** clean pairs and **excluded**:
+For **every** directory block of **every** stock and tuned image:
 
-### Additive sums — excluded (magnitude + exhaustive search, 3 pairs)
+```
+sum32be(block) = Σ big-endian u32 words over [start, end] inclusive, mod 2^32
+               = 0xD01FE500   (the fixed Bosch constant)
+```
 
-Required stored deltas are large and avalanche-like:
-`Yaris 0xBB8AE1`, `BMW318 0x16AACF62`, `BMW320 0x71178C28`.
+The constant `0xD01FE500` is identical across BMW C35, BMW C35 (1 MiB) and Kia
+C39 — it is a family constant, not per-ECU. The compensation word is each block's
+**last dword**, and re-deriving it as `0xD01FE500 − sum(block without last dword)`
+reproduces the stored value **exactly** for all blocks (e.g. the BMW calibration
+"clean field" below).
 
-* **Byte / 16-bit sums** are impossible by magnitude: the summed absolute
-  per-word differences over the whole image are far smaller than the required
-  stored delta (Yaris byte `0x9F3`, 16-bit `0x98FDB`).
-* **32-bit word sums** (LE/BE, every alignment phase): an O(n) prefix-sum search
-  — both an absolute `sum(S,E)==stored` sweep and a signed difference-window
-  sweep — finds **only** the degenerate self-sum of the checksum field itself
-  (it sums the fill zeros after it), never a real data range. Excluded.
+### The calibration "clean field" revisited
 
-### XOR checksum — excluded (3 pairs)
+Earlier calibration-only analysis isolated a lone 32-bit field at the top of the
+cal bank (BMW 318d `0xFDFF8`, 320d `0xFEFF8`). It is exactly the calibration
+block's last-dword compensation word — read **big-endian** on this PowerPC core:
 
-The XOR of every changed 32-bit word does **not** equal the stored-value XOR
-(`stored_stock ^ stored_tuned`) for any pair — e.g. Yaris `0x03001900` vs the
-required `0x07449563`. So it is not a 32-bit XOR fold. (This is now a locked
-regression in `reference_known_fields`.)
+| ECU       | field     | stock (BE)   | tuned (BE)   | (same bytes, LE) |
+|-----------|-----------|--------------|--------------|------------------|
+| BMW 318d  | `0xFDFF8` | `0xD765195A` | `0x3935C470` | `0x5A1965D7` / `0x70C43539` |
+| BMW 320d  | `0xFEFF8` | `0x8CC09C30` | `0xB42CB4A1` | `0x309CC08C` / `0xA1B42CB4` |
+| Kia 381743| `0x1FDFFC`| `0xC96D875F` | `0x782E8453` |                  |
 
-### Standard / Bosch CRC-32 over a contiguous range — excluded
+The BMW values match the prior pass's field exactly (it read them little-endian).
 
-Using `crc(a) ^ crc(b) = crc_linear(a ^ b)` (independent of init / xorout) and a
-direct parameter brute, the following were swept over every end offset, both
-reflections, and 16-/32-bit byte-swapped feed orders:
+## Why the prior (calibration-only) pass could not solve it
 
-* CRC-32, CRC-32C, CRC-32K (Koopman), CRC-32/Q, XFER, MPEG-2, POSIX, CRC-32/K2;
-* the Bosch/VAG forward polynomial `0x04C11DB7` with init 0 and init
-  `0xFFFFFFFF`.
+The earlier pass had only the calibration partition and correctly concluded the
+field was *not* a contiguous CRC and *not* `sum(range) == stored`. Both negatives
+were right; the reasons it looked unsolvable were:
 
-**None matched** over a single contiguous span.
+1. **The relationship is `sum(block including the field) == constant`**, not
+   `sum(range) == stored`. A search for a range whose sum equals the field value
+   can never find it.
+2. **The field is big-endian** (MPC56x is a PowerPC core). Read little-endian the
+   32-bit sums never line up.
+3. **The directory lives in the boot/program area**, absent from a cal-only dump,
+   so the `{start,end}` bounds and the "it's one block of many" structure were
+   invisible.
+4. It is an **additive checksum, not a CRC** — consistent with the prior GF(2)
+   polynomial-GCD finding no degree-32 generator.
 
-### Multi-area / proprietary CRC — the remaining shape
+The VAG Audi/VW EDC16 variants noted earlier as a "high-entropy block" are a
+separate (newer / signed) case and are not claimed solved here; the MPC56x BMW
+and Kia families above are.
 
-A GF(2) **polynomial-GCD** recovery was run on the within-pair *codeword
-differences* (message ⧺ stored-word, forward and reflected framings). Because a
-same-length pair's codeword difference is divisible by the CRC generator
-independent of init/xorout, the GCD of valid codewords should expose a degree-32
-generator. It does **not** (GCD degree 2–3). That rules out *any* CRC over a
-single contiguous span, and is consistent with the Bosch design in which the CRC
-runs over a **concatenation of areas** named by a directory (see
-`docs/BOSCH-CHECKSUM.md`): concatenation moves bit positions, so the raw
-contiguous bytes are not a valid codeword.
+## What the implementation does (`edc16.rs`)
 
-The area directory is **not** present in the calibration partition of these
-clean-field images: scans for `{start,end,cs,~cs}` complement descriptors and for
-32-bit pointers bracketing the calibration region found none. For EDC16 it lives
-in the boot/program area, which is outside the harvested calibration dumps.
+* `parse_directory(image) -> Vec<DirBlock>` — structural scan for the marker
+  pair, CPU→offset mapping, alignment filter, de-dup, sorted by `end` ascending.
+* `verify_directory(image)` — reports each block; `ok` iff it sums to
+  `EDC16_MPC_SUM_CONST` (`0xD01FE500`).
+* `correct_directory(image)` — rewrites each off block's last-dword compensation
+  word, inner blocks first (so nested sub-blocks are fixed before their enclosing
+  block; an enclosing block's compensation word always lies outside the inner
+  blocks, so no fix is undone).
+* `Edc16::verify` / `Edc16::correct` use the directory walker when a directory is
+  present (a full dump), and otherwise fall back to surfacing the calibration
+  field from `DEFAULT_BLOCKS` / `KNOWN_FIELDS` (and refusing to correct it, since
+  a cal-only dump lacks the directory).
 
-**Conclusion:** the field is a 32-bit avalanche checksum — most likely a CRC-32
-over a multi-area concatenation (or a proprietary polynomial). It cannot be
-pinned from these images alone; it needs the on-image area directory or the ECU
-checksum routine (C166 boot code). Until then it stays `Algo::Unknown`.
-
-## What the implementation does
-
-`edc16.rs` ships a **data-driven** engine:
-
-* `Algo` — `Sum8`, `Sum16Le/Be`, `Sum32Le/Be`, `Crc32` (reflected IEEE),
-  `Crc32Bosch` (forward poly `0x04C11DB7`, init 0 — the Bosch/VAG main CRC,
-  added as a reference-backed, reusable algorithm; see `crate::crc32_bosch`),
-  and `Unknown`.
-* `Block { name, sum_range, store_offset, store_len, store_le, algo }` — one
-  checksum-protected block; the active map is a table (`DEFAULT_BLOCKS`).
-* `KNOWN_FIELDS` — the three VERIFIED clean-field samples (fixture, length,
-  offset, stored stock/tuned), used by the fixtures tests.
-* `verify_blocks` / `correct_blocks` iterate the table.
-
-`DEFAULT_BLOCKS` carries the one verified Yaris field with `algo: Algo::Unknown`:
-
-* `verify` **surfaces** it (reports the stored value, `ok = false`);
-* `correct` **refuses** (`Error::Unsupported`) rather than write a guessed value.
+The generic data-driven `Algo`/`Block` engine (additive sums, reflected CRC-32
+and the Bosch forward CRC-32 `Crc32Bosch`) is retained for other
+variants/families and remains fully unit-tested.
 
 ## Validation
 
-* `cargo test -p opentune-checksum` — synthetic tests cover each `Algo`
-  (including `Crc32Bosch` against the forward-engine MPEG-2 vector `0x0376E6E7`
-  and the init-0 value `0x89A1897F`), width truncation, LE/BE storage,
-  wrap-around, idempotent `correct`, corruption detection, and the `Unknown`
-  surface/refuse behaviour.
-* `reference_known_fields` (`#[ignore]`d) asserts the field location/width/order
-  and both stored values on all three real pairs, and that none is a 32-bit XOR.
-* `reference_files` (`#[ignore]`d) additionally proves the generic `Sum32Le`
-  engine round-trips on the real Yaris bytes (correct → verify → corrupt →
-  verify-fails → correct → verify-ok).
+* `cargo test -p opentune-checksum` — synthetic tests cover the directory parser
+  (incl. nested blocks and misaligned-duplicate rejection), `sum32be`, the
+  compensation-word round-trip, corruption detect→correct, and the no-directory
+  fallback, plus the pre-existing `Algo` coverage.
+* `reference_mpc_directory` (`#[ignore]`d) proves, on all 7 full-dump pairs: the
+  directory parses (multi-block); **every** block sums to the constant in both
+  stock and tuned; valid images need no correction; the calibration block's
+  stored compensation word equals the recorded big-endian value; corrupt→correct
+  →verify round-trips; and zeroing the field then correcting **re-derives the
+  exact original stored value**.
 
 ## Confidence summary
 
-| item                                               | confidence            |
-|----------------------------------------------------|-----------------------|
-| checksum field location/width/LE (3 pairs)         | high (all reproduced) |
-| additive-sum algorithms ruled out                  | high (proof + search) |
-| 32-bit XOR ruled out                               | high (3 pairs)        |
-| standard/Bosch CRC over contiguous range ruled out | high (linearity + GCD)|
-| multi-area or proprietary CRC (shape)              | medium (by elimination)|
-| exact algorithm                                    | **unresolved**        |
+| item                                                   | confidence              |
+|--------------------------------------------------------|-------------------------|
+| MPC56x directory structure + marker fingerprint        | high (14 images)        |
+| `sum32be(block) == 0xD01FE500` for every block          | high (14 images)        |
+| last-dword compensation word, exact re-derivation      | high (all blocks)       |
+| BMW cal field == prior clean field (read BE)           | high (exact match)      |
+| applies to other MPC56x EDC16C3x (C31, …)              | medium (same family)    |
+| VAG Audi/VW EDC16 (signed high-entropy block)          | **separate, unsolved**  |
 
-## To finish the reverse-engineering
+## Open / next
 
-1. Recover the **area directory** (the `{start,end}` list the ECU concatenates).
-   It is not in the calibration partition; extract it from the boot/program area
-   or from a full ECU dump, then CRC over the concatenation and brute the poly.
-2. Or extract the checksum routine from the C166 code and read poly / seed /
-   area list directly.
-3. Then replace `Algo::Unknown` in `DEFAULT_BLOCKS` with the recovered algorithm
-   (add e.g. `Crc32Custom { poly, init, xorout, refin, refout, areas }` if the
-   existing `Crc32Bosch` parameters do not fit) and extend the fixtures tests to
-   assert `stock` verifies OK and corrupt→correct reproduces the stored word.
+* Confirm the constant and directory on further MPC56x variants (C31, C34, …).
+* The Kia C39 also carries extra high-entropy data in the cal tail; the sum
+  check and last-dword correction are valid, but if an independent signature is
+  also enforced by the ECU it is out of scope here.
+* Solve the VAG Audi/VW EDC16 signed container separately (different scheme).

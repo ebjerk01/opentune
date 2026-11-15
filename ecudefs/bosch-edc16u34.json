@@ -13,16 +13,32 @@
   "regions": [
     {
       "name": "full",
-      "region": { "address": 0, "length": 524288 },
+      "region": {
+        "address": 0,
+        "length": 524288
+      },
       "writable": false
     },
     {
       "name": "calibration",
-      "region": { "address": 393216, "length": 131072 },
+      "region": {
+        "address": 393216,
+        "length": 131072
+      },
       "writable": true
     }
   ],
   "checksum": "edc16",
   "seedkey": null,
-  "full_read": "obd"
+  "full_read": "obd",
+  "identify": {
+    "part_numbers": [
+      "03G906",
+      "0281011",
+      "0281012"
+    ],
+    "sw_numbers": [
+      "1037"
+    ]
+  }
 }

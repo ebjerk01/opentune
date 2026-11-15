@@ -111,17 +111,59 @@ directory and a wide additive monitor sum.
   exception (it is what the EDC16 *calibration* field turned out to be; its
   algorithm is still open, see `docs/checksums-edc16.md`).
 
+## EDC16 MPC56x: directory + 32-bit big-endian sum to a constant (SOLVED)
+
+The common EDC16 variants on the **Freescale MPC56x** PowerPC core (`EDC16C35`
+BMW, `EDC16C39` Kia/Hyundai, siblings) do **not** use a CRC for the main/cal
+checksum. They use a directory of records
+
+```
+struct DirRecord {   // 16 bytes, big-endian
+    uint32_t start;      // inclusive CPU address
+    uint32_t end;        // inclusive CPU address
+    uint32_t cs_slot;    // 0xFADECAFE (placeholder)
+    uint32_t cmpl_slot;  // 0xCAFEAFFE (placeholder)
+};
+```
+
+located by scanning for the `0xFADECAFE`/`0xCAFEAFFE` magic pair (CPU→file offset
+= `addr & (len−1)`), and for **every** block the invariant
+
+> `sum32be(block) == 0xD01FE500`
+
+holds — the sum of big-endian 32-bit words over `[start, end]`, mod 2³², equals a
+fixed family constant. Each block's **last dword** is the compensation word
+(`last = 0xD01FE500 − sum(rest)`, big-endian). Verified on 14 full dumps
+(BMW C35 318d/320d + five Kia C39 pairs). This is the cracked EDC16 scheme; see
+`docs/checksums-edc16.md`. It is an **additive checksum, not a CRC**, and the
+"clean field" earlier EDC16 analysis found is just the calibration block's
+last-dword compensation word, read **big-endian**.
+
+## EDC15C6 (CR1, Infineon C167): field located, algorithm open
+
+One real EDC15C6 pair (MB Sprinter 2.2 CDI, `1037351686`, 1 MiB) isolates a lone
+4-byte checksum field at `0xFBFFC` (two 16-bit LE words, `0xC3` fill, constant
+`0xC058` prefix) that changes stock→tuned. It is **not** reproduced by any
+contiguous 16-/32-bit sum, is **not** a `{sum, ~sum}` complement pair, and has no
+"sum to a constant" invariant like the MPC56x EDC16 above. The expected EDC15
+scheme from the references is a 16-bit additive block sum stored with its
+complement, but the block map (and any C6 CRC/obfuscation layer) could not be
+pinned from a single pair. Per the project rule, `crate::edc15::Edc15C6`
+**surfaces** the field and **refuses** to correct it (`Algo`-less, like the EDC16
+cal-only fallback) rather than guess. See `crates/opentune-checksum/src/edc15.rs`.
+
 ## Engine mapping in this crate
 
 `opentune-checksum` models all of the above as a data-driven block table:
 
-| Bosch construct             | `Algo`                               |
-|-----------------------------|--------------------------------------|
-| ME7 / MSE6 16-bit word sum  | `Sum16Le` / `Sum16Be` (32-bit accum) |
-| wide additive monitor sum   | `Sum32Le` / `Sum32Be`                |
-| standard CRC block          | `Crc32` (reflected IEEE)             |
-| Simos/MED/EDC17 main CRC    | `Crc32Bosch` (fwd `0x04C11DB7`, init 0)|
-| unidentified field          | `Unknown` (surface, refuse to write) |
+| Bosch construct                | `Algo` / engine                        |
+|--------------------------------|----------------------------------------|
+| ME7 / MSE6 16-bit word sum     | `Sum16Le` / `Sum16Be` (32-bit accum)   |
+| wide additive monitor sum      | `Sum32Le` / `Sum32Be`                  |
+| standard CRC block             | `Crc32` (reflected IEEE)               |
+| Simos/MED/EDC17 main CRC       | `Crc32Bosch` (fwd `0x04C11DB7`, init 0)|
+| **EDC16 MPC56x dir + sum→K**   | `edc16::{parse,verify,correct}_directory` (`sum32be == 0xD01FE500`) |
+| unidentified field             | `Unknown` (surface, refuse to write)   |
 
 A `{v, ~v}` complement pair and multi-area directories are represented by adding
 `Block`s to the table (one per range); the one's-complement word is written as a

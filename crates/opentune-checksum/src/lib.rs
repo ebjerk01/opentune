@@ -6,6 +6,7 @@
 //! modules and must be validated against known-good reference files.
 use opentune_core::{MemoryRegion, Result};
 
+pub mod edc15;
 pub mod edc16;
 pub mod generic;
 
@@ -42,6 +43,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
     match id {
         "crc32-tail" => Some(Box::new(generic::Crc32Tail)),
         "edc16" => Some(Box::new(edc16::Edc16)),
+        "edc15c6" | "edc15" => Some(Box::new(edc15::Edc15C6)),
         _ => None,
     }
 }

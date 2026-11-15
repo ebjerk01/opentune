@@ -9,6 +9,7 @@ members = [
     "crates/drivers/j2534-openport",
     "crates/drivers/socketcan",
     "crates/drivers/kline-elm327",
+    "crates/drivers/kkl",
 ]
 
 [workspace.package]

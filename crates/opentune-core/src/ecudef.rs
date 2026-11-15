@@ -1,6 +1,6 @@
 //! ECU definitions: data describing a known ECU (protocol, memory map, which
 //! checksum and seed/key handlers apply). Loaded from JSON in `ecudefs/`.
-use crate::types::{DiagLayer, MemoryRegion, Protocol};
+use crate::types::{DiagLayer, EcuId, MemoryRegion, Protocol};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -35,6 +35,60 @@ pub struct EcuDef {
     /// definition with no maps still parses. See [`MapDef`] and `docs/MAP-DEFS.md`.
     #[serde(default)]
     pub maps: Vec<MapDef>,
+    /// Keys for identifying this ECU from what it reports over diagnostics.
+    #[serde(default)]
+    pub identify: Identify,
+}
+
+/// Identification keys: how an ECU's self-reported identity (part number, SW
+/// number) maps to this definition. Matching is prefix/substring based so a
+/// family prefix (e.g. "03G906") covers many exact numbers. See `identify`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Identify {
+    /// Hardware / spare-part numbers or prefixes (e.g. "0281011", "03G906").
+    #[serde(default)]
+    pub part_numbers: Vec<String>,
+    /// Software / calibration numbers or prefixes (e.g. "1037369105").
+    #[serde(default)]
+    pub sw_numbers: Vec<String>,
+}
+
+fn norm(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
+/// Does `value` match any of `keys` (case/space-insensitive prefix or substring)?
+fn key_hit(value: &str, keys: &[String]) -> bool {
+    let v = norm(value);
+    keys.iter().any(|k| {
+        let k = norm(k);
+        !k.is_empty() && (v.starts_with(&k) || v.contains(&k))
+    })
+}
+
+impl EcuDef {
+    /// True if an ECU reporting `id` matches this definition's identify keys.
+    pub fn matches_id(&self, id: &EcuId) -> bool {
+        if let Some(hw) = &id.hw_number {
+            if key_hit(hw, &self.identify.part_numbers) {
+                return true;
+            }
+        }
+        if let Some(sw) = &id.sw_number {
+            if key_hit(sw, &self.identify.sw_numbers) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// Find the first definition whose identify keys match a reported ECU id.
+pub fn match_ecu<'a>(defs: &'a [EcuDef], id: &EcuId) -> Option<&'a EcuDef> {
+    defs.iter().find(|d| d.matches_id(id))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

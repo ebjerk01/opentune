@@ -25,13 +25,19 @@ Everything you can do with a `.bin` and no car.
 - [ ] Binary model: load/save, region map, metadata
 - [x] **Checksum engine**: trait + verify + correct
   - [x] generic (CRC32-tail example + CRC32 helper)
-  - [~] Bosch EDC16: checksum **field** located + validated across 3 real pairs; additive/XOR/standard-CRC excluded; algorithm needs the area-directory from a **full flash read (boot section)** — `correct()` refuses to guess
+  - [x] **Bosch EDC16 (MPC56x): SOLVED** — full directory-walking verify+correct, validated against real full dumps (BMW/KIA). VAG *signed* high-entropy block = separate, unsolved
+  - [x] Bosch EDC15C6 checksum module (edc15.rs)
   - [ ] EDC17, PCR2.1 (later)
 - [x] Map diff (compare stock vs modified, byte and region level)
+- [~] **ECU auto-identification** (`identify` command): read UDS/KWP DIDs → match `EcuDef.identify` keys + a vehicle catalog
+  - [x] `identify` field on ECU defs + `opentune identify` (defs + catalog matching)
+  - [ ] harvest comma.ai opendbc/openpilot FW fingerprints (MIT) into a catalog
+  - [ ] read the real identity DIDs in the drivers (0xF187/F189/F190/F18A…)
 - [x] ECU definition format (JSON) + 5 fleet defs + parse test
 - [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
 - [x] Calibration **map-definition format** (docs/MAP-DEFS.md) + `maps` in ECU defs
 - [x] Prior-art survey + credits (docs/PRIOR-ART.md); flash sequences (docs/FLASHING-NOTES.md); Bosch checksum structure (docs/BOSCH-CHECKSUM.md)
+- [~] **ECU identification / autoselect**: read DIDs → match ecudefs + a vehicle catalog; `opentune identify`, `EcuDef.identify`, `catalog` module done; opendbc harvest pending
 
 ## M2 — Read path (hardware)
 Identify and read a real ECU.
@@ -40,6 +46,7 @@ Identify and read a real ECU.
 - [~] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol) — implemented, awaiting hardware test
 - [~] **SocketCAN driver** — implemented, awaiting hardware test
 - [~] **K-line / ELM327 driver** — implemented, awaiting hardware test
+- [~] **KKL 409.1 raw-K-line driver** — implemented (serial BREAK init, ISO14230 framing), wired into CLI, awaiting hardware
 - [ ] **Cheap / AliExpress clone interface compatibility** (research: docs/CHEAP-INTERFACES.md)
   - [ ] OpenPort 2.0 clones (via the openport2 driver) — verified on a clone
   - [ ] ELM327 clones (read/log; most can't flash) via the elm327 driver

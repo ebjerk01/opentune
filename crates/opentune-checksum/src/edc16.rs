@@ -1,58 +1,57 @@
-//! Bosch EDC16 (Infineon C16x / ST10, little-endian) flash checksum engine.
+//! Bosch EDC16 flash checksum engine.
 //!
-//! # What is reverse-engineered here
+//! # The MPC56x scheme — REVERSE-ENGINEERED (cracked from full dumps)
 //!
-//! Several stock/tuned EDC16 pairs were byte-diffed. In the "clean-field"
-//! variants (Toyota, BMW) the only non-calibration difference between the two
-//! valid files is a single isolated 32-bit little-endian field — the
-//! calibration checksum the ECU verifies. Its location/width/byte-order are
-//! VERIFIED on three independent real pairs:
+//! The common EDC16 variants built on the Freescale/Motorola **MPC56x**
+//! (PowerPC, big-endian) core — `EDC16C35` (BMW), `EDC16C39` (Kia/Hyundai) and
+//! their siblings — protect the flash with a **block directory** plus a plain
+//! **32-bit big-endian additive checksum to a fixed constant**. The scheme was
+//! fully recovered by analysing complete (boot+program+calibration) dumps:
 //!
-//! | ECU (fixture)                 | field    | stock (LE)   | tuned (LE)   |
-//! |-------------------------------|----------|--------------|--------------|
-//! | Toyota Yaris 90 (`yaris_90`)  | `0x7BD7C`| `0xDBCCED4D`  | `0xDC88782E` |
-//! | BMW E46 318d (`bmw318`)       | `0xFDFF8`| `0x5A1965D7`  | `0x70C43539` |
-//! | BMW E46 320d (`bmw320`)       | `0xFEFF8`| `0x309CC08C`  | `0xA1B42CB4` |
+//! * The image carries a directory of 16-byte records
+//!   `{ start:u32be, end:u32be, 0xFADECAFE, 0xCAFEAFFE }`. `start`/`end` are the
+//!   inclusive CPU-address bounds of a checksum-protected block; the two trailing
+//!   magic words `0xFADECAFE` / `0xCAFEAFFE` are the (unused) checksum /
+//!   complement placeholder slots and are the directory's structural fingerprint.
+//! * CPU addresses map to file offsets by masking with `len-1` (equivalently,
+//!   subtracting the per-image ROM base: `0` for the 2 MiB BMW/Kia images,
+//!   `0x0080_0000` for the 1 MiB BMW 320d).
+//! * For **every** block the ECU verifies:
+//!   `sum32be(flash[start..=end]) == 0xD01F_E500` — the sum of big-endian 32-bit
+//!   words over the block, truncated to 32 bits, equals the fixed Bosch constant
+//!   [`EDC16_MPC_SUM_CONST`]. (Verified identical across BMW C35 318d, BMW C35
+//!   320d and five Kia C39 pairs — 14 images, every directory block.)
+//! * The **last dword of each block** is that block's compensation / checksum
+//!   word: `last = (K - sum_of_the_rest) mod 2^32`, stored big-endian. For the
+//!   calibration block this is the lone "clean field" surrounded by fill that
+//!   earlier calibration-only analysis found (BMW 318d `0xFDFF8`, 320d `0xFEFF8`)
+//!   — read **big-endian** it is exactly this compensation word.
 //!
-//! In each case the field is a lone 32-bit word surrounded by fill bytes, with
-//! no adjacent complement word and no adjacent `{start,end}` descriptor.
+//! [`verify_directory`] walks the real on-image directory and checks each block;
+//! [`correct_directory`] rewrites each off block's compensation word (innermost
+//! block first, so nested sub-blocks are fixed before their enclosing block).
+//! This is wired into [`Edc16::verify`] / [`Edc16::correct`]: when a directory is
+//! present (a full dump) it is used; otherwise the engine falls back to surfacing
+//! the calibration field from [`KNOWN_FIELDS`] / [`DEFAULT_BLOCKS`].
 //!
-//! The VAG variants (Audi/VW/MB/Freelander EDC16) use a *different* scheme: a
-//! ~128-byte high-entropy block (near the end of each bank) that is rewritten
-//! wholesale by the tuner, not a single checksum word. Those are out of scope
-//! for this field-based engine and are documented in `docs/checksums-edc16.md`.
+//! ## How this reconciles the earlier (calibration-only) finding
 //!
-//! # What is NOT yet reverse-engineered
+//! The prior pass — which had only the calibration partition — correctly located
+//! the field but could not identify the algorithm, because the relationship is
+//! *not* `sum(range) == stored` (which it searched for) but
+//! `sum(block including the field) == constant`, and because the field reads as
+//! **big-endian** on this PowerPC core, not little-endian. Those two facts, plus
+//! the directory living in the boot/program area (absent from a cal-only dump),
+//! are exactly why it looked like an unidentified avalanche value and why the
+//! GF(2) GCD never found a degree-32 CRC generator: it is an additive checksum,
+//! not a CRC.
 //!
-//! The *algorithm* that produces the 32-bit value is still unidentified. Across
-//! all three clean pairs it was exhaustively shown **not** to be:
+//! # The generic block engine (reused)
 //!
-//! * any additive sum — byte, 16-bit or 32-bit, either endianness, any
-//!   alignment phase, over any contiguous sub-range (re-tested on all three
-//!   pairs with O(n) prefix-sum and difference-window searches; only the
-//!   degenerate self-sum of the field itself ever matches);
-//! * a 32-bit XOR checksum (the XOR of every changed 32-bit word does not equal
-//!   the stored-value XOR for any of the three pairs);
-//! * a standard CRC-32 over a contiguous range — CRC-32, CRC-32C, Koopman,
-//!   CRC-32/Q, XFER, MPEG-2, POSIX, CRC-32/K2 and the Bosch forward
-//!   poly `0x04C11DB7` (init 0 / init `0xFFFFFFFF`) were excluded, both
-//!   reflections, every end offset, via `crc(a) ^ crc(b) == crc_linear(a ^ b)`.
-//!
-//! It is therefore a 32-bit avalanche checksum. A GF(2) polynomial-GCD recovery
-//! over the within-pair codeword differences returns no common degree-32
-//! generator under contiguous framing, which means — if it is a CRC — it runs
-//! over a **multi-area concatenation** (the Bosch directory pattern documented
-//! in `docs/BOSCH-CHECKSUM.md`), not a single span, or over a proprietary
-//! polynomial. Either way it cannot be pinned from these images alone; it needs
-//! the on-image area directory (not found in the calibration partition — it is
-//! held in boot/code for these variants) or the ECU checksum routine.
-//!
-//! It is represented below with [`Algo::Unknown`] so that
-//! [`verify`](Edc16::verify) surfaces the field while
-//! [`correct`](Edc16::correct) refuses to write a value it cannot compute.
-//! A reusable, reference-backed Bosch forward CRC-32 ([`Algo::Crc32Bosch`]) is
-//! also provided for EDC16 variants (and later EDC17/MED families) whose main
-//! block *does* use it.
+//! A reusable, reference-backed Bosch forward CRC-32 ([`Algo::Crc32Bosch`]) and
+//! additive algorithms are retained for EDC16/EDC17/MED variants whose blocks use
+//! them, and the [`KnownField`] table records the validated calibration-field
+//! facts for documentation and regression.
 //!
 //! # The engine
 //!
@@ -118,14 +117,15 @@ pub struct Block {
     pub algo: Algo,
 }
 
-/// Default EDC16 block map.
+/// Default EDC16 block map (fallback for calibration-only images).
 ///
-/// Currently holds the one VERIFIED-in-position calibration checksum field of
-/// the reference ECU (`1025 C9/ESB/G43`, firmware "TSW V0.70 120701"), whose
-/// algorithm is still [`Algo::Unknown`]. The summed range is the natural
-/// calibration block `[0x70000, 0x7BD7C)` (data area start up to the checksum
-/// word); it is recorded as the best-estimate candidate and is *not* relied on
-/// while `algo` is `Unknown`.
+/// Holds the one VERIFIED-in-position calibration checksum field of the Toyota
+/// reference ECU (`1025 C9/ESB/G43`, firmware "TSW V0.70 120701"). It is left as
+/// [`Algo::Unknown`] because the on-image directory needed to drive the
+/// MPC56x [`verify_directory`] walker is absent from a calibration-only dump
+/// (the directory lives in the boot/program area). When a full dump is supplied,
+/// [`Edc16::verify`] / [`Edc16::correct`] use the directory walker instead of
+/// this table; this entry only surfaces the field when no directory is present.
 pub const DEFAULT_BLOCKS: &[Block] = &[Block {
     name: "cal-checksum",
     sum_range: (0x0007_0000, 0x0007_BD7C),
@@ -343,11 +343,175 @@ pub fn correct_blocks(image: &mut [u8], blocks: &[Block]) -> Result<Vec<Fix>> {
     Ok(fixes)
 }
 
+// ---------------------------------------------------------------------------
+// MPC56x directory engine (EDC16C35 / EDC16C39 and siblings) — the cracked
+// scheme. See the module docs for the reverse-engineering summary.
+// ---------------------------------------------------------------------------
+
+/// The fixed Bosch constant every MPC56x EDC16 block's 32-bit big-endian word
+/// sum must equal. Recovered empirically and verified identical across BMW C35
+/// (318d, 320d) and five Kia C39 pairs — every directory block of 14 full dumps.
+pub const EDC16_MPC_SUM_CONST: u32 = 0xD01F_E500;
+
+/// The directory record's trailing checksum/complement placeholder magics, in
+/// file order (big-endian). Their presence marks a `{start,end,..}` record.
+const MARK_CS: [u8; 4] = [0xFA, 0xDE, 0xCA, 0xFE]; // 0xFADECAFE
+const MARK_CP: [u8; 4] = [0xCA, 0xFE, 0xAF, 0xFE]; // 0xCAFEAFFE
+
+/// One checksum-protected block parsed from the on-image directory, as file
+/// offsets. `end` is inclusive. The compensation word is the last dword
+/// (`[end-3 ..= end]`, big-endian).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirBlock {
+    /// First byte of the summed block (file offset).
+    pub start: u32,
+    /// Last byte of the summed block (file offset, inclusive).
+    pub end: u32,
+}
+
+impl DirBlock {
+    /// File offset of the 4-byte big-endian compensation (checksum) word.
+    pub fn store_offset(self) -> u32 {
+        self.end - 3
+    }
+}
+
+/// Read a big-endian u32 at `off`, or `None` if out of range.
+fn read_u32_be(image: &[u8], off: usize) -> Option<u32> {
+    image
+        .get(off..off + 4)
+        .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// 32-bit big-endian additive checksum over `image[start..=end]` (inclusive),
+/// mod 2^32. A trailing partial (< 4-byte) word is ignored, matching the ECU.
+fn sum32be_range(image: &[u8], start: u32, end: u32) -> u32 {
+    let (s, e) = (start as usize, end as usize);
+    let hi = (e + 1).min(image.len());
+    let mut acc: u32 = 0;
+    let mut i = s;
+    while i + 4 <= hi {
+        acc = acc.wrapping_add(u32::from_be_bytes([
+            image[i],
+            image[i + 1],
+            image[i + 2],
+            image[i + 3],
+        ]));
+        i += 4;
+    }
+    acc
+}
+
+/// Map a directory CPU address to a file offset.
+///
+/// EDC16 images are power-of-two sized (512 KiB / 1 MiB / 2 MiB); the ROM base
+/// is a high power-of-two, so masking with `len-1` recovers the offset
+/// (base 0 for the 2 MiB images, `0x0080_0000` for the 1 MiB BMW 320d).
+fn addr_to_offset(addr: u32, len: usize) -> Option<u32> {
+    if len == 0 || (len & (len - 1)) != 0 {
+        // Non-power-of-two: only accept addresses that already are offsets.
+        return if (addr as usize) < len {
+            Some(addr)
+        } else {
+            None
+        };
+    }
+    Some(addr & (len as u32 - 1))
+}
+
+/// Parse the on-image checksum directory.
+///
+/// Scans for the `0xFADECAFE`/`0xCAFEAFFE` marker pair; the two big-endian u32
+/// words immediately before it are the record's `{start, end}` (inclusive CPU
+/// addresses). Records are mapped to file offsets, kept only when dword-aligned
+/// (`start % 4 == 0 && (end + 1) % 4 == 0`, which rejects the off-by-one
+/// duplicate records some directories carry), and de-duplicated. Returned sorted
+/// by `end` ascending so [`correct_directory`] fixes inner blocks first.
+pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
+    let len = image.len();
+    let mut out: Vec<DirBlock> = Vec::new();
+    if len < 16 {
+        return out;
+    }
+    let mut i = 0usize;
+    while i + 8 <= len {
+        if image[i..i + 4] == MARK_CS && image[i + 4..i + 8] == MARK_CP {
+            // Record = { start@(i-8), end@(i-4), MARK_CS@i, MARK_CP@(i+4) }.
+            if i >= 8 {
+                if let (Some(sa), Some(ea)) = (read_u32_be(image, i - 8), read_u32_be(image, i - 4))
+                {
+                    if let (Some(start), Some(end)) =
+                        (addr_to_offset(sa, len), addr_to_offset(ea, len))
+                    {
+                        let aligned = start % 4 == 0 && (end.wrapping_add(1)) % 4 == 0;
+                        let valid = start < end && (end as usize) < len && (end - start) >= 4;
+                        let blk = DirBlock { start, end };
+                        if aligned && valid && !out.contains(&blk) {
+                            out.push(blk);
+                        }
+                    }
+                }
+            }
+        }
+        i += 4; // records/markers are dword-aligned
+    }
+    out.sort_by_key(|b| (b.end, b.start));
+    out
+}
+
+/// Walk the directory and report each block's 32-bit big-endian sum against the
+/// fixed constant. `ok` means the block currently sums to [`EDC16_MPC_SUM_CONST`].
+pub fn verify_directory(image: &[u8]) -> Result<Vec<BlockStatus>> {
+    let blocks = parse_directory(image);
+    let mut out = Vec::with_capacity(blocks.len());
+    for b in &blocks {
+        let computed = sum32be_range(image, b.start, b.end) as u64;
+        out.push(BlockStatus {
+            name: format!("mpc-block@0x{:06X}", b.start),
+            region: MemoryRegion::new(b.start, b.end - b.start + 1),
+            stored: EDC16_MPC_SUM_CONST as u64,
+            computed,
+            ok: computed == EDC16_MPC_SUM_CONST as u64,
+        });
+    }
+    Ok(out)
+}
+
+/// Walk the directory and rewrite the compensation word of every block whose sum
+/// is off, so each block sums to [`EDC16_MPC_SUM_CONST`].
+///
+/// Blocks are processed inner-first (sorted by `end`), so a nested sub-block is
+/// fixed before its enclosing block — the enclosing block's compensation word
+/// (its own last dword) always lies outside any inner block, so no fix is undone.
+pub fn correct_directory(image: &mut [u8]) -> Result<Vec<Fix>> {
+    let blocks = parse_directory(image);
+    let mut fixes = Vec::new();
+    for b in &blocks {
+        let store = b.store_offset() as usize;
+        // Sum of the block excluding its last (compensation) dword.
+        let rest = sum32be_range(image, b.start, b.end.wrapping_sub(4));
+        let want = EDC16_MPC_SUM_CONST.wrapping_sub(rest);
+        let old = read_u32_be(image, store)
+            .ok_or_else(|| Error::Config("mpc block store offset out of range".into()))?;
+        if old != want {
+            image[store..store + 4].copy_from_slice(&want.to_be_bytes());
+            fixes.push(Fix {
+                name: format!("mpc-block@0x{:06X}", b.start),
+                offset: store as u32,
+                old: old as u64,
+                new: want as u64,
+            });
+        }
+    }
+    Ok(fixes)
+}
+
 /// Bosch EDC16 checksum scheme.
 pub struct Edc16;
 
 impl Edc16 {
-    /// The active block map ([`DEFAULT_BLOCKS`]).
+    /// The fallback block map ([`DEFAULT_BLOCKS`]), used only when no on-image
+    /// directory is present (a calibration-only dump).
     pub fn blocks(&self) -> &'static [Block] {
         DEFAULT_BLOCKS
     }
@@ -359,10 +523,18 @@ impl ChecksumAlgo for Edc16 {
     }
 
     fn verify(&self, image: &[u8]) -> Result<Vec<BlockStatus>> {
+        // Prefer the real directory walker (MPC56x full dumps); fall back to the
+        // calibration-field surface when no directory is present.
+        if !parse_directory(image).is_empty() {
+            return verify_directory(image);
+        }
         verify_blocks(image, self.blocks())
     }
 
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
+        if !parse_directory(image).is_empty() {
+            return correct_directory(image);
+        }
         correct_blocks(image, self.blocks())
     }
 }
@@ -536,6 +708,111 @@ mod tests {
         assert!(algo.correct(&mut img).is_err());
     }
 
+    // ---- MPC56x directory engine: synthetic coverage (no fixtures) -------
+
+    /// Build a tiny power-of-two image carrying one directory record for the
+    /// block `[start, end]` (file offsets) at `rec_off`, with the block's bytes
+    /// filled so its last dword is the compensation word.
+    fn mpc_image(len: usize, start: u32, end: u32, rec_off: usize) -> Vec<u8> {
+        let mut img = vec![0u8; len];
+        // directory record: start, end (big-endian CPU addr == offset here), magics
+        img[rec_off..rec_off + 4].copy_from_slice(&start.to_be_bytes());
+        img[rec_off + 4..rec_off + 8].copy_from_slice(&end.to_be_bytes());
+        img[rec_off + 8..rec_off + 12].copy_from_slice(&MARK_CS);
+        img[rec_off + 12..rec_off + 16].copy_from_slice(&MARK_CP);
+        // some arbitrary block data
+        for (k, b) in img[start as usize..(end as usize - 3)]
+            .iter_mut()
+            .enumerate()
+        {
+            *b = (k as u8).wrapping_mul(7).wrapping_add(1);
+        }
+        img
+    }
+
+    #[test]
+    fn mpc_parse_correct_verify_roundtrip() {
+        // 64 KiB image; block [0x100, 0x1FF], record safely in a header gap.
+        let (len, start, end) = (0x1_0000usize, 0x100u32, 0x1FFu32);
+        let mut img = mpc_image(len, start, end, 0x40);
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0], DirBlock { start, end });
+        assert_eq!(blocks[0].store_offset(), end - 3);
+
+        // Freshly computed: correct writes the compensation word, then every
+        // block sums to the constant and a second correct is a no-op.
+        let fixes = correct_directory(&mut img).unwrap();
+        assert_eq!(fixes.len(), 1);
+        assert_eq!(sum32be_range(&img, start, end), EDC16_MPC_SUM_CONST);
+        assert!(verify_directory(&img).unwrap()[0].ok);
+        assert!(correct_directory(&mut img).unwrap().is_empty());
+
+        // Corrupt a data byte -> verify fails -> correct -> verify ok.
+        img[(start + 8) as usize] ^= 0xFF;
+        assert!(!verify_directory(&img).unwrap()[0].ok);
+        assert_eq!(correct_directory(&mut img).unwrap().len(), 1);
+        assert!(verify_directory(&img).unwrap()[0].ok);
+    }
+
+    #[test]
+    fn mpc_nested_blocks_fixed_inner_first() {
+        // Outer [0x100,0x2FF] and inner [0x140,0x1BF]; two records. Correcting
+        // must leave BOTH summing to the constant (inner fixed before outer).
+        let len = 0x1_0000usize;
+        let mut img = vec![0u8; len];
+        for b in img[0x100..0x300].iter_mut() {
+            *b = 0x5A;
+        }
+        // outer record @0x20, inner record @0x40
+        img[0x20..0x24].copy_from_slice(&0x100u32.to_be_bytes());
+        img[0x24..0x28].copy_from_slice(&0x2FFu32.to_be_bytes());
+        img[0x28..0x2C].copy_from_slice(&MARK_CS);
+        img[0x2C..0x30].copy_from_slice(&MARK_CP);
+        img[0x40..0x44].copy_from_slice(&0x140u32.to_be_bytes());
+        img[0x44..0x48].copy_from_slice(&0x1BFu32.to_be_bytes());
+        img[0x48..0x4C].copy_from_slice(&MARK_CS);
+        img[0x4C..0x50].copy_from_slice(&MARK_CP);
+
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].end, 0x1BF); // inner first (sorted by end)
+        correct_directory(&mut img).unwrap();
+        for st in verify_directory(&img).unwrap() {
+            assert!(st.ok, "{} not corrected", st.name);
+        }
+    }
+
+    #[test]
+    fn mpc_rejects_misaligned_duplicate_records() {
+        // A valid record plus an off-by-one duplicate (end+1): only the aligned
+        // one is kept.
+        let len = 0x1_0000usize;
+        let mut img = mpc_image(len, 0x100, 0x1FF, 0x40);
+        // duplicate with end = 0x200 ((end+1)=0x201 not dword-aligned)
+        img[0x80..0x84].copy_from_slice(&0x100u32.to_be_bytes());
+        img[0x84..0x88].copy_from_slice(&0x200u32.to_be_bytes());
+        img[0x88..0x8C].copy_from_slice(&MARK_CS);
+        img[0x8C..0x90].copy_from_slice(&MARK_CP);
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].end, 0x1FF);
+    }
+
+    #[test]
+    fn mpc_no_directory_falls_back_to_field_surface() {
+        // No markers -> parse yields nothing -> Edc16 uses DEFAULT_BLOCKS and
+        // refuses to correct the still-Unknown cal-only field.
+        let mut img = vec![0u8; 0x8_0000];
+        img[0x7BD7C..0x7BD80].copy_from_slice(&0xDBCC_ED4Du32.to_le_bytes());
+        assert!(parse_directory(&img).is_empty());
+        let algo = Edc16;
+        let st = algo.verify(&img).unwrap();
+        assert_eq!(st[0].stored, 0xDBCC_ED4D);
+        assert!(!st[0].ok);
+        assert!(algo.correct(&mut img).is_err());
+    }
+
     #[test]
     fn out_of_range_block_errors() {
         let img = buf(&[1, 2, 3], 0);
@@ -613,6 +890,176 @@ mod tests {
         assert!(
             checked >= 1,
             "no EDC16 fixtures found under OPENTUNE_FIXTURES"
+        );
+    }
+
+    // ---- MPC56x full-dump fixtures (the cracked directory scheme) --------
+    //
+    // Enabled when OPENTUNE_FIXTURES/edc16-full/<name>_ori.bin and _mod.bin are
+    // present. Each is a complete (boot+program+calibration) EDC16C35 / C39 read.
+
+    /// Full-dump fixtures with their calibration-block compensation ("clean")
+    /// field: offset and the big-endian stored value in the stock image.
+    struct FullFixture {
+        name: &'static str,
+        len: usize,
+        cal_field_off: u32,
+        cal_field_be_ori: u32,
+    }
+
+    const FULL_FIXTURES: &[FullFixture] = &[
+        FullFixture {
+            name: "bmw_318d_376967",
+            len: 0x20_0000,
+            cal_field_off: 0x000F_DFF8,
+            cal_field_be_ori: 0xD765_195A, // == 0x5A1965D7 read little-endian
+        },
+        FullFixture {
+            name: "bmw_320d_361811",
+            len: 0x10_0000,
+            cal_field_off: 0x000F_EFF8,
+            cal_field_be_ori: 0x8CC0_9C30, // == 0x309CC08C read little-endian
+        },
+        FullFixture {
+            name: "kia_sorento_381743",
+            len: 0x20_0000,
+            cal_field_off: 0x001F_DFFC,
+            cal_field_be_ori: 0xC96D_875F,
+        },
+        FullFixture {
+            name: "kia_sorento_388042",
+            len: 0x20_0000,
+            cal_field_off: 0x001F_DFFC,
+            cal_field_be_ori: 0x3BFF_7E44,
+        },
+        FullFixture {
+            name: "kia_sorento_390051",
+            len: 0x20_0000,
+            cal_field_off: 0x001F_DFFC,
+            cal_field_be_ori: 0xA750_532D,
+        },
+        FullFixture {
+            name: "kia_sorento_394237",
+            len: 0x20_0000,
+            cal_field_off: 0x001F_DFFC,
+            cal_field_be_ori: 0xBD81_7ACA,
+        },
+        FullFixture {
+            name: "kia_sorento_394261",
+            len: 0x20_0000,
+            cal_field_off: 0x001F_DFFC,
+            cal_field_be_ori: 0x2657_FE66,
+        },
+    ];
+
+    fn load_full(dir: &str, name: &str) -> Option<(Vec<u8>, Vec<u8>)> {
+        let o = std::fs::read(format!("{dir}/edc16-full/{name}_ori.bin")).ok()?;
+        let m = std::fs::read(format!("{dir}/edc16-full/{name}_mod.bin")).ok()?;
+        Some((o, m))
+    }
+
+    /// The MPC56x directory scheme, validated end-to-end on every full dump:
+    /// the directory parses, EVERY block sums to the constant in BOTH stock and
+    /// tuned images, the calibration compensation word is reproduced exactly, and
+    /// corrupt -> correct -> verify round-trips (including re-deriving the exact
+    /// stored field after zeroing it).
+    #[test]
+    #[ignore = "needs private EDC16 full-dump fixtures via OPENTUNE_FIXTURES"]
+    fn reference_mpc_directory() {
+        let dir = match std::env::var("OPENTUNE_FIXTURES") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let mut checked = 0;
+        for f in FULL_FIXTURES {
+            let Some((stock, tuned)) = load_full(&dir, f.name) else {
+                continue;
+            };
+            assert_eq!(stock.len(), f.len, "{} stock len", f.name);
+            assert_eq!(tuned.len(), f.len, "{} tuned len", f.name);
+
+            // (1) Directory parses and is non-trivial.
+            let blocks = parse_directory(&stock);
+            assert!(
+                blocks.len() >= 2,
+                "{}: expected a multi-block directory, got {}",
+                f.name,
+                blocks.len()
+            );
+
+            // (2) EVERY block sums to the constant in BOTH valid images.
+            for img in [&stock, &tuned] {
+                for st in verify_directory(img).unwrap() {
+                    assert!(
+                        st.ok,
+                        "{}: block {} failed in a valid image",
+                        f.name, st.name
+                    );
+                    assert_eq!(st.computed, EDC16_MPC_SUM_CONST as u64);
+                }
+            }
+
+            // (3) A valid image needs no correction (idempotent / no false fixes).
+            assert!(
+                correct_directory(&mut stock.clone()).unwrap().is_empty(),
+                "{}: valid stock should need no fixes",
+                f.name
+            );
+
+            // (4) The calibration block is in the directory and its stored
+            //     compensation word is the big-endian clean field.
+            assert!(
+                blocks.iter().any(|b| b.store_offset() == f.cal_field_off),
+                "{}: cal field 0x{:X} not a block compensation word",
+                f.name,
+                f.cal_field_off
+            );
+            let o = f.cal_field_off as usize;
+            let got = u32::from_be_bytes(stock[o..o + 4].try_into().unwrap());
+            assert_eq!(got, f.cal_field_be_ori, "{} cal field (BE)", f.name);
+
+            // (5) Full round-trip: corrupt a calibration byte, verify fails,
+            //     correct, verify passes again.
+            let mut img = stock.clone();
+            let cal = blocks
+                .iter()
+                .copied()
+                .find(|b| b.store_offset() == f.cal_field_off)
+                .unwrap();
+            // A data byte inside the block, just before the compensation word
+            // (avoids the directory markers that sit in the block header).
+            let victim = (cal.store_offset() - 8) as usize;
+            img[victim] ^= 0xFF;
+            assert!(
+                verify_directory(&img).unwrap().iter().any(|s| !s.ok),
+                "{}: corruption must be detected",
+                f.name
+            );
+            correct_directory(&mut img).unwrap();
+            assert!(
+                verify_directory(&img).unwrap().iter().all(|s| s.ok),
+                "{}: correct must restore every block",
+                f.name
+            );
+
+            // (6) Re-derivation: zero the stored field, correct, and the exact
+            //     original big-endian stored value comes back.
+            let mut img2 = stock.clone();
+            img2[o..o + 4].copy_from_slice(&[0, 0, 0, 0]);
+            correct_directory(&mut img2).unwrap();
+            let rederived = u32::from_be_bytes(img2[o..o + 4].try_into().unwrap());
+            assert_eq!(rederived, f.cal_field_be_ori, "{} re-derived field", f.name);
+
+            // (7) The public ChecksumAlgo surface uses the directory on full dumps.
+            let algo = Edc16;
+            assert!(algo.verify(&stock).unwrap().iter().all(|s| s.ok));
+            assert!(algo.correct(&mut stock.clone()).unwrap().is_empty());
+
+            checked += 1;
+        }
+        assert!(
+            checked >= 1,
+            "no EDC16 full-dump fixtures under OPENTUNE_FIXTURES"
         );
     }
 

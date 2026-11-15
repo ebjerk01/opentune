@@ -95,6 +95,17 @@ enum Command {
         /// Directory of *.json ECU definitions.
         dir: PathBuf,
     },
+    /// Read the connected ECU's identity and match it to a definition/catalog.
+    Identify {
+        #[command(flatten)]
+        conn: ConnectArgs,
+        /// Directory of ECU definitions to match against.
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+        /// Optional catalog directory (harvested vehicle→ECU data).
+        #[arg(long)]
+        catalog: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -140,6 +151,9 @@ fn registry() -> Registry {
     });
     r.register("elm327", "K-line (ELM327)", || {
         Box::new(opentune_driver_elm327::Elm327Driver::new())
+    });
+    r.register("kkl", "K-line (KKL 409.1 raw, FTDI/CH340)", || {
+        Box::new(opentune_driver_kkl::KklDriver::new())
     });
     r
 }
@@ -361,6 +375,57 @@ fn main() -> Result<()> {
                 );
             }
         }
+        Command::Identify {
+            conn,
+            ecudefs,
+            catalog,
+        } => {
+            let mut drv = open_driver(&reg, &conn)?;
+            let id = drv.read_ecu_id()?;
+            println!("Reported identity:");
+            if let Some(v) = &id.ecu_name {
+                println!("  ECU name : {v}");
+            }
+            if let Some(v) = &id.hw_number {
+                println!("  HW/part  : {v}");
+            }
+            if let Some(v) = &id.sw_number {
+                println!("  SW number: {v}");
+            }
+            if let Some(v) = &id.supplier {
+                println!("  Supplier : {v}");
+            }
+            if let Some(v) = &id.vin {
+                println!("  VIN      : {v}");
+            }
+            let defs = opentune_core::ecudef::load_dir(&ecudefs).unwrap_or_default();
+            match opentune_core::ecudef::match_ecu(&defs, &id) {
+                Some(d) => println!(
+                    "\nMatched definition: {} ({}) — protocol {:?}, checksum {:?}, seedkey {:?}",
+                    d.id, d.name, d.protocol, d.checksum, d.seedkey
+                ),
+                None => println!("\nNo exact definition match in {}", ecudefs.display()),
+            }
+            if let Some(cat) = catalog {
+                let entries = opentune_core::catalog::load_catalog(&cat).unwrap_or_default();
+                let hits = opentune_core::catalog::match_catalog(&entries, &id);
+                if hits.is_empty() {
+                    println!("No catalog candidates.");
+                } else {
+                    println!("Catalog candidates:");
+                    for h in hits.iter().take(10) {
+                        println!(
+                            "  {} {} [{}] {}",
+                            h.make,
+                            h.models.join("/"),
+                            h.family.clone().unwrap_or_default(),
+                            h.source.clone().unwrap_or_default()
+                        );
+                    }
+                }
+            }
+            drv.close()?;
+        }
     }
     Ok(())
 }
@@ -400,10 +465,10 @@ fn find_maps(a: &[u8], b: &[u8], gap: usize, min_len: usize) -> Vec<(usize, usiz
 
 /// Hint whether a region's size looks like a table of 16-bit cells.
 fn guess_stride(len: usize) -> String {
-    if len >= 4 && len % 2 == 0 {
+    if len >= 4 && len.is_multiple_of(2) {
         let cells = len / 2;
         for &w in &[16usize, 12, 10, 8] {
-            if cells % w == 0 {
+            if cells.is_multiple_of(w) {
                 return format!("  (~{}x{} u16?)", cells / w, w);
             }
         }

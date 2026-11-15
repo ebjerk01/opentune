@@ -13,12 +13,18 @@
   "regions": [
     {
       "name": "full",
-      "region": { "address": 0, "length": 524288 },
+      "region": {
+        "address": 0,
+        "length": 524288
+      },
       "writable": false
     },
     {
       "name": "calibration",
-      "region": { "address": 393216, "length": 131072 },
+      "region": {
+        "address": 393216,
+        "length": 131072
+      },
       "writable": true
     }
   ],
@@ -34,7 +40,10 @@
       "endian": "big",
       "rows": 16,
       "cols": 16,
-      "scaling": { "factor": 0.01, "offset": 0.0 },
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
       "unit": "mg/stroke",
       "x_axis": {
         "name": "engine speed",
@@ -43,7 +52,10 @@
         "address": 458240,
         "data_type": "u16",
         "endian": "big",
-        "scaling": { "factor": 1.0, "offset": 0.0 }
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
       },
       "y_axis": {
         "name": "charge air pressure",
@@ -52,7 +64,10 @@
         "address": 458496,
         "data_type": "u16",
         "endian": "big",
-        "scaling": { "factor": 1.0, "offset": 0.0 }
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
       },
       "min": 0.0,
       "max": 80.0
@@ -65,7 +80,10 @@
       "endian": "big",
       "rows": 1,
       "cols": 16,
-      "scaling": { "factor": 0.1, "offset": 0.0 },
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
       "unit": "Nm",
       "x_axis": {
         "name": "engine speed",
@@ -74,10 +92,24 @@
         "address": 458240,
         "data_type": "u16",
         "endian": "big",
-        "scaling": { "factor": 1.0, "offset": 0.0 }
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
       },
       "min": 0.0,
       "max": 400.0
     }
-  ]
+  ],
+  "identify": {
+    "part_numbers": [
+      "0281011",
+      "0281013",
+      "896631",
+      "8966152"
+    ],
+    "sw_numbers": [
+      "1037"
+    ]
+  }
 }

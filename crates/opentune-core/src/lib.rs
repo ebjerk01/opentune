@@ -5,6 +5,7 @@
 //! implements [`Interface`]. Everything above — CLI, desktop, Android — talks only
 //! to that trait, so a new reader/flasher is a new driver, nothing else.
 pub mod capabilities;
+pub mod catalog;
 pub mod ecudef;
 pub mod error;
 pub mod interface;
