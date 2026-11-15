@@ -24,3 +24,4 @@ anyhow.workspace = true
 serde_json.workspace = true
 opentune-dtc = { path = "../opentune-dtc" }
 opentune-xdf = { path = "../opentune-xdf" }
+opentune-a2l = { path = "../opentune-a2l" }

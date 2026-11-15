@@ -14,6 +14,7 @@ members = [
     "crates/drivers/slcan",
     "crates/opentune-dtc",
     "crates/opentune-xdf",
+    "crates/opentune-a2l",
 ]
 
 [workspace.package]

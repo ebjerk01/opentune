@@ -1,0 +1,17 @@
+# Importer crate: ASAM MCD-2 MC (A2L) -> OpenTune MapDef. Part of the workspace.
+[package]
+name = "opentune-a2l"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Import ASAM MCD-2 MC (A2L) calibration descriptions into OpenTune ECU definitions."
+
+[dependencies]
+# Zero external dependencies on purpose: A2L is a simple keyword/block text
+# grammar (/begin X .. /end X, "strings", /* */ and // comments) and is parsed
+# by hand in this crate. Only opentune-core is needed, for the MapDef types.
+opentune-core = { path = "../opentune-core" }

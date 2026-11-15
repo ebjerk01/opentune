@@ -18,7 +18,10 @@ emissions defeat, odometer fraud, or theft.
 - `[L]` **Map editor** (not just the viewer) — edit cells in the heat grid, interpolate,
   copy/paste regions, undo, and write back with automatic checksum correction.
 - `[L]` **A2L / DAMOS import** — parse the OEM ASAM calibration description to auto-populate
-  precise map definitions (addresses, axes, scaling) for any ECU that has one.
+  precise map definitions (addresses, axes, scaling) for any ECU that has one *(done:
+  `opentune-a2l` crate + `import-a2l` CLI, zero-dep parser; RAT_FUNC affine recovery, COM_AXIS
+  resolution, non-linear flagged; validated on real EDC15/PPD/MSV80 A2Ls. `--base` rebases
+  logical CPU addresses to bin offsets. STD_AXIS embedded address + >2-D cuboids still TODO)*.
 - `[M]` **XDF / TunerPro import + export** — reuse the huge community library of definitions
   *(done: `opentune-xdf` crate, `import-xdf` modern XML + legacy text, `export-xdf` modern XML,
   round-trip validated)*.

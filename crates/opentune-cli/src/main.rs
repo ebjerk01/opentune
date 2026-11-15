@@ -142,6 +142,21 @@ enum Command {
         #[arg(long)]
         verify: bool,
     },
+    /// Import an ASAM A2L description and list (or merge) its calibration maps.
+    ImportA2l {
+        /// Path to the .a2l file.
+        file: PathBuf,
+        /// Optional ECU-definition JSON to merge the imported maps into
+        /// (existing maps with the same name are left untouched).
+        #[arg(long)]
+        into: Option<PathBuf>,
+        /// Base to subtract from each A2L CPU/logical address to get the bin
+        /// file offset (hex ok, e.g. 0xA0000000 for TriCore). A2L addresses are
+        /// logical, not file offsets, and — unlike XDF — the file carries no
+        /// base, so supply the ECU's memory-map base here.
+        #[arg(long, default_value = "0")]
+        base: String,
+    },
     /// Export an ECU definition's maps as a TunerPro XDF (modern XML).
     ExportXdf {
         /// Directory of ECU definitions.
@@ -563,6 +578,80 @@ fn main() -> Result<()> {
                     def.maps.iter().map(|m| m.name.clone()).collect();
                 let mut added = 0usize;
                 for m in import.maps {
+                    if have.contains(&m.name) {
+                        continue;
+                    }
+                    def.maps.push(m);
+                    added += 1;
+                }
+                let out = serde_json::to_string_pretty(&def)?;
+                std::fs::write(&into, out).map_err(|e| anyhow!("write {}: {e}", into.display()))?;
+                println!(
+                    "Merged {added} new map(s) into {} ({} total).",
+                    into.display(),
+                    def.maps.len()
+                );
+            }
+        }
+        Command::ImportA2l { file, into, base } => {
+            let base = parse_num(&base)?;
+            // A2L text can be Latin-1/Win-1252; decode lossily (ASCII structure).
+            let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+            let src = String::from_utf8_lossy(&raw);
+            let import = opentune_a2l::parse_a2l(&src).map_err(|e| anyhow!("{e}"))?;
+            println!(
+                "A2L: project {:?} module {:?} — {} map(s)  (base 0x{:X})",
+                import.project.as_deref().unwrap_or("?"),
+                import.module.as_deref().unwrap_or("?"),
+                import.maps.len(),
+                base
+            );
+            // Rebase CPU addresses to bin file offsets.
+            let mut maps = import.maps;
+            for m in &mut maps {
+                m.address = m.address.wrapping_sub(base);
+                if let Some(ax) = m.x_axis.as_mut() {
+                    if let Some(a) = ax.address.as_mut() {
+                        *a = a.wrapping_sub(base);
+                    }
+                }
+                if let Some(ax) = m.y_axis.as_mut() {
+                    if let Some(a) = ax.address.as_mut() {
+                        *a = a.wrapping_sub(base);
+                    }
+                }
+            }
+            for m in maps.iter().take(60) {
+                let note = if m.notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("  ! {}", m.notes)
+                };
+                println!(
+                    "  {:<34} @0x{:06X}  {}x{}  {:?}/{:?}  x{}{:+}{}",
+                    m.name,
+                    m.address,
+                    m.rows,
+                    m.cols,
+                    m.data_type,
+                    m.endian,
+                    m.scaling.factor,
+                    m.scaling.offset,
+                    note
+                );
+            }
+            if maps.len() > 60 {
+                println!("  … and {} more", maps.len() - 60);
+            }
+            if let Some(into) = into {
+                let txt = std::fs::read_to_string(&into)
+                    .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
+                let mut def: opentune_core::ecudef::EcuDef = serde_json::from_str(&txt)
+                    .map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+                let have: std::collections::HashSet<String> =
+                    def.maps.iter().map(|m| m.name.clone()).collect();
+                let mut added = 0usize;
+                for m in maps {
                     if have.contains(&m.name) {
                         continue;
                     }

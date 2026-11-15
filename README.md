@@ -23,8 +23,13 @@
   physical units (mg/stroke, °, …) with a before→after grid, not just a byte diff.
 - **Import and export** the large community library of **TunerPro XDF** definitions
   (`import-xdf` / `export-xdf`, modern XML, round-trip validated).
+- **Import factory ASAM A2L** calibration descriptions (`import-a2l`) — precise map
+  addresses/axes/scaling straight from the OEM description; validated at scale on real
+  EDC15 / Siemens PPD / BMW MSV80 files (thousands of maps each), linear scaling recovered
+  from RAT_FUNC and non-linear conversions flagged, never guessed.
 - A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
-  `compare`, `checksum verify|fix`, `flash`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`, `dtc`.
+  `compare`, `checksum verify|fix`, `flash`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`,
+  `import-a2l`, `dtc`.
 
 OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
 already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
