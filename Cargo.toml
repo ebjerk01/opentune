@@ -13,6 +13,7 @@ members = [
     "crates/drivers/kline-bridge",
     "crates/drivers/slcan",
     "crates/opentune-dtc",
+    "crates/opentune-xdf",
 ]
 
 [workspace.package]

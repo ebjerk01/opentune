@@ -1,0 +1,17 @@
+# Importer crate: TunerPro XDF -> OpenTune MapDef. Part of the workspace.
+[package]
+name = "opentune-xdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Import TunerPro XDF map definitions into OpenTune ECU definitions."
+
+[dependencies]
+# roxmltree 0.20.0 (2023-12-29) is a small, pull-free DOM reader with no
+# external runtime dependencies (its xmlparser tokenizer is vendored in).
+roxmltree = "0.20.0"
+opentune-core = { path = "../opentune-core" }

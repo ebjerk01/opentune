@@ -108,6 +108,15 @@ enum Command {
     },
     /// Look up a diagnostic trouble code (e.g. P0101).
     Dtc { code: String },
+    /// Import a TunerPro XDF definition and list (or merge) its maps.
+    ImportXdf {
+        /// Path to the .xdf file (modern XML or legacy text format).
+        file: PathBuf,
+        /// Optional ECU-definition JSON to merge the imported maps into
+        /// (existing maps with the same name are left untouched).
+        #[arg(long)]
+        into: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -438,6 +447,62 @@ fn main() -> Result<()> {
             Some(d) => println!("{}  [{:?}]  {}", d.code, d.system, d.description),
             None => println!("{code}: malformed code"),
         },
+        Command::ImportXdf { file, into } => {
+            // XDF payloads in the wild are sometimes Windows-1251/Latin-1, not
+            // UTF-8. The structure is ASCII; decode lossily so a non-UTF-8 unit
+            // string can't abort the import (affected text is flagged, not lost).
+            let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+            let src = String::from_utf8_lossy(&raw);
+            let import = opentune_xdf::parse_xdf(&src).map_err(|e| anyhow!("{e:?}"))?;
+            println!(
+                "XDF: {}  (base offset 0x{:X}) — {} map(s)",
+                import.title.as_deref().unwrap_or("(untitled)"),
+                import.base_offset,
+                import.maps.len()
+            );
+            for m in &import.maps {
+                let note = if m.notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("  ! {}", m.notes)
+                };
+                println!(
+                    "  {:<28} @0x{:06X}  {}x{}  {:?}/{:?}  x{}{:+}{}",
+                    m.name,
+                    m.address,
+                    m.rows,
+                    m.cols,
+                    m.data_type,
+                    m.endian,
+                    m.scaling.factor,
+                    m.scaling.offset,
+                    note
+                );
+            }
+            if let Some(into) = into {
+                let txt = std::fs::read_to_string(&into)
+                    .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
+                let mut def: opentune_core::ecudef::EcuDef =
+                    serde_json::from_str(&txt).map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+                let have: std::collections::HashSet<String> =
+                    def.maps.iter().map(|m| m.name.clone()).collect();
+                let mut added = 0usize;
+                for m in import.maps {
+                    if have.contains(&m.name) {
+                        continue;
+                    }
+                    def.maps.push(m);
+                    added += 1;
+                }
+                let out = serde_json::to_string_pretty(&def)?;
+                std::fs::write(&into, out).map_err(|e| anyhow!("write {}: {e}", into.display()))?;
+                println!(
+                    "Merged {added} new map(s) into {} ({} total).",
+                    into.display(),
+                    def.maps.len()
+                );
+            }
+        }
     }
     Ok(())
 }
