@@ -353,6 +353,7 @@ dependencies = [
  "opentune-driver-openport2",
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
+ "opentune-dtc",
  "opentune-flash",
  "serde_json",
 ]
@@ -420,6 +421,10 @@ dependencies = [
  "opentune-core",
  "socketcan",
 ]
+
+[[package]]
+name = "opentune-dtc"
+version = "0.1.0"
 
 [[package]]
 name = "opentune-flash"

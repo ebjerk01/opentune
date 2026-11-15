@@ -29,6 +29,7 @@ Everything you can do with a `.bin` and no car.
   - [x] Bosch EDC15C6 checksum module (edc15.rs)
   - [ ] EDC17, PCR2.1 (later)
 - [x] Map diff (compare stock vs modified, byte and region level)
+- [x] **Real map library** — EDC16U34 (Golf): smoke/IQ limiters validated vs real dumps (docs/MAP-LIBRARY.md)
 - [~] **ECU auto-identification** (`identify` command): read UDS/KWP DIDs → match `EcuDef.identify` keys + a vehicle catalog
   - [x] `identify` field on ECU defs + `opentune identify` (defs + catalog matching)
   - [x] harvest comma.ai opendbc FW fingerprints (MIT) into a catalog — 998 entries, 14 brands
@@ -84,6 +85,7 @@ Write a calibration back, safely.
 - [ ] Bosch EDC17 (checksum + OBD flash)
 - [ ] Continental/Siemens Simos PCR2.1
 - [ ] Bosch EDC15C6 over K-line (Mercedes CR1 family)
+- [x] DTC database + decoder (11,140 codes; `opentune dtc <code>`)
 - [ ] Growing community ECU-definition library
 
 ## M7 — Android app

@@ -22,3 +22,4 @@ opentune-driver-slcan = { path = "../drivers/slcan" }
 clap.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+opentune-dtc = { path = "../opentune-dtc" }

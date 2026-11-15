@@ -106,6 +106,8 @@ enum Command {
         #[arg(long)]
         catalog: Option<PathBuf>,
     },
+    /// Look up a diagnostic trouble code (e.g. P0101).
+    Dtc { code: String },
 }
 
 #[derive(Subcommand)]
@@ -432,6 +434,10 @@ fn main() -> Result<()> {
             }
             drv.close()?;
         }
+        Command::Dtc { code } => match opentune_dtc::lookup(&code) {
+            Some(d) => println!("{}  [{:?}]  {}", d.code, d.system, d.description),
+            None => println!("{code}: malformed code"),
+        },
     }
     Ok(())
 }

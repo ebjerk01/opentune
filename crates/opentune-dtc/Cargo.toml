@@ -1,0 +1,18 @@
+# Standalone for now: an empty [workspace] table makes this crate its own
+# workspace root so it can be built in isolation with
+#   cargo check --manifest-path crates/opentune-dtc/Cargo.toml
+# The maintainer removes this table when wiring it into the root workspace.
+
+[package]
+name = "opentune-dtc"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Diagnostic Trouble Code (DTC) database and ISO 15031-6 / UDS decoder for OpenTune"
+publish = false
+
+# No dependencies: the DTC table is embedded with include_str! and parsed once.
+[dependencies]
