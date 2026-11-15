@@ -60,6 +60,41 @@ enum Command {
         #[arg(long, default_value_t = 12_000)]
         min_mv: u32,
     },
+    /// Full read via a driver, archived to the backup vault with ECU id.
+    Dump {
+        #[command(flatten)]
+        conn: ConnectArgs,
+        /// Start address (hex), default 0.
+        #[arg(long, default_value = "0x0")]
+        addr: String,
+        /// Length to read (hex or decimal).
+        #[arg(long)]
+        len: String,
+        /// Vault directory to archive the dump into.
+        #[arg(long, default_value = "backups")]
+        vault: PathBuf,
+    },
+    /// Find candidate calibration maps by clustering the diff of two images.
+    Findmaps {
+        /// Stock image.
+        stock: PathBuf,
+        /// Modified image.
+        tuned: PathBuf,
+        /// Merge changed bytes closer than this many bytes into one region.
+        #[arg(long, default_value_t = 16)]
+        gap: usize,
+        /// Minimum region length (bytes) to report.
+        #[arg(long, default_value_t = 2)]
+        min_len: usize,
+        /// Optionally write the candidate regions as JSON.
+        #[arg(long)]
+        emit: Option<PathBuf>,
+    },
+    /// List ECU definitions in a directory.
+    Ecudefs {
+        /// Directory of *.json ECU definitions.
+        dir: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -252,8 +287,129 @@ fn main() -> Result<()> {
             );
             drv.close()?;
         }
+        Command::Dump {
+            conn,
+            addr,
+            len,
+            vault,
+        } => {
+            let mut drv = open_driver(&reg, &conn)?;
+            let region = MemoryRegion::new(parse_num(&addr)?, parse_num(&len)?);
+            let id = drv.read_ecu_id().unwrap_or_default();
+            let data = drv.read_memory(region, &mut noprogress)?;
+            let path = opentune_flash::vault::save_backup(&vault, &id, region, &data)
+                .map_err(|e| anyhow!("vault: {e}"))?;
+            println!(
+                "Dumped {} bytes @0x{:08X} -> {}",
+                data.len(),
+                region.address,
+                path.display()
+            );
+            drv.close()?;
+        }
+        Command::Findmaps {
+            stock,
+            tuned,
+            gap,
+            min_len,
+            emit,
+        } => {
+            let a = std::fs::read(&stock).with_context(|| format!("read {}", stock.display()))?;
+            let b = std::fs::read(&tuned).with_context(|| format!("read {}", tuned.display()))?;
+            let regions = find_maps(&a, &b, gap, min_len);
+            println!(
+                "{} candidate map region(s) (gap={gap}, min_len={min_len}):",
+                regions.len()
+            );
+            for (i, (s, e)) in regions.iter().enumerate() {
+                println!(
+                    "  map{:<3} 0x{:08X}..0x{:08X}  {:>6} bytes{}",
+                    i,
+                    s,
+                    e,
+                    e - s,
+                    guess_stride(e - s)
+                );
+            }
+            if let Some(path) = emit {
+                let arr: Vec<_> = regions
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (s, e))| {
+                        serde_json::json!({
+                            "name": format!("map{i}"),
+                            "address": s,
+                            "length": e - s,
+                            "notes": "auto-detected from stock/tuned diff; confirm type/axes",
+                        })
+                    })
+                    .collect();
+                std::fs::write(&path, serde_json::to_string_pretty(&arr)?)?;
+                println!("wrote {} candidate(s) -> {}", regions.len(), path.display());
+            }
+        }
+        Command::Ecudefs { dir } => {
+            let defs = opentune_core::ecudef::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
+            println!("{} ECU definition(s):", defs.len());
+            for d in &defs {
+                println!(
+                    "  {:<22} {:<16} {:>5} KiB  {:?}",
+                    d.id,
+                    d.name,
+                    d.flash_size / 1024,
+                    d.protocol
+                );
+            }
+        }
     }
     Ok(())
+}
+
+/// Cluster the byte differences between two images into candidate map regions,
+/// merging changes separated by fewer than `gap` unchanged bytes.
+fn find_maps(a: &[u8], b: &[u8], gap: usize, min_len: usize) -> Vec<(usize, usize)> {
+    let n = a.len().min(b.len());
+    let mut regions = Vec::new();
+    let mut i = 0;
+    while i < n {
+        if a[i] != b[i] {
+            let start = i;
+            let mut end = i + 1;
+            let mut since_change = 0usize;
+            let mut j = i + 1;
+            while j < n && since_change <= gap {
+                if a[j] != b[j] {
+                    end = j + 1;
+                    since_change = 0;
+                } else {
+                    since_change += 1;
+                }
+                j += 1;
+            }
+            regions.push((start, end));
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    regions
+        .into_iter()
+        .filter(|(s, e)| e - s >= min_len)
+        .collect()
+}
+
+/// Hint whether a region's size looks like a table of 16-bit cells.
+fn guess_stride(len: usize) -> String {
+    if len >= 4 && len % 2 == 0 {
+        let cells = len / 2;
+        for &w in &[16usize, 12, 10, 8] {
+            if cells % w == 0 {
+                return format!("  (~{}x{} u16?)", cells / w, w);
+            }
+        }
+        return format!("  (~{cells} u16 cells?)");
+    }
+    String::new()
 }
 
 /// Summarise the byte differences between two images as contiguous ranges.

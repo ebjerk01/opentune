@@ -40,6 +40,12 @@ Identify and read a real ECU.
 - [~] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol) — implemented, awaiting hardware test
 - [~] **SocketCAN driver** — implemented, awaiting hardware test
 - [~] **K-line / ELM327 driver** — implemented, awaiting hardware test
+- [ ] **Cheap / AliExpress clone interface compatibility** (research: docs/CHEAP-INTERFACES.md)
+  - [ ] OpenPort 2.0 clones (via the openport2 driver) — verified on a clone
+  - [ ] ELM327 clones (read/log; most can't flash) via the elm327 driver
+  - [ ] **KKL 409.1 raw-K-line driver** (FTDI/CH340 + transceiver — new driver)
+  - [ ] **slcan / gs_usb USB-CAN driver** (CANable/CANtact/CH340 clones)
+  - [ ] **Generic J2534 driver** (Mongoose/VNCI/SVCI/Scanmatik clones)
 - [ ] ECU identify (part/SW number, VIN)
 - [ ] Full OBD read — Bosch EDC16 first
 - [x] Battery-voltage read, exposed as a safety gate
