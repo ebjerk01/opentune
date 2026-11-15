@@ -155,6 +155,9 @@ fn registry() -> Registry {
     r.register("kkl", "K-line (KKL 409.1 raw, FTDI/CH340)", || {
         Box::new(opentune_driver_kkl::KklDriver::new())
     });
+    r.register("kline-bridge", "Arduino K-line bridge", || {
+        Box::new(opentune_driver_kline_bridge::BridgeDriver::new())
+    });
     r
 }
 

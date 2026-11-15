@@ -348,6 +348,7 @@ dependencies = [
  "opentune-core",
  "opentune-driver-elm327",
  "opentune-driver-kkl",
+ "opentune-driver-kline-bridge",
  "opentune-driver-mock",
  "opentune-driver-openport2",
  "opentune-driver-socketcan",
@@ -374,6 +375,14 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-kkl"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-kline-bridge"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
