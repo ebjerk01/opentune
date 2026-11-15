@@ -108,6 +108,22 @@ enum Command {
     },
     /// Look up a diagnostic trouble code (e.g. P0101).
     Dtc { code: String },
+    /// Compare two calibrations map-by-map through an ECU definition.
+    Compare {
+        /// Directory of ECU definitions.
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+        /// Definition id (see `ecudefs`) whose maps describe the images.
+        #[arg(long)]
+        def: String,
+        /// Original / stock image.
+        stock: PathBuf,
+        /// Modified / tuned image.
+        tuned: PathBuf,
+        /// Show the full before/after grid for just this map (by name substring).
+        #[arg(long)]
+        map: Option<String>,
+    },
     /// Import a TunerPro XDF definition and list (or merge) its maps.
     ImportXdf {
         /// Path to the .xdf file (modern XML or legacy text format).
@@ -464,6 +480,27 @@ fn main() -> Result<()> {
             Some(d) => println!("{}  [{:?}]  {}", d.code, d.system, d.description),
             None => println!("{code}: malformed code"),
         },
+        Command::Compare {
+            ecudefs,
+            def,
+            stock,
+            tuned,
+            map,
+        } => {
+            let defs = opentune_core::ecudef::load_dir(&ecudefs)
+                .map_err(|e| anyhow!("load {}: {e}", ecudefs.display()))?;
+            let d = defs
+                .iter()
+                .find(|d| d.id == def)
+                .ok_or_else(|| anyhow!("no definition '{def}' in {}", ecudefs.display()))?;
+            if d.maps.is_empty() {
+                println!("Definition '{def}' has no maps to compare.");
+                return Ok(());
+            }
+            let a = std::fs::read(&stock).with_context(|| format!("read {}", stock.display()))?;
+            let b = std::fs::read(&tuned).with_context(|| format!("read {}", tuned.display()))?;
+            compare_maps(d, &a, &b, map.as_deref());
+        }
         Command::ImportXdf { file, into } => {
             // XDF payloads in the wild are sometimes Windows-1251/Latin-1, not
             // UTF-8. The structure is ASCII; decode lossily so a non-UTF-8 unit
@@ -603,5 +640,145 @@ fn diff(a: &[u8], b: &[u8]) {
     }
     if ranges.len() > 40 {
         println!("  … and {} more regions", ranges.len() - 40);
+    }
+}
+
+/// Read one map cell's RAW value at a byte offset, honoring type + byte order.
+fn read_cell(
+    img: &[u8],
+    off: usize,
+    dt: opentune_core::ecudef::DataType,
+    endian: opentune_core::ecudef::Endian,
+) -> Option<f64> {
+    use opentune_core::ecudef::{DataType as T, Endian as E};
+    let w = dt.byte_len() as usize;
+    let b = img.get(off..off + w)?;
+    let le = matches!(endian, E::Little);
+    let v = match dt {
+        T::U8 => b[0] as f64,
+        T::S8 => (b[0] as i8) as f64,
+        T::U16 => {
+            let a = [b[0], b[1]];
+            (if le { u16::from_le_bytes(a) } else { u16::from_be_bytes(a) }) as f64
+        }
+        T::S16 => {
+            let a = [b[0], b[1]];
+            (if le { i16::from_le_bytes(a) } else { i16::from_be_bytes(a) }) as f64
+        }
+        T::U32 => {
+            let a = [b[0], b[1], b[2], b[3]];
+            (if le { u32::from_le_bytes(a) } else { u32::from_be_bytes(a) }) as f64
+        }
+        T::S32 => {
+            let a = [b[0], b[1], b[2], b[3]];
+            (if le { i32::from_le_bytes(a) } else { i32::from_be_bytes(a) }) as f64
+        }
+        T::F32 => {
+            let a = [b[0], b[1], b[2], b[3]];
+            (if le { f32::from_le_bytes(a) } else { f32::from_be_bytes(a) }) as f64
+        }
+    };
+    Some(v)
+}
+
+/// Decode every cell of a map (physical values) from an image, or `None` if the
+/// map runs off the end of the image.
+fn decode_map_phys(m: &opentune_core::ecudef::MapDef, img: &[u8]) -> Option<Vec<f64>> {
+    let n = (m.rows as usize) * (m.cols as usize);
+    let w = m.data_type.byte_len() as usize;
+    let base = m.address as usize;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let raw = read_cell(img, base + i * w, m.data_type, m.endian)?;
+        out.push(m.scaling.to_physical(raw));
+    }
+    Some(out)
+}
+
+/// Compare two images map-by-map through a definition's MapDefs.
+fn compare_maps(d: &opentune_core::ecudef::EcuDef, a: &[u8], b: &[u8], only: Option<&str>) {
+    println!(
+        "Comparing {} map(s) of '{}' ({} → {})",
+        d.maps.len(),
+        d.id,
+        human_len(a.len()),
+        human_len(b.len())
+    );
+    let mut any_changed = false;
+    for m in &d.maps {
+        if let Some(sub) = only {
+            if !m.name.to_lowercase().contains(&sub.to_lowercase()) {
+                continue;
+            }
+        }
+        let (Some(pa), Some(pb)) = (decode_map_phys(m, a), decode_map_phys(m, b)) else {
+            println!("  {:<32} [out of range — skipped]", m.name);
+            continue;
+        };
+        let mut changed = 0usize;
+        let mut max_abs = 0f64;
+        let mut sum_delta = 0f64;
+        for (x, y) in pa.iter().zip(pb.iter()) {
+            let dlt = y - x;
+            if dlt.abs() > 1e-9 {
+                changed += 1;
+                sum_delta += dlt;
+                if dlt.abs() > max_abs {
+                    max_abs = dlt.abs();
+                }
+            }
+        }
+        let unit = if m.unit.is_empty() { String::new() } else { format!(" {}", m.unit) };
+        if changed == 0 {
+            if only.is_some() {
+                println!("  {:<32} unchanged", m.name);
+            }
+            continue;
+        }
+        any_changed = true;
+        let avg = sum_delta / changed as f64;
+        println!(
+            "  {:<32} {}x{}  {} cell(s) changed  Δmax {:+.3}{u}  Δavg {:+.3}{u}",
+            m.name,
+            m.rows,
+            m.cols,
+            changed,
+            max_abs,
+            avg,
+            u = unit
+        );
+        // Full grid for a single explicitly-requested map.
+        if only.is_some() {
+            print_grid(m, &pa, &pb);
+        }
+    }
+    if !any_changed && only.is_none() {
+        println!("  No mapped cells differ.");
+    }
+}
+
+/// Print a before→after grid for one map.
+fn print_grid(m: &opentune_core::ecudef::MapDef, pa: &[f64], pb: &[f64]) {
+    let cols = m.cols as usize;
+    for r in 0..m.rows as usize {
+        let mut line = String::from("      ");
+        for c in 0..cols {
+            let i = r * cols + c;
+            let (x, y) = (pa[i], pb[i]);
+            if (y - x).abs() > 1e-9 {
+                line.push_str(&format!("{:>7.1}>{:<7.1}", x, y));
+            } else {
+                line.push_str(&format!("{:>7.1}{:<8}", x, ""));
+            }
+        }
+        println!("{}", line.trim_end());
+    }
+}
+
+fn human_len(n: usize) -> String {
+    if n >= 1024 * 1024 {
+        format!("{} MiB", n / (1024 * 1024))
+    } else {
+        format!("{} KiB", n / 1024)
     }
 }

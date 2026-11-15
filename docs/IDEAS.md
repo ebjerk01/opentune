@@ -25,7 +25,8 @@ emissions defeat, odometer fraud, or theft.
 - `[M]` **Auto map-finder** — cluster a stock/tuned diff, classify regions against known map
   shapes, and emit candidate `MapDef`s to seed a definition.
 - `[M]` **Tune compare** — diff two calibrations map-by-map (not just bytes), overlaying the
-  grids so you can see exactly what a tune changed and by how much.
+  grids so you can see exactly what a tune changed and by how much *(done: `compare` CLI —
+  per-map changed-cell count, Δmax/Δavg in physical units, and a before→after grid)*.
 - `[S]` **Units & axis decoding** everywhere (mg/stroke, mbar, bar, °CA, Nm).
 
 ## Identification & data

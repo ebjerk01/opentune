@@ -19,8 +19,11 @@
 - **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, with a
   backup vault, all exercised through the mock/file driver.
+- **Compare** two calibrations **map-by-map** through a definition's `MapDef`s — decoded to
+  physical units (mg/stroke, °, …) with a before→after grid, not just a byte diff.
+- **Import** the large community library of **TunerPro XDF** definitions (`import-xdf`).
 - A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
-  `checksum verify|fix`, `flash`, `ecudefs`.
+  `compare`, `checksum verify|fix`, `flash`, `ecudefs`, `import-xdf`, `dtc`.
 
 OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
 already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
