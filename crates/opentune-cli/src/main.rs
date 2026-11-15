@@ -133,6 +133,15 @@ enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// List archived reads in a backup vault directory.
+    Vault {
+        /// Vault directory to scan (default: ./vault).
+        #[arg(default_value = "vault")]
+        dir: PathBuf,
+        /// Re-read each .bin and check its CRC32 against the .meta sidecar.
+        #[arg(long)]
+        verify: bool,
+    },
     /// Export an ECU definition's maps as a TunerPro XDF (modern XML).
     ExportXdf {
         /// Directory of ECU definitions.
@@ -566,6 +575,57 @@ fn main() -> Result<()> {
                     "Merged {added} new map(s) into {} ({} total).",
                     into.display(),
                     def.maps.len()
+                );
+            }
+        }
+        Command::Vault { dir, verify } => {
+            if !dir.is_dir() {
+                return Err(anyhow!("vault directory not found: {}", dir.display()));
+            }
+            let mut metas: Vec<PathBuf> = std::fs::read_dir(&dir)?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().map(|x| x == "meta").unwrap_or(false))
+                .collect();
+            metas.sort();
+            if metas.is_empty() {
+                println!("No backups in {}", dir.display());
+                return Ok(());
+            }
+            println!("{} backup(s) in {}:", metas.len(), dir.display());
+            for meta in &metas {
+                let txt = std::fs::read_to_string(meta).unwrap_or_default();
+                let field = |k: &str| -> String {
+                    txt.lines()
+                        .find_map(|l| l.split_once('=').filter(|(key, _)| key.trim() == k))
+                        .map(|(_, v)| v.trim().to_string())
+                        .unwrap_or_default()
+                };
+                let bin = meta.with_extension("bin");
+                let name = bin
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let sw = field("sw_number");
+                let addr = field("address");
+                let len = field("length");
+                let stored_crc = field("crc32");
+                let mut status = String::new();
+                if verify {
+                    status = match std::fs::read(&bin) {
+                        Ok(data) => {
+                            let got = format!("0x{:08X}", opentune_checksum::crc32(&data));
+                            if got.eq_ignore_ascii_case(&stored_crc) {
+                                "  [OK]".into()
+                            } else {
+                                format!("  [MISMATCH got {got}]")
+                            }
+                        }
+                        Err(_) => "  [.bin missing]".into(),
+                    };
+                }
+                println!(
+                    "  {:<40} sw={:<12} @{} {} bytes crc={}{}",
+                    name, sw, addr, len, stored_crc, status
                 );
             }
         }

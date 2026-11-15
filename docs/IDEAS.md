@@ -50,7 +50,8 @@ emissions defeat, odometer fraud, or theft.
 - `[M]` **Resumable / recoverable flash** — checkpoint block progress; resume after a drop.
 - `[M]` **Flash wizard** — guided session with the safety checklist, battery-voltage watch,
   and an automatic pre-flash backup to the vault.
-- `[S]` **Backup vault browser** — list/restore/compare archived reads (CLI + app).
+- `[S]` **Backup vault browser** — list/restore/compare archived reads *(done: `vault` CLI
+  lists the vault and `--verify` re-checks each .bin CRC against its .meta; apps browse too)*.
 - `[M]` **Security-access (seed/key) plugin UX** — supply your own algorithm; never shipped.
 
 ## Apps & ecosystem

@@ -24,7 +24,7 @@
 - **Import and export** the large community library of **TunerPro XDF** definitions
   (`import-xdf` / `export-xdf`, modern XML, round-trip validated).
 - A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
-  `compare`, `checksum verify|fix`, `flash`, `ecudefs`, `import-xdf`, `export-xdf`, `dtc`.
+  `compare`, `checksum verify|fix`, `flash`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`, `dtc`.
 
 OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
 already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
