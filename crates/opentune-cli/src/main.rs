@@ -59,6 +59,9 @@ enum Command {
         /// Minimum battery mV gate (0 disables).
         #[arg(long, default_value_t = 12_000)]
         min_mv: u32,
+        /// Directory to archive the pre-flash backup into (the safety net).
+        #[arg(long, default_value = "vault")]
+        vault: PathBuf,
     },
     /// Full read via a driver, archived to the backup vault with ECU id.
     Dump {
@@ -362,10 +365,13 @@ fn main() -> Result<()> {
             addr,
             data,
             min_mv,
+            vault,
         } => {
             let mut drv = open_driver(&reg, &conn)?;
             let bytes = std::fs::read(&data).with_context(|| format!("read {}", data.display()))?;
             let region = MemoryRegion::new(parse_num(&addr)?, bytes.len() as u32);
+            // Capture ECU identity up front so the archived backup is labelled.
+            let id = drv.read_ecu_id().unwrap_or_default();
             let safety = opentune_flash::SafetyConfig {
                 min_millivolts: min_mv,
                 ..Default::default()
@@ -378,6 +384,16 @@ fn main() -> Result<()> {
                 &mut noprogress,
             )
             .map_err(|e| anyhow!("flash: {e}"))?;
+            // Persist the pre-flash backup — the safety net if the write is bad.
+            if !report.backup.is_empty() {
+                match opentune_flash::vault::save_backup(&vault, &id, region, &report.backup) {
+                    Ok(p) => println!("Pre-flash backup archived: {}", p.display()),
+                    Err(e) => eprintln!(
+                        "WARNING: could not archive backup to {}: {e}",
+                        vault.display()
+                    ),
+                }
+            }
             println!(
                 "Flashed {} bytes @0x{:08X} — backup {} bytes, verified={}",
                 report.bytes_written,
