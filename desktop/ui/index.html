@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenTune</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Sidebar -->
+      <aside id="sidebar">
+        <div class="brand">
+          <div class="brand-mark">OT</div>
+          <div class="brand-text">
+            <div class="brand-name">OpenTune</div>
+            <div class="brand-sub">open · calibration edition</div>
+          </div>
+        </div>
+
+        <nav id="nav">
+          <div class="nav-group-label">Calibration</div>
+          <button class="nav-item" data-panel="image"><span class="ni-ico">▦</span> Image</button>
+          <button class="nav-item" data-panel="identify"><span class="ni-ico">⌖</span> Identify</button>
+          <button class="nav-item" data-panel="checksum"><span class="ni-ico">✓</span> Checksum</button>
+          <button class="nav-item" data-panel="maps"><span class="ni-ico">▞</span> Maps</button>
+          <button class="nav-item" data-panel="flash"><span class="ni-ico">⚡</span> Flash</button>
+          <button class="nav-item" data-panel="vault"><span class="ni-ico">▣</span> Vault</button>
+          <button class="nav-item" data-panel="drivers"><span class="ni-ico">⇄</span> Drivers</button>
+
+          <div class="nav-divider"></div>
+          <div class="nav-group-label">Help</div>
+          <button class="nav-item" data-panel="guide"><span class="ni-ico">❔</span> Guide</button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div id="dataStatus" class="data-status">resolving data…</div>
+          <div class="offline-badge">● offline · mock driver</div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main id="main">
+        <!-- IMAGE -->
+        <section class="panel" id="panel-image">
+          <header class="panel-head">
+            <h1>Image</h1>
+            <p>Open a flash dump and inspect it. Everything downstream works on this file, offline.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <button class="btn primary" id="btnOpenImage">Open flash dump…</button>
+              <span id="imageHint" class="muted small">no image opened</span>
+            </div>
+            <div id="imageMeta" class="meta-grid muted">No image loaded.</div>
+          </div>
+          <div class="card">
+            <div class="card-title-row">
+              <h2>Hex preview</h2>
+              <div class="row tight">
+                <button class="btn sm" id="hexPrev">◀ prev</button>
+                <input class="inp sm mono" id="hexOffset" value="0x00000000" />
+                <button class="btn sm" id="hexNext">next ▶</button>
+              </div>
+            </div>
+            <div id="hexView" class="hexview muted">—</div>
+          </div>
+        </section>
+
+        <!-- IDENTIFY -->
+        <section class="panel" id="panel-identify">
+          <header class="panel-head">
+            <h1>Identify</h1>
+            <p>ECU identity from the dump, the matched OpenTune definition, and vehicle-catalog candidates.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <button class="btn primary" id="btnIdentify">Identify opened image</button>
+              <span id="idPathHint" class="muted small">no image opened</span>
+            </div>
+            <div id="idResult" class="result"></div>
+          </div>
+          <div class="card">
+            <h2>Match a part / software number</h2>
+            <p class="muted small">The offline mock driver reports only a name + size. Enter a real HW/SW number to exercise definition + catalog matching against the bundled databases.</p>
+            <div class="row">
+              <label>HW #</label><input class="inp mono" id="idHw" placeholder="e.g. 0281011402" />
+              <label>SW #</label><input class="inp mono" id="idSw" placeholder="e.g. 1037…" />
+              <button class="btn primary" id="btnMatchId">Match</button>
+            </div>
+            <div class="row tight chips">
+              <button class="chip" data-hw="0281011402" data-sw="">EDC16 0281011402</button>
+              <button class="chip" data-hw="03G906016" data-sw="">VW 03G906016</button>
+              <button class="chip" data-hw="" data-sw="1037369105">SW 1037369105</button>
+            </div>
+            <div id="matchResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- CHECKSUM -->
+        <section class="panel" id="panel-checksum">
+          <header class="panel-head">
+            <h1>Checksum</h1>
+            <p>Verify and correct the integrity fields the ECU requires before it will run an image.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <label>Algorithm</label>
+              <select class="inp" id="csAlgo">
+                <option value="edc16">edc16</option>
+                <option value="edc17">edc17</option>
+                <option value="pcr21">pcr21</option>
+                <option value="crc32-tail">crc32-tail</option>
+              </select>
+              <button class="btn primary" id="btnCsVerify">Verify</button>
+              <button class="btn warn" id="btnCsFix">Fix &amp; save</button>
+              <button class="btn" id="btnCsFixAs">Fix → Save as…</button>
+              <span id="csPathHint" class="muted small">no image opened</span>
+            </div>
+            <div class="muted small">edc16 = Bosch EDC16 block/additive checksum · edc17 = Bosch/VAG forward CRC-32 · pcr21 = Simos PCR2.1 cal CRC (RSA block untouched) · crc32-tail = generic tail CRC-32.</div>
+            <div id="csResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- MAPS -->
+        <section class="panel" id="panel-maps">
+          <header class="panel-head">
+            <h1>Maps</h1>
+            <p>Find changed regions between two dumps, and decode a defined calibration map into a read-only heat grid.</p>
+          </header>
+          <div class="card">
+            <h2>Find maps (diff two files)</h2>
+            <div class="row">
+              <button class="btn" id="fmStock">Stock file…</button>
+              <span id="fmStockName" class="muted small mono">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="fmTuned">Tuned file…</button>
+              <span id="fmTunedName" class="muted small mono">—</span>
+            </div>
+            <div class="row tight">
+              <label>gap</label><input class="inp sm" id="fmGap" value="16" />
+              <label>min len</label><input class="inp sm" id="fmMin" value="8" />
+              <button class="btn primary" id="btnFindmaps">Run diff</button>
+            </div>
+            <div id="fmResult" class="result"></div>
+          </div>
+
+          <div class="card">
+            <h2>Map viewer</h2>
+            <p class="muted small">Decode a defined calibration map out of the opened image into a blue→red heat grid with real axis breakpoints, units and scaling. Read-only in this edition.</p>
+            <div class="row">
+              <label>Definition</label>
+              <select class="inp" id="mvDef"></select>
+              <label>Map</label>
+              <select class="inp wide" id="mvMap"></select>
+            </div>
+            <div class="row">
+              <button class="btn" id="mvPick">Image…</button>
+              <span id="mvImgName" class="muted small mono">uses opened image</span>
+              <button class="btn primary" id="btnDecodeMap">Decode</button>
+            </div>
+            <div id="mvResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- FLASH -->
+        <section class="panel" id="panel-flash">
+          <header class="panel-head">
+            <h1>Flash</h1>
+            <p>Safety-gated write through the mock driver: voltage gate → verified backup → write → read-back verify.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <label>Driver</label><select class="inp" id="flDriver"></select>
+            </div>
+            <div class="row">
+              <button class="btn" id="flTarget">Target image…</button>
+              <span id="flTargetName" class="muted small mono">uses opened image</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="flData">Data file…</button>
+              <span id="flDataName" class="muted small mono">—</span>
+            </div>
+            <div class="row tight">
+              <label>Address</label><input class="inp sm mono" id="flAddr" value="0x00070000" />
+              <label>min mV</label><input class="inp sm" id="flMv" value="12000" />
+              <button class="btn warn" id="btnFlash">Run flash</button>
+            </div>
+            <p class="muted small">The data file length must equal the region length. Reads the whole file, writes it at the address.</p>
+            <div id="flResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- VAULT -->
+        <section class="panel" id="panel-vault">
+          <header class="panel-head">
+            <h1>Vault</h1>
+            <p>Browse a backup directory: every saved dump is a <code>.bin</code> plus a <code>.meta</code> sidecar with a CRC-32.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <button class="btn primary" id="btnVaultPick">Choose backups folder…</button>
+              <span id="vaultDir" class="muted small mono">—</span>
+              <button class="btn sm" id="btnVaultRefresh">Refresh</button>
+            </div>
+            <div id="vaultResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- DRIVERS -->
+        <section class="panel" id="panel-drivers">
+          <header class="panel-head">
+            <h1>Drivers</h1>
+            <p>Interface drivers registered in this build. Offline work uses the mock / file driver.</p>
+          </header>
+          <div class="card">
+            <div id="driversResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- GUIDE -->
+        <section class="panel" id="panel-guide">
+          <header class="panel-head">
+            <h1>Guide</h1>
+            <p>What this app does, how the workflow fits together, and the hardware behind it. Bundled offline — no internet.</p>
+          </header>
+          <div class="guide-layout">
+            <nav id="guideNav" class="guide-nav"></nav>
+            <article id="guideBody" class="guide-body card">Loading…</article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

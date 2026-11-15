@@ -1,28 +1,52 @@
 # OpenTune Desktop
 
-A [Tauri](https://tauri.app) app that puts a UI on the shared OpenTune Rust
-core. The backend (`src-tauri/`) exposes a handful of commands — `list_drivers`,
-`connect`, `identify`, `read_region` — that call straight into `opentune-core`,
-`opentune-checksum` and `opentune-flash`; the frontend is plain HTML/JS, no
-build step.
+The open-source, **calibration-only** OpenTune app — a [Tauri 2](https://tauri.app)
+desktop UI over the shared OpenTune Rust core. It runs the whole workflow
+**offline** on a flash-image file through the mock/file driver: open a dump,
+identify it, verify/fix checksums, diff for maps, decode a defined map into a
+heat grid, run a safety-gated (mock) flash, and browse a backup vault.
+
+It is deliberately calibration-only — there is **no** immobiliser / EEPROM /
+standalone / bench tooling here (that lives in a separate private app).
 
 > This crate is **not** part of the root Cargo workspace. It builds on its own so
 > the workspace stays lean and the desktop-only dependencies (Tauri) don't leak
 > into the core build.
 
+## Panels
+
+`Image` · `Identify` · `Checksum` · `Maps` (findmaps diff + read-only map
+viewer) · `Flash` · `Vault` · `Drivers` · `Guide` (bundled offline markdown).
+
+## Backend commands
+
+`list_drivers`, `data_paths`, `image_info`, `hex_preview`, `identify`,
+`match_identity`, `checksum_verify`, `checksum_fix` (with a Save-As fallback),
+`findmaps`, `list_ecudefs`, `list_maps`, `decode_map`, `flash`, `vault_list`,
+`guide_list`, `guide_read` — each calls straight into `opentune-core`,
+`opentune-checksum` and `opentune-flash`.
+
 ## Layout
 
 ```
 desktop/
-├── index.html          # UI markup
-├── src/main.js         # UI logic — calls Tauri commands
-├── package.json        # Tauri CLI wrapper scripts
+├── ui/                     # frontend (build.frontendDist = "../ui")
+│   ├── index.html
+│   └── src/{app.js,styles.css}
+├── package.json            # Tauri CLI wrapper scripts
 └── src-tauri/
-    ├── Cargo.toml      # depends on the core + driver crates by relative path
-    ├── tauri.conf.json # window + bundle + updater config
+    ├── Cargo.toml          # core + driver crates by relative path
+    ├── tauri.conf.json     # window + bundle (ecudefs/catalog/guide resources) + updater
+    ├── capabilities/default.json   # Tauri 2 core + dialog permissions
+    ├── guide/*.md          # bundled in-app guide sections
+    ├── icons/              # app icons
     ├── build.rs
-    └── src/main.rs     # #[tauri::command]s that call the core
+    └── src/main.rs         # #[tauri::command]s that call the core
 ```
+
+The ECU definitions (`ecudefs/`), vehicle catalog (`catalog/`) and the guide
+markdown are bundled as Tauri resources and resolved at startup (a dev build
+falls back to the repo-root `ecudefs/` and `catalog/`).
 
 ## Prerequisites
 
@@ -51,8 +75,8 @@ cargo tauri dev
 cargo tauri build
 ```
 
-The frontend is served directly from `index.html` (`build.frontendDist` is
-`"../"`), so there is nothing to bundle on the web side.
+The frontend is served directly from `ui/index.html` (`build.frontendDist` is
+`"../ui"`), so there is nothing to bundle on the web side.
 
 ## Auto-update (signed GitHub Releases)
 
