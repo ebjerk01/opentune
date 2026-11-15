@@ -3,6 +3,8 @@
 //! No driver writes to an ECU directly from the app. Writes go through
 //! [`flash_calibration`], which enforces: voltage gate → verified backup →
 //! write → read-back verify. These rules live here so no driver can skip them.
+pub mod vault;
+
 use opentune_core::{Error, Interface, MemoryRegion, Phase, Progress, Result};
 
 /// Safety thresholds and switches for a flash operation.

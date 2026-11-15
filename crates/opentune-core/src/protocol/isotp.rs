@@ -144,3 +144,65 @@ impl DiagTransport for IsoTp {
         Err(Error::Timeout(timeout_ms))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+
+    /// A scripted CAN endpoint: returns queued frames on recv, records sends.
+    struct FakeEcu {
+        to_tester: VecDeque<(u32, Vec<u8>)>,
+        from_tester: Vec<(u32, Vec<u8>)>,
+        rx_id: u32,
+    }
+
+    impl CanLink for FakeEcu {
+        fn send_frame(&mut self, id: u32, data: &[u8]) -> Result<()> {
+            self.from_tester.push((id, data.to_vec()));
+            Ok(())
+        }
+        fn recv_frame(&mut self, _timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+            self.to_tester
+                .pop_front()
+                .map(|(_, d)| (self.rx_id, d))
+                .ok_or(Error::Timeout(0))
+        }
+    }
+
+    #[test]
+    fn single_frame_round_trip() {
+        let ecu = FakeEcu {
+            to_tester: VecDeque::from(vec![(0x7E8, vec![0x03, 0x62, 0x12, 0x34])]),
+            from_tester: Vec::new(),
+            rx_id: 0x7E8,
+        };
+        let mut tp = IsoTp::new(Box::new(ecu), 0x7E0, 0x7E8);
+        tp.send(&[0x22, 0x12, 0x34], 100).unwrap();
+        let resp = tp.recv(100).unwrap();
+        assert_eq!(resp, vec![0x62, 0x12, 0x34]);
+    }
+
+    #[test]
+    fn multiframe_send_and_recv() {
+        // ECU will: 1) send flow-control after our first frame,
+        //           2) answer a 10-byte response as FF + one CF.
+        let fc = (0x7E8, vec![0x30, 0x00, 0x00]);
+        let resp_ff = (0x7E8, vec![0x10, 0x0A, 0, 1, 2, 3, 4, 5]);
+        let resp_cf = (0x7E8, vec![0x21, 6, 7, 8, 9, 0xAA, 0xAA, 0xAA]);
+        let ecu = FakeEcu {
+            to_tester: VecDeque::from(vec![fc, resp_ff, resp_cf]),
+            from_tester: Vec::new(),
+            rx_id: 0x7E8,
+        };
+        let mut tp = IsoTp::new(Box::new(ecu), 0x7E0, 0x7E8);
+
+        // Send a 12-byte payload -> first frame + consecutive frame(s).
+        let payload: Vec<u8> = (0..12).collect();
+        tp.send(&payload, 100).unwrap();
+
+        // Receive the 10-byte multi-frame response.
+        let resp = tp.recv(100).unwrap();
+        assert_eq!(resp, (0u8..10).collect::<Vec<u8>>());
+    }
+}
