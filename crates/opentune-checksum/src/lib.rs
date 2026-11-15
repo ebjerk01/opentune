@@ -59,6 +59,38 @@ pub fn crc32(data: &[u8]) -> u32 {
     !crc
 }
 
+/// Forward (MSB-first) CRC-32 with polynomial `0x04C11DB7`, given `init` and no
+/// final XOR. `refin = refout = false`.
+///
+/// This is the "main ROM" CRC family used across Bosch control units
+/// (Motronic ME7 CRC blocks, Simos/MED/EDC17 main block). See
+/// `docs/BOSCH-CHECKSUM.md` and the VW_Flash reference. Exposed so EDC16/EDC17
+/// block tables can reuse a single, tested implementation.
+fn crc32_forward(data: &[u8], init: u32) -> u32 {
+    let mut crc = init;
+    for &b in data {
+        crc ^= (b as u32) << 24;
+        for _ in 0..8 {
+            crc = if crc & 0x8000_0000 != 0 {
+                (crc << 1) ^ 0x04C1_1DB7
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc
+}
+
+/// Bosch/VAG main CRC-32: forward poly `0x04C11DB7`, **init 0**, no final XOR.
+///
+/// Documented in VW_Flash as the algorithm the Simos/MED families use over the
+/// concatenated checksum areas. Provided for EDC16 variants whose main block
+/// uses it; the EDC16 *calibration* checksum reverse-engineered here is a
+/// different (still unidentified) 32-bit avalanche field — see `edc16`.
+pub fn crc32_bosch(data: &[u8]) -> u32 {
+    crc32_forward(data, 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +98,20 @@ mod tests {
     fn crc32_known_vector() {
         // CRC32 of "123456789" == 0xCBF43926
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+    }
+
+    #[test]
+    fn crc32_forward_matches_mpeg2_vector() {
+        // CRC-32/MPEG-2 is forward poly 0x04C11DB7, init 0xFFFFFFFF, no xorout;
+        // its published check value over "123456789" is 0x0376E6E7. This pins
+        // the forward engine against a standard vector.
+        assert_eq!(crc32_forward(b"123456789", 0xFFFF_FFFF), 0x0376_E6E7);
+    }
+
+    #[test]
+    fn crc32_bosch_init0_vector() {
+        // Same engine with init 0 (the Bosch/VAG main-CRC parameters). Value is
+        // locked as a regression against the validated implementation.
+        assert_eq!(crc32_bosch(b"123456789"), 0x89A1_897F);
     }
 }

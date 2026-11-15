@@ -1,5 +1,24 @@
 //! KWP2000 (ISO 14230) service client over a [`DiagTransport`]. Used for older
 //! ECUs (EDC15/EDC16 over K-line or VW TP2.0).
+//!
+//! ## Timing (ISO 14230-2, informed by freediag `diag_l2_iso14230.c`)
+//!
+//! KWP2000 is timing-sensitive; the numbers below are the transport's job, but
+//! this client's `timeout_ms` (default 2000 ms) must stay ≥ P2max so a slow ECU
+//! is not cut off:
+//!
+//! * **P1** ≤ 20 ms — inter-byte time within an ECU response (K-line only).
+//! * **P2min 25 ms / P2max 50 ms** — gap between a request and the start of the
+//!   ECU response. An ECU that needs longer must answer with NRC 0x78
+//!   (`responsePending`), which [`DiagTransport`] implementations loop on.
+//! * **P3min 55 ms / P3max 5000 ms** — gap between the end of a response and the
+//!   next request. `TesterPresent` (0x3E) must be sent inside P3max to keep the
+//!   session alive. P3max also bounds how long a channel may sit idle.
+//! * **P4min 5 ms** — inter-byte time within a tester request (K-line only).
+//!
+//! On CAN (VW TP2.0) the byte-level P1/P4 do not apply — the transport frames
+//! whole messages — but P2/P3 still gate request/response and keep-alive.
+//! NRC 0x21 (`busyRepeatRequest`) means "retry the identical request later".
 use crate::protocol::diag::{check_response, DiagTransport};
 use crate::{Error, Result};
 
@@ -62,7 +81,10 @@ impl<'a> Kwp2000Client<'a> {
         req.extend_from_slice(key);
         match self.call(&req) {
             Ok(_) => Ok(()),
-            Err(Error::NegativeResponse { code: 0x35, .. }) => Err(Error::SecurityDenied),
+            // invalidKey (0x35) or exceededNumberOfAttempts (0x36): failed unlock.
+            Err(Error::NegativeResponse {
+                code: 0x35 | 0x36, ..
+            }) => Err(Error::SecurityDenied),
             Err(e) => Err(e),
         }
     }

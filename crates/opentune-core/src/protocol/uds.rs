@@ -60,6 +60,13 @@ impl<'a> UdsClient<'a> {
     }
 
     /// Request a seed at an odd access level (e.g. 0x11).
+    ///
+    /// A seed of all-zero bytes is the ISO 14229 convention for "already
+    /// unlocked" — call [`seed_is_unlocked`] on the result to detect it and skip
+    /// the key exchange. Per §9.4.5 the ECU may answer 0x37
+    /// (`requiredTimeDelayNotExpired`) if a prior attempt failed and the delay
+    /// timer has not elapsed; that surfaces as [`Error::NegativeResponse`] so the
+    /// caller can back off.
     pub fn request_seed(&mut self, level: u8) -> Result<Vec<u8>> {
         let resp = self.call(&[sid::SECURITY_ACCESS, level])?;
         if resp.is_empty() {
@@ -69,12 +76,20 @@ impl<'a> UdsClient<'a> {
     }
 
     /// Send a key at an even access level (seed level + 1).
+    ///
+    /// The ECU enforces an attempt counter: once it is exhausted it answers 0x36
+    /// (`exceededNumberOfAttempts`) and starts the delay timer. Both an invalid
+    /// key (0x35) and an exhausted counter (0x36) map to [`Error::SecurityDenied`]
+    /// so the caller treats them as a failed unlock; 0x37 stays a raw negative
+    /// response so a retry can honor the delay.
     pub fn send_key(&mut self, level: u8, key: &[u8]) -> Result<()> {
         let mut req = vec![sid::SECURITY_ACCESS, level];
         req.extend_from_slice(key);
         match self.call(&req) {
             Ok(_) => Ok(()),
-            Err(Error::NegativeResponse { code: 0x35, .. }) => Err(Error::SecurityDenied),
+            Err(Error::NegativeResponse {
+                code: 0x35 | 0x36, ..
+            }) => Err(Error::SecurityDenied),
             Err(e) => Err(e),
         }
     }
@@ -108,6 +123,13 @@ impl<'a> UdsClient<'a> {
     }
 
     /// `transferData` with a block sequence counter.
+    ///
+    /// Per ISO 14229 §14.3 the `blockSequenceCounter` starts at 0x01 for the
+    /// first block after `requestDownload`/`requestUpload`, increments by one per
+    /// block and wraps 0xFF→0x00. A mismatch is answered with NRC 0x73
+    /// (`wrongBlockSequenceCounter`); re-sending the same counter is the defined
+    /// way to retransmit a lost block. The caller owns the counter — see
+    /// [`next_block_seq`] for the wrap.
     pub fn transfer_data(&mut self, seq: u8, block: &[u8]) -> Result<Vec<u8>> {
         let mut req = vec![sid::TRANSFER_DATA, seq];
         req.extend_from_slice(block);
@@ -117,6 +139,17 @@ impl<'a> UdsClient<'a> {
     pub fn transfer_exit(&mut self) -> Result<Vec<u8>> {
         self.call(&[sid::TRANSFER_EXIT])
     }
+}
+
+/// True if a security-access seed is all-zero, the ISO 14229 convention for an
+/// ECU that is already unlocked at that level (skip the key exchange).
+pub fn seed_is_unlocked(seed: &[u8]) -> bool {
+    !seed.is_empty() && seed.iter().all(|&b| b == 0)
+}
+
+/// Next `transferData` block sequence counter, wrapping 0xFF→0x00.
+pub fn next_block_seq(seq: u8) -> u8 {
+    seq.wrapping_add(1)
 }
 
 fn parse_max_block_len(resp: &[u8]) -> Result<usize> {
@@ -133,4 +166,30 @@ fn parse_max_block_len(resp: &[u8]) -> Result<usize> {
         v = (v << 8) | *b as usize;
     }
     Ok(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unlocked_seed_detection() {
+        assert!(seed_is_unlocked(&[0, 0, 0, 0]));
+        assert!(!seed_is_unlocked(&[0, 0, 1, 0]));
+        assert!(!seed_is_unlocked(&[])); // no seed is not "unlocked"
+    }
+
+    #[test]
+    fn block_seq_wraps() {
+        assert_eq!(next_block_seq(0x01), 0x02);
+        assert_eq!(next_block_seq(0xFF), 0x00);
+    }
+
+    #[test]
+    fn max_block_len_parsed() {
+        // lengthFormatIdentifier 0x20 -> 2 length bytes: 0x0F 0xFA = 4090.
+        assert_eq!(parse_max_block_len(&[0x20, 0x0F, 0xFA]).unwrap(), 4090);
+        assert!(parse_max_block_len(&[0x20, 0x0F]).is_err()); // short
+        assert!(parse_max_block_len(&[0x00]).is_err()); // n == 0
+    }
 }

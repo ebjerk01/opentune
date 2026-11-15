@@ -3,147 +3,170 @@
 Reverse-engineering notes for the EDC16 (Infineon C16x / ST10, little-endian)
 calibration checksum, as implemented in `crates/opentune-checksum/src/edc16.rs`.
 
+See `docs/BOSCH-CHECKSUM.md` for the general Bosch multi-block checksum structure
+these findings sit inside.
+
 ## Reference material
 
-Two valid 512 KiB (`0x80000`-byte) flash images of the **same** EDC16 ECU:
+Three independent, valid EDC16 stock/tuned pairs with a **clean** single
+checksum field were analysed (plus several VAG pairs that use a different
+scheme, see below). Each pair is two valid images of the same ECU — one
+factory-stock, one professionally tuned and re-checksummed.
 
-| file                 | role                                             |
-|----------------------|--------------------------------------------------|
-| `yaris_90_stock.ori` | factory-stock dump (valid checksums)             |
-| `yaris_90_tuned.mod` | professionally tuned, re-checksummed, **valid**  |
+| fixture                         | size   | role                     |
+|---------------------------------|--------|--------------------------|
+| `yaris_90_stock.ori` / `.mod`   | 512 KiB| Toyota Yaris 90, EDC16    |
+| `bmw_e46_318d_376967_2m_*`      | 2 MiB  | BMW E46 318d, EDC16       |
+| `bmw_e46_320d_361811_2m_*`      | 1 MiB  | BMW E46 320d, EDC16       |
 
-ECU identity string at `0x8000`: `TSW V0.70 120701 1025 C9/ESB/G43`.
+Yaris ECU identity string at `0x8000`: `TSW V0.70 120701 1025 C9/ESB/G43`.
 
 These files are private and **not** in the repository or CI. The `#[ignore]`d
-test `edc16::tests::reference_files` uses them when `OPENTUNE_FIXTURES` points at
-the directory holding them.
+tests `edc16::tests::reference_known_fields` and `::reference_files` use them
+when `OPENTUNE_FIXTURES` points at the directory holding them (Yaris at the
+root, the harvested pairs under `edc16-pairs/<name>_ori.bin` / `_mod.bin`). Run:
 
-## File layout (from a structural scan of the stock image)
+```
+OPENTUNE_FIXTURES=/path cargo test -p opentune-checksum -- --ignored
+```
 
-| range                 | contents                                    |
-|-----------------------|---------------------------------------------|
-| `0x00000 .. 0x08000`  | `0xC3` fill (empty boot area)               |
-| `0x08000 .. 0x4DFFF`  | program / code (ID string at `0x8000`)      |
-| `0x4E000 .. 0x6DFFF`  | `0xC3` fill                                 |
-| `0x70000 .. 0x7BD80`  | calibration / maps                          |
-| `0x7BD7C .. 0x7BD80`  | **calibration checksum word** (4 bytes)     |
-| `0x7BD80 .. 0x7C000`  | `0x00` padding                              |
-| `0x7C000 .. end`      | `0xC3` fill + a small tail data block        |
+## The calibration checksum field — VERIFIED (3 pairs)
 
-A repeated descriptor at `0x7BBE0 / 0x7BBF4 / 0x7BC08` holds the triple
-`{0x0004C57E, 0x0AAB08E9, 0x10550C9F}`; `0x0004C57E` is a file-offset pointer
-just past the end of the code area. These bytes do **not** change between the
-stock and tuned files (the code is untouched), so they are code-area metadata
-and are not needed to correct a calibration tune. Their exact meaning
-(`0x0AAB08E9` / `0x10550C9F`) was not pinned down and is not relied upon.
+Byte-diffing each valid pair, the only non-calibration difference is a single
+isolated 32-bit **little-endian** word — the calibration checksum the ECU
+verifies. Location, width and byte order are reproduced exactly on all three
+pairs (asserted by `reference_known_fields`):
 
-## The calibration checksum field — VERIFIED
+| ECU       | offset    | stock (LE)   | tuned (LE)   |
+|-----------|-----------|--------------|--------------|
+| Yaris 90  | `0x7BD7C` | `0xDBCCED4D` | `0xDC88782E` |
+| BMW 318d  | `0xFDFF8` | `0x5A1965D7` | `0x70C43539` |
+| BMW 320d  | `0xFEFF8` | `0x309CC08C` | `0xA1B42CB4` |
 
-Byte-diffing the two valid files, every differing byte except one group lies in
-the calibration/map cluster `0x72899 .. 0x7A673`. The single isolated non-map
-difference is:
+In every case the field is a lone 32-bit word surrounded by fill bytes
+(`0xC3` on Yaris, `0xFF`/`0x5A` on BMW), with **no** adjacent complement word
+and **no** adjacent `{start,end}` descriptor. Confidence: **high.**
 
-| offset    | stock (LE) | tuned (LE) | width | byte order    |
-|-----------|------------|------------|-------|---------------|
-| `0x7BD7C` | `0xDBCCED4D` | `0xDC88782E` | 4 B | little-endian |
+## VAG EDC16 uses a different scheme (out of scope here)
 
-Because a *valid* tuned file must carry a recomputed checksum, and this is the
-only non-map field that the tuner changed, **this 32-bit little-endian field at
-`0x7BD7C` is the calibration checksum the ECU verifies.** Its location, width
-and byte order are verified against both reference files and are asserted by the
-`reference_files` test. Confidence: **high.**
+The Audi / VW / Mercedes / Land-Rover EDC16 pairs that were harvested do **not**
+have a lone checksum word. Instead each has a ~128-byte **high-entropy block**
+near the end of a bank (e.g. Audi 512 KiB at `0x7DF7C..0x7E000`, 2 MiB at
+`0x1FDF7C..`) whose bytes change *wholesale* between stock and tuned. This is a
+signed/obfuscated checksum container, not a plain 32-bit field, and is not
+addressed by the field-based engine. Documented here so it is not mistaken for
+the clean-field case.
 
 ## The algorithm — NOT yet determined (honest status)
 
-The algorithm that produces the stored value was **not** recovered from a single
-stock/tuned pair. The following were tested and **excluded**:
+The algorithm that produces the 32-bit value is **still unidentified**. It was
+re-tested against **all three** clean pairs and **excluded**:
 
-### Additive sums — excluded by magnitude and by exhaustive search
+### Additive sums — excluded (magnitude + exhaustive search, 3 pairs)
 
-The required change in the stored value between the two files is
-`0xDC88782E - 0xDBCCED4D = 0xBB8AE1` (12 290 785).
+Required stored deltas are large and avalanche-like:
+`Yaris 0xBB8AE1`, `BMW318 0x16AACF62`, `BMW320 0x71178C28`.
 
-* **Byte sum** is impossible: the sum of the absolute per-byte differences over
-  the *entire* file is only `0x9F3` (2 547) — far below `0xBB8AE1`.
-* **16-bit word sum** is impossible: the sum of absolute per-word differences is
-  only `0x98FDB` (626 139) — still far below `0xBB8AE1`.
-* **32-bit word sum**: over any range that covers the map edits the delta is a
-  byte-rotation of `{0x00,0x04,0x3B,0xDF}` in every alignment phase and for a
-  half-word-swapped grouping — never `0xBB8AE1`. An O(n) prefix-sum search over
-  **all** contiguous ranges (byte/16/32-bit, LE/BE, value and two's-complement)
-  found no non-degenerate range reproducing **both** stored values.
-* Treating the 4 bytes as **two independent 16-bit checksums** also fails: no
-  contiguous range reproduces the low half (`0xED4D`/`0x782E`) for both files.
+* **Byte / 16-bit sums** are impossible by magnitude: the summed absolute
+  per-word differences over the whole image are far smaller than the required
+  stored delta (Yaris byte `0x9F3`, 16-bit `0x98FDB`).
+* **32-bit word sums** (LE/BE, every alignment phase): an O(n) prefix-sum search
+  — both an absolute `sum(S,E)==stored` sweep and a signed difference-window
+  sweep — finds **only** the degenerate self-sum of the checksum field itself
+  (it sums the fill zeros after it), never a real data range. Excluded.
 
-So the field is an **avalanche** function, not an additive checksum.
+### XOR checksum — excluded (3 pairs)
 
-### Standard CRC-32 — excluded
+The XOR of every changed 32-bit word does **not** equal the stored-value XOR
+(`stored_stock ^ stored_tuned`) for any pair — e.g. Yaris `0x03001900` vs the
+required `0x07449563`. So it is not a 32-bit XOR fold. (This is now a locked
+regression in `reference_known_fields`.)
 
-Using the CRC linearity identity `crc(a) ^ crc(b) = crc_linear(a ^ b)` (which is
-independent of the CRC's init and final-xor), the diff of the two files must
-satisfy `crc_linear(stock ^ tuned) = 0xDBCCED4D ^ 0xDC88782E = 0x07449563` at the
-correct end offset. This was tested, sweeping every end offset, for:
+### Standard / Bosch CRC-32 over a contiguous range — excluded
 
-* polynomials CRC-32, CRC-32C, CRC-32K (Koopman), CRC-32/Q, XFER, MPEG-2, POSIX,
-  CRC-32/K2, in **both** reflected and forward forms;
-* normal, 16-bit-swapped and 32-bit-swapped byte feed orders.
+Using `crc(a) ^ crc(b) = crc_linear(a ^ b)` (independent of init / xorout) and a
+direct parameter brute, the following were swept over every end offset, both
+reflections, and 16-/32-bit byte-swapped feed orders:
 
-**None matched.** The field is therefore consistent with a CRC-32 using a
-**non-standard / proprietary polynomial** (common on Bosch EDC units), which
-cannot be uniquely recovered from one difference codeword — it needs more
-stock/tuned pairs for the same ECU, or the checksum routine from the boot code.
+* CRC-32, CRC-32C, CRC-32K (Koopman), CRC-32/Q, XFER, MPEG-2, POSIX, CRC-32/K2;
+* the Bosch/VAG forward polynomial `0x04C11DB7` with init 0 and init
+  `0xFFFFFFFF`.
+
+**None matched** over a single contiguous span.
+
+### Multi-area / proprietary CRC — the remaining shape
+
+A GF(2) **polynomial-GCD** recovery was run on the within-pair *codeword
+differences* (message ⧺ stored-word, forward and reflected framings). Because a
+same-length pair's codeword difference is divisible by the CRC generator
+independent of init/xorout, the GCD of valid codewords should expose a degree-32
+generator. It does **not** (GCD degree 2–3). That rules out *any* CRC over a
+single contiguous span, and is consistent with the Bosch design in which the CRC
+runs over a **concatenation of areas** named by a directory (see
+`docs/BOSCH-CHECKSUM.md`): concatenation moves bit positions, so the raw
+contiguous bytes are not a valid codeword.
+
+The area directory is **not** present in the calibration partition of these
+clean-field images: scans for `{start,end,cs,~cs}` complement descriptors and for
+32-bit pointers bracketing the calibration region found none. For EDC16 it lives
+in the boot/program area, which is outside the harvested calibration dumps.
+
+**Conclusion:** the field is a 32-bit avalanche checksum — most likely a CRC-32
+over a multi-area concatenation (or a proprietary polynomial). It cannot be
+pinned from these images alone; it needs the on-image area directory or the ECU
+checksum routine (C166 boot code). Until then it stays `Algo::Unknown`.
 
 ## What the implementation does
 
-`edc16.rs` ships a **data-driven** engine, not a hard-coded hack:
+`edc16.rs` ships a **data-driven** engine:
 
-* `Algo` — `Sum8`, `Sum16Le/Be`, `Sum32Le/Be`, `Crc32`, and `Unknown`.
+* `Algo` — `Sum8`, `Sum16Le/Be`, `Sum32Le/Be`, `Crc32` (reflected IEEE),
+  `Crc32Bosch` (forward poly `0x04C11DB7`, init 0 — the Bosch/VAG main CRC,
+  added as a reference-backed, reusable algorithm; see `crate::crc32_bosch`),
+  and `Unknown`.
 * `Block { name, sum_range, store_offset, store_len, store_le, algo }` — one
-  checksum-protected block; the active map is a table (`DEFAULT_BLOCKS`), so new
-  EDC16 variants are added as data.
-* `verify_blocks` / `correct_blocks` iterate the table. The `ChecksumAlgo` impl
-  for `Edc16` uses `DEFAULT_BLOCKS`.
+  checksum-protected block; the active map is a table (`DEFAULT_BLOCKS`).
+* `KNOWN_FIELDS` — the three VERIFIED clean-field samples (fixture, length,
+  offset, stored stock/tuned), used by the fixtures tests.
+* `verify_blocks` / `correct_blocks` iterate the table.
 
-`DEFAULT_BLOCKS` contains the one verified-in-position calibration field with
-`algo: Algo::Unknown`:
+`DEFAULT_BLOCKS` carries the one verified Yaris field with `algo: Algo::Unknown`:
 
-* `verify` **surfaces** it (reports the stored value, `ok = false`, since no
-  algorithm can confirm it);
-* `correct` **refuses** (`Error::Unsupported`) rather than write a guessed value
-  that would brick the ECU.
-
-The sum/CRC algorithms are real and fully exercised by synthetic unit tests. For
-an EDC16 variant whose checksum *is* a plain sum, add a `Block` with the right
-`Algo` and it verifies/corrects end-to-end with no code changes.
+* `verify` **surfaces** it (reports the stored value, `ok = false`);
+* `correct` **refuses** (`Error::Unsupported`) rather than write a guessed value.
 
 ## Validation
 
-* `cargo test -p opentune-checksum` — 11 synthetic tests cover each `Algo`, width
-  truncation, LE/BE storage, wrap-around, idempotent `correct`, corruption
-  detection, and the `Unknown` surface/refuse behaviour.
-* `reference_files` (`#[ignore]`d, needs `OPENTUNE_FIXTURES`) asserts the exact
-  stored constants at `0x7BD7C` in **both** real files, that the default map
-  surfaces-but-will-not-correct the `Unknown` block, and that the generic
-  `Sum32Le` engine round-trips (correct → verify → corrupt → verify-fails →
-  correct → verify-ok) over the **real** calibration bytes.
+* `cargo test -p opentune-checksum` — synthetic tests cover each `Algo`
+  (including `Crc32Bosch` against the forward-engine MPEG-2 vector `0x0376E6E7`
+  and the init-0 value `0x89A1897F`), width truncation, LE/BE storage,
+  wrap-around, idempotent `correct`, corruption detection, and the `Unknown`
+  surface/refuse behaviour.
+* `reference_known_fields` (`#[ignore]`d) asserts the field location/width/order
+  and both stored values on all three real pairs, and that none is a 32-bit XOR.
+* `reference_files` (`#[ignore]`d) additionally proves the generic `Sum32Le`
+  engine round-trips on the real Yaris bytes (correct → verify → corrupt →
+  verify-fails → correct → verify-ok).
 
 ## Confidence summary
 
-| item                                             | confidence   |
-|--------------------------------------------------|--------------|
-| checksum field at `0x7BD7C`, 32-bit, LE          | high (both files) |
-| calibration region ≈ `0x70000 .. 0x7BD7C`        | medium (structural) |
-| additive-sum algorithms ruled out                | high (proof + search) |
-| standard CRC-32 ruled out                        | high (linearity sweep) |
-| exact algorithm (non-standard CRC/proprietary)   | **unresolved** |
+| item                                               | confidence            |
+|----------------------------------------------------|-----------------------|
+| checksum field location/width/LE (3 pairs)         | high (all reproduced) |
+| additive-sum algorithms ruled out                  | high (proof + search) |
+| 32-bit XOR ruled out                               | high (3 pairs)        |
+| standard/Bosch CRC over contiguous range ruled out | high (linearity + GCD)|
+| multi-area or proprietary CRC (shape)              | medium (by elimination)|
+| exact algorithm                                    | **unresolved**        |
 
 ## To finish the reverse-engineering
 
-1. Obtain more stock/tuned pairs for this ECU (`1025 C9/ESB/G43`) to get several
-   difference codewords and run a CRC-RevEng polynomial recovery.
-2. Or extract the checksum routine from the code area (`0x8000 .. 0x4DFFF`) and
-   read the polynomial / seed directly.
+1. Recover the **area directory** (the `{start,end}` list the ECU concatenates).
+   It is not in the calibration partition; extract it from the boot/program area
+   or from a full ECU dump, then CRC over the concatenation and brute the poly.
+2. Or extract the checksum routine from the C166 code and read poly / seed /
+   area list directly.
 3. Then replace `Algo::Unknown` in `DEFAULT_BLOCKS` with the recovered algorithm
-   (add a `Crc32Custom { poly, init, xorout, refin, refout }` variant if needed)
-   and extend `reference_files` to assert `stock` verifies OK and
-   corrupt→correct reproduces the stored word.
+   (add e.g. `Crc32Custom { poly, init, xorout, refin, refout, areas }` if the
+   existing `Crc32Bosch` parameters do not fit) and extend the fixtures tests to
+   assert `stock` verifies OK and corrupt→correct reproduces the stored word.

@@ -2,41 +2,57 @@
 //!
 //! # What is reverse-engineered here
 //!
-//! The reference pair (`yaris_90_stock.ori` / `yaris_90_tuned.mod`, two valid
-//! 512 KiB EDC16 images of the same ECU, one stock and one professionally
-//! tuned) was byte-diffed. Apart from the calibration/map edits (which cluster
-//! in `0x72899..=0x7A673`), **exactly one** other 32-bit field differs between
-//! the two valid files:
+//! Several stock/tuned EDC16 pairs were byte-diffed. In the "clean-field"
+//! variants (Toyota, BMW) the only non-calibration difference between the two
+//! valid files is a single isolated 32-bit little-endian field — the
+//! calibration checksum the ECU verifies. Its location/width/byte-order are
+//! VERIFIED on three independent real pairs:
 //!
-//! | offset     | stock        | tuned        |
-//! |------------|--------------|--------------|
-//! | `0x7BD7C`  | `0xDBCCED4D` | `0xDC88782E` | little-endian, 4 bytes
+//! | ECU (fixture)                 | field    | stock (LE)   | tuned (LE)   |
+//! |-------------------------------|----------|--------------|--------------|
+//! | Toyota Yaris 90 (`yaris_90`)  | `0x7BD7C`| `0xDBCCED4D`  | `0xDC88782E` |
+//! | BMW E46 318d (`bmw318`)       | `0xFDFF8`| `0x5A1965D7`  | `0x70C43539` |
+//! | BMW E46 320d (`bmw320`)       | `0xFEFF8`| `0x309CC08C`  | `0xA1B42CB4` |
 //!
-//! Because a *valid* tuned file must carry a recomputed checksum, this isolated
-//! field is the calibration checksum the ECU verifies. Its exact location,
-//! width (32-bit) and byte order (little-endian) are therefore VERIFIED against
-//! both reference files (see `docs/checksums-edc16.md`).
+//! In each case the field is a lone 32-bit word surrounded by fill bytes, with
+//! no adjacent complement word and no adjacent `{start,end}` descriptor.
+//!
+//! The VAG variants (Audi/VW/MB/Freelander EDC16) use a *different* scheme: a
+//! ~128-byte high-entropy block (near the end of each bank) that is rewritten
+//! wholesale by the tuner, not a single checksum word. Those are out of scope
+//! for this field-based engine and are documented in `docs/checksums-edc16.md`.
 //!
 //! # What is NOT yet reverse-engineered
 //!
-//! The *algorithm* that produces that 32-bit value could not be determined from
-//! a single stock/tuned pair. It was exhaustively shown **not** to be:
+//! The *algorithm* that produces the 32-bit value is still unidentified. Across
+//! all three clean pairs it was exhaustively shown **not** to be:
 //!
 //! * any additive sum — byte, 16-bit or 32-bit, either endianness, any
-//!   alignment phase, over any contiguous sub-range (the required value delta
-//!   `0xBB8AE1` exceeds the maximum possible additive delta for byte sums
-//!   (`0x9F3`) and 16-bit-word sums (`0x98FDB`), and no 32-bit-word sub-range
-//!   reproduces both stored values);
-//! * a standard CRC-32 — CRC-32, CRC-32C, Koopman, CRC-32/Q, XFER, MPEG-2,
-//!   POSIX and CRC-32/K2 were all excluded (both reflections, every end offset,
-//!   plus 16-/32-bit byte-swapped feed orders) via the CRC linearity identity
-//!   `crc(a) ^ crc(b) == crc_linear(a ^ b)`.
+//!   alignment phase, over any contiguous sub-range (re-tested on all three
+//!   pairs with O(n) prefix-sum and difference-window searches; only the
+//!   degenerate self-sum of the field itself ever matches);
+//! * a 32-bit XOR checksum (the XOR of every changed 32-bit word does not equal
+//!   the stored-value XOR for any of the three pairs);
+//! * a standard CRC-32 over a contiguous range — CRC-32, CRC-32C, Koopman,
+//!   CRC-32/Q, XFER, MPEG-2, POSIX, CRC-32/K2 and the Bosch forward
+//!   poly `0x04C11DB7` (init 0 / init `0xFFFFFFFF`) were excluded, both
+//!   reflections, every end offset, via `crc(a) ^ crc(b) == crc_linear(a ^ b)`.
 //!
-//! It is therefore a 32-bit avalanche checksum, consistent with a CRC-32 using
-//! a non-standard/proprietary Bosch polynomial, which needs more sample pairs
-//! (or the ECU boot code) to pin down uniquely. It is represented below with
-//! [`Algo::Unknown`] so that [`verify`](Edc16::verify) surfaces the field while
+//! It is therefore a 32-bit avalanche checksum. A GF(2) polynomial-GCD recovery
+//! over the within-pair codeword differences returns no common degree-32
+//! generator under contiguous framing, which means — if it is a CRC — it runs
+//! over a **multi-area concatenation** (the Bosch directory pattern documented
+//! in `docs/BOSCH-CHECKSUM.md`), not a single span, or over a proprietary
+//! polynomial. Either way it cannot be pinned from these images alone; it needs
+//! the on-image area directory (not found in the calibration partition — it is
+//! held in boot/code for these variants) or the ECU checksum routine.
+//!
+//! It is represented below with [`Algo::Unknown`] so that
+//! [`verify`](Edc16::verify) surfaces the field while
 //! [`correct`](Edc16::correct) refuses to write a value it cannot compute.
+//! A reusable, reference-backed Bosch forward CRC-32 ([`Algo::Crc32Bosch`]) is
+//! also provided for EDC16 variants (and later EDC17/MED families) whose main
+//! block *does* use it.
 //!
 //! # The engine
 //!
@@ -64,6 +80,9 @@ pub enum Algo {
     Sum32Be,
     /// CRC-32 (IEEE 802.3, reflected) — see [`crate::crc32`].
     Crc32,
+    /// Bosch/VAG main CRC-32 (forward poly `0x04C11DB7`, init 0, no xorout) —
+    /// see [`crate::crc32_bosch`] and `docs/BOSCH-CHECKSUM.md`.
+    Crc32Bosch,
     /// Checksum field whose algorithm is identified in position but NOT yet
     /// reverse-engineered. [`verify`](Edc16::verify) reports it as not-OK;
     /// [`correct`](Edc16::correct) returns an error rather than guess.
@@ -77,7 +96,7 @@ impl Algo {
             Algo::Sum8 => 1,
             Algo::Sum16Le | Algo::Sum16Be => 2,
             Algo::Sum32Le | Algo::Sum32Be => 4,
-            Algo::Crc32 | Algo::Unknown => 1,
+            Algo::Crc32 | Algo::Crc32Bosch | Algo::Unknown => 1,
         }
     }
 }
@@ -115,6 +134,52 @@ pub const DEFAULT_BLOCKS: &[Block] = &[Block {
     store_le: true,
     algo: Algo::Unknown,
 }];
+
+/// A verified EDC16 calibration-checksum field from a real stock/tuned pair.
+///
+/// Records only what is *proven* by diffing two valid images: the field's
+/// position/width/order and the two stored 32-bit values. The algorithm that
+/// produces them is still [`Algo::Unknown`]; this table exists so the fixtures
+/// test can assert the field locations across every harvested pair.
+#[derive(Debug, Clone, Copy)]
+pub struct KnownField {
+    /// Fixture base name (`<name>_ori.bin` / `<name>_mod.bin`, Yaris uses the
+    /// legacy `yaris_90_stock.ori` / `yaris_90_tuned.mod`).
+    pub fixture: &'static str,
+    /// Image length in bytes.
+    pub image_len: usize,
+    /// Byte offset of the 32-bit little-endian checksum field.
+    pub store_offset: u32,
+    /// Stored value in the stock image (little-endian).
+    pub stored_stock: u32,
+    /// Stored value in the tuned image (little-endian).
+    pub stored_tuned: u32,
+}
+
+/// The validated clean-field EDC16 calibration checksums (see module docs).
+pub const KNOWN_FIELDS: &[KnownField] = &[
+    KnownField {
+        fixture: "yaris_90",
+        image_len: 0x8_0000,
+        store_offset: 0x0007_BD7C,
+        stored_stock: 0xDBCC_ED4D,
+        stored_tuned: 0xDC88_782E,
+    },
+    KnownField {
+        fixture: "bmw_e46_318d_376967_2m",
+        image_len: 0x20_0000,
+        store_offset: 0x000F_DFF8,
+        stored_stock: 0x5A19_65D7,
+        stored_tuned: 0x70C4_3539,
+    },
+    KnownField {
+        fixture: "bmw_e46_320d_361811_2m",
+        image_len: 0x10_0000,
+        store_offset: 0x000F_EFF8,
+        stored_stock: 0x309C_C08C,
+        stored_tuned: 0xA1B4_2CB4,
+    },
+];
 
 /// Read the stored checksum word of `block` from `image`.
 fn read_stored(image: &[u8], block: &Block) -> Result<u64> {
@@ -195,6 +260,7 @@ pub fn compute_block(image: &[u8], block: &Block) -> Result<Option<u64>> {
     let value = match block.algo {
         Algo::Unknown => return Ok(None),
         Algo::Crc32 => crc32(data) as u64 & mask,
+        Algo::Crc32Bosch => crate::crc32_bosch(data) as u64 & mask,
         algo => {
             let step = algo.step();
             let mut acc: u64 = 0;
@@ -210,7 +276,7 @@ pub fn compute_block(image: &[u8], block: &Block) -> Result<Option<u64>> {
                     Algo::Sum32Be => {
                         u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as u64
                     }
-                    Algo::Crc32 | Algo::Unknown => unreachable!(),
+                    Algo::Crc32 | Algo::Crc32Bosch | Algo::Unknown => unreachable!(),
                 };
                 acc = acc.wrapping_add(word);
                 i += step;
@@ -397,6 +463,26 @@ mod tests {
     }
 
     #[test]
+    fn crc32_bosch_roundtrip() {
+        // Forward Bosch CRC (poly 0x04C11DB7, init 0). crc32_bosch("123456789")
+        // == 0x89A1897F (locked in lib.rs); exercise the block path end-to-end.
+        let data = b"123456789";
+        let mut img = buf(data, 4);
+        let b = block(
+            Algo::Crc32Bosch,
+            0,
+            data.len() as u32,
+            data.len() as u32,
+            4,
+            true,
+        );
+        assert_eq!(compute_block(&img, &b).unwrap(), Some(0x89A1_897F));
+        correct_blocks(&mut img, std::slice::from_ref(&b)).unwrap();
+        assert_eq!(&img[9..13], &[0x7F, 0x89, 0xA1, 0x89]); // stored little-endian
+        assert!(verify_blocks(&img, std::slice::from_ref(&b)).unwrap()[0].ok);
+    }
+
+    #[test]
     fn correct_is_idempotent_and_reports_only_changes() {
         let mut img = buf(&[10, 20, 30, 40], 4);
         let b = block(Algo::Sum32Le, 0, 4, 4, 4, true);
@@ -457,12 +543,79 @@ mod tests {
         assert!(compute_block(&img, &b).is_err());
     }
 
-    // ---- Reference-file test (requires the private fixtures) -------------
+    // ---- Reference-file tests (require the private fixtures) -------------
     //
     // Enabled only when OPENTUNE_FIXTURES points at a directory holding
-    // `yaris_90_stock.ori` and `yaris_90_tuned.mod`. CI has no access to these
-    // files, so the test is #[ignore]d by default. Run with:
+    // `yaris_90_stock.ori` / `yaris_90_tuned.mod` and, optionally, the harvested
+    // pairs under `edc16-pairs/<name>_ori.bin` / `<name>_mod.bin`. CI has no
+    // access to these files, so the tests are #[ignore]d by default. Run with:
     //   OPENTUNE_FIXTURES=/path cargo test -p opentune-checksum -- --ignored
+
+    /// Load `(stock, tuned)` for a `KnownField` fixture, or `None` if missing.
+    fn load_pair(dir: &str, f: &KnownField) -> Option<(Vec<u8>, Vec<u8>)> {
+        let (sp, tp) = if f.fixture == "yaris_90" {
+            (
+                format!("{dir}/yaris_90_stock.ori"),
+                format!("{dir}/yaris_90_tuned.mod"),
+            )
+        } else {
+            (
+                format!("{dir}/edc16-pairs/{}_ori.bin", f.fixture),
+                format!("{dir}/edc16-pairs/{}_mod.bin", f.fixture),
+            )
+        };
+        Some((std::fs::read(sp).ok()?, std::fs::read(tp).ok()?))
+    }
+
+    /// Every harvested clean-field pair: the field location/width/order and both
+    /// stored values are reproduced exactly (the VERIFIED facts), and the
+    /// default engine refuses to "correct" the still-Unknown algorithm.
+    #[test]
+    #[ignore = "needs private EDC16 reference fixtures via OPENTUNE_FIXTURES"]
+    fn reference_known_fields() {
+        let dir = match std::env::var("OPENTUNE_FIXTURES") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let mut checked = 0;
+        for f in KNOWN_FIELDS {
+            let Some((stock, tuned)) = load_pair(&dir, f) else {
+                continue;
+            };
+            assert_eq!(stock.len(), f.image_len, "{} stock len", f.fixture);
+            assert_eq!(tuned.len(), f.image_len, "{} tuned len", f.fixture);
+            let o = f.store_offset as usize;
+            let s = u32::from_le_bytes(stock[o..o + 4].try_into().unwrap());
+            let t = u32::from_le_bytes(tuned[o..o + 4].try_into().unwrap());
+            assert_eq!(s, f.stored_stock, "{} stock field", f.fixture);
+            assert_eq!(t, f.stored_tuned, "{} tuned field", f.fixture);
+
+            // The stored value is a genuine avalanche field: it is NOT the XOR of
+            // the changed 32-bit words (regression on the exclusion finding).
+            let mut wx = 0u32;
+            let mut i = 0;
+            while i + 4 <= stock.len().min(tuned.len()) {
+                if i != o {
+                    let wo = u32::from_le_bytes(stock[i..i + 4].try_into().unwrap());
+                    let wm = u32::from_le_bytes(tuned[i..i + 4].try_into().unwrap());
+                    wx ^= wo ^ wm;
+                }
+                i += 4;
+            }
+            assert_ne!(
+                wx,
+                s ^ t,
+                "{}: must not be a 32-bit XOR checksum",
+                f.fixture
+            );
+            checked += 1;
+        }
+        assert!(
+            checked >= 1,
+            "no EDC16 fixtures found under OPENTUNE_FIXTURES"
+        );
+    }
+
     #[test]
     #[ignore = "needs private EDC16 reference fixtures via OPENTUNE_FIXTURES"]
     fn reference_files() {

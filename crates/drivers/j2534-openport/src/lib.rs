@@ -24,7 +24,9 @@
 //! layout is isolated in [`Op2Serial::recv_frame`]/[`Op2Serial::transmit`] so it
 //! is a one-line change if a trace disagrees.
 
+use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
+use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
@@ -301,11 +303,21 @@ pub struct OpenPort2Driver {
     transport: Option<IsoTp>,
     firmware: Option<String>,
     cfg: Option<ConnectConfig>,
+    /// Optional seed/key handler for UDS security access (service 0x27). No OEM
+    /// algorithm ships with OpenTune; the application supplies one.
+    seed_key: Option<Box<dyn SeedKey>>,
 }
 
 impl OpenPort2Driver {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Install the seed/key handler used to unlock the ECU (service 0x27)
+    /// before a download. Without it, writing a security-protected ECU fails
+    /// with a clear error. OpenTune ships no OEM algorithms.
+    pub fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) {
+        self.seed_key = Some(seed_key);
     }
 
     fn transport(&mut self) -> Result<&mut IsoTp> {
@@ -319,6 +331,18 @@ impl OpenPort2Driver {
         // 0x03 = extendedDiagnosticSession. Ignore ECUs that only accept it in
         // programming mode by surfacing the error to the caller.
         uds.session(0x03).map(|_| ())
+    }
+
+    /// Run UDS security access (service 0x27) if a seed/key handler is set or
+    /// the connection config marks security as required. A no-op on an open
+    /// ECU with no handler configured, so unlocked sessions keep working.
+    fn security_access(&mut self) -> Result<()> {
+        let required = security_required(self.cfg.as_ref());
+        let level = seedkey_level(self.cfg.as_ref(), 0x11);
+        // Disjoint field borrows: `seed_key` (shared) and `transport` (unique).
+        let sk = self.seed_key.as_deref();
+        let transport = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        uds_security_access(transport, sk, level, required)
     }
 }
 
@@ -411,6 +435,9 @@ impl Interface for OpenPort2Driver {
             return Err(Error::NotConnected);
         }
         let _ = self.begin_session();
+        // A full read from a locked ECU needs security access too; a no-op when
+        // no handler is set and security is not required.
+        self.security_access()?;
         uds_read_memory(self.transport()?, region, progress)
     }
 
@@ -427,7 +454,86 @@ impl Interface for OpenPort2Driver {
             return Err(Error::Config("data length != region length".into()));
         }
         let _ = self.begin_session();
+        // Unlock the ECU (service 0x27) before requestDownload if required.
+        self.security_access()?;
         uds_write_memory(self.transport()?, region, data, progress)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security access (service 0x27) hook.
+//
+// OpenTune ships NO OEM seed/key algorithms. A seed/key handler is supplied by
+// the application via [`OpenPort2Driver::set_seed_key`] (or a plugin), keyed by
+// the `seedkey` id in an ECU definition. This helper runs the request-seed →
+// compute → send-key handshake over the existing [`UdsClient`] before a
+// download.
+//
+// Config keys read from [`ConnectConfig::options`]:
+// - `seedkey`:       expected algorithm id; its presence marks security required.
+// - `security`:      `required`/`true`/`1`/`yes` marks security required.
+// - `seedkey_level`: the request-seed access level (odd), decimal or `0x`-hex.
+// ---------------------------------------------------------------------------
+
+/// True if the config marks the ECU as requiring security access.
+fn security_required(cfg: Option<&ConnectConfig>) -> bool {
+    cfg.map(|c| {
+        c.options.contains_key("seedkey")
+            || matches!(
+                c.options.get("security").map(String::as_str),
+                Some("required" | "true" | "1" | "yes")
+            )
+    })
+    .unwrap_or(false)
+}
+
+/// Request-seed access level from config, or `default` (send-key level is +1).
+fn seedkey_level(cfg: Option<&ConnectConfig>, default: u8) -> u8 {
+    cfg.and_then(|c| c.options.get("seedkey_level"))
+        .and_then(|s| parse_access_level(s))
+        .unwrap_or(default)
+}
+
+/// Parse an access level as decimal or `0x`-prefixed hex.
+fn parse_access_level(s: &str) -> Option<u8> {
+    let t = s.trim();
+    match t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        Some(h) => u8::from_str_radix(h, 16).ok(),
+        None => t.parse().ok(),
+    }
+}
+
+/// Perform UDS service 0x27 seed/key if a handler is set; otherwise error only
+/// when security is required.
+fn uds_security_access(
+    transport: &mut dyn DiagTransport,
+    seed_key: Option<&dyn SeedKey>,
+    request_level: u8,
+    required: bool,
+) -> Result<()> {
+    match seed_key {
+        None => {
+            if required {
+                Err(Error::Config(
+                    "ECU requires security access but no seed/key handler is set \
+                     (call set_seed_key with an algorithm for this ECU)"
+                        .into(),
+                ))
+            } else {
+                // Open ECU, or already unlocked: nothing to do.
+                Ok(())
+            }
+        }
+        Some(sk) => {
+            let mut uds = UdsClient::new(transport);
+            let seed = uds.request_seed(request_level)?;
+            // An all-zero seed conventionally means "already unlocked".
+            if !seed.is_empty() && seed.iter().all(|&b| b == 0) {
+                return Ok(());
+            }
+            let key = sk.compute(&seed, request_level)?;
+            uds.send_key(request_level.wrapping_add(1), &key)
+        }
     }
 }
 
@@ -540,10 +646,9 @@ pub(crate) fn uds_read_memory(
 /// UDS `requestDownload` + `transferData` + `transferExit` write loop.
 ///
 /// Assumes the ECU is already in a programming session with security access
-/// granted. `write_memory` attempts the sequence regardless, so it succeeds on
-/// an already-unlocked session.
-// TODO: security access via SeedKey plugin (service 0x27 seed/key) before the
-// requestDownload for ECUs that are still locked.
+/// granted. [`OpenPort2Driver::write_memory`] runs the service 0x27 seed/key
+/// handshake (see [`uds_security_access`]) before calling this, so a locked ECU
+/// is unlocked first when a seed/key handler is configured.
 pub(crate) fn uds_write_memory(
     transport: &mut IsoTp,
     region: MemoryRegion,
@@ -575,4 +680,92 @@ pub(crate) fn uds_write_memory(
     }
     uds.transfer_exit()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod seedkey_hook_tests {
+    use super::*;
+    use opentune_core::protocol::diag::DiagTransport;
+    use std::collections::VecDeque;
+
+    /// A scripted diagnostic transport: returns queued responses and records
+    /// every request so a handshake can be asserted.
+    struct ScriptedTransport {
+        replies: VecDeque<Vec<u8>>,
+        requests: Vec<Vec<u8>>,
+    }
+
+    impl DiagTransport for ScriptedTransport {
+        fn request(&mut self, req: &[u8], _timeout_ms: u64) -> Result<Vec<u8>> {
+            self.requests.push(req.to_vec());
+            self.replies.pop_front().ok_or(Error::Timeout(0))
+        }
+    }
+
+    /// DEMO ONLY — not a real OEM algorithm. Exercises the [`SeedKey`] hook with
+    /// a trivial reversible transform (XOR 0x5A then +1 per byte).
+    struct DemoXorAddKey;
+
+    impl SeedKey for DemoXorAddKey {
+        fn id(&self) -> &str {
+            "demo-xor-add"
+        }
+        fn compute(&self, seed: &[u8], _level: u8) -> Result<Vec<u8>> {
+            Ok(seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect())
+        }
+    }
+
+    #[test]
+    fn runs_seed_key_handshake_before_download() {
+        let seed = [0x11u8, 0x22, 0x33, 0x44];
+        let mut seed_resp = vec![0x67, 0x11]; // positiveResponse, echoed level
+        seed_resp.extend_from_slice(&seed);
+        let key_ok = vec![0x67, 0x12]; // send-key accepted
+        let mut t = ScriptedTransport {
+            replies: VecDeque::from(vec![seed_resp, key_ok]),
+            requests: Vec::new(),
+        };
+
+        uds_security_access(&mut t, Some(&DemoXorAddKey), 0x11, true).unwrap();
+
+        // First request asks for the seed; second sends the computed key.
+        assert_eq!(t.requests[0], vec![0x27, 0x11]);
+        let expected_key: Vec<u8> = seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect();
+        let mut expected_req = vec![0x27u8, 0x12];
+        expected_req.extend_from_slice(&expected_key);
+        assert_eq!(t.requests[1], expected_req);
+    }
+
+    #[test]
+    fn errors_when_required_but_no_handler() {
+        let mut t = ScriptedTransport {
+            replies: VecDeque::new(),
+            requests: Vec::new(),
+        };
+        let err = uds_security_access(&mut t, None, 0x11, true).unwrap_err();
+        assert!(matches!(err, Error::Config(_)));
+        assert!(t.requests.is_empty());
+    }
+
+    #[test]
+    fn noop_when_open_ecu_and_no_handler() {
+        let mut t = ScriptedTransport {
+            replies: VecDeque::new(),
+            requests: Vec::new(),
+        };
+        uds_security_access(&mut t, None, 0x11, false).unwrap();
+        assert!(t.requests.is_empty());
+    }
+
+    #[test]
+    fn config_helpers_parse_options() {
+        use opentune_core::ConnectConfig;
+        let mut cfg = ConnectConfig::default();
+        assert!(!security_required(Some(&cfg)));
+        assert_eq!(seedkey_level(Some(&cfg), 0x11), 0x11);
+        cfg.options.insert("seedkey".into(), "edc17-sa2".into());
+        cfg.options.insert("seedkey_level".into(), "0x09".into());
+        assert!(security_required(Some(&cfg)));
+        assert_eq!(seedkey_level(Some(&cfg), 0x11), 0x09);
+    }
 }

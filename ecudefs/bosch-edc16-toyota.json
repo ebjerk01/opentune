@@ -24,5 +24,60 @@
   ],
   "checksum": "edc16",
   "seedkey": null,
-  "full_read": "obd"
+  "full_read": "obd",
+  "maps": [
+    {
+      "name": "smoke limiter (injection quantity vs rpm/boost)",
+      "notes": "EXAMPLE ONLY. Address and axes are family-level placeholders inside the calibration region and MUST be confirmed per software variant before any read or write.",
+      "address": 458752,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 16,
+      "scaling": { "factor": 0.01, "offset": 0.0 },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 458240,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": { "factor": 1.0, "offset": 0.0 }
+      },
+      "y_axis": {
+        "name": "charge air pressure",
+        "unit": "hPa",
+        "count": 16,
+        "address": 458496,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": { "factor": 1.0, "offset": 0.0 }
+      },
+      "min": 0.0,
+      "max": 80.0
+    },
+    {
+      "name": "torque limiter (max indicated torque vs rpm)",
+      "notes": "EXAMPLE ONLY. Placeholder address/axis; confirm per software variant before use.",
+      "address": 462848,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 1,
+      "cols": 16,
+      "scaling": { "factor": 0.1, "offset": 0.0 },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 458240,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": { "factor": 1.0, "offset": 0.0 }
+      },
+      "min": 0.0,
+      "max": 400.0
+    }
+  ]
 }

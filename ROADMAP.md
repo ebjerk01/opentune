@@ -25,16 +25,18 @@ Everything you can do with a `.bin` and no car.
 - [ ] Binary model: load/save, region map, metadata
 - [x] **Checksum engine**: trait + verify + correct
   - [x] generic (CRC32-tail example + CRC32 helper)
-  - [~] Bosch EDC16: checksum field located + validated (0x7BD7C, 32-bit LE); algorithm still to crack (needs more sample pairs / boot-code)
+  - [~] Bosch EDC16: checksum **field** located + validated across 3 real pairs; additive/XOR/standard-CRC excluded; algorithm needs the area-directory from a **full flash read (boot section)** — `correct()` refuses to guess
   - [ ] EDC17, PCR2.1 (later)
 - [x] Map diff (compare stock vs modified, byte and region level)
 - [x] ECU definition format (JSON) + 5 fleet defs + parse test
 - [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
+- [x] Calibration **map-definition format** (docs/MAP-DEFS.md) + `maps` in ECU defs
+- [x] Prior-art survey + credits (docs/PRIOR-ART.md); flash sequences (docs/FLASHING-NOTES.md); Bosch checksum structure (docs/BOSCH-CHECKSUM.md)
 
 ## M2 — Read path (hardware)
 Identify and read a real ECU.
 
-- [~] `opentune-core` protocol layer: ISO-TP, UDS, KWP2000 done; VW TP2.0 next
+- [x] `opentune-core` protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
 - [~] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol) — implemented, awaiting hardware test
 - [~] **SocketCAN driver** — implemented, awaiting hardware test
 - [~] **K-line / ELM327 driver** — implemented, awaiting hardware test
@@ -45,7 +47,7 @@ Identify and read a real ECU.
 ## M3 — Flash path
 Write a calibration back, safely.
 
-- [~] Security access: `SeedKey` plugin trait in core; driver write paths hook it (TODO: algorithms)
+- [x] Security access: `SeedKey` plugin trait + all 3 drivers run the 0x27 seed/key handshake before flash (user supplies the algorithm)
 - [ ] Erase / `requestDownload` / `transferData` / `transferExit`
 - [ ] Calibration-only write (write just the map region where supported)
 - [ ] Read-back verify after write

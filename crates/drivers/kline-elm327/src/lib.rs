@@ -20,6 +20,7 @@
 
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
+use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, DiagLayer, EcuId, Error, Interface, InterfaceInfo, MemoryRegion,
@@ -283,6 +284,10 @@ fn hex_bytes(s: &str) -> Vec<u8> {
 pub struct Elm327Driver {
     transport: Option<ElmTransport>,
     diag_layer: DiagLayer,
+    cfg: Option<ConnectConfig>,
+    /// Optional seed/key handler for security access (service 0x27), used on
+    /// both the UDS and KWP2000 paths. No OEM algorithm ships with OpenTune.
+    seed_key: Option<Box<dyn SeedKey>>,
 }
 
 impl Default for Elm327Driver {
@@ -290,6 +295,8 @@ impl Default for Elm327Driver {
         Self {
             transport: None,
             diag_layer: DiagLayer::Uds,
+            cfg: None,
+            seed_key: None,
         }
     }
 }
@@ -299,8 +306,37 @@ impl Elm327Driver {
         Self::default()
     }
 
+    /// Install the seed/key handler used to unlock the ECU (service 0x27)
+    /// before a download. Without it, writing a security-protected ECU fails
+    /// with a clear error. OpenTune ships no OEM algorithms.
+    pub fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) {
+        self.seed_key = Some(seed_key);
+    }
+
     fn transport(&mut self) -> Result<&mut ElmTransport> {
         self.transport.as_mut().ok_or(Error::NotConnected)
+    }
+
+    /// Run security access (service 0x27) for the active diagnostic layer if a
+    /// seed/key handler is set or the config marks security as required. A
+    /// no-op on an open ECU with no handler configured.
+    fn security_access(&mut self) -> Result<()> {
+        let layer = self.diag_layer;
+        let required = security_required(self.cfg.as_ref());
+        // UDS programming sessions typically use level 0x11; KWP2000 ECUs
+        // (EDC15/16) commonly use level 0x01. Both are overridable.
+        let default_level = match layer {
+            DiagLayer::Uds => 0x11,
+            DiagLayer::Kwp2000 => 0x01,
+        };
+        let level = seedkey_level(self.cfg.as_ref(), default_level);
+        // Disjoint field borrows: `seed_key` (shared), `transport` (unique).
+        let sk = self.seed_key.as_deref();
+        let t = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        match layer {
+            DiagLayer::Uds => uds_security_access(t, sk, level, required),
+            DiagLayer::Kwp2000 => kwp_security_access(t, sk, level, required),
+        }
     }
 }
 
@@ -348,6 +384,7 @@ impl Interface for Elm327Driver {
         transport.init(cfg)?;
         self.transport = Some(transport);
         self.diag_layer = cfg.diag_layer;
+        self.cfg = Some(cfg.clone());
         Ok(())
     }
 
@@ -377,6 +414,9 @@ impl Interface for Elm327Driver {
         region: MemoryRegion,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<Vec<u8>> {
+        // A full read from a locked ECU needs security access too; a no-op when
+        // no handler is set and security is not required.
+        self.security_access()?;
         let layer = self.diag_layer;
         let t = self.transport()?;
         match layer {
@@ -394,6 +434,8 @@ impl Interface for Elm327Driver {
         if data.len() != region.length as usize {
             return Err(Error::Config("data length != region length".into()));
         }
+        // Unlock the ECU (service 0x27) before requestDownload if required.
+        self.security_access()?;
         let layer = self.diag_layer;
         let t = self.transport()?;
         match layer {
@@ -497,7 +539,8 @@ fn uds_read_memory(
     Ok(out)
 }
 
-// TODO: security access via SeedKey plugin (service 0x27) before requestDownload.
+// Security access (service 0x27) runs in `Elm327Driver::write_memory` via
+// `uds_security_access` before this function.
 fn uds_write_memory(
     transport: &mut dyn DiagTransport,
     region: MemoryRegion,
@@ -609,7 +652,8 @@ fn kwp_read_memory(
     Ok(out)
 }
 
-// TODO: security access via SeedKey plugin (service 0x27) before requestDownload.
+// Security access (service 0x27) runs in `Elm327Driver::write_memory` via
+// `kwp_security_access` before this function.
 fn kwp_write_memory(
     transport: &mut dyn DiagTransport,
     region: MemoryRegion,
@@ -639,4 +683,211 @@ fn kwp_write_memory(
     }
     kwp.transfer_exit()?;
     Ok(())
+}
+
+// --- Security access (service 0x27) hook ------------------------------------
+//
+// OpenTune ships NO OEM seed/key algorithms. A handler is supplied by the
+// application via [`Elm327Driver::set_seed_key`] (or a plugin), keyed by the
+// `seedkey` id in an ECU definition. These helpers run request-seed → compute →
+// send-key over the existing [`UdsClient`] / [`Kwp2000Client`] before download.
+//
+// Config keys read from [`ConnectConfig::options`]:
+// - `seedkey`:       expected algorithm id; its presence marks security required.
+// - `security`:      `required`/`true`/`1`/`yes` marks security required.
+// - `seedkey_level`: the request-seed access level (odd), decimal or `0x`-hex.
+
+/// True if the config marks the ECU as requiring security access.
+fn security_required(cfg: Option<&ConnectConfig>) -> bool {
+    cfg.map(|c| {
+        c.options.contains_key("seedkey")
+            || matches!(
+                c.options.get("security").map(String::as_str),
+                Some("required" | "true" | "1" | "yes")
+            )
+    })
+    .unwrap_or(false)
+}
+
+/// Request-seed access level from config, or `default` (send-key level is +1).
+fn seedkey_level(cfg: Option<&ConnectConfig>, default: u8) -> u8 {
+    cfg.and_then(|c| c.options.get("seedkey_level"))
+        .and_then(|s| parse_access_level(s))
+        .unwrap_or(default)
+}
+
+/// Parse an access level as decimal or `0x`-prefixed hex.
+fn parse_access_level(s: &str) -> Option<u8> {
+    let t = s.trim();
+    match t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        Some(h) => u8::from_str_radix(h, 16).ok(),
+        None => t.parse().ok(),
+    }
+}
+
+/// UDS service 0x27 seed/key (CAN path). Errors only when security is required
+/// and no handler is set.
+fn uds_security_access(
+    transport: &mut dyn DiagTransport,
+    seed_key: Option<&dyn SeedKey>,
+    request_level: u8,
+    required: bool,
+) -> Result<()> {
+    match seed_key {
+        None => {
+            if required {
+                Err(Error::Config(
+                    "ECU requires security access but no seed/key handler is set \
+                     (call set_seed_key with an algorithm for this ECU)"
+                        .into(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Some(sk) => {
+            let mut uds = UdsClient::new(transport);
+            let seed = uds.request_seed(request_level)?;
+            if !seed.is_empty() && seed.iter().all(|&b| b == 0) {
+                return Ok(());
+            }
+            let key = sk.compute(&seed, request_level)?;
+            uds.send_key(request_level.wrapping_add(1), &key)
+        }
+    }
+}
+
+/// KWP2000 service 0x27 seed/key (K-line path). Errors only when security is
+/// required and no handler is set.
+fn kwp_security_access(
+    transport: &mut dyn DiagTransport,
+    seed_key: Option<&dyn SeedKey>,
+    request_level: u8,
+    required: bool,
+) -> Result<()> {
+    match seed_key {
+        None => {
+            if required {
+                Err(Error::Config(
+                    "ECU requires security access but no seed/key handler is set \
+                     (call set_seed_key with an algorithm for this ECU)"
+                        .into(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Some(sk) => {
+            let mut kwp = Kwp2000Client::new(transport);
+            let seed = kwp.request_seed(request_level)?;
+            if !seed.is_empty() && seed.iter().all(|&b| b == 0) {
+                return Ok(());
+            }
+            let key = sk.compute(&seed, request_level)?;
+            kwp.send_key(request_level.wrapping_add(1), &key)
+        }
+    }
+}
+
+#[cfg(test)]
+mod seedkey_hook_tests {
+    use super::*;
+    use std::collections::VecDeque;
+
+    struct ScriptedTransport {
+        replies: VecDeque<Vec<u8>>,
+        requests: Vec<Vec<u8>>,
+    }
+
+    impl DiagTransport for ScriptedTransport {
+        fn request(&mut self, req: &[u8], _timeout_ms: u64) -> Result<Vec<u8>> {
+            self.requests.push(req.to_vec());
+            self.replies.pop_front().ok_or(Error::Timeout(0))
+        }
+    }
+
+    /// DEMO ONLY — not a real OEM algorithm. XOR 0x5A then +1 per byte.
+    struct DemoXorAddKey;
+
+    impl SeedKey for DemoXorAddKey {
+        fn id(&self) -> &str {
+            "demo-xor-add"
+        }
+        fn compute(&self, seed: &[u8], _level: u8) -> Result<Vec<u8>> {
+            Ok(seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect())
+        }
+    }
+
+    #[test]
+    fn uds_handshake_sends_computed_key() {
+        let seed = [0xDEu8, 0xAD, 0xBE, 0xEF];
+        let mut seed_resp = vec![0x67, 0x11];
+        seed_resp.extend_from_slice(&seed);
+        let mut t = ScriptedTransport {
+            replies: VecDeque::from(vec![seed_resp, vec![0x67, 0x12]]),
+            requests: Vec::new(),
+        };
+        uds_security_access(&mut t, Some(&DemoXorAddKey), 0x11, true).unwrap();
+        assert_eq!(t.requests[0], vec![0x27, 0x11]);
+        let expected_key: Vec<u8> = seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect();
+        let mut expected_req = vec![0x27u8, 0x12];
+        expected_req.extend_from_slice(&expected_key);
+        assert_eq!(t.requests[1], expected_req);
+    }
+
+    #[test]
+    fn kwp_handshake_sends_computed_key() {
+        let seed = [0x01u8, 0x02, 0x03, 0x04];
+        let mut seed_resp = vec![0x67, 0x01];
+        seed_resp.extend_from_slice(&seed);
+        let mut t = ScriptedTransport {
+            replies: VecDeque::from(vec![seed_resp, vec![0x67, 0x02]]),
+            requests: Vec::new(),
+        };
+        kwp_security_access(&mut t, Some(&DemoXorAddKey), 0x01, true).unwrap();
+        assert_eq!(t.requests[0], vec![0x27, 0x01]);
+        let expected_key: Vec<u8> = seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect();
+        let mut expected_req = vec![0x27u8, 0x02];
+        expected_req.extend_from_slice(&expected_key);
+        assert_eq!(t.requests[1], expected_req);
+    }
+
+    #[test]
+    fn errors_when_required_but_no_handler() {
+        let mut t = ScriptedTransport {
+            replies: VecDeque::new(),
+            requests: Vec::new(),
+        };
+        assert!(matches!(
+            uds_security_access(&mut t, None, 0x11, true),
+            Err(Error::Config(_))
+        ));
+        assert!(matches!(
+            kwp_security_access(&mut t, None, 0x01, true),
+            Err(Error::Config(_))
+        ));
+        assert!(t.requests.is_empty());
+    }
+
+    #[test]
+    fn noop_when_open_ecu_and_no_handler() {
+        let mut t = ScriptedTransport {
+            replies: VecDeque::new(),
+            requests: Vec::new(),
+        };
+        uds_security_access(&mut t, None, 0x11, false).unwrap();
+        kwp_security_access(&mut t, None, 0x01, false).unwrap();
+        assert!(t.requests.is_empty());
+    }
+
+    #[test]
+    fn config_helpers_parse_options() {
+        let mut cfg = ConnectConfig::default();
+        assert!(!security_required(Some(&cfg)));
+        assert_eq!(seedkey_level(Some(&cfg), 0x01), 0x01);
+        cfg.options.insert("seedkey".into(), "edc16-vag".into());
+        cfg.options.insert("seedkey_level".into(), "0x05".into());
+        assert!(security_required(Some(&cfg)));
+        assert_eq!(seedkey_level(Some(&cfg), 0x01), 0x05);
+    }
 }
