@@ -383,6 +383,68 @@ impl ChecksumAlgo for Edc17 {
         }
         Ok(fixes)
     }
+
+    /// Correct EDC17 blocks using the owner's own stock dump to recover each
+    /// block's firmware constant `K = crc32(stock_block)` (valid because the
+    /// ECU wrote self-consistent checksums). The tuned image's trailing
+    /// compensation word is then forged to that same `K`. Only blocks that
+    /// appear with identical bounds in **both** the target and the reference
+    /// directory are touched; when a validated library constant also exists for
+    /// a block, the reference must agree with it or that block is skipped — so a
+    /// wrong/mismatched reference can never silently corrupt the image.
+    fn correct_with_reference(&self, image: &mut [u8], reference: &[u8]) -> Result<Vec<Fix>> {
+        let blocks = parse_directory(image);
+        let ref_blocks = parse_directory(reference);
+        if blocks.is_empty() {
+            return Err(Error::Config(
+                "no EDC17 checksum directory (FADECAFE/CAFEAFFE) in the target image".into(),
+            ));
+        }
+        let shared: Vec<DirBlock> = blocks
+            .iter()
+            .copied()
+            .filter(|b| ref_blocks.contains(b))
+            .collect();
+        if shared.is_empty() {
+            return Err(Error::Unsupported(
+                "EDC17: the reference shares no checksum block with this image \
+                 (different firmware?); refusing to guess"
+                    .into(),
+            ));
+        }
+        let mut fixes = Vec::new();
+        for b in shared {
+            let (s, e) = b.range();
+            if e > image.len() || e > reference.len() {
+                continue;
+            }
+            // K recovered from the owner's valid stock dump = the firmware's
+            // real per-block constant.
+            let k = crc32(&reference[s..e]);
+            // If we also have a validated library constant for this block, the
+            // reference must match it; a mismatch means it isn't this firmware.
+            if let Some(kc) = known_const(b.start, b.end) {
+                if kc.k != k {
+                    continue;
+                }
+            }
+            let store = b.store_offset() as usize;
+            let old = read_u32_le(image, store)
+                .ok_or_else(|| Error::Config("EDC17 store offset out of range".into()))?;
+            let want = forge_last_dword(&image[s..e], k);
+            let want_u = u32::from_le_bytes(want);
+            if old != want_u {
+                image[store..store + 4].copy_from_slice(&want);
+                fixes.push(Fix {
+                    name: format!("edc17@0x{:06X} (K from reference)", b.start),
+                    offset: store as u32,
+                    old: old as u64,
+                    new: want_u as u64,
+                });
+            }
+        }
+        Ok(fixes)
+    }
 }
 
 #[cfg(test)]
@@ -451,6 +513,59 @@ mod tests {
         assert!(!st[0].ok);
         // correct() refuses: no validated constant present.
         assert!(Edc17.correct(&mut img).is_err());
+    }
+
+    /// Build a 0x2000 image with one directory block [0x100,0x1FF] whose
+    /// trailing dword is forged so the block CRC equals an arbitrary `k` — a
+    /// self-consistent "stock" dump for a block that is NOT in KNOWN_CONSTS
+    /// (exactly the owner's-CC case: a real VAG block with no shipped constant).
+    fn synthetic_stock(k: u32) -> Vec<u8> {
+        let mut img = vec![0u8; 0x2000];
+        img[0x40..0x44].copy_from_slice(&0x8000_0100u32.to_le_bytes());
+        img[0x44..0x48].copy_from_slice(&0x8000_01FFu32.to_le_bytes());
+        img[0x48..0x4C].copy_from_slice(&0xFADE_CAFEu32.to_le_bytes());
+        img[0x4C..0x50].copy_from_slice(&0xCAFE_AFFEu32.to_le_bytes());
+        for b in img[0x100..0x1FC].iter_mut() {
+            *b = 0x5A;
+        }
+        let (s, e) = (0x100usize, 0x200usize);
+        let x = forge_last_dword(&img[s..e], k);
+        img[0x1FC..0x200].copy_from_slice(&x);
+        assert_eq!(crc32(&img[s..e]), k);
+        img
+    }
+
+    #[test]
+    fn correct_with_reference_bootstraps_unknown_constant() {
+        // Stock: a block whose firmware constant K is NOT in KNOWN_CONSTS.
+        let k = 0x1234_ABCDu32;
+        let stock = synthetic_stock(k);
+        // correct() alone must refuse — no validated constant for this block.
+        assert!(Edc17.correct(&mut stock.clone()).is_err());
+
+        // "Tune" it: change a calibration byte, which breaks the block CRC.
+        let mut tuned = stock.clone();
+        tuned[0x150] ^= 0x5A;
+        let (s, e) = (0x100usize, 0x200usize);
+        assert_ne!(crc32(&tuned[s..e]), k);
+
+        // Bootstrap K from the owner's own stock dump and correct.
+        let fixes = Edc17.correct_with_reference(&mut tuned, &stock).unwrap();
+        assert_eq!(fixes.len(), 1);
+        // Block CRC is now back to the firmware constant recovered from stock.
+        assert_eq!(crc32(&tuned[s..e]), k);
+        // Only the trailing compensation dword moved; the edited data byte stays.
+        assert_eq!(tuned[0x150], stock[0x150] ^ 0x5A);
+    }
+
+    #[test]
+    fn correct_with_reference_rejects_foreign_image() {
+        // A reference whose directory shares no block with the target is refused.
+        let target = synthetic_stock(0x1111_1111);
+        let foreign = vec![0u8; 0x400]; // no directory at all
+        assert!(Edc17
+            .correct_with_reference(&mut target.clone(), &foreign)
+            .is_err());
     }
 
     #[test]

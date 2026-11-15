@@ -5,8 +5,9 @@ A living backlog of features worth building. Grouped by theme; rough effort in
 emissions defeat, odometer fraud, or theft.
 
 ## Checksums & integrity
-- `[M]` **EDC17** (TriCore) — your Passat CC's engine *(in progress)*.
-- `[M]` **Simos PCR2.1** — VAG 1.6 TDI CR *(in progress)*.
+- `[M]` **EDC17** (TriCore) — your Passat CC's engine *(done: verify + correct; VAG constant
+  bootstrapped from your own stock via `checksum fix --reference`)*.
+- `[M]` **Simos PCR2.1** — VAG 1.6 TDI CR *(done: self-contained on-image directory)*.
 - `[S]` **EDC16-CR in-situ** confirmation (constants validated, needs a live word-wise dump).
 - `[M]` **Checksum plugin system** — load ECU checksum algorithms as data/plugins so new
   families drop in without a rebuild; a shared `correct_with_reference` boundary model.

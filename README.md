@@ -11,9 +11,11 @@
 
 - **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **998-vehicle
   catalog** harvested from comma.ai opendbc.
-- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x) solved** (directory-walking
-  verify + correct, validated against real full dumps) and an EDC15 module; `fix` corrects an
-  uncorrected tune, and refuses to guess on anything unvalidated (anti-brick).
+- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore) and
+  Continental Simos PCR2.1 solved** (directory-walking verify + correct, validated against real
+  full dumps) plus an EDC15 module; `fix` corrects an uncorrected tune, `fix --reference`
+  bootstraps EDC17's firmware-specific constant from your own stock dump, and it refuses to
+  guess on anything unvalidated (anti-brick).
 - **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, with a
   backup vault, all exercised through the mock/file driver.
@@ -66,11 +68,14 @@ OpenTune is **calibration-focused**. First targets are the well-understood Bosch
 |---|---|---|---|
 | Bosch **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD (03G906…), BMW/KIA diesels | **solved** (verify + correct) | OBD/CAN |
 | Bosch **EDC15C6** | older CDI diesels | field located (word-wise solve kept private) | K-line |
-| Bosch **EDC17** | later common-rail diesels | in progress | OBD (bench/boot for full read) |
-| Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | planned | OBD (bench/boot) |
+| Bosch **EDC17** (TriCore) | later common-rail diesels (incl. VAG) | **solved** — verify + correct; a firmware-specific VAG block constant is bootstrapped from your own stock dump (`checksum fix --reference`) | OBD (bench/boot for full read) |
+| Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | **solved** (verify + correct; self-contained on-image directory) | OBD (bench/boot) |
 
-The EDC16 checksum is validated against real full dumps. Checksum work derived from any
-proprietary tool is re-derived and validated independently before it ships here.
+The checksums are validated against real full dumps. Checksum work derived from any
+proprietary tool is re-derived and validated independently before it ships here. EDC17's
+per-block target constant is firmware-specific; rather than guess, OpenTune recovers it from
+a known-good reference image (your own untouched read) and refuses when the reference doesn't
+match — so a wrong file can never silently corrupt the image.
 
 The OBD-only interfaces move data in and out; obtaining a complete original from a
 readout-protected ECU may require a bench/boot tool, which OpenTune does not provide.

@@ -38,6 +38,17 @@ pub trait ChecksumAlgo {
     fn verify(&self, image: &[u8]) -> Result<Vec<BlockStatus>>;
     /// Recompute and write correct checksums in place; return what changed.
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>>;
+
+    /// Correct using a known-good **reference image** (e.g. the owner's own
+    /// untouched stock dump) to bootstrap per-block target values that are not
+    /// baked into this library. The default ignores the reference and behaves
+    /// exactly like [`correct`](Self::correct) — correct for algorithms whose
+    /// targets are self-contained in the image (EDC16, PCR2.1, EDC15). EDC17
+    /// overrides it: the VAG per-block constant is firmware-specific, so it is
+    /// recovered from the reference rather than guessed.
+    fn correct_with_reference(&self, image: &mut [u8], _reference: &[u8]) -> Result<Vec<Fix>> {
+        self.correct(image)
+    }
 }
 
 /// Look up a checksum algorithm by id (as named in an ECU definition).

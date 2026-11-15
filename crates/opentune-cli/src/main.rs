@@ -133,6 +133,12 @@ enum ChecksumAction {
         #[arg(long)]
         algo: String,
         file: PathBuf,
+        /// Known-good reference image (your own untouched stock dump) used to
+        /// recover per-block constants the library doesn't ship — needed for
+        /// EDC17 (VAG constants are firmware-specific); ignored by self-contained
+        /// algorithms (edc16/pcr21/edc15c).
+        #[arg(long)]
+        reference: Option<PathBuf>,
     },
 }
 
@@ -270,11 +276,22 @@ fn main() -> Result<()> {
                     );
                 }
             }
-            ChecksumAction::Fix { algo, file } => {
+            ChecksumAction::Fix {
+                algo,
+                file,
+                reference,
+            } => {
                 let algo = opentune_checksum::get(&algo)
                     .ok_or_else(|| anyhow!("unknown checksum algo '{algo}'"))?;
                 let mut img = std::fs::read(&file)?;
-                let fixes = algo.correct(&mut img)?;
+                let fixes = match reference {
+                    Some(r) => {
+                        let refimg = std::fs::read(&r)
+                            .with_context(|| format!("read reference {}", r.display()))?;
+                        algo.correct_with_reference(&mut img, &refimg)?
+                    }
+                    None => algo.correct(&mut img)?,
+                };
                 if fixes.is_empty() {
                     println!("No corrections needed.");
                 } else {
