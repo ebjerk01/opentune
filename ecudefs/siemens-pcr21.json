@@ -22,7 +22,7 @@
       "writable": true
     }
   ],
-  "checksum": null,
+  "checksum": "pcr21",
   "seedkey": null,
   "full_read": "bench_boot"
 }
