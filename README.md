@@ -2,9 +2,23 @@
 
 **Open-source ECU reading, flashing and calibration for people who want to tune their own cars with cheap, open hardware.**
 
-> ⚠️ **Early work in progress.** The foundation is being built in the open. Nothing here is
-> ready to touch a real car yet. Reading, writing or reflashing an engine or transmission
-> control unit can permanently damage it. Use at your own risk — see [Safety](#safety).
+> ⚠️ **Work in progress.** The offline calibration tooling works today (see below); the
+> hardware drivers are implemented but awaiting on-car testing. Reading, writing or reflashing
+> an engine or transmission control unit can permanently damage it — don't flash a real car
+> until a driver is proven on your hardware. Use at your own risk — see [Safety](#safety).
+
+## What works today (offline, on a `.bin`)
+
+- **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **998-vehicle
+  catalog** harvested from comma.ai opendbc.
+- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x) solved** (directory-walking
+  verify + correct, validated against real full dumps) and an EDC15 module; `fix` corrects an
+  uncorrected tune, and refuses to guess on anything unvalidated (anti-brick).
+- **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
+- **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, with a
+  backup vault, all exercised through the mock/file driver.
+- A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
+  `checksum verify|fix`, `flash`, `ecudefs`.
 
 OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
 already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
@@ -30,25 +44,33 @@ the calibration, correct the checksums, write it back, and verify.
    (offline)   (J2534/CDC-ACM)   (CANable/…)    + own firmware)  J2534 generic
 ```
 
-## Supported interfaces (planned for v1)
+## Interface drivers
 
 | Driver | Hardware | Status |
 |---|---|---|
-| **mock/file** | none — operates on local `.bin` files | building |
-| **OpenPort 2.0** | Tactrix OpenPort 2.0 (genuine or clone), CDC-ACM | building |
-| **SocketCAN** | any Linux CAN (CANable, PCAN, …) | building |
-| **K-line (ELM327)** | ELM327 or OpenTune's own ESP32/Arduino firmware | building |
+| **mock/file** | none — operates on local `.bin` files | **working** |
+| **OpenPort 2.0** | Tactrix OpenPort 2.0 (genuine or clone), CDC-ACM | implemented · awaiting hardware |
+| **SocketCAN** | any Linux CAN (CANable, PCAN, …) | implemented · awaiting hardware |
+| **K-line (ELM327)** | ELM327 (USB) | implemented · awaiting hardware |
+| **KKL (raw K-line)** | FTDI/CH340 KKL 409.1 cable + transceiver | implemented · awaiting hardware |
+| **Arduino K-line bridge** | an Arduino + L9637D running OpenTune firmware (`hardware/firmware/`) | implemented · awaiting hardware |
+| **slcan** | CANable / CANtact USB-CAN | implemented · awaiting hardware |
+
+See [`docs/CHEAP-INTERFACES.md`](docs/CHEAP-INTERFACES.md) for which cheap/clone adapters map to which driver.
 
 ## ECU coverage (first targets)
 
 OpenTune is **calibration-focused**. First targets are the well-understood Bosch families:
 
-| ECU | Example engines | Read | Flash (maps) |
+| ECU | Example engines | Checksum | Bus |
 |---|---|---|---|
-| Bosch **EDC16** (incl. U34, C-series) | VAG 1.9 TDI PD, Toyota 1.4 D-4D | OBD | OBD |
-| Bosch **EDC15C6** | older CDI diesels | K-line | K-line |
-| Bosch **EDC17** | later common-rail diesels | bench/boot for full read | OBD |
-| Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | bench/boot | OBD |
+| Bosch **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD (03G906…), BMW/KIA diesels | **solved** (verify + correct) | OBD/CAN |
+| Bosch **EDC15C6** | older CDI diesels | field located (word-wise solve kept private) | K-line |
+| Bosch **EDC17** | later common-rail diesels | in progress | OBD (bench/boot for full read) |
+| Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | planned | OBD (bench/boot) |
+
+The EDC16 checksum is validated against real full dumps. Checksum work derived from any
+proprietary tool is re-derived and validated independently before it ships here.
 
 The OBD-only interfaces move data in and out; obtaining a complete original from a
 readout-protected ECU may require a bench/boot tool, which OpenTune does not provide.
