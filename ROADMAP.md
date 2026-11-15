@@ -37,7 +37,7 @@ Everything you can do with a `.bin` and no car.
 - [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
 - [x] Calibration **map-definition format** (docs/MAP-DEFS.md) + `maps` in ECU defs
 - [x] Prior-art survey + credits (docs/PRIOR-ART.md); flash sequences (docs/FLASHING-NOTES.md); Bosch checksum structure (docs/BOSCH-CHECKSUM.md)
-- [~] **ECU identification / autoselect**: read DIDs → match ecudefs + a vehicle catalog; `opentune identify`, `EcuDef.identify`, `catalog` module done; opendbc harvest pending
+- [x] **ECU identification / autoselect**: `opentune identify` (read DIDs → match ecudefs + catalog), `EcuDef.identify`, `catalog` module, and a **998-entry vehicle catalog harvested from opendbc** (14 makes, MIT); docs/IDENTIFICATION.md
 
 ## M2 — Read path (hardware)
 Identify and read a real ECU.
@@ -93,6 +93,7 @@ Write a calibration back, safely.
 
 ## M8 — Open hardware interface
 - [~] ESP32-S3 + CAN + K-line interface spec (docs/hardware.md); KiCad next
+- [~] **Arduino K-line bridge firmware** (ATmega328, hardware/firmware/kline-bridge) — written; a DIY cheap K-line adapter, host driver to follow
 - [ ] Device firmware (ISO-TP, TP2.0, K-line init, raw UART for boot mode)
 - [ ] USB CDC + optional WiFi/BLE bridge
 - [ ] OpenTune driver for the device
