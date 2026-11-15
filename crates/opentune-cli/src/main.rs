@@ -133,6 +133,18 @@ enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// Export an ECU definition's maps as a TunerPro XDF (modern XML).
+    ExportXdf {
+        /// Directory of ECU definitions.
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+        /// Definition id whose maps to export.
+        #[arg(long)]
+        def: String,
+        /// Output .xdf path (defaults to stdout).
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -536,8 +548,8 @@ fn main() -> Result<()> {
             if let Some(into) = into {
                 let txt = std::fs::read_to_string(&into)
                     .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
-                let mut def: opentune_core::ecudef::EcuDef =
-                    serde_json::from_str(&txt).map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+                let mut def: opentune_core::ecudef::EcuDef = serde_json::from_str(&txt)
+                    .map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
                 let have: std::collections::HashSet<String> =
                     def.maps.iter().map(|m| m.name.clone()).collect();
                 let mut added = 0usize;
@@ -555,6 +567,25 @@ fn main() -> Result<()> {
                     into.display(),
                     def.maps.len()
                 );
+            }
+        }
+        Command::ExportXdf { ecudefs, def, out } => {
+            let defs = opentune_core::ecudef::load_dir(&ecudefs)
+                .map_err(|e| anyhow!("load {}: {e}", ecudefs.display()))?;
+            let d = defs
+                .iter()
+                .find(|d| d.id == def)
+                .ok_or_else(|| anyhow!("no definition '{def}' in {}", ecudefs.display()))?;
+            if d.maps.is_empty() {
+                return Err(anyhow!("definition '{def}' has no maps to export"));
+            }
+            let xml = opentune_xdf::export_xdf(Some(&d.name), &d.maps);
+            match out {
+                Some(p) => {
+                    std::fs::write(&p, &xml).map_err(|e| anyhow!("write {}: {e}", p.display()))?;
+                    println!("Wrote {} map(s) to {}", d.maps.len(), p.display());
+                }
+                None => print!("{xml}"),
             }
         }
     }
@@ -659,23 +690,43 @@ fn read_cell(
         T::S8 => (b[0] as i8) as f64,
         T::U16 => {
             let a = [b[0], b[1]];
-            (if le { u16::from_le_bytes(a) } else { u16::from_be_bytes(a) }) as f64
+            (if le {
+                u16::from_le_bytes(a)
+            } else {
+                u16::from_be_bytes(a)
+            }) as f64
         }
         T::S16 => {
             let a = [b[0], b[1]];
-            (if le { i16::from_le_bytes(a) } else { i16::from_be_bytes(a) }) as f64
+            (if le {
+                i16::from_le_bytes(a)
+            } else {
+                i16::from_be_bytes(a)
+            }) as f64
         }
         T::U32 => {
             let a = [b[0], b[1], b[2], b[3]];
-            (if le { u32::from_le_bytes(a) } else { u32::from_be_bytes(a) }) as f64
+            (if le {
+                u32::from_le_bytes(a)
+            } else {
+                u32::from_be_bytes(a)
+            }) as f64
         }
         T::S32 => {
             let a = [b[0], b[1], b[2], b[3]];
-            (if le { i32::from_le_bytes(a) } else { i32::from_be_bytes(a) }) as f64
+            (if le {
+                i32::from_le_bytes(a)
+            } else {
+                i32::from_be_bytes(a)
+            }) as f64
         }
         T::F32 => {
             let a = [b[0], b[1], b[2], b[3]];
-            (if le { f32::from_le_bytes(a) } else { f32::from_be_bytes(a) }) as f64
+            (if le {
+                f32::from_le_bytes(a)
+            } else {
+                f32::from_be_bytes(a)
+            }) as f64
         }
     };
     Some(v)
@@ -728,7 +779,11 @@ fn compare_maps(d: &opentune_core::ecudef::EcuDef, a: &[u8], b: &[u8], only: Opt
                 }
             }
         }
-        let unit = if m.unit.is_empty() { String::new() } else { format!(" {}", m.unit) };
+        let unit = if m.unit.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", m.unit)
+        };
         if changed == 0 {
             if only.is_some() {
                 println!("  {:<32} unchanged", m.name);

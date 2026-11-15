@@ -19,8 +19,9 @@ emissions defeat, odometer fraud, or theft.
   copy/paste regions, undo, and write back with automatic checksum correction.
 - `[L]` **A2L / DAMOS import** — parse the OEM ASAM calibration description to auto-populate
   precise map definitions (addresses, axes, scaling) for any ECU that has one.
-- `[M]` **XDF / TunerPro import** — reuse the huge community library of definitions
-  *(done: `opentune-xdf` crate + `import-xdf` CLI, modern XML + legacy text)*; export still TODO.
+- `[M]` **XDF / TunerPro import + export** — reuse the huge community library of definitions
+  *(done: `opentune-xdf` crate, `import-xdf` modern XML + legacy text, `export-xdf` modern XML,
+  round-trip validated)*.
 - `[M]` **Real map library** for the common ECUs (EDC16U34 first) *(in progress)*.
 - `[M]` **Auto map-finder** — cluster a stock/tuned diff, classify regions against known map
   shapes, and emit candidate `MapDef`s to seed a definition.

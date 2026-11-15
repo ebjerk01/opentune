@@ -29,9 +29,12 @@
 use opentune_core::ecudef::{DataType, Endian, MapDef};
 use std::fmt;
 
+pub mod export;
 pub mod legacy;
 pub mod math;
 pub mod xml;
+
+pub use export::export_xdf;
 
 /// Result of importing one XDF file.
 #[derive(Debug, Clone, Default, PartialEq)]
