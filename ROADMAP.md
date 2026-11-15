@@ -83,7 +83,7 @@ Write a calibration back, safely.
 
 ## M6 — More ECUs
 - [ ] Bosch EDC17 (checksum + OBD flash)
-- [ ] Continental/Siemens Simos PCR2.1
+- [x] **Continental/Siemens Simos PCR2.1 checksum SOLVED** (forward CRC-32 + on-image directory; validated on real 1.6 TDI dumps; RSA signature block out of scope)
 - [ ] Bosch EDC15C6 over K-line (Mercedes CR1 family)
 - [x] DTC database + decoder (11,140 codes; `opentune dtc <code>`)
 - [ ] Growing community ECU-definition library

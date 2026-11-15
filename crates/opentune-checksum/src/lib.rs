@@ -10,6 +10,7 @@ pub mod edc15;
 pub mod edc16;
 pub mod edc17;
 pub mod generic;
+pub mod pcr21;
 
 /// Status of one checksum-protected block.
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "crc32-tail" => Some(Box::new(generic::Crc32Tail)),
         "edc16" => Some(Box::new(edc16::Edc16)),
         "edc17" => Some(Box::new(edc17::Edc17)),
+        "pcr21" => Some(Box::new(pcr21::Pcr21)),
         "edc15c6" | "edc15" => Some(Box::new(edc15::Edc15C6)),
         _ => None,
     }
