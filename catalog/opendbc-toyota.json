@@ -1,0 +1,6808 @@
+[
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152676144\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus CT Hybrid"
+    ],
+    "part_numbers": [
+      "F152676144"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881517601100\\x00\\x00\\x00\\x00",
+      "881517602000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus CT Hybrid"
+    ],
+    "part_numbers": [
+      "881517601100",
+      "881517602000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0237635000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237641000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus CT Hybrid"
+    ],
+    "part_numbers": [
+      "37635000",
+      "37641000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F7601100\\x00\\x00\\x00\\x00",
+      "8646F7601200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus CT Hybrid"
+    ],
+    "part_numbers": [
+      "8646F7601100",
+      "8646F7601200"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus CT Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152606201\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606202\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633171\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "F152606201",
+      "F152606202",
+      "F152633171"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881513309400\\x00\\x00\\x00\\x00",
+      "881513309500\\x00\\x00\\x00\\x00",
+      "881513310400\\x00\\x00\\x00\\x00",
+      "881513310500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "881513309400",
+      "881513309500",
+      "881513310400",
+      "881513310500"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x02333M4100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02333M4200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02333R0000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0C01000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "333M4100",
+      "333M4200",
+      "333R0000",
+      "A0C01000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B33502\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33512\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8965B33502",
+      "8965B33512"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F3302001\\x00\\x00\\x00\\x00",
+      "8646F3302100\\x00\\x00\\x00\\x00",
+      "8646F3302200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8646F3302001",
+      "8646F3302100",
+      "8646F3302200"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4701100\\x00\\x00\\x00\\x00",
+      "8821F4701200\\x00\\x00\\x00\\x00",
+      "8821F4701300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4701100",
+      "8821F4701200",
+      "8821F4701300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152633423\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633680\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633681\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633F50\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633F51\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606281\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606340\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606461\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260646200\\x00\\x00\\x00\\x00",
+      "\\x01F152633A71\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152633E2100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "F152606281",
+      "F152606340",
+      "F152606461",
+      "F15260646200",
+      "F152633423",
+      "F152633680",
+      "F152633681",
+      "F152633A71",
+      "F152633E2100",
+      "F152633F50",
+      "F152633F51"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966306U6000\\x00\\x00\\x00\\x00",
+      "\\x018966306V5000\\x00\\x00\\x00\\x00",
+      "\\x018966306W6000\\x00\\x00\\x00\\x00",
+      "\\x018966333T5000\\x00\\x00\\x00\\x00",
+      "\\x018966333T5100\\x00\\x00\\x00\\x00",
+      "\\x018966333X6000\\x00\\x00\\x00\\x00",
+      "\\x01896633T07000\\x00\\x00\\x00\\x00",
+      "\\x01896633T24000\\x00\\x00\\x00\\x00",
+      "\\x01896633T38000\\x00\\x00\\x00\\x00",
+      "\\x01896633T58000\\x00\\x00\\x00\\x00",
+      "\\x01896633T63000\\x00\\x00\\x00\\x00",
+      "\\x028966333S8000\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966333S8000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966333T0100\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966333V4000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966333W1000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x02896633T09000\\x00\\x00\\x00\\x00897CF3307001\\x00\\x00\\x00\\x00",
+      "\\x02896633T10000\\x00\\x00\\x00\\x00897CF3307001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8966306U6000",
+      "8966306V5000",
+      "8966306W6000",
+      "8966333S8000",
+      "8966333T0100",
+      "8966333T5000",
+      "8966333T5100",
+      "8966333V4000",
+      "8966333W1000",
+      "8966333X6000",
+      "896633T07000",
+      "896633T09000",
+      "896633T10000",
+      "896633T24000",
+      "896633T38000",
+      "896633T58000",
+      "896633T63000",
+      "897CF3302002",
+      "897CF3305001",
+      "897CF3307001"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B33252\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33590\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33690\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33702\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33721\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8965B33252",
+      "8965B33590",
+      "8965B33690",
+      "8965B33702",
+      "8965B33721"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0610000\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F0610100\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F33030D0\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F3303100\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F3303200\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F3304100\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F3304200\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F3304300\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00",
+      "\\x028646F3309100\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3309100\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F3309400\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3313000\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0610000",
+      "8646F0610100",
+      "8646F33030D0",
+      "8646F3303100",
+      "8646F3303200",
+      "8646F3304100",
+      "8646F3304200",
+      "8646F3304300",
+      "8646F3309100",
+      "8646F3309400",
+      "8646F3313000",
+      "8646G26011A0",
+      "8646G2601200",
+      "8646G2601400",
+      "8646G2601500",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301100\\x00\\x00\\x00\\x00",
+      "\\x018821F3301200\\x00\\x00\\x00\\x00",
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00",
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus ES",
+      "Lexus ES Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301100",
+      "8821F3301200",
+      "8821F3301300",
+      "8821F3301400",
+      "8821F6201200",
+      "8821F6201300",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152630400\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152630700\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "F152630400",
+      "F152630700"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881513011300\\x00\\x00\\x00\\x00",
+      "881513016200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "881513011300",
+      "881513016200"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0233075200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00530B9000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02330Y8000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "33075200",
+      "330Y8000",
+      "530B9000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B30431\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B30551\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "8965B30431",
+      "8965B30551"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F3001200\\x00\\x00\\x00\\x00",
+      "8646F3002100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "8646F3001200",
+      "8646F3002100"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus GS F"
+    ],
+    "part_numbers": [
+      "8821F4702000"
+    ],
+    "source": "opendbc",
+    "years": "2016"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152653300\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152653301\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152653310\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152653330\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "F152653300",
+      "F152653301",
+      "F152653310",
+      "F152653330"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881515306200\\x00\\x00\\x00\\x00",
+      "881515306400\\x00\\x00\\x00\\x00",
+      "881515306500\\x00\\x00\\x00\\x00",
+      "881515307400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "881515306200",
+      "881515306400",
+      "881515306500",
+      "881515307400"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966353M7000\\x00\\x00\\x00\\x00",
+      "\\x018966353M7100\\x00\\x00\\x00\\x00",
+      "\\x018966353Q2000\\x00\\x00\\x00\\x00",
+      "\\x018966353Q2100\\x00\\x00\\x00\\x00",
+      "\\x018966353Q2300\\x00\\x00\\x00\\x00",
+      "\\x018966353Q4000\\x00\\x00\\x00\\x00",
+      "\\x018966353R1100\\x00\\x00\\x00\\x00",
+      "\\x018966353R5000\\x00\\x00\\x00\\x00",
+      "\\x018966353R7000\\x00\\x00\\x00\\x00",
+      "\\x018966353R7100\\x00\\x00\\x00\\x00",
+      "\\x018966353R8000\\x00\\x00\\x00\\x00",
+      "\\x018966353R8100\\x00\\x00\\x00\\x00",
+      "\\x0232480000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02353N5100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02353P7000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00530J5000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02353P9000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00553C1000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "32480000",
+      "353N5100",
+      "353P7000",
+      "353P9000",
+      "530J5000",
+      "553C1000",
+      "8966353M7000",
+      "8966353M7100",
+      "8966353Q2000",
+      "8966353Q2100",
+      "8966353Q2300",
+      "8966353Q4000",
+      "8966353R1100",
+      "8966353R5000",
+      "8966353R7000",
+      "8966353R7100",
+      "8966353R8000",
+      "8966353R8100",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B53270\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53271\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53280\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53281\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53310\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53311\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8965B53270",
+      "8965B53271",
+      "8965B53280",
+      "8965B53281",
+      "8965B53310",
+      "8965B53311"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F5301101\\x00\\x00\\x00\\x00",
+      "8646F5301200\\x00\\x00\\x00\\x00",
+      "8646F5301300\\x00\\x00\\x00\\x00",
+      "8646F5301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8646F5301101",
+      "8646F5301200",
+      "8646F5301300",
+      "8646F5301400"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15265337200\\x00\\x00\\x00\\x00",
+      "\\x01F15265342000\\x00\\x00\\x00\\x00",
+      "\\x01F15265343000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "F15265337200",
+      "F15265342000",
+      "F15265343000"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966353S1000\\x00\\x00\\x00\\x00",
+      "\\x018966353S2000\\x00\\x00\\x00\\x00",
+      "\\x02353U0000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0052422000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "353U0000",
+      "52422000",
+      "8966353S1000",
+      "8966353S2000"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B53450\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53800\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B53801\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8965B53450",
+      "8965B53800",
+      "8965B53801"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F5303300\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F5303300\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F5303400\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8646F5303300",
+      "8646F5303400",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus IS"
+    ],
+    "part_numbers": [
+      "8821F6201200",
+      "8821F6201300",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152611390\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152611430\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LC"
+    ],
+    "part_numbers": [
+      "F152611390",
+      "F152611430"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0131126000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0131130000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LC"
+    ],
+    "part_numbers": [
+      "31126000",
+      "31130000"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B11091\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B11120\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LC"
+    ],
+    "part_numbers": [
+      "8965B11091",
+      "8965B11120"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F1104200\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F1105200\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LC"
+    ],
+    "part_numbers": [
+      "8646F1104200",
+      "8646F1105200",
+      "8646G3304000"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LC"
+    ],
+    "part_numbers": [
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152650290\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "F152650290"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881515003400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "881515003400"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028966350K7200\\x00\\x00\\x00\\x00896655066200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "8966350K7200",
+      "896655066200"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B50022\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "8965B50022"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F5001200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "8646F5001200"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus LS"
+    ],
+    "part_numbers": [
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152678130\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678140\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678160\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678170\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678171\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "F152678130",
+      "F152678140",
+      "F152678160",
+      "F152678170",
+      "F152678171"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881517803100\\x00\\x00\\x00\\x00",
+      "881517803300\\x00\\x00\\x00\\x00",
+      "881517804100\\x00\\x00\\x00\\x00",
+      "881517804300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "881517803100",
+      "881517803300",
+      "881517804100",
+      "881517804300"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896637850000\\x00\\x00\\x00\\x00",
+      "\\x01896637851000\\x00\\x00\\x00\\x00",
+      "\\x01896637852000\\x00\\x00\\x00\\x00",
+      "\\x01896637854000\\x00\\x00\\x00\\x00",
+      "\\x01896637873000\\x00\\x00\\x00\\x00",
+      "\\x01896637878000\\x00\\x00\\x00\\x00",
+      "\\x01896637878100\\x00\\x00\\x00\\x00",
+      "\\x0237841000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237842000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237880000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237882000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237886000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "37841000",
+      "37842000",
+      "37880000",
+      "37882000",
+      "37886000",
+      "896637850000",
+      "896637851000",
+      "896637852000",
+      "896637854000",
+      "896637873000",
+      "896637878000",
+      "896637878100",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B78060\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B78080\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B78100\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8965B78060",
+      "8965B78080",
+      "8965B78100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F7801100\\x00\\x00\\x00\\x00",
+      "8646F7801300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8646F7801100",
+      "8646F7801300"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152678200\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678210\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152678211\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152678221\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "F152678200",
+      "F152678210",
+      "F152678211",
+      "F152678221"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966378B2000\\x00\\x00\\x00\\x00",
+      "\\x018966378B2100\\x00\\x00\\x00\\x00",
+      "\\x018966378B3000\\x00\\x00\\x00\\x00",
+      "\\x018966378B3100\\x00\\x00\\x00\\x00",
+      "\\x018966378B4100\\x00\\x00\\x00\\x00",
+      "\\x018966378G2000\\x00\\x00\\x00\\x00",
+      "\\x018966378G3000\\x00\\x00\\x00\\x00",
+      "\\x018966378G4000\\x00\\x00\\x00\\x00",
+      "\\x0237881000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0237887000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02378A0000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02378F4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "37881000",
+      "37887000",
+      "378A0000",
+      "378F4000",
+      "8966378B2000",
+      "8966378B2100",
+      "8966378B3000",
+      "8966378B3100",
+      "8966378B4100",
+      "8966378G2000",
+      "8966378G3000",
+      "8966378G4000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B78110\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B78120\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8965B78110",
+      "8965B78120"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F78030A0\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F7803100\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8646F78030A0",
+      "8646F7803100",
+      "8646G2601200",
+      "8646G2601400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301200\\x00\\x00\\x00\\x00",
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus NX",
+      "Lexus NX Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301200",
+      "8821F3301300",
+      "8821F3301400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152624150\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152624171\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152624221\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "F152624150",
+      "F152624171",
+      "F152624221"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881512404100\\x00\\x00\\x00\\x00",
+      "881512405100\\x00\\x00\\x00\\x00",
+      "881512407000\\x00\\x00\\x00\\x00",
+      "881512409100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "881512404100",
+      "881512405100",
+      "881512407000",
+      "881512409100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896632461100\\x00\\x00\\x00\\x00",
+      "\\x01896632478100\\x00\\x00\\x00\\x00",
+      "\\x01896632478200\\x00\\x00\\x00\\x00",
+      "\\x0232480000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0232484000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0052422000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "32480000",
+      "32484000",
+      "52422000",
+      "896632461100",
+      "896632478100",
+      "896632478200",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B24081\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B24240\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B24260\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B24320\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8965B24081",
+      "8965B24240",
+      "8965B24260",
+      "8965B24320"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F2401100\\x00\\x00\\x00\\x00",
+      "8646F2401200\\x00\\x00\\x00\\x00",
+      "8646F2402200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8646F2401100",
+      "8646F2401200",
+      "8646F2402200"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15262426000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "F15262426000"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966324C8000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8966324C8000"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B24481\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8965B24481"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F2403100\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8646F2403100",
+      "8646G3304000"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RC"
+    ],
+    "part_numbers": [
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152648361\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648472\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648473\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648474\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648492\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648493\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648494\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648501\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648502\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648504\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648630\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648740\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648A30\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "F152648361",
+      "F152648472",
+      "F152648473",
+      "F152648474",
+      "F152648492",
+      "F152648493",
+      "F152648494",
+      "F152648501",
+      "F152648502",
+      "F152648504",
+      "F152648630",
+      "F152648740",
+      "F152648A30"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881514810300\\x00\\x00\\x00\\x00",
+      "881514810500\\x00\\x00\\x00\\x00",
+      "881514810700\\x00\\x00\\x00\\x00",
+      "881514811300\\x00\\x00\\x00\\x00",
+      "881514811500\\x00\\x00\\x00\\x00",
+      "881514811700\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "881514810300",
+      "881514810500",
+      "881514810700",
+      "881514811300",
+      "881514811500",
+      "881514811700"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630E36100\\x00\\x00\\x00\\x00",
+      "\\x01896630E36200\\x00\\x00\\x00\\x00",
+      "\\x01896630E36300\\x00\\x00\\x00\\x00",
+      "\\x01896630E36600\\x00\\x00\\x00\\x00",
+      "\\x01896630E37100\\x00\\x00\\x00\\x00",
+      "\\x01896630E37200\\x00\\x00\\x00\\x00",
+      "\\x01896630E37300\\x00\\x00\\x00\\x00",
+      "\\x01896630E41000\\x00\\x00\\x00\\x00",
+      "\\x01896630E41100\\x00\\x00\\x00\\x00",
+      "\\x01896630E41200\\x00\\x00\\x00\\x00",
+      "\\x01896630E41500\\x00\\x00\\x00\\x00",
+      "\\x01896630EA3100\\x00\\x00\\x00\\x00",
+      "\\x01896630EA3300\\x00\\x00\\x00\\x00",
+      "\\x01896630EA3400\\x00\\x00\\x00\\x00",
+      "\\x01896630EA4100\\x00\\x00\\x00\\x00",
+      "\\x01896630EA4200\\x00\\x00\\x00\\x00",
+      "\\x01896630EA4300\\x00\\x00\\x00\\x00",
+      "\\x01896630EA4400\\x00\\x00\\x00\\x00",
+      "\\x01896630EA6300\\x00\\x00\\x00\\x00",
+      "\\x018966348R1300\\x00\\x00\\x00\\x00",
+      "\\x018966348R8500\\x00\\x00\\x00\\x00",
+      "\\x018966348R9300\\x00\\x00\\x00\\x00",
+      "\\x018966348W1300\\x00\\x00\\x00\\x00",
+      "\\x018966348W2300\\x00\\x00\\x00\\x00",
+      "\\x02348J7000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348N0000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348Q4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348Q4100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348T1000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348T1100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348T1200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348T3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348V6000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348Z3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "348J7000",
+      "348N0000",
+      "348Q4000",
+      "348Q4100",
+      "348T1000",
+      "348T1100",
+      "348T1200",
+      "348T3000",
+      "348V6000",
+      "348Z3000",
+      "896630E36100",
+      "896630E36200",
+      "896630E36300",
+      "896630E36600",
+      "896630E37100",
+      "896630E37200",
+      "896630E37300",
+      "896630E41000",
+      "896630E41100",
+      "896630E41200",
+      "896630E41500",
+      "896630EA3100",
+      "896630EA3300",
+      "896630EA3400",
+      "896630EA4100",
+      "896630EA4200",
+      "896630EA4300",
+      "896630EA4400",
+      "896630EA6300",
+      "8966348R1300",
+      "8966348R8500",
+      "8966348R9300",
+      "8966348W1300",
+      "8966348W2300",
+      "A4802000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B0E011\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B0E012\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48102\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48111\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48112\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8965B0E011",
+      "8965B0E012",
+      "8965B48102",
+      "8965B48111",
+      "8965B48112"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F4801100\\x00\\x00\\x00\\x00",
+      "8646F4801200\\x00\\x00\\x00\\x00",
+      "8646F4802001\\x00\\x00\\x00\\x00",
+      "8646F4802100\\x00\\x00\\x00\\x00",
+      "8646F4802200\\x00\\x00\\x00\\x00",
+      "8646F4809000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8646F4801100",
+      "8646F4801200",
+      "8646F4802001",
+      "8646F4802100",
+      "8646F4802200",
+      "8646F4809000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4701000\\x00\\x00\\x00\\x00",
+      "8821F4701100\\x00\\x00\\x00\\x00",
+      "8821F4701200\\x00\\x00\\x00\\x00",
+      "8821F4701300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX",
+      "Lexus RX Hybrid",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4701000",
+      "8821F4701100",
+      "8821F4701200",
+      "8821F4701300"
+    ],
+    "source": "opendbc",
+    "years": "2016-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152648493\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648811\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648831\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648891\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648C80\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648D00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648D60\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260E031\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260E041\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152648781\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152648801\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "F15260E031",
+      "F15260E041",
+      "F152648493",
+      "F152648781",
+      "F152648801",
+      "F152648811",
+      "F152648831",
+      "F152648891",
+      "F152648C80",
+      "F152648D00",
+      "F152648D60"
+    ],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630EA9000\\x00\\x00\\x00\\x00",
+      "\\x01896630EB0000\\x00\\x00\\x00\\x00",
+      "\\x01896630EC9000\\x00\\x00\\x00\\x00",
+      "\\x01896630EC9100\\x00\\x00\\x00\\x00",
+      "\\x01896630ED0000\\x00\\x00\\x00\\x00",
+      "\\x01896630ED0100\\x00\\x00\\x00\\x00",
+      "\\x01896630ED5000\\x00\\x00\\x00\\x00",
+      "\\x01896630ED6000\\x00\\x00\\x00\\x00",
+      "\\x018966348R9200\\x00\\x00\\x00\\x00",
+      "\\x018966348T8000\\x00\\x00\\x00\\x00",
+      "\\x018966348W5100\\x00\\x00\\x00\\x00",
+      "\\x018966348W9000\\x00\\x00\\x00\\x00",
+      "\\x018966348X0000\\x00\\x00\\x00\\x00",
+      "\\x01896634D11000\\x00\\x00\\x00\\x00",
+      "\\x01896634D12000\\x00\\x00\\x00\\x00",
+      "\\x01896634D12100\\x00\\x00\\x00\\x00",
+      "\\x01896634D43000\\x00\\x00\\x00\\x00",
+      "\\x01896634D44000\\x00\\x00\\x00\\x00",
+      "\\x02348U2000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348X4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348X5000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348X6000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348X8000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02348Y3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0234D14000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0234D15000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0234D16000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "348U2000",
+      "348X4000",
+      "348X5000",
+      "348X6000",
+      "348X8000",
+      "348Y3000",
+      "34D14000",
+      "34D15000",
+      "34D16000",
+      "896630EA9000",
+      "896630EB0000",
+      "896630EC9000",
+      "896630EC9100",
+      "896630ED0000",
+      "896630ED0100",
+      "896630ED5000",
+      "896630ED6000",
+      "8966348R9200",
+      "8966348T8000",
+      "8966348W5100",
+      "8966348W9000",
+      "8966348X0000",
+      "896634D11000",
+      "896634D12000",
+      "896634D12100",
+      "896634D43000",
+      "896634D44000",
+      "A4802000"
+    ],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B48261\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48271\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8965B48261",
+      "8965B48271"
+    ],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F4810100\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F4810200\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F4810300\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F4810400\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8646F4810100",
+      "8646F4810200",
+      "8646F4810300",
+      "8646F4810400",
+      "8646G2601200",
+      "8646G2601400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301100\\x00\\x00\\x00\\x00",
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Lexus",
+    "models": [
+      "Lexus RX",
+      "Lexus RX Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301100",
+      "8821F3301300",
+      "8821F3301400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152658160\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152658320\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152658341\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Alphard",
+      "Toyota Alphard Hybrid"
+    ],
+    "part_numbers": [
+      "F152658160",
+      "F152658320",
+      "F152658341"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0235852100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0235870000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0235879000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0235883000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Alphard",
+      "Toyota Alphard Hybrid"
+    ],
+    "part_numbers": [
+      "35852100",
+      "35870000",
+      "35879000",
+      "35883000",
+      "A0202000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B58040\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B58052\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Alphard",
+      "Toyota Alphard Hybrid"
+    ],
+    "part_numbers": [
+      "8965B58040",
+      "8965B58052"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F58010B0\\x00\\x00\\x00\\x008646G2601003\\x00\\x00\\x00\\x00",
+      "\\x028646F58010C0\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F5803200\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646FV201000\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Alphard",
+      "Toyota Alphard Hybrid"
+    ],
+    "part_numbers": [
+      "8646F58010B0",
+      "8646F58010C0",
+      "8646F5803200",
+      "8646FV201000",
+      "8646G2601003",
+      "8646G26011A0",
+      "8646G2601400"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301000\\x00\\x00\\x00\\x00",
+      "\\x018821F3301200\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Alphard",
+      "Toyota Alphard Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301000",
+      "8821F3301200",
+      "8821F3301400"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152607060\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "F152607060"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881510701300\\x00\\x00\\x00\\x00",
+      "881510705100\\x00\\x00\\x00\\x00",
+      "881510705200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "881510701300",
+      "881510705100",
+      "881510705200"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0230721100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0C01000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230721200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0C01000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "30721100",
+      "30721200",
+      "A0C01000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B41051\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "8965B41051"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0701100\\x00\\x00\\x00\\x00",
+      "8646F0703000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "8646F0701100",
+      "8646F0703000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702000\\x00\\x00\\x00\\x00",
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon"
+    ],
+    "part_numbers": [
+      "8821F4702000",
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152607110\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152607140\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152607171\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152607180\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152641040\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152641050\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152641060\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152641061\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "F152607110",
+      "F152607140",
+      "F152607171",
+      "F152607180",
+      "F152641040",
+      "F152641050",
+      "F152641060",
+      "F152641061"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881510703200\\x00\\x00\\x00\\x00",
+      "881510704200\\x00\\x00\\x00\\x00",
+      "881514107100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "881510703200",
+      "881510704200",
+      "881514107100"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630725100\\x00\\x00\\x00\\x00",
+      "\\x01896630725200\\x00\\x00\\x00\\x00",
+      "\\x01896630725300\\x00\\x00\\x00\\x00",
+      "\\x01896630725400\\x00\\x00\\x00\\x00",
+      "\\x01896630735100\\x00\\x00\\x00\\x00",
+      "\\x01896630738000\\x00\\x00\\x00\\x00",
+      "\\x02896630724000\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x02896630728000\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x02896630734000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x02896630737000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "896630724000",
+      "896630725100",
+      "896630725200",
+      "896630725300",
+      "896630725400",
+      "896630728000",
+      "896630734000",
+      "896630735100",
+      "896630737000",
+      "896630738000",
+      "897CF3302002",
+      "897CF3305001"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B07010\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B41070\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B41080\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B41090\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8965B07010",
+      "8965B41070",
+      "8965B41080",
+      "8965B41090"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0702100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0702100"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152641080\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152607240\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152607250\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152607280\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "F152607240",
+      "F152607250",
+      "F152607280",
+      "F152641080"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966306Q6000\\x00\\x00\\x00\\x00",
+      "\\x01896630742000\\x00\\x00\\x00\\x00",
+      "\\x01896630743000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8966306Q6000",
+      "896630742000",
+      "896630743000"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B41110\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8965B41110"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F4104100\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F4104100\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8646F4104100",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Avalon",
+      "Toyota Avalon Hybrid"
+    ],
+    "part_numbers": [
+      "8821F6201200",
+      "8821F6201300",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152606210\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606230\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606260\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606270\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606290\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152606410\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633214\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633540\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633660\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633712\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633713\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633A10\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633A20\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633B51\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633B60\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "F152606210",
+      "F152606230",
+      "F152606260",
+      "F152606270",
+      "F152606290",
+      "F152606410",
+      "F152633214",
+      "F152633540",
+      "F152633660",
+      "F152633712",
+      "F152633713",
+      "F152633A10",
+      "F152633A20",
+      "F152633B51",
+      "F152633B60"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F0601200    ",
+      "8821F0601300    ",
+      "8821F0601400    ",
+      "8821F0601500    ",
+      "8821F0601600    ",
+      "8821F0602000    ",
+      "8821F0603300    ",
+      "8821F0603400    ",
+      "8821F0604000    ",
+      "8821F0604100    ",
+      "8821F0604200    ",
+      "8821F0605200    ",
+      "8821F0606200    ",
+      "8821F0607200    ",
+      "8821F0607300    ",
+      "8821F0608000    ",
+      "8821F0608200    ",
+      "8821F0608300    ",
+      "8821F0609000    ",
+      "8821F0609100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0601200",
+      "8821F0601300",
+      "8821F0601400",
+      "8821F0601500",
+      "8821F0601600",
+      "8821F0602000",
+      "8821F0603300",
+      "8821F0603400",
+      "8821F0604000",
+      "8821F0604100",
+      "8821F0604200",
+      "8821F0605200",
+      "8821F0606200",
+      "8821F0607200",
+      "8821F0607300",
+      "8821F0608000",
+      "8821F0608200",
+      "8821F0608300",
+      "8821F0609000",
+      "8821F0609100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966306L3100\\x00\\x00\\x00\\x00",
+      "\\x018966306L4200\\x00\\x00\\x00\\x00",
+      "\\x018966306L5200\\x00\\x00\\x00\\x00",
+      "\\x018966306L9000\\x00\\x00\\x00\\x00",
+      "\\x018966306P8000\\x00\\x00\\x00\\x00",
+      "\\x018966306Q3100\\x00\\x00\\x00\\x00",
+      "\\x018966306Q4000\\x00\\x00\\x00\\x00",
+      "\\x018966306Q4100\\x00\\x00\\x00\\x00",
+      "\\x018966306Q4200\\x00\\x00\\x00\\x00",
+      "\\x018966306Q6000\\x00\\x00\\x00\\x00",
+      "\\x018966333N1100\\x00\\x00\\x00\\x00",
+      "\\x018966333N4300\\x00\\x00\\x00\\x00",
+      "\\x018966333P3000\\x00\\x00\\x00\\x00",
+      "\\x018966333P3100\\x00\\x00\\x00\\x00",
+      "\\x018966333P3200\\x00\\x00\\x00\\x00",
+      "\\x018966333P4200\\x00\\x00\\x00\\x00",
+      "\\x018966333P4300\\x00\\x00\\x00\\x00",
+      "\\x018966333P4400\\x00\\x00\\x00\\x00",
+      "\\x018966333P4500\\x00\\x00\\x00\\x00",
+      "\\x018966333P4700\\x00\\x00\\x00\\x00",
+      "\\x018966333P4900\\x00\\x00\\x00\\x00",
+      "\\x018966333Q6000\\x00\\x00\\x00\\x00",
+      "\\x018966333Q6200\\x00\\x00\\x00\\x00",
+      "\\x018966333Q6300\\x00\\x00\\x00\\x00",
+      "\\x018966333Q6500\\x00\\x00\\x00\\x00",
+      "\\x018966333Q9200\\x00\\x00\\x00\\x00",
+      "\\x018966333W6000\\x00\\x00\\x00\\x00",
+      "\\x018966333X0000\\x00\\x00\\x00\\x00",
+      "\\x018966333X4000\\x00\\x00\\x00\\x00",
+      "\\x01896633T16000\\x00\\x00\\x00\\x00",
+      "\\x01896633TA2000\\x00\\x00\\x00\\x00",
+      "\\x02333P1100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x028966306B2100\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306B2300\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306B2500\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306N8100\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306N8200\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306N8300\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306N8400\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306R5000\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306R5000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966306R6000\\x00\\x00\\x00\\x00897CF3302002\\x00\\x00\\x00\\x00",
+      "\\x028966306R6000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966306S0000\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966306S0100\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00",
+      "\\x028966306S1100\\x00\\x00\\x00\\x00897CF3305001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "333P1100",
+      "8966306B2100",
+      "8966306B2300",
+      "8966306B2500",
+      "8966306L3100",
+      "8966306L4200",
+      "8966306L5200",
+      "8966306L9000",
+      "8966306N8100",
+      "8966306N8200",
+      "8966306N8300",
+      "8966306N8400",
+      "8966306P8000",
+      "8966306Q3100",
+      "8966306Q4000",
+      "8966306Q4100",
+      "8966306Q4200",
+      "8966306Q6000",
+      "8966306R5000",
+      "8966306R6000",
+      "8966306S0000",
+      "8966306S0100",
+      "8966306S1100",
+      "8966333N1100",
+      "8966333N4300",
+      "8966333P3000",
+      "8966333P3100",
+      "8966333P3200",
+      "8966333P4200",
+      "8966333P4300",
+      "8966333P4400",
+      "8966333P4500",
+      "8966333P4700",
+      "8966333P4900",
+      "8966333Q6000",
+      "8966333Q6200",
+      "8966333Q6300",
+      "8966333Q6500",
+      "8966333Q9200",
+      "8966333W6000",
+      "8966333X0000",
+      "8966333X4000",
+      "896633T16000",
+      "896633TA2000",
+      "897CF3302002",
+      "897CF3305001",
+      "A0202000"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B33540\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33542\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33550\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33551\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33580\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33581\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33611\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33621\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33630\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8965B33540",
+      "8965B33542",
+      "8965B33550",
+      "8965B33551",
+      "8965B33580",
+      "8965B33581",
+      "8965B33611",
+      "8965B33621",
+      "8965B33630"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0601200    ",
+      "8646F0601300    ",
+      "8646F0601400    ",
+      "8646F0603400    ",
+      "8646F0603500    ",
+      "8646F0604000    ",
+      "8646F0604100    ",
+      "8646F0605000    ",
+      "8646F0606000    ",
+      "8646F0606100    ",
+      "8646F0607000    ",
+      "8646F0607100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0601200",
+      "8646F0601300",
+      "8646F0601400",
+      "8646F0603400",
+      "8646F0603500",
+      "8646F0604000",
+      "8646F0604100",
+      "8646F0605000",
+      "8646F0606000",
+      "8646F0606100",
+      "8646F0607000",
+      "8646F0607100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F0601200    ",
+      "8821F0601300    ",
+      "8821F0601400    ",
+      "8821F0601500    ",
+      "8821F0601600    ",
+      "8821F0602000    ",
+      "8821F0603300    ",
+      "8821F0603400    ",
+      "8821F0604000    ",
+      "8821F0604100    ",
+      "8821F0604200    ",
+      "8821F0605200    ",
+      "8821F0606200    ",
+      "8821F0607200    ",
+      "8821F0607300    ",
+      "8821F0608000    ",
+      "8821F0608200    ",
+      "8821F0608300    ",
+      "8821F0609000    ",
+      "8821F0609100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0601200",
+      "8821F0601300",
+      "8821F0601400",
+      "8821F0601500",
+      "8821F0601600",
+      "8821F0602000",
+      "8821F0603300",
+      "8821F0603400",
+      "8821F0604000",
+      "8821F0604100",
+      "8821F0604200",
+      "8821F0605200",
+      "8821F0606200",
+      "8821F0607200",
+      "8821F0607300",
+      "8821F0608000",
+      "8821F0608200",
+      "8821F0608300",
+      "8821F0609000",
+      "8821F0609100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152633310\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633D00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152633D60\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606370\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606390\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606400\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152606431\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152633E11\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "F152606370",
+      "F152606390",
+      "F152606400",
+      "F152606431",
+      "F152633310",
+      "F152633D00",
+      "F152633D60",
+      "F152633E11"
+    ],
+    "source": "opendbc",
+    "years": "2021-2024"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966306Q5000\\x00\\x00\\x00\\x00",
+      "\\x018966306Q6000\\x00\\x00\\x00\\x00",
+      "\\x018966306Q7000\\x00\\x00\\x00\\x00",
+      "\\x018966306Q9000\\x00\\x00\\x00\\x00",
+      "\\x018966306R3000\\x00\\x00\\x00\\x00",
+      "\\x018966306R8000\\x00\\x00\\x00\\x00",
+      "\\x018966306T0000\\x00\\x00\\x00\\x00",
+      "\\x018966306T3100\\x00\\x00\\x00\\x00",
+      "\\x018966306T3200\\x00\\x00\\x00\\x00",
+      "\\x018966306T4000\\x00\\x00\\x00\\x00",
+      "\\x018966306T4100\\x00\\x00\\x00\\x00",
+      "\\x018966306V1000\\x00\\x00\\x00\\x00",
+      "\\x018966333Z1000\\x00\\x00\\x00\\x00",
+      "\\x018966333Z9000\\x00\\x00\\x00\\x00",
+      "\\x01896633T20000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8966306Q5000",
+      "8966306Q6000",
+      "8966306Q7000",
+      "8966306Q9000",
+      "8966306R3000",
+      "8966306R8000",
+      "8966306T0000",
+      "8966306T3100",
+      "8966306T3200",
+      "8966306T4000",
+      "8966306T4100",
+      "8966306V1000",
+      "8966333Z1000",
+      "8966333Z9000",
+      "896633T20000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2024"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B33630\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33640\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B33650\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8965B33630",
+      "8965B33640",
+      "8965B33650"
+    ],
+    "source": "opendbc",
+    "years": "2021-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0602100\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F0602200\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F0602300\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3305200\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3305200\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F3305300\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3305300\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F3305400\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F3305500\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0602100",
+      "8646F0602200",
+      "8646F0602300",
+      "8646F3305200",
+      "8646F3305300",
+      "8646F3305400",
+      "8646F3305500",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2021-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Camry",
+      "Toyota Camry Hybrid"
+    ],
+    "part_numbers": [
+      "8821F6201200",
+      "8821F6201300",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2021-2024"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152610012\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610013\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610014\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610020\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610040\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610153\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610190\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610200\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610210\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610220\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610230\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4034\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4044\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4073\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4121\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4122\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4190\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "F152610012",
+      "F152610013",
+      "F152610014",
+      "F152610020",
+      "F152610040",
+      "F152610153",
+      "F152610190",
+      "F152610200",
+      "F152610210",
+      "F152610220",
+      "F152610230",
+      "F1526F4034",
+      "F1526F4044",
+      "F1526F4073",
+      "F1526F4121",
+      "F1526F4122",
+      "F1526F4190"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F0W01000    ",
+      "8821F0W01100    ",
+      "8821FF401600    ",
+      "8821FF401800    ",
+      "8821FF402300    ",
+      "8821FF402400    ",
+      "8821FF404000    ",
+      "8821FF404100    ",
+      "8821FF405000    ",
+      "8821FF405100    ",
+      "8821FF406000    ",
+      "8821FF407100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0W01000",
+      "8821F0W01100",
+      "8821FF401600",
+      "8821FF401800",
+      "8821FF402300",
+      "8821FF402400",
+      "8821FF404000",
+      "8821FF404100",
+      "8821FF405000",
+      "8821FF405100",
+      "8821FF406000",
+      "8821FF407100"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896631017100\\x00\\x00\\x00\\x00",
+      "\\x01896631017200\\x00\\x00\\x00\\x00",
+      "\\x01896631021100\\x00\\x00\\x00\\x00",
+      "\\x0189663F413100\\x00\\x00\\x00\\x00",
+      "\\x0189663F414100\\x00\\x00\\x00\\x00",
+      "\\x0189663F438000\\x00\\x00\\x00\\x00",
+      "\\x02896631013200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F405000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F405100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F418000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F423000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F431000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0331024000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00",
+      "\\x0331024000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x0331036000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x033F401100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203102\\x00\\x00\\x00\\x00",
+      "\\x033F401200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00",
+      "\\x033F424000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00",
+      "\\x033F424000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x033F435000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "31024000",
+      "31036000",
+      "3F401100",
+      "3F401200",
+      "3F424000",
+      "3F435000",
+      "895231203102",
+      "895231203202",
+      "895231203302",
+      "896631013200",
+      "896631017100",
+      "896631017200",
+      "896631021100",
+      "89663F405000",
+      "89663F405100",
+      "89663F413100",
+      "89663F414100",
+      "89663F418000",
+      "89663F423000",
+      "89663F431000",
+      "89663F438000",
+      "8966A4703000",
+      "A0202000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B10011\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10020\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10040\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10050\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10070\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8965B10011",
+      "8965B10020",
+      "8965B10040",
+      "8965B10050",
+      "8965B10070"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646FF401700    ",
+      "8646FF401800    ",
+      "8646FF402100    ",
+      "8646FF404000    ",
+      "8646FF406000    ",
+      "8646FF407000    ",
+      "8646FF407100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8646FF401700",
+      "8646FF401800",
+      "8646FF402100",
+      "8646FF404000",
+      "8646FF406000",
+      "8646FF407000",
+      "8646FF407100"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F0W01000    ",
+      "8821F0W01100    ",
+      "8821FF401600    ",
+      "8821FF401800    ",
+      "8821FF402300    ",
+      "8821FF402400    ",
+      "8821FF404000    ",
+      "8821FF404100    ",
+      "8821FF405000    ",
+      "8821FF405100    ",
+      "8821FF406000    ",
+      "8821FF407100    "
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0W01000",
+      "8821F0W01100",
+      "8821FF401600",
+      "8821FF401800",
+      "8821FF402300",
+      "8821FF402400",
+      "8821FF404000",
+      "8821FF404100",
+      "8821FF405000",
+      "8821FF405100",
+      "8821FF406000",
+      "8821FF407100"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152610041\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152610260\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F1526F4270\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "F152610041",
+      "F152610260",
+      "F1526F4270"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0189663F438000\\x00\\x00\\x00\\x00",
+      "\\x0189663F459000\\x00\\x00\\x00\\x00",
+      "\\x02896631025000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0289663F453000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x0331014000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "31014000",
+      "895231203402",
+      "896631025000",
+      "89663F438000",
+      "89663F453000",
+      "89663F459000",
+      "8966A4703000",
+      "A0202000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B10091\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10092\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10110\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B10111\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8965B10091",
+      "8965B10092",
+      "8965B10110",
+      "8965B10111"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646FF410200\\x00\\x00\\x00\\x008646GF408200\\x00\\x00\\x00\\x00",
+      "\\x028646FF411100\\x00\\x00\\x00\\x008646GF409000\\x00\\x00\\x00\\x00",
+      "\\x028646FF413000\\x00\\x00\\x00\\x008646GF411000\\x00\\x00\\x00\\x00",
+      "\\x028646FF413100\\x00\\x00\\x00\\x008646GF411100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8646FF410200",
+      "8646FF411100",
+      "8646FF413000",
+      "8646FF413100",
+      "8646GF408200",
+      "8646GF409000",
+      "8646GF411000",
+      "8646GF411100"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821FF410200\\x00\\x00\\x00\\x00",
+      "\\x018821FF410300\\x00\\x00\\x00\\x00",
+      "\\x018821FF410400\\x00\\x00\\x00\\x00",
+      "\\x018821FF410500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota C-HR",
+      "Toyota C-HR Hybrid"
+    ],
+    "part_numbers": [
+      "8821FF410200",
+      "8821FF410300",
+      "8821FF410400",
+      "8821FF410500"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152602190\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152602191\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "F152602190",
+      "F152602191"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881510201100\\x00\\x00\\x00\\x00",
+      "881510201200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "881510201100",
+      "881510201200"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0230ZC2000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC2100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC2200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC2300\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC3100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC3200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZC3300\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0330ZC1200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "30ZC1200",
+      "30ZC2000",
+      "30ZC2100",
+      "30ZC2200",
+      "30ZC2300",
+      "30ZC3000",
+      "30ZC3100",
+      "30ZC3200",
+      "30ZC3300",
+      "50212000",
+      "895231203202"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B02181\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B02191\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48150\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "8965B02181",
+      "8965B02191",
+      "8965B48150"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0201101\\x00\\x00\\x00\\x00",
+      "8646F0201200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "8646F0201101",
+      "8646F0201200"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla"
+    ],
+    "part_numbers": [
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152612590\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612691\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612692\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612700\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612710\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612790\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612800\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612820\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612840\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612842\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612890\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612A00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612A10\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152612D00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152616011\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152616030\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152616060\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642540\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152676293\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152676303\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152676304\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152676311\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152676371\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602280\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602281\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602470\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602560\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602590\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152602650\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260A010\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260A050\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260A070\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260A33000\\x00\\x00\\x00\\x00",
+      "\\x01F152612641\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612651\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612862\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B10\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B51\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B60\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B61\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B62\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B70\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B71\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B81\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B90\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612B91\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152612C00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152676250\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152676350\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla",
+      "Toyota Corolla Cross (Non-US only)",
+      "Toyota Corolla Hatchback",
+      "Toyota Corolla Hybrid",
+      "Toyota Corolla Hybrid (South America only)",
+      "Toyota Corolla Cross Hybrid (Non-US only)",
+      "Lexus UX Hybrid"
+    ],
+    "part_numbers": [
+      "F152602280",
+      "F152602281",
+      "F152602470",
+      "F152602560",
+      "F152602590",
+      "F152602650",
+      "F15260A010",
+      "F15260A050",
+      "F15260A070",
+      "F15260A33000",
+      "F152612590",
+      "F152612641",
+      "F152612651",
+      "F152612691",
+      "F152612692",
+      "F152612700",
+      "F152612710",
+      "F152612790",
+      "F152612800",
+      "F152612820",
+      "F152612840",
+      "F152612842",
+      "F152612862",
+      "F152612890",
+      "F152612A00",
+      "F152612A10",
+      "F152612B10",
+      "F152612B51",
+      "F152612B60",
+      "F152612B61",
+      "F152612B62",
+      "F152612B70",
+      "F152612B71",
+      "F152612B81",
+      "F152612B90",
+      "F152612B91",
+      "F152612C00",
+      "F152612D00",
+      "F152616011",
+      "F152616030",
+      "F152616060",
+      "F152642540",
+      "F152676250",
+      "F152676293",
+      "F152676303",
+      "F152676304",
+      "F152676311",
+      "F152676350",
+      "F152676371"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630A22000\\x00\\x00\\x00\\x00",
+      "\\x01896630A42000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZG2000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZG5000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZG5100\\x00\\x00\\x00\\x00",
+      "\\x01896630ZG5200\\x00\\x00\\x00\\x00",
+      "\\x01896630ZG5300\\x00\\x00\\x00\\x00",
+      "\\x01896630ZJ1000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZP1000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZP2000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZQ5000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZU8000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZU9000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZX4000\\x00\\x00\\x00\\x00",
+      "\\x01896630ZX7100\\x00\\x00\\x00\\x00",
+      "\\x018966312L8000\\x00\\x00\\x00\\x00",
+      "\\x018966312M0000\\x00\\x00\\x00\\x00",
+      "\\x018966312M9000\\x00\\x00\\x00\\x00",
+      "\\x018966312P9000\\x00\\x00\\x00\\x00",
+      "\\x018966312P9100\\x00\\x00\\x00\\x00",
+      "\\x018966312P9200\\x00\\x00\\x00\\x00",
+      "\\x018966312P9300\\x00\\x00\\x00\\x00",
+      "\\x018966312Q2300\\x00\\x00\\x00\\x00",
+      "\\x018966312Q8000\\x00\\x00\\x00\\x00",
+      "\\x018966312R0000\\x00\\x00\\x00\\x00",
+      "\\x018966312R0100\\x00\\x00\\x00\\x00",
+      "\\x018966312R0200\\x00\\x00\\x00\\x00",
+      "\\x018966312R1000\\x00\\x00\\x00\\x00",
+      "\\x018966312R1100\\x00\\x00\\x00\\x00",
+      "\\x018966312R3100\\x00\\x00\\x00\\x00",
+      "\\x018966312S5000\\x00\\x00\\x00\\x00",
+      "\\x018966312S7000\\x00\\x00\\x00\\x00",
+      "\\x018966312W3000\\x00\\x00\\x00\\x00",
+      "\\x018966312W9000\\x00\\x00\\x00\\x00",
+      "\\x01896637621000\\x00\\x00\\x00\\x00",
+      "\\x01896637623000\\x00\\x00\\x00\\x00",
+      "\\x01896637624000\\x00\\x00\\x00\\x00",
+      "\\x01896637625000\\x00\\x00\\x00\\x00",
+      "\\x01896637626000\\x00\\x00\\x00\\x00",
+      "\\x01896637639000\\x00\\x00\\x00\\x00",
+      "\\x01896637643000\\x00\\x00\\x00\\x00",
+      "\\x01896637644000\\x00\\x00\\x00\\x00",
+      "\\x01896637648000\\x00\\x00\\x00\\x00",
+      "\\x01896637649000\\x00\\x00\\x00\\x00",
+      "\\x0230A10000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230A11000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZN4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230ZN5000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02312K4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02312U5000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02896630A07000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630A21000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZJ5000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZK8000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZN8000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZQ3000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZR2000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZT8000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZT9000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896630ZZ0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312K6000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312L0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312L0100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312Q3000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312Q3100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966312Q4000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x03312K7000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00",
+      "\\x03312M3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00",
+      "\\x03312N6000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00",
+      "\\x03312N6000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x03312N6000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00",
+      "\\x03312N6100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x03312N6100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00",
+      "\\x03312N6200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203202\\x00\\x00\\x00\\x00",
+      "\\x03312N6200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203302\\x00\\x00\\x00\\x00",
+      "\\x03312N6200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A0202000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00895231203402\\x00\\x00\\x00\\x00",
+      "\\x038966312L7000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF1205001\\x00\\x00\\x00\\x00",
+      "\\x038966312N1000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x038966312T3000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF1205001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla",
+      "Toyota Corolla Cross (Non-US only)",
+      "Toyota Corolla Hatchback",
+      "Toyota Corolla Hybrid",
+      "Toyota Corolla Hybrid (South America only)",
+      "Toyota Corolla Cross Hybrid (Non-US only)",
+      "Lexus UX Hybrid"
+    ],
+    "part_numbers": [
+      "30A10000",
+      "30A11000",
+      "30ZN4000",
+      "30ZN5000",
+      "312K4000",
+      "312K7000",
+      "312M3000",
+      "312N6000",
+      "312N6100",
+      "312N6200",
+      "312U5000",
+      "895231203202",
+      "895231203302",
+      "895231203402",
+      "896630A07000",
+      "896630A21000",
+      "896630A22000",
+      "896630A42000",
+      "896630ZG2000",
+      "896630ZG5000",
+      "896630ZG5100",
+      "896630ZG5200",
+      "896630ZG5300",
+      "896630ZJ1000",
+      "896630ZJ5000",
+      "896630ZK8000",
+      "896630ZN8000",
+      "896630ZP1000",
+      "896630ZP2000",
+      "896630ZQ3000",
+      "896630ZQ5000",
+      "896630ZR2000",
+      "896630ZT8000",
+      "896630ZT9000",
+      "896630ZU8000",
+      "896630ZU9000",
+      "896630ZX4000",
+      "896630ZX7100",
+      "896630ZZ0000",
+      "8966312K6000",
+      "8966312L0000",
+      "8966312L0100",
+      "8966312L7000",
+      "8966312L8000",
+      "8966312M0000",
+      "8966312M9000",
+      "8966312N1000",
+      "8966312P9000",
+      "8966312P9100",
+      "8966312P9200",
+      "8966312P9300",
+      "8966312Q2300",
+      "8966312Q3000",
+      "8966312Q3100",
+      "8966312Q4000",
+      "8966312Q8000",
+      "8966312R0000",
+      "8966312R0100",
+      "8966312R0200",
+      "8966312R1000",
+      "8966312R1100",
+      "8966312R3100",
+      "8966312S5000",
+      "8966312S7000",
+      "8966312T3000",
+      "8966312W3000",
+      "8966312W9000",
+      "896637621000",
+      "896637623000",
+      "896637624000",
+      "896637625000",
+      "896637626000",
+      "896637639000",
+      "896637643000",
+      "896637644000",
+      "896637648000",
+      "896637649000",
+      "8966A4703000",
+      "897CF1203001",
+      "897CF1205001",
+      "A0202000"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B12361\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B12451\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B16011\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B16101\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B16170\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B16260\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B76012\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B76050\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B76091\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B76101\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12350\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12470\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12490\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12500\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12510\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12520\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B12530\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x018965B1254000\\x00\\x00\\x00\\x00",
+      "\\x018965B1255000\\x00\\x00\\x00\\x00",
+      "\\x018965B1256000\\x00\\x00\\x00\\x00",
+      "\\x018965B1270000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla",
+      "Toyota Corolla Cross (Non-US only)",
+      "Toyota Corolla Hatchback",
+      "Toyota Corolla Hybrid",
+      "Toyota Corolla Hybrid (South America only)",
+      "Toyota Corolla Cross Hybrid (Non-US only)",
+      "Lexus UX Hybrid"
+    ],
+    "part_numbers": [
+      "8965B12350",
+      "8965B12361",
+      "8965B12451",
+      "8965B12470",
+      "8965B12490",
+      "8965B12500",
+      "8965B12510",
+      "8965B12520",
+      "8965B12530",
+      "8965B1254000",
+      "8965B1255000",
+      "8965B1256000",
+      "8965B1270000",
+      "8965B16011",
+      "8965B16101",
+      "8965B16170",
+      "8965B16260",
+      "8965B76012",
+      "8965B76050",
+      "8965B76091",
+      "8965B76101"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F12010C0\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F12010D0\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F1201100\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F1201200\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F1201300\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F1201400\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00",
+      "\\x028646F1202000\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F1202100\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F1202200\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00",
+      "\\x028646F1206000\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00",
+      "\\x028646F1601100\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F1601200\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F1601300\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F1601500\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F4203400\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F76020C0\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F7603100\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F7603200\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F7603300\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F7605100\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla",
+      "Toyota Corolla Cross (Non-US only)",
+      "Toyota Corolla Hatchback",
+      "Toyota Corolla Hybrid",
+      "Toyota Corolla Hybrid (South America only)",
+      "Toyota Corolla Cross Hybrid (Non-US only)",
+      "Lexus UX Hybrid"
+    ],
+    "part_numbers": [
+      "8646F12010C0",
+      "8646F12010D0",
+      "8646F1201100",
+      "8646F1201200",
+      "8646F1201300",
+      "8646F1201400",
+      "8646F1202000",
+      "8646F1202100",
+      "8646F1202200",
+      "8646F1206000",
+      "8646F1601100",
+      "8646F1601200",
+      "8646F1601300",
+      "8646F1601500",
+      "8646F4203400",
+      "8646F76020C0",
+      "8646F7603100",
+      "8646F7603200",
+      "8646F7603300",
+      "8646F7605100",
+      "8646G26011A0",
+      "8646G2601200",
+      "8646G2601400",
+      "8646G2601500",
+      "8646G3304000"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301100\\x00\\x00\\x00\\x00",
+      "\\x018821F3301200\\x00\\x00\\x00\\x00",
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Corolla",
+      "Toyota Corolla Cross (Non-US only)",
+      "Toyota Corolla Hatchback",
+      "Toyota Corolla Hybrid",
+      "Toyota Corolla Hybrid (South America only)",
+      "Toyota Corolla Cross Hybrid (Non-US only)",
+      "Lexus UX Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301100",
+      "8821F3301200",
+      "8821F3301300",
+      "8821F3301400",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F15260E011\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648541\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152648542\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "F15260E011",
+      "F152648541",
+      "F152648542"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881510E01100\\x00\\x00\\x00\\x00",
+      "881510E01200\\x00\\x00\\x00\\x00",
+      "881510E02100\\x00\\x00\\x00\\x00",
+      "881510E02200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "881510E01100",
+      "881510E01200",
+      "881510E02100",
+      "881510E02200"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x700",
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630E09000\\x00\\x00\\x00\\x00",
+      "\\x01896630E43000\\x00\\x00\\x00\\x00",
+      "\\x01896630E43100\\x00\\x00\\x00\\x00",
+      "\\x01896630E43200\\x00\\x00\\x00\\x00",
+      "\\x01896630E43500\\x00\\x00\\x00\\x00",
+      "\\x01896630E44200\\x00\\x00\\x00\\x00",
+      "\\x01896630E44400\\x00\\x00\\x00\\x00",
+      "\\x01896630E45000\\x00\\x00\\x00\\x00",
+      "\\x01896630E45100\\x00\\x00\\x00\\x00",
+      "\\x01896630E45200\\x00\\x00\\x00\\x00",
+      "\\x01896630E46000\\x00\\x00\\x00\\x00",
+      "\\x01896630E46200\\x00\\x00\\x00\\x00",
+      "\\x01896630E48200\\x00\\x00\\x00\\x00",
+      "\\x01896630E74000\\x00\\x00\\x00\\x00",
+      "\\x01896630E75000\\x00\\x00\\x00\\x00",
+      "\\x01896630E76000\\x00\\x00\\x00\\x00",
+      "\\x01896630E77000\\x00\\x00\\x00\\x00",
+      "\\x01896630E83000\\x00\\x00\\x00\\x00",
+      "\\x01896630E84000\\x00\\x00\\x00\\x00",
+      "\\x01896630E85000\\x00\\x00\\x00\\x00",
+      "\\x01896630E86000\\x00\\x00\\x00\\x00",
+      "\\x01896630E88000\\x00\\x00\\x00\\x00",
+      "\\x01896630EA0000\\x00\\x00\\x00\\x00",
+      "\\x0230E40000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230E40100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230E51000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050E17000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230E82000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0050E17000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230EA2000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x0230EA2100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4802000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "30E40000",
+      "30E40100",
+      "30E51000",
+      "30E82000",
+      "30EA2000",
+      "30EA2100",
+      "50E17000",
+      "896630E09000",
+      "896630E43000",
+      "896630E43100",
+      "896630E43200",
+      "896630E43500",
+      "896630E44200",
+      "896630E44400",
+      "896630E45000",
+      "896630E45100",
+      "896630E45200",
+      "896630E46000",
+      "896630E46200",
+      "896630E48200",
+      "896630E74000",
+      "896630E75000",
+      "896630E76000",
+      "896630E77000",
+      "896630E83000",
+      "896630E84000",
+      "896630E85000",
+      "896630E86000",
+      "896630E88000",
+      "896630EA0000",
+      "A4802000"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B48140\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48150\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48160\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48210\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8965B48140",
+      "8965B48150",
+      "8965B48160",
+      "8965B48210"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0E01200\\x00\\x00\\x00\\x00",
+      "8646F0E01300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0E01200",
+      "8646F0E01300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15260E051\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260E05300\\x00\\x00\\x00\\x00",
+      "\\x01F15260E061\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260E110\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260E170\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15264872300\\x00\\x00\\x00\\x00",
+      "\\x01F15264872400\\x00\\x00\\x00\\x00",
+      "\\x01F15264872500\\x00\\x00\\x00\\x00",
+      "\\x01F15264872600\\x00\\x00\\x00\\x00",
+      "\\x01F15264872700\\x00\\x00\\x00\\x00",
+      "\\x01F15264873500\\x00\\x00\\x00\\x00",
+      "\\x01F152648C6300\\x00\\x00\\x00\\x00",
+      "\\x01F152648J4000\\x00\\x00\\x00\\x00",
+      "\\x01F152648J5000\\x00\\x00\\x00\\x00",
+      "\\x01F152648J6000\\x00\\x00\\x00\\x00",
+      "\\x01F152648J7000\\x00\\x00\\x00\\x00",
+      "\\x01F152648L5000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "F15260E051",
+      "F15260E05300",
+      "F15260E061",
+      "F15260E110",
+      "F15260E170",
+      "F15264872300",
+      "F15264872400",
+      "F15264872500",
+      "F15264872600",
+      "F15264872700",
+      "F15264873500",
+      "F152648C6300",
+      "F152648J4000",
+      "F152648J5000",
+      "F152648J6000",
+      "F152648J7000",
+      "F152648L5000"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630E62100\\x00\\x00\\x00\\x00",
+      "\\x01896630E62200\\x00\\x00\\x00\\x00",
+      "\\x01896630E64100\\x00\\x00\\x00\\x00",
+      "\\x01896630E64200\\x00\\x00\\x00\\x00",
+      "\\x01896630E64400\\x00\\x00\\x00\\x00",
+      "\\x01896630E67000\\x00\\x00\\x00\\x00",
+      "\\x01896630EA1000\\x00\\x00\\x00\\x00",
+      "\\x01896630EB1000\\x00\\x00\\x00\\x00",
+      "\\x01896630EB1100\\x00\\x00\\x00\\x00",
+      "\\x01896630EB1200\\x00\\x00\\x00\\x00",
+      "\\x01896630EB1300\\x00\\x00\\x00\\x00",
+      "\\x01896630EB2000\\x00\\x00\\x00\\x00",
+      "\\x01896630EB2100\\x00\\x00\\x00\\x00",
+      "\\x01896630EB2200\\x00\\x00\\x00\\x00",
+      "\\x01896630EC4000\\x00\\x00\\x00\\x00",
+      "\\x01896630ED9000\\x00\\x00\\x00\\x00",
+      "\\x01896630ED9100\\x00\\x00\\x00\\x00",
+      "\\x01896630EE1000\\x00\\x00\\x00\\x00",
+      "\\x01896630EE1100\\x00\\x00\\x00\\x00",
+      "\\x01896630EE4000\\x00\\x00\\x00\\x00",
+      "\\x01896630EE4100\\x00\\x00\\x00\\x00",
+      "\\x01896630EE5000\\x00\\x00\\x00\\x00",
+      "\\x01896630EE6000\\x00\\x00\\x00\\x00",
+      "\\x01896630EE7000\\x00\\x00\\x00\\x00",
+      "\\x01896630EF8000\\x00\\x00\\x00\\x00",
+      "\\x01896630EG3000\\x00\\x00\\x00\\x00",
+      "\\x01896630EG3100\\x00\\x00\\x00\\x00",
+      "\\x01896630EG5000\\x00\\x00\\x00\\x00",
+      "\\x01896630EG5100\\x00\\x00\\x00\\x00",
+      "\\x02896630E66000\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896630E66100\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896630EB3000\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896630EB3100\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896630EB3200\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "896630E62100",
+      "896630E62200",
+      "896630E64100",
+      "896630E64200",
+      "896630E64400",
+      "896630E66000",
+      "896630E66100",
+      "896630E67000",
+      "896630EA1000",
+      "896630EB1000",
+      "896630EB1100",
+      "896630EB1200",
+      "896630EB1300",
+      "896630EB2000",
+      "896630EB2100",
+      "896630EB2200",
+      "896630EB3000",
+      "896630EB3100",
+      "896630EB3200",
+      "896630EC4000",
+      "896630ED9000",
+      "896630ED9100",
+      "896630EE1000",
+      "896630EE1100",
+      "896630EE4000",
+      "896630EE4100",
+      "896630EE5000",
+      "896630EE6000",
+      "896630EE7000",
+      "896630EF8000",
+      "896630EG3000",
+      "896630EG3100",
+      "896630EG5000",
+      "896630EG5100",
+      "897CF4801001"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B48241\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48310\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48320\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B48400\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8965B48241",
+      "8965B48310",
+      "8965B48320",
+      "8965B48400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0E02100\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F4803000\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F4803000\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00",
+      "\\x028646F4803200\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0E02100",
+      "8646F4803000",
+      "8646F4803200",
+      "8646G2601200",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301400\\x00\\x00\\x00\\x00",
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Highlander",
+      "Toyota Highlander Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301400",
+      "8821F6201200",
+      "8821F6201300",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7b0",
+      "0x7d1"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01898A36203000\\x00\\x00\\x00\\x00",
+      "\\x01F15266203200\\x00\\x00\\x00\\x00",
+      "\\x01F15266203500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Mirai"
+    ],
+    "part_numbers": [
+      "898A36203000",
+      "F15266203200",
+      "F15266203500"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028965B6204100\\x00\\x00\\x00\\x008965B6203100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Mirai"
+    ],
+    "part_numbers": [
+      "8965B6203100",
+      "8965B6204100"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F6201400\\x00\\x00\\x00\\x008646G3304000\\x00\\x00\\x00\\x00",
+      "\\x028646F6201400\\x00\\x00\\x00\\x008646G5301200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Mirai"
+    ],
+    "part_numbers": [
+      "8646F6201400",
+      "8646G3304000",
+      "8646G5301200"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F6201200\\x00\\x00\\x00\\x00",
+      "\\x018821F6201300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Mirai"
+    ],
+    "part_numbers": [
+      "8821F6201200",
+      "8821F6201300"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152647290\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647300\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647310\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647414\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647415\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647416\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647417\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647470\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647490\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647682\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647683\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647684\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647862\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647863\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647864\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647865\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "F152647290",
+      "F152647300",
+      "F152647310",
+      "F152647414",
+      "F152647415",
+      "F152647416",
+      "F152647417",
+      "F152647470",
+      "F152647490",
+      "F152647682",
+      "F152647683",
+      "F152647684",
+      "F152647862",
+      "F152647863",
+      "F152647864",
+      "F152647865"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881514702300\\x00\\x00\\x00\\x00",
+      "881514702400\\x00\\x00\\x00\\x00",
+      "881514703100\\x00\\x00\\x00\\x00",
+      "881514704100\\x00\\x00\\x00\\x00",
+      "881514706000\\x00\\x00\\x00\\x00",
+      "881514706100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "881514702300",
+      "881514702400",
+      "881514703100",
+      "881514704100",
+      "881514706000",
+      "881514706100"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x02896634761000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634761100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634761200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634762000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634762100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634763000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634763100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634765000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634765100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634769000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634769100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634769200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634770000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634770100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634774000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634774100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634774200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634782000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x02896634784000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347A0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347A1000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347A5000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347A8000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347B0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x03896634759100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634759200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634759200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701004\\x00\\x00\\x00\\x00",
+      "\\x03896634759300\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634759300\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701004\\x00\\x00\\x00\\x00",
+      "\\x03896634760000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701002\\x00\\x00\\x00\\x00",
+      "\\x03896634760000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634760000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701004\\x00\\x00\\x00\\x00",
+      "\\x03896634760100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634760200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x03896634760200\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701004\\x00\\x00\\x00\\x00",
+      "\\x03896634760300\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701004\\x00\\x00\\x00\\x00",
+      "\\x03896634768000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4703001\\x00\\x00\\x00\\x00",
+      "\\x03896634768000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4703002\\x00\\x00\\x00\\x00",
+      "\\x03896634768100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4703002\\x00\\x00\\x00\\x00",
+      "\\x03896634785000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4705001\\x00\\x00\\x00\\x00",
+      "\\x03896634785000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710001\\x00\\x00\\x00\\x00",
+      "\\x03896634786000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4705001\\x00\\x00\\x00\\x00",
+      "\\x03896634786000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710001\\x00\\x00\\x00\\x00",
+      "\\x03896634789000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4703002\\x00\\x00\\x00\\x00",
+      "\\x038966347A3000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4701003\\x00\\x00\\x00\\x00",
+      "\\x038966347A3000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4707001\\x00\\x00\\x00\\x00",
+      "\\x038966347B6000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710001\\x00\\x00\\x00\\x00",
+      "\\x038966347B7000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x038966347B7000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "896634759100",
+      "896634759200",
+      "896634759300",
+      "896634760000",
+      "896634760100",
+      "896634760200",
+      "896634760300",
+      "896634761000",
+      "896634761100",
+      "896634761200",
+      "896634762000",
+      "896634762100",
+      "896634763000",
+      "896634763100",
+      "896634765000",
+      "896634765100",
+      "896634768000",
+      "896634768100",
+      "896634769000",
+      "896634769100",
+      "896634769200",
+      "896634770000",
+      "896634770100",
+      "896634774000",
+      "896634774100",
+      "896634774200",
+      "896634782000",
+      "896634784000",
+      "896634785000",
+      "896634786000",
+      "896634789000",
+      "8966347A0000",
+      "8966347A1000",
+      "8966347A3000",
+      "8966347A5000",
+      "8966347A8000",
+      "8966347B0000",
+      "8966347B6000",
+      "8966347B7000",
+      "8966A4703000",
+      "897CF1203001",
+      "897CF4701002",
+      "897CF4701003",
+      "897CF4701004",
+      "897CF4703001",
+      "897CF4703002",
+      "897CF4705001",
+      "897CF4707001",
+      "897CF4710001"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B47021\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B47022\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B47023\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B47050\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B47060\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B47070\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8965B47021",
+      "8965B47022",
+      "8965B47023",
+      "8965B47050",
+      "8965B47060",
+      "8965B47070"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F4701300\\x00\\x00\\x00\\x00",
+      "8646F4702001\\x00\\x00\\x00\\x00",
+      "8646F4702100\\x00\\x00\\x00\\x00",
+      "8646F4702200\\x00\\x00\\x00\\x00",
+      "8646F4705000\\x00\\x00\\x00\\x00",
+      "8646F4705200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8646F4701300",
+      "8646F4702001",
+      "8646F4702100",
+      "8646F4702200",
+      "8646F4705000",
+      "8646F4705200"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702000\\x00\\x00\\x00\\x00",
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8821F4702000",
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152647500\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647510\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647520\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647521\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152647531\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "F152647500",
+      "F152647510",
+      "F152647520",
+      "F152647521",
+      "F152647531"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028966347B1000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347C4000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347C6000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347C7000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x028966347C8000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00",
+      "\\x038966347C0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710101\\x00\\x00\\x00\\x00",
+      "\\x038966347C0000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710102\\x00\\x00\\x00\\x00",
+      "\\x038966347C1000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4710101\\x00\\x00\\x00\\x00",
+      "\\x038966347C5000\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4707101\\x00\\x00\\x00\\x00",
+      "\\x038966347C5100\\x00\\x00\\x00\\x008966A4703000\\x00\\x00\\x00\\x00897CF4707101\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8966347B1000",
+      "8966347C0000",
+      "8966347C1000",
+      "8966347C4000",
+      "8966347C5000",
+      "8966347C5100",
+      "8966347C6000",
+      "8966347C7000",
+      "8966347C8000",
+      "8966A4703000",
+      "897CF4707101",
+      "897CF4710101",
+      "897CF4710102"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B47070\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8965B47070"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F4707000\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F4710000\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00",
+      "\\x028646F4712000\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8646F4707000",
+      "8646F4710000",
+      "8646F4712000",
+      "8646G2601400",
+      "8646G2601500"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius",
+      "Toyota Prius Prime"
+    ],
+    "part_numbers": [
+      "8821F3301300",
+      "8821F3301400"
+    ],
+    "source": "opendbc",
+    "years": "2021-2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152647280\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius v"
+    ],
+    "part_numbers": [
+      "F152647280"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881514705100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius v"
+    ],
+    "part_numbers": [
+      "881514705100"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0234781000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius v"
+    ],
+    "part_numbers": [
+      "34781000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F4703300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius v"
+    ],
+    "part_numbers": [
+      "8646F4703300"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Prius v"
+    ],
+    "part_numbers": [
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F15260R102\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F15260R103\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642492\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642493\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "F15260R102",
+      "F15260R103",
+      "F152642492",
+      "F152642493"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881514201200\\x00\\x00\\x00\\x00",
+      "881514201300\\x00\\x00\\x00\\x00",
+      "881514201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "881514201200",
+      "881514201300",
+      "881514201400"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x02342Q1000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q1100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q1200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q1300\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054212000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q2000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054213000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q2100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054213000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q2200\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054213000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q3000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054214000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342Q4000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x0054215000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "342Q1000",
+      "342Q1100",
+      "342Q1200",
+      "342Q1300",
+      "342Q2000",
+      "342Q2100",
+      "342Q2200",
+      "342Q3000",
+      "342Q4000",
+      "54212000",
+      "54213000",
+      "54214000",
+      "54215000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B42063\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42073\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42082\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42083\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "8965B42063",
+      "8965B42073",
+      "8965B42082",
+      "8965B42083"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F4201100\\x00\\x00\\x00\\x00",
+      "8646F4201200\\x00\\x00\\x00\\x00",
+      "8646F4202001\\x00\\x00\\x00\\x00",
+      "8646F4202100\\x00\\x00\\x00\\x00",
+      "8646F4204000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "8646F4201100",
+      "8646F4201200",
+      "8646F4202001",
+      "8646F4202100",
+      "8646F4204000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702000\\x00\\x00\\x00\\x00",
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4"
+    ],
+    "part_numbers": [
+      "8821F4702000",
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152642090\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642110\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642120\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642400\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "F152642090",
+      "F152642110",
+      "F152642120",
+      "F152642400"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881514202200\\x00\\x00\\x00\\x00",
+      "881514202300\\x00\\x00\\x00\\x00",
+      "881514202400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "881514202200",
+      "881514202300",
+      "881514202400"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x02342N9000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342N9100\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02342P0000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00A4701000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "342N9000",
+      "342N9100",
+      "342P0000",
+      "A4701000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B42102\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42103\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42112\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42162\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42163\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8965B42102",
+      "8965B42103",
+      "8965B42112",
+      "8965B42162",
+      "8965B42163"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F4201100\\x00\\x00\\x00\\x00",
+      "8646F4201200\\x00\\x00\\x00\\x00",
+      "8646F4202001\\x00\\x00\\x00\\x00",
+      "8646F4202100\\x00\\x00\\x00\\x00",
+      "8646F4204000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8646F4201100",
+      "8646F4201200",
+      "8646F4202001",
+      "8646F4202100",
+      "8646F4204000"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702000\\x00\\x00\\x00\\x00",
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Hybrid",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8821F4702000",
+      "8821F4702100",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15264228300\\x00\\x00\\x00\\x00",
+      "\\x01F15264228500\\x00\\x00\\x00\\x00",
+      "\\x01F15264284100\\x00\\x00\\x00\\x00",
+      "\\x01F152642F3000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Prime"
+    ],
+    "part_numbers": [
+      "F15264228300",
+      "F15264228500",
+      "F15264284100",
+      "F152642F3000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018966342S7000\\x00\\x00\\x00\\x00",
+      "\\x018966342Z1000\\x00\\x00\\x00\\x00",
+      "\\x018966342Z1100\\x00\\x00\\x00\\x00",
+      "\\x01896634AJ7000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Prime"
+    ],
+    "part_numbers": [
+      "8966342S7000",
+      "8966342Z1000",
+      "8966342Z1100",
+      "896634AJ7000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018965B4209000\\x00\\x00\\x00\\x00",
+      "\\x018965B4233100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Prime"
+    ],
+    "part_numbers": [
+      "8965B4209000",
+      "8965B4233100"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F4205200\\x00\\x00\\x00\\x008646G4202000\\x00\\x00\\x00\\x00",
+      "\\x028646F4205300\\x00\\x00\\x00\\x008646G4202100\\x00\\x00\\x00\\x00",
+      "\\x028646F4210100\\x00\\x00\\x00\\x008646G3305000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Prime"
+    ],
+    "part_numbers": [
+      "8646F4205200",
+      "8646F4205300",
+      "8646F4210100",
+      "8646G3305000",
+      "8646G4202000",
+      "8646G4202100"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301400\\x00\\x00\\x00\\x00",
+      "\\x018821F6201400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4 Prime"
+    ],
+    "part_numbers": [
+      "8821F3301400",
+      "8821F6201400"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152642290\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642291\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642322\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642330\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642331\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642520\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642521\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642531\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642532\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642540\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642541\\x00\\x00\\x00\\x00\\x00\\x00",
+      "F152642542\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R210\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R220\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R290\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R292\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R300\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R302\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642551\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642561\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642601\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642700\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642701\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642710\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642711\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642750\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F152642751\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "F15260R210",
+      "F15260R220",
+      "F15260R290",
+      "F15260R292",
+      "F15260R300",
+      "F15260R302",
+      "F152642290",
+      "F152642291",
+      "F152642322",
+      "F152642330",
+      "F152642331",
+      "F152642520",
+      "F152642521",
+      "F152642531",
+      "F152642532",
+      "F152642540",
+      "F152642541",
+      "F152642542",
+      "F152642551",
+      "F152642561",
+      "F152642601",
+      "F152642700",
+      "F152642701",
+      "F152642710",
+      "F152642711",
+      "F152642750",
+      "F152642751"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630R58000\\x00\\x00\\x00\\x00",
+      "\\x01896630R58100\\x00\\x00\\x00\\x00",
+      "\\x018966342E2000\\x00\\x00\\x00\\x00",
+      "\\x018966342M5000\\x00\\x00\\x00\\x00",
+      "\\x018966342M8000\\x00\\x00\\x00\\x00",
+      "\\x018966342S9000\\x00\\x00\\x00\\x00",
+      "\\x018966342T1000\\x00\\x00\\x00\\x00",
+      "\\x018966342T6000\\x00\\x00\\x00\\x00",
+      "\\x018966342T9000\\x00\\x00\\x00\\x00",
+      "\\x018966342U4000\\x00\\x00\\x00\\x00",
+      "\\x018966342U4100\\x00\\x00\\x00\\x00",
+      "\\x018966342U5100\\x00\\x00\\x00\\x00",
+      "\\x018966342V0000\\x00\\x00\\x00\\x00",
+      "\\x018966342V3000\\x00\\x00\\x00\\x00",
+      "\\x018966342V3100\\x00\\x00\\x00\\x00",
+      "\\x018966342V3200\\x00\\x00\\x00\\x00",
+      "\\x018966342W5000\\x00\\x00\\x00\\x00",
+      "\\x018966342W7000\\x00\\x00\\x00\\x00",
+      "\\x018966342W8000\\x00\\x00\\x00\\x00",
+      "\\x018966342W9000\\x00\\x00\\x00\\x00",
+      "\\x018966342X5000\\x00\\x00\\x00\\x00",
+      "\\x018966342X6000\\x00\\x00\\x00\\x00",
+      "\\x01896634A05000\\x00\\x00\\x00\\x00",
+      "\\x01896634A15000\\x00\\x00\\x00\\x00",
+      "\\x01896634A19000\\x00\\x00\\x00\\x00",
+      "\\x01896634A19100\\x00\\x00\\x00\\x00",
+      "\\x01896634A20000\\x00\\x00\\x00\\x00",
+      "\\x01896634A20100\\x00\\x00\\x00\\x00",
+      "\\x01896634A22000\\x00\\x00\\x00\\x00",
+      "\\x01896634A22100\\x00\\x00\\x00\\x00",
+      "\\x01896634A25000\\x00\\x00\\x00\\x00",
+      "\\x01896634A30000\\x00\\x00\\x00\\x00",
+      "\\x01896634A44000\\x00\\x00\\x00\\x00",
+      "\\x01896634A45000\\x00\\x00\\x00\\x00",
+      "\\x01896634A46000\\x00\\x00\\x00\\x00",
+      "\\x028966342M7000\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x028966342T0000\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x028966342V1000\\x00\\x00\\x00\\x00897CF1202001\\x00\\x00\\x00\\x00",
+      "\\x028966342W4001\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x028966342Y8000\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x028966342Z8000\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x02896634A13000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02896634A13001\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896634A13101\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896634A13201\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896634A14001\\x00\\x00\\x00\\x00897CF0R01000\\x00\\x00\\x00\\x00",
+      "\\x02896634A14001\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x02896634A14001\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896634A14101\\x00\\x00\\x00\\x00897CF4801001\\x00\\x00\\x00\\x00",
+      "\\x02896634A18000\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x02896634A18100\\x00\\x00\\x00\\x00897CF1201001\\x00\\x00\\x00\\x00",
+      "\\x02896634A23000\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x02896634A23001\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x02896634A23101\\x00\\x00\\x00\\x00897CF1203001\\x00\\x00\\x00\\x00",
+      "\\x02896634A43000\\x00\\x00\\x00\\x00897CF4201001\\x00\\x00\\x00\\x00",
+      "\\x02896634A47000\\x00\\x00\\x00\\x00897CF4201001\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "896630R58000",
+      "896630R58100",
+      "8966342E2000",
+      "8966342M5000",
+      "8966342M7000",
+      "8966342M8000",
+      "8966342S9000",
+      "8966342T0000",
+      "8966342T1000",
+      "8966342T6000",
+      "8966342T9000",
+      "8966342U4000",
+      "8966342U4100",
+      "8966342U5100",
+      "8966342V0000",
+      "8966342V1000",
+      "8966342V3000",
+      "8966342V3100",
+      "8966342V3200",
+      "8966342W4001",
+      "8966342W5000",
+      "8966342W7000",
+      "8966342W8000",
+      "8966342W9000",
+      "8966342X5000",
+      "8966342X6000",
+      "8966342Y8000",
+      "8966342Z8000",
+      "896634A05000",
+      "896634A13000",
+      "896634A13001",
+      "896634A13101",
+      "896634A13201",
+      "896634A14001",
+      "896634A14101",
+      "896634A15000",
+      "896634A18000",
+      "896634A18100",
+      "896634A19000",
+      "896634A19100",
+      "896634A20000",
+      "896634A20100",
+      "896634A22000",
+      "896634A22100",
+      "896634A23000",
+      "896634A23001",
+      "896634A23101",
+      "896634A25000",
+      "896634A30000",
+      "896634A43000",
+      "896634A44000",
+      "896634A45000",
+      "896634A46000",
+      "896634A47000",
+      "897CF0R01000",
+      "897CF1201001",
+      "897CF1202001",
+      "897CF1203001",
+      "897CF4201001",
+      "897CF4801001"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B42170\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42171\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42180\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42181\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x028965B0R01200\\x00\\x00\\x00\\x008965B0R02200\\x00\\x00\\x00\\x00",
+      "\\x028965B0R01300\\x00\\x00\\x00\\x008965B0R02300\\x00\\x00\\x00\\x00",
+      "\\x028965B0R01400\\x00\\x00\\x00\\x008965B0R02400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8965B0R01200",
+      "8965B0R01300",
+      "8965B0R01400",
+      "8965B0R02200",
+      "8965B0R02300",
+      "8965B0R02400",
+      "8965B42170",
+      "8965B42171",
+      "8965B42180",
+      "8965B42181"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F4203200\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F4203300\\x00\\x00\\x00\\x008646G26011A0\\x00\\x00\\x00\\x00",
+      "\\x028646F4203400\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F4203500\\x00\\x00\\x00\\x008646G2601200\\x00\\x00\\x00\\x00",
+      "\\x028646F4203700\\x00\\x00\\x00\\x008646G2601400\\x00\\x00\\x00\\x00",
+      "\\x028646F4203800\\x00\\x00\\x00\\x008646G2601500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8646F4203200",
+      "8646F4203300",
+      "8646F4203400",
+      "8646F4203500",
+      "8646F4203700",
+      "8646F4203800",
+      "8646G26011A0",
+      "8646G2601200",
+      "8646G2601400",
+      "8646G2601500"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301100\\x00\\x00\\x00\\x00",
+      "\\x018821F3301200\\x00\\x00\\x00\\x00",
+      "\\x018821F3301300\\x00\\x00\\x00\\x00",
+      "\\x018821F3301400\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8821F3301100",
+      "8821F3301200",
+      "8821F3301300",
+      "8821F3301400"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15260R350\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R361\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15264283100\\x00\\x00\\x00\\x00",
+      "\\x01F15264283200\\x00\\x00\\x00\\x00",
+      "\\x01F15264286100\\x00\\x00\\x00\\x00",
+      "\\x01F15264286200\\x00\\x00\\x00\\x00",
+      "\\x01F152642870\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "F15260R350",
+      "F15260R361",
+      "F15264283100",
+      "F15264283200",
+      "F15264286100",
+      "F15264286200",
+      "F152642870"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896634A02001\\x00\\x00\\x00\\x00",
+      "\\x01896634A02101\\x00\\x00\\x00\\x00",
+      "\\x01896634A03000\\x00\\x00\\x00\\x00",
+      "\\x01896634A08000\\x00\\x00\\x00\\x00",
+      "\\x01896634A59000\\x00\\x00\\x00\\x00",
+      "\\x01896634A61000\\x00\\x00\\x00\\x00",
+      "\\x01896634A62000\\x00\\x00\\x00\\x00",
+      "\\x01896634A62100\\x00\\x00\\x00\\x00",
+      "\\x01896634A63000\\x00\\x00\\x00\\x00",
+      "\\x01896634A88000\\x00\\x00\\x00\\x00",
+      "\\x01896634A89000\\x00\\x00\\x00\\x00",
+      "\\x01896634A89100\\x00\\x00\\x00\\x00",
+      "\\x01896634AA0000\\x00\\x00\\x00\\x00",
+      "\\x01896634AA0100\\x00\\x00\\x00\\x00",
+      "\\x01896634AA1000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "896634A02001",
+      "896634A02101",
+      "896634A03000",
+      "896634A08000",
+      "896634A59000",
+      "896634A61000",
+      "896634A62000",
+      "896634A62100",
+      "896634A63000",
+      "896634A88000",
+      "896634A89000",
+      "896634A89100",
+      "896634AA0000",
+      "896634AA0100",
+      "896634AA1000"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B42172\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B42182\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x028965B0R01500\\x00\\x00\\x00\\x008965B0R02500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8965B0R01500",
+      "8965B0R02500",
+      "8965B42172",
+      "8965B42182"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0R02100\\x00\\x00\\x00\\x008646G0R01100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0R02100",
+      "8646G0R01100"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F0R01100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0R01100"
+    ],
+    "source": "opendbc",
+    "years": "2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15260R440\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R450\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x01F15260R50000\\x00\\x00\\x00\\x00",
+      "\\x01F15260R51000\\x00\\x00\\x00\\x00",
+      "\\x01F15264283200\\x00\\x00\\x00\\x00",
+      "\\x01F15264283300\\x00\\x00\\x00\\x00",
+      "\\x01F152642F1000\\x00\\x00\\x00\\x00",
+      "\\x01F152642F8000\\x00\\x00\\x00\\x00",
+      "\\x01F152642F8100\\x00\\x00\\x00\\x00",
+      "\\x01F152642F9000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "F15260R440",
+      "F15260R450",
+      "F15260R50000",
+      "F15260R51000",
+      "F15264283200",
+      "F15264283300",
+      "F152642F1000",
+      "F152642F8000",
+      "F152642F8100",
+      "F152642F9000"
+    ],
+    "source": "opendbc",
+    "years": "2023-2025"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896634A61000\\x00\\x00\\x00\\x00",
+      "\\x01896634A88100\\x00\\x00\\x00\\x00",
+      "\\x01896634A89100\\x00\\x00\\x00\\x00",
+      "\\x01896634AD7000\\x00\\x00\\x00\\x00",
+      "\\x01896634AE1001\\x00\\x00\\x00\\x00",
+      "\\x01896634AF0000\\x00\\x00\\x00\\x00",
+      "\\x01896634AJ2000\\x00\\x00\\x00\\x00",
+      "\\x01896634AJ3000\\x00\\x00\\x00\\x00",
+      "\\x01896634AL5000\\x00\\x00\\x00\\x00",
+      "\\x01896634AL6000\\x00\\x00\\x00\\x00",
+      "\\x01896634AL8000\\x00\\x00\\x00\\x00",
+      "\\x01896634AS8001\\x00\\x00\\x00\\x00",
+      "\\x01896634AS9000\\x00\\x00\\x00\\x00",
+      "\\x01896634AT7000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "896634A61000",
+      "896634A88100",
+      "896634A89100",
+      "896634AD7000",
+      "896634AE1001",
+      "896634AF0000",
+      "896634AJ2000",
+      "896634AJ3000",
+      "896634AL5000",
+      "896634AL6000",
+      "896634AL8000",
+      "896634AS8001",
+      "896634AS9000",
+      "896634AT7000"
+    ],
+    "source": "opendbc",
+    "years": "2023-2025"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B42371\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x028965B0R11000\\x00\\x00\\x00\\x008965B0R12000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8965B0R11000",
+      "8965B0R12000",
+      "8965B42371"
+    ],
+    "source": "opendbc",
+    "years": "2023-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0R05100\\x00\\x00\\x00\\x008646G0R02100\\x00\\x00\\x00\\x00",
+      "\\x028646F0R05200\\x00\\x00\\x00\\x008646G0R02200\\x00\\x00\\x00\\x00",
+      "\\x028646F0R05300\\x00\\x00\\x00\\x008646G0R02300\\x00\\x00\\x00\\x00",
+      "\\x028646F0R11000\\x00\\x00\\x00\\x008646G0R04000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8646F0R05100",
+      "8646F0R05200",
+      "8646F0R05300",
+      "8646F0R11000",
+      "8646G0R02100",
+      "8646G0R02200",
+      "8646G0R02300",
+      "8646G0R04000"
+    ],
+    "source": "opendbc",
+    "years": "2023-2025"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F0R03100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota RAV4",
+      "Toyota RAV4 Hybrid"
+    ],
+    "part_numbers": [
+      "8821F0R03100"
+    ],
+    "source": "opendbc",
+    "years": "2023-2025"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "F152608130\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "F152608130"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x791"
+    ],
+    "ecu": "dsu",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "881510801100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "881510801100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630832100\\x00\\x00\\x00\\x00",
+      "\\x01896630832200\\x00\\x00\\x00\\x00",
+      "\\x01896630838000\\x00\\x00\\x00\\x00",
+      "\\x01896630838100\\x00\\x00\\x00\\x00",
+      "\\x01896630842000\\x00\\x00\\x00\\x00",
+      "\\x01896630843000\\x00\\x00\\x00\\x00",
+      "\\x01896630851000\\x00\\x00\\x00\\x00",
+      "\\x01896630851100\\x00\\x00\\x00\\x00",
+      "\\x01896630851200\\x00\\x00\\x00\\x00",
+      "\\x01896630852000\\x00\\x00\\x00\\x00",
+      "\\x01896630852100\\x00\\x00\\x00\\x00",
+      "\\x01896630852200\\x00\\x00\\x00\\x00",
+      "\\x01896630859000\\x00\\x00\\x00\\x00",
+      "\\x01896630860000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "896630832100",
+      "896630832200",
+      "896630838000",
+      "896630838100",
+      "896630842000",
+      "896630843000",
+      "896630851000",
+      "896630851100",
+      "896630851200",
+      "896630852000",
+      "896630852100",
+      "896630852200",
+      "896630859000",
+      "896630860000"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8965B45070\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B45080\\x00\\x00\\x00\\x00\\x00\\x00",
+      "8965B45082\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8965B45070",
+      "8965B45080",
+      "8965B45082"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8646F0801100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8646F0801100"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "8821F4702100\\x00\\x00\\x00\\x00",
+      "8821F4702200\\x00\\x00\\x00\\x00",
+      "8821F4702300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8821F4702100",
+      "8821F4702200",
+      "8821F4702300"
+    ],
+    "source": "opendbc",
+    "years": "2018-2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F15260815100\\x00\\x00\\x00\\x00",
+      "\\x01F15260815300\\x00\\x00\\x00\\x00",
+      "\\x01F15260823000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "F15260815100",
+      "F15260815300",
+      "F15260823000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2026"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01896630841000\\x00\\x00\\x00\\x00",
+      "\\x01896630857101\\x00\\x00\\x00\\x00",
+      "\\x01896630862000\\x00\\x00\\x00\\x00",
+      "\\x01896630864000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "896630841000",
+      "896630857101",
+      "896630862000",
+      "896630864000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2026"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018965B4509100\\x00\\x00\\x00\\x00",
+      "\\x018965B4514000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8965B4509100",
+      "8965B4514000"
+    ],
+    "source": "opendbc",
+    "years": "2021-2026"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0802200\\x00\\x00\\x00\\x008646G4202100\\x00\\x00\\x00\\x00",
+      "\\x028646F0802300\\x00\\x00\\x00\\x008646G4202100\\x00\\x00\\x00\\x00",
+      "\\x028646F0802400\\x00\\x00\\x00\\x008646G4202100\\x00\\x00\\x00\\x00",
+      "\\x028646F0802500\\x00\\x00\\x00\\x008646G4202100\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8646F0802200",
+      "8646F0802300",
+      "8646F0802400",
+      "8646F0802500",
+      "8646G4202100"
+    ],
+    "source": "opendbc",
+    "years": "2021-2026"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F3301500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Sienna"
+    ],
+    "part_numbers": [
+      "8821F3301500"
+    ],
+    "source": "opendbc",
+    "years": "2021-2026"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x01F1526K005600\\x00\\x00\\x00\\x00",
+      "\\x01F1526K007500\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Yaris (Non-US only) 2020,"
+    ],
+    "part_numbers": [
+      "F1526K005600",
+      "F1526K007500"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x700"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0189663K015300\\x00\\x00\\x00\\x00",
+      "\\x0189663K023000\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Yaris (Non-US only) 2020,"
+    ],
+    "part_numbers": [
+      "89663K015300",
+      "89663K023000"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018965BK002100\\x00\\x00\\x00\\x00",
+      "\\x018965BK003200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Yaris (Non-US only) 2020,"
+    ],
+    "part_numbers": [
+      "8965BK002100",
+      "8965BK003200"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x028646F0W04100\\x00\\x00\\x00\\x008646G0W04100\\x00\\x00\\x00\\x00",
+      "\\x028646F5205200\\x00\\x00\\x00\\x008646G5202200\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Yaris (Non-US only) 2020,"
+    ],
+    "part_numbers": [
+      "8646F0W04100",
+      "8646F5205200",
+      "8646G0W04100",
+      "8646G5202200"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x750"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x018821F0D04100\\x00\\x00\\x00\\x00",
+      "\\x018821F0D05300\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Toyota",
+    "models": [
+      "Toyota Yaris (Non-US only) 2020,"
+    ],
+    "part_numbers": [
+      "8821F0D04100",
+      "8821F0D05300"
+    ],
+    "source": "opendbc",
+    "years": "2023"
+  }
+]

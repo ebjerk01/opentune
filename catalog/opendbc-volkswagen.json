@@ -1,0 +1,4923 @@
+[
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906023AN\\xf1\\x893695",
+      "\\xf1\\x8704E906023AR\\xf1\\x893440",
+      "\\xf1\\x8704E906023BL\\xf1\\x895190",
+      "\\xf1\\x8704E906027CJ\\xf1\\x897798",
+      "\\xf1\\x8704L997022N \\xf1\\x899459",
+      "\\xf1\\x875G0906259A \\xf1\\x890004",
+      "\\xf1\\x875G0906259D \\xf1\\x890002",
+      "\\xf1\\x875G0906259L \\xf1\\x890002",
+      "\\xf1\\x875G0906259Q \\xf1\\x890002",
+      "\\xf1\\x875G0906259Q \\xf1\\x890007",
+      "\\xf1\\x878V0906259E \\xf1\\x890001",
+      "\\xf1\\x878V0906259F \\xf1\\x890002",
+      "\\xf1\\x878V0906259H \\xf1\\x890002",
+      "\\xf1\\x878V0906259J \\xf1\\x890002",
+      "\\xf1\\x878V0906259K \\xf1\\x890001",
+      "\\xf1\\x878V0906259K \\xf1\\x890002",
+      "\\xf1\\x878V0906264B \\xf1\\x890003",
+      "\\xf1\\x878V0907115B \\xf1\\x890007",
+      "\\xf1\\x878V0907404A \\xf1\\x890005",
+      "\\xf1\\x878V0907404G \\xf1\\x890004",
+      "\\xf1\\x878V0907404G \\xf1\\x890005"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi A3",
+      "Audi A3 Sportback e-tron",
+      "Audi RS3",
+      "Audi S3"
+    ],
+    "part_numbers": [
+      "04E906023AN",
+      "04E906023AR",
+      "04E906023BL",
+      "04E906027CJ",
+      "04L997022N",
+      "5G0906259A",
+      "5G0906259D",
+      "5G0906259L",
+      "5G0906259Q",
+      "8V0906259E",
+      "8V0906259F",
+      "8V0906259H",
+      "8V0906259J",
+      "8V0906259K",
+      "8V0906264B",
+      "8V0907115B",
+      "8V0907404A",
+      "8V0907404G"
+    ],
+    "source": "opendbc",
+    "years": "2014-2019"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144F \\xf1\\x895043\\xf1\\x82\\x0561G01A13A0",
+      "\\xf1\\x873Q0909144H \\xf1\\x895061\\xf1\\x82\\x0566G0HA14A1",
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566G0HA14A1",
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571G01A16A1",
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571G0HA16A1",
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571G0JA13A1",
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571G0JA14A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521G0G809A1",
+      "\\xf1\\x875Q0909144P \\xf1\\x891043\\xf1\\x82\\x0503G00303A0",
+      "\\xf1\\x875Q0909144P \\xf1\\x891043\\xf1\\x82\\x0503G00803A0",
+      "\\xf1\\x875Q0909144P \\xf1\\x891043\\xf1\\x82\\x0503G0G803A0",
+      "\\xf1\\x875Q0909144R \\xf1\\x891061\\xf1\\x82\\x0516G00804A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516G00804A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521G00807A1"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi A3",
+      "Audi A3 Sportback e-tron",
+      "Audi RS3",
+      "Audi S3"
+    ],
+    "part_numbers": [
+      "03G00303A0",
+      "03G00803A0",
+      "03G0G803A0",
+      "16G00804A1",
+      "21G00807A1",
+      "21G0G809A1",
+      "3Q0909144F",
+      "3Q0909144H",
+      "3Q0909144J",
+      "3Q0909144K",
+      "3Q0909144L",
+      "5Q0909144AB",
+      "5Q0909144P",
+      "5Q0909144R",
+      "5Q0909144S",
+      "5Q0909144T",
+      "61G01A13A0",
+      "66G0HA14A1",
+      "71G01A16A1",
+      "71G0HA16A1",
+      "71G0JA13A1",
+      "71G0JA14A1"
+    ],
+    "source": "opendbc",
+    "years": "2014-2019"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0907567M \\xf1\\x890398\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907567N \\xf1\\x890400\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572D \\xf1\\x890304\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572F \\xf1\\x890400\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572G \\xf1\\x890571",
+      "\\xf1\\x875Q0907572H \\xf1\\x890620",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi A3",
+      "Audi A3 Sportback e-tron",
+      "Audi RS3",
+      "Audi S3"
+    ],
+    "part_numbers": [
+      "5Q0907567M",
+      "5Q0907567N",
+      "5Q0907572D",
+      "5Q0907572F",
+      "5Q0907572G",
+      "5Q0907572H",
+      "5Q0907572P"
+    ],
+    "source": "opendbc",
+    "years": "2014-2019"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AB\\xf1\\x890388\\xf1\\x82\\x111111001111111206110412111321139114",
+      "\\xf1\\x875Q0959655AM\\xf1\\x890315\\xf1\\x82\\x1311111111111111311411011231129321212100",
+      "\\xf1\\x875Q0959655AM\\xf1\\x890318\\xf1\\x82\\x1311111111111112311411011531159321212100",
+      "\\xf1\\x875Q0959655AR\\xf1\\x890315\\xf1\\x82\\x1311110011131115311211012331239321212100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890339\\xf1\\x82\\x1311110011131100311111011731179321342100",
+      "\\xf1\\x875Q0959655J \\xf1\\x890825\\xf1\\x82\\x13111112111111--171115141112221291163221",
+      "\\xf1\\x875Q0959655J \\xf1\\x890825\\xf1\\x82\\x13111112111111--241115141112221291163221",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13111112111111--241115141112221291163221",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13121111111111--341117141212231291163221",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13121111111211--261117141112231291163221",
+      "\\xf1\\x875Q0959655N \\xf1\\x890361\\xf1\\x82\\x111212001112110004110411111421149114",
+      "\\xf1\\x875Q0959655N \\xf1\\x890361\\xf1\\x82\\x111212001112111104110411111521159114"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi A3",
+      "Audi A3 Sportback e-tron",
+      "Audi RS3",
+      "Audi S3"
+    ],
+    "part_numbers": [
+      "1111001111111206110412111321139114",
+      "11110011131100311111011731179321342100",
+      "11110011131115311211012331239321212100",
+      "11111111111111311411011231129321212100",
+      "11111111111112311411011531159321212100",
+      "111112111111--171115141112221291163221",
+      "111112111111--241115141112221291163221",
+      "121111111111--341117141212231291163221",
+      "121111111211--261117141112231291163221",
+      "1212001112110004110411111421149114",
+      "1212001112111104110411111521159114",
+      "5Q0959655AB",
+      "5Q0959655AM",
+      "5Q0959655AR",
+      "5Q0959655BJ",
+      "5Q0959655J",
+      "5Q0959655N"
+    ],
+    "source": "opendbc",
+    "years": "2014-2019"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300044T \\xf1\\x895245",
+      "\\xf1\\x870CW300048  \\xf1\\x895201",
+      "\\xf1\\x870D9300012  \\xf1\\x894912",
+      "\\xf1\\x870D9300012  \\xf1\\x894931",
+      "\\xf1\\x870D9300012K \\xf1\\x894513",
+      "\\xf1\\x870D9300012L \\xf1\\x894521",
+      "\\xf1\\x870D9300013B \\xf1\\x894902",
+      "\\xf1\\x870D9300013B \\xf1\\x894931",
+      "\\xf1\\x870D9300014Q \\xf1\\x895006",
+      "\\xf1\\x870D9300041N \\xf1\\x894512",
+      "\\xf1\\x870D9300043T \\xf1\\x899699",
+      "\\xf1\\x870DD300046  \\xf1\\x891604",
+      "\\xf1\\x870DD300046A \\xf1\\x891602",
+      "\\xf1\\x870DD300046F \\xf1\\x891602",
+      "\\xf1\\x870DD300046G \\xf1\\x891601",
+      "\\xf1\\x870DL300012E \\xf1\\x892012",
+      "\\xf1\\x870DL300012H \\xf1\\x892112",
+      "\\xf1\\x870GC300011  \\xf1\\x890403",
+      "\\xf1\\x870GC300013M \\xf1\\x892402",
+      "\\xf1\\x870GC300042J \\xf1\\x891402"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi A3",
+      "Audi A3 Sportback e-tron",
+      "Audi RS3",
+      "Audi S3"
+    ],
+    "part_numbers": [
+      "0CW300044T",
+      "0CW300048",
+      "0D9300012",
+      "0D9300012K",
+      "0D9300012L",
+      "0D9300013B",
+      "0D9300014Q",
+      "0D9300041N",
+      "0D9300043T",
+      "0DD300046",
+      "0DD300046A",
+      "0DD300046F",
+      "0DD300046G",
+      "0DL300012E",
+      "0DL300012H",
+      "0GC300011",
+      "0GC300013M",
+      "0GC300042J"
+    ],
+    "source": "opendbc",
+    "years": "2014-2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906027JT\\xf1\\x894145"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q2"
+    ],
+    "part_numbers": [
+      "04E906027JT"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571F60511A1"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q2"
+    ],
+    "part_numbers": [
+      "3Q0909144K",
+      "71F60511A1"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572M \\xf1\\x890233"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q2"
+    ],
+    "part_numbers": [
+      "2Q0907572M"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655BD\\xf1\\x890336\\xf1\\x82\\x1311111111111100311211011231129321312111"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q2"
+    ],
+    "part_numbers": [
+      "11111111111100311211011231129321312111",
+      "5Q0959655BD"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041F \\xf1\\x891006"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q2"
+    ],
+    "part_numbers": [
+      "0CW300041F"
+    ],
+    "source": "opendbc",
+    "years": "2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8705E906018N \\xf1\\x899970",
+      "\\xf1\\x8705L906022M \\xf1\\x890901",
+      "\\xf1\\x875NA906259C \\xf1\\x890003",
+      "\\xf1\\x8783A906259  \\xf1\\x890001",
+      "\\xf1\\x8783A906259  \\xf1\\x890005",
+      "\\xf1\\x8783A906259C \\xf1\\x890002",
+      "\\xf1\\x8783A906259D \\xf1\\x890001",
+      "\\xf1\\x8783A906259F \\xf1\\x890001",
+      "\\xf1\\x8783A906259H \\xf1\\x890002",
+      "\\xf1\\x8783A907115P \\xf1\\x890002"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q3"
+    ],
+    "part_numbers": [
+      "05E906018N",
+      "05L906022M",
+      "5NA906259C",
+      "83A906259",
+      "83A906259C",
+      "83A906259D",
+      "83A906259F",
+      "83A906259H",
+      "83A907115P"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567G6000300",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567G6000800",
+      "\\xf1\\x875QF909144B \\xf1\\x895582\\xf1\\x82\\x0571G60533A1",
+      "\\xf1\\x875QF909144B \\xf1\\x895582\\xf1\\x82\\x0571G60733A1",
+      "\\xf1\\x875QS907145E \\xf1\\x891122\\xf1\\x82\\x0001G67801]V",
+      "\\xf1\\x875TA907145D \\xf1\\x891051\\xf1\\x82\\x001PG60A1P7N",
+      "\\xf1\\x875TA907145F \\xf1\\x891063\\xf1\\x82\\x002VG60A2VOM"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q3"
+    ],
+    "part_numbers": [
+      "01G67801",
+      "1PG60A1P7N",
+      "2VG60A2VOM",
+      "5Q0910143C",
+      "5QF909144B",
+      "5QS907145E",
+      "5TA907145D",
+      "5TA907145F",
+      "67G6000300",
+      "67G6000800",
+      "71G60533A1",
+      "71G60733A1"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907567C \\xf1\\x890541",
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572AB\\xf1\\x890397",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q3"
+    ],
+    "part_numbers": [
+      "2Q0907567C",
+      "2Q0907572AA",
+      "2Q0907572AB",
+      "2Q0907572R",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655BF\\xf1\\x890403\\xf1\\x82\\x1321211111211200311121232152219321422111",
+      "\\xf1\\x875Q0959655BQ\\xf1\\x890421\\xf1\\x82\\x132121111121120031112124218A219321532111",
+      "\\xf1\\x875Q0959655BQ\\xf1\\x890421\\xf1\\x82\\x132121111121120031112124218C219321532111",
+      "\\xf1\\x875Q0959655CC\\xf1\\x890421\\xf1\\x82\\x131111111111120031111224118A119321532111",
+      "\\xf1\\x875Q0959655CC\\xf1\\x890421\\xf1\\x82\\x131111111111120031111237116A119321532111",
+      "\\xf1\\x875QD959655AH\\xf1\\x890403\\xf1\\x82\\x1311110011311100313131013150319321422100"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q3"
+    ],
+    "part_numbers": [
+      "11110011311100313131013150319321422100",
+      "1111111111120031111224118A119321532111",
+      "1111111111120031111237116A119321532111",
+      "21211111211200311121232152219321422111",
+      "2121111121120031112124218A219321532111",
+      "2121111121120031112124218C219321532111",
+      "5Q0959655BF",
+      "5Q0959655BQ",
+      "5Q0959655CC",
+      "5QD959655AH"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158CN\\xf1\\x893608",
+      "\\xf1\\x8709G927158FL\\xf1\\x893758",
+      "\\xf1\\x8709G927158GG\\xf1\\x893825",
+      "\\xf1\\x8709G927158GP\\xf1\\x893937",
+      "\\xf1\\x8709G927158HC\\xf1\\x894070",
+      "\\xf1\\x8709G927158HG\\xf1\\x894168",
+      "\\xf1\\x870DW300011C \\xf1\\x892401",
+      "\\xf1\\x870GC300045D \\xf1\\x892802",
+      "\\xf1\\x870GC300046F \\xf1\\x892701"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q3"
+    ],
+    "part_numbers": [
+      "09G927158CN",
+      "09G927158FL",
+      "09G927158GG",
+      "09G927158GP",
+      "09G927158HC",
+      "09G927158HG",
+      "0DW300011C",
+      "0GC300045D",
+      "0GC300046F"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x878R0907115N \\xf1\\x890006",
+      "\\xf1\\x878R0907551F \\xf1\\x890007"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q5"
+    ],
+    "part_numbers": [
+      "8R0907115N",
+      "8R0907551F"
+    ],
+    "source": "opendbc",
+    "years": "2013-2017"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x878R0909144F \\xf1\\x890507\\xf1\\x82\\x01\\x09\\xe6",
+      "\\xf1\\x878R0909144R \\xf1\\x890511\\xf1\\x82\\x01\\x0a\\x1a"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q5"
+    ],
+    "part_numbers": [
+      "8R0909144F",
+      "8R0909144R"
+    ],
+    "source": "opendbc",
+    "years": "2013-2017"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x878R0907561A\\x00\\xf1\\x890410\\xf1\\x80100"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q5"
+    ],
+    "part_numbers": [
+      "8R0907561A"
+    ],
+    "source": "opendbc",
+    "years": "2013-2017"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x878R0959655F \\xf1\\x890610\\xf1\\x82\\x050304010402"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q5"
+    ],
+    "part_numbers": [
+      "0304010402",
+      "8R0959655F"
+    ],
+    "source": "opendbc",
+    "years": "2013-2017"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x878R0927158AM\\xf1\\x891003",
+      "\\xf1\\x878R0927158D \\xf1\\x891010"
+    ],
+    "make": "Audi",
+    "models": [
+      "Audi Q5"
+    ],
+    "part_numbers": [
+      "8R0927158AM",
+      "8R0927158D"
+    ],
+    "source": "opendbc",
+    "years": "2013-2017"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA907572H \\xf1\\x890234"
+    ],
+    "make": "CUPRA",
+    "models": [
+      "CUPRA Born"
+    ],
+    "part_numbers": [
+      "1EA907572H"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA959655EH\\xf1\\x890381"
+    ],
+    "make": "CUPRA",
+    "models": [
+      "CUPRA Born"
+    ],
+    "part_numbers": [
+      "1EA959655EH"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8795B906259BJ\\xf1\\x890001",
+      "\\xf1\\x8795B906259BM\\xf1\\x890001",
+      "\\xf1\\x8795B90652013\\xf1\\x893485",
+      "\\xf1\\x8795B90654002\\xf1\\x893495",
+      "\\xf1\\x8795B907551AD\\xf1\\x890001",
+      "\\xf1\\x8795B907551D \\xf1\\x890006"
+    ],
+    "make": "Porsche",
+    "models": [
+      "Porsche Macan"
+    ],
+    "part_numbers": [
+      "95B906259BJ",
+      "95B906259BM",
+      "95B90652013",
+      "95B90654002",
+      "95B907551AD",
+      "95B907551D"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8795B909144K \\xf1\\x891902\\xf1\\x82\\x02\\x04#\\x04#",
+      "\\xf1\\x8795B909144K \\xf1\\x891902\\xf1\\x82\\x02\\x04/\\x04/"
+    ],
+    "make": "Porsche",
+    "models": [
+      "Porsche Macan"
+    ],
+    "part_numbers": [
+      "95B909144K"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8795B907567B\\x00\\xf1\\x890800\\xf1\\x82108",
+      "\\xf1\\x8795B907567G\\x00\\xf1\\x890410\\xf1\\x82104",
+      "\\xf1\\x8795B907567H\\x00\\xf1\\x890430\\xf1\\x82104",
+      "\\xf1\\x8795B907567J \\xf1\\x890440\\xf1\\x82104"
+    ],
+    "make": "Porsche",
+    "models": [
+      "Porsche Macan"
+    ],
+    "part_numbers": [
+      "95B907567B",
+      "95B907567G",
+      "95B907567H",
+      "95B907567J"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8795B959655F \\xf1\\x890130\\xf1\\x82\\x05065Q033513",
+      "\\xf1\\x8795B959655F \\xf1\\x890130\\xf1\\x82\\x050682033514",
+      "\\xf1\\x8795B959655G \\xf1\\x890150\\xf1\\x82\\x0506B1033514",
+      "\\xf1\\x8795B959655G \\xf1\\x890150\\xf1\\x82\\x0506CG033517",
+      "\\xf1\\x8795B959655G \\xf1\\x890150\\xf1\\x82\\x0506CJ02D417"
+    ],
+    "make": "Porsche",
+    "models": [
+      "Porsche Macan"
+    ],
+    "part_numbers": [
+      "065Q033513",
+      "0682033514",
+      "06B1033514",
+      "06CG033517",
+      "06CJ02D417",
+      "95B959655F",
+      "95B959655G"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8795B927156CE\\xf1\\x890022",
+      "\\xf1\\x8795B927156JH\\xf1\\x890001",
+      "\\xf1\\x8795B927156KD\\xf1\\x890001",
+      "\\xf1\\x8795B927156KK\\xf1\\x890001",
+      "\\xf1\\x8795B927156KP\\xf1\\x890001",
+      "\\xf1\\x8795B927156R \\xf1\\x890021"
+    ],
+    "make": "Porsche",
+    "models": [
+      "Porsche Macan"
+    ],
+    "part_numbers": [
+      "95B927156CE",
+      "95B927156JH",
+      "95B927156KD",
+      "95B927156KK",
+      "95B927156KP",
+      "95B927156R"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906027KA\\xf1\\x893749",
+      "\\xf1\\x8704L906021EL\\xf1\\x897542",
+      "\\xf1\\x8704L906026BP\\xf1\\x891198",
+      "\\xf1\\x8704L906026BP\\xf1\\x897608",
+      "\\xf1\\x8704L906056CR\\xf1\\x892181",
+      "\\xf1\\x8704L906056CR\\xf1\\x892797",
+      "\\xf1\\x8705E906018AS\\xf1\\x899596",
+      "\\xf1\\x8781A906259B \\xf1\\x890003",
+      "\\xf1\\x878V0906264H \\xf1\\x890005",
+      "\\xf1\\x878V0907115E \\xf1\\x890002"
+    ],
+    "make": "SEAT",
+    "models": [
+      "CUPRA Ateca",
+      "SEAT Ateca",
+      "SEAT Leon"
+    ],
+    "part_numbers": [
+      "04E906027KA",
+      "04L906021EL",
+      "04L906026BP",
+      "04L906056CR",
+      "05E906018AS",
+      "81A906259B",
+      "8V0906264H",
+      "8V0907115E"
+    ],
+    "source": "opendbc",
+    "years": "2014-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571N60511A1",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521N01842A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521N01342A1",
+      "\\xf1\\x875Q0909144P \\xf1\\x891043\\xf1\\x82\\x0511N01805A0",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521N01309A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521N05808A1",
+      "\\xf1\\x875WA907145M \\xf1\\x891051\\xf1\\x82\\x0013N619137N"
+    ],
+    "make": "SEAT",
+    "models": [
+      "CUPRA Ateca",
+      "SEAT Ateca",
+      "SEAT Leon"
+    ],
+    "part_numbers": [
+      "11N01805A0",
+      "13N619137N",
+      "21N01309A1",
+      "21N01342A1",
+      "21N01842A1",
+      "21N05808A1",
+      "3Q0909144L",
+      "5Q0909144AA",
+      "5Q0909144AB",
+      "5Q0909144P",
+      "5Q0909144T",
+      "5WA907145M",
+      "71N60511A1"
+    ],
+    "source": "opendbc",
+    "years": "2014-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x875Q0907572B \\xf1\\x890200\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572H \\xf1\\x890620",
+      "\\xf1\\x875Q0907572K \\xf1\\x890402\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771"
+    ],
+    "make": "SEAT",
+    "models": [
+      "CUPRA Ateca",
+      "SEAT Ateca",
+      "SEAT Leon"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572M",
+      "5Q0907572B",
+      "5Q0907572H",
+      "5Q0907572K",
+      "5Q0907572P",
+      "5Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2014-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655AC\\xf1\\x890189\\xf1\\x82\\x0d11110011110011021511110200",
+      "\\xf1\\x873Q0959655AS\\xf1\\x890200\\xf1\\x82\\x0d11110011110011021511110200",
+      "\\xf1\\x873Q0959655AS\\xf1\\x890200\\xf1\\x82\\x0d12110012120012021612110200",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890703\\xf1\\x82\\x0e1212001211001305121211052900",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890703\\xf1\\x82\\x0e1312001313001305171311052900",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890712\\xf1\\x82\\x0e1312001313001305171311052900",
+      "\\xf1\\x873Q0959655CM\\xf1\\x890720\\xf1\\x82\\x0e1312001313001305171311052900",
+      "\\xf1\\x875QF959655AT\\xf1\\x890755\\xf1\\x82\\x1311110011110011111100110200--1113121149"
+    ],
+    "make": "SEAT",
+    "models": [
+      "CUPRA Ateca",
+      "SEAT Ateca",
+      "SEAT Leon"
+    ],
+    "part_numbers": [
+      "11110011110011021511110200",
+      "11110011110011111100110200--1113121149",
+      "12110012120012021612110200",
+      "1212001211001305121211052900",
+      "1312001313001305171311052900",
+      "3Q0959655AC",
+      "3Q0959655AS",
+      "3Q0959655BH",
+      "3Q0959655CM",
+      "5QF959655AT"
+    ],
+    "source": "opendbc",
+    "years": "2014-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041D \\xf1\\x891004",
+      "\\xf1\\x870CW300041G \\xf1\\x891003",
+      "\\xf1\\x870CW300050J \\xf1\\x891908",
+      "\\xf1\\x870D9300014S \\xf1\\x895202",
+      "\\xf1\\x870D9300042M \\xf1\\x895016",
+      "\\xf1\\x870GC300014P \\xf1\\x892801",
+      "\\xf1\\x870GC300043A \\xf1\\x892304"
+    ],
+    "make": "SEAT",
+    "models": [
+      "CUPRA Ateca",
+      "SEAT Ateca",
+      "SEAT Leon"
+    ],
+    "part_numbers": [
+      "0CW300041D",
+      "0CW300041G",
+      "0CW300050J",
+      "0D9300014S",
+      "0D9300042M",
+      "0GC300014P",
+      "0GC300043A"
+    ],
+    "source": "opendbc",
+    "years": "2014-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8705C906032L \\xf1\\x891701",
+      "\\xf1\\x8705E906018CF\\xf1\\x891905"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Fabia"
+    ],
+    "part_numbers": [
+      "05C906032L",
+      "05E906018CF"
+    ],
+    "source": "opendbc",
+    "years": "2022-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q1909144S \\xf1\\x896042"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Fabia"
+    ],
+    "part_numbers": [
+      "2Q1909144S"
+    ],
+    "source": "opendbc",
+    "years": "2022-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Fabia"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2022-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875QF959655AF\\xf1\\x890753\\xf1\\x82\\x13111100111100111111001102----1111120749",
+      "\\xf1\\x875QF959655AT\\xf1\\x890755\\xf1\\x82\\x1311110011110011111100110200--1111120749"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Fabia"
+    ],
+    "part_numbers": [
+      "111100111100111111001102----1111120749",
+      "11110011110011111100110200--1111120749",
+      "5QF959655AF",
+      "5QF959655AT"
+    ],
+    "source": "opendbc",
+    "years": "2022-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300051G \\xf1\\x891906",
+      "\\xf1\\x870CW300051M \\xf1\\x891936"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Fabia"
+    ],
+    "part_numbers": [
+      "0CW300051G",
+      "0CW300051M"
+    ],
+    "source": "opendbc",
+    "years": "2022-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704C906025AK\\xf1\\x897053",
+      "\\xf1\\x8705C906032M \\xf1\\x891333",
+      "\\xf1\\x8705C906032M \\xf1\\x892365",
+      "\\xf1\\x8705E906013CK\\xf1\\x892540"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kamiq",
+      "Škoda Scala"
+    ],
+    "part_numbers": [
+      "04C906025AK",
+      "05C906032M",
+      "05E906013CK"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q1909144AB\\xf1\\x896050",
+      "\\xf1\\x872Q1909144M \\xf1\\x896041"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kamiq",
+      "Škoda Scala"
+    ],
+    "part_numbers": [
+      "2Q1909144AB",
+      "2Q1909144M"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kamiq",
+      "Škoda Scala"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572R",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0959655AJ\\xf1\\x890250\\xf1\\x82\\x1211110411110411--04040404131111112H14",
+      "\\xf1\\x872Q0959655AM\\xf1\\x890351\\xf1\\x82\\x12111104111104112104040404111111112H14",
+      "\\xf1\\x872Q0959655AM\\xf1\\x890351\\xf1\\x82\\x122221042111042121040404042E2711152H14",
+      "\\xf1\\x872Q0959655AS\\xf1\\x890411\\xf1\\x82\\x1311150411110411210404040417151215391413",
+      "\\xf1\\x872Q0959655BJ\\xf1\\x890412\\xf1\\x82\\x132223042111042121040404042B251215391423"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kamiq",
+      "Škoda Scala"
+    ],
+    "part_numbers": [
+      "11110411110411--04040404131111112H14",
+      "111104111104112104040404111111112H14",
+      "11150411110411210404040417151215391413",
+      "2221042111042121040404042E2711152H14",
+      "2223042111042121040404042B251215391423",
+      "2Q0959655AJ",
+      "2Q0959655AM",
+      "2Q0959655AS",
+      "2Q0959655BJ"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300020  \\xf1\\x891906",
+      "\\xf1\\x870CW300020  \\xf1\\x891907",
+      "\\xf1\\x870CW300020T \\xf1\\x892204",
+      "\\xf1\\x870CW300050  \\xf1\\x891709"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kamiq",
+      "Škoda Scala"
+    ],
+    "part_numbers": [
+      "0CW300020",
+      "0CW300020T",
+      "0CW300050"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8705E906013CL\\xf1\\x892541",
+      "\\xf1\\x8705E906013H \\xf1\\x892407",
+      "\\xf1\\x8705E906018P \\xf1\\x895472",
+      "\\xf1\\x8705E906018P \\xf1\\x896020",
+      "\\xf1\\x8705L906022BS\\xf1\\x890913"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Karoq"
+    ],
+    "part_numbers": [
+      "05E906013CL",
+      "05E906013H",
+      "05E906018P",
+      "05L906022BS"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0910143B \\xf1\\x892201\\xf1\\x82\\x0563T6090500",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567T6100500",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567T6100600",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567T6100700"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Karoq"
+    ],
+    "part_numbers": [
+      "5Q0910143B",
+      "5Q0910143C",
+      "63T6090500",
+      "67T6100500",
+      "67T6100600",
+      "67T6100700"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572AB\\xf1\\x890397",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Karoq"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572AB",
+      "2Q0907572M",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655BH\\xf1\\x890703\\xf1\\x82\\x0e1213001211001101131112012100",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890712\\xf1\\x82\\x0e1213001211001101131122012100",
+      "\\xf1\\x873Q0959655DE\\xf1\\x890731\\xf1\\x82\\x0e1213001211001101131121012J00",
+      "\\xf1\\x875QF959655AT\\xf1\\x890755\\xf1\\x82\\x1312110012120011111100010200--2521210749"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Karoq"
+    ],
+    "part_numbers": [
+      "12110012120011111100010200--2521210749",
+      "1213001211001101131112012100",
+      "1213001211001101131121012J00",
+      "1213001211001101131122012100",
+      "3Q0959655BH",
+      "3Q0959655DE",
+      "5QF959655AT"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300020T \\xf1\\x892202",
+      "\\xf1\\x870CW300041S \\xf1\\x891615",
+      "\\xf1\\x870GC300014L \\xf1\\x892802"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Karoq"
+    ],
+    "part_numbers": [
+      "0CW300020T",
+      "0CW300041S",
+      "0GC300014L"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906027DD\\xf1\\x893123",
+      "\\xf1\\x8704E906027LD\\xf1\\x893433",
+      "\\xf1\\x8704E906027NB\\xf1\\x896517",
+      "\\xf1\\x8704E906027NB\\xf1\\x899504",
+      "\\xf1\\x8704L906026DE\\xf1\\x895418",
+      "\\xf1\\x8704L906026EJ\\xf1\\x893661",
+      "\\xf1\\x8704L906026HT\\xf1\\x893617",
+      "\\xf1\\x8705E906018DJ\\xf1\\x890915",
+      "\\xf1\\x8705E906018DJ\\xf1\\x891903",
+      "\\xf1\\x8705L906022GM\\xf1\\x893411",
+      "\\xf1\\x875NA906259E \\xf1\\x890003",
+      "\\xf1\\x875NA907115D \\xf1\\x890003",
+      "\\xf1\\x875NA907115E \\xf1\\x890003",
+      "\\xf1\\x875NA907115E \\xf1\\x890005",
+      "\\xf1\\x8783A907115E \\xf1\\x890001"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kodiaq"
+    ],
+    "part_numbers": [
+      "04E906027DD",
+      "04E906027LD",
+      "04E906027NB",
+      "04L906026DE",
+      "04L906026EJ",
+      "04L906026HT",
+      "05E906018DJ",
+      "05L906022GM",
+      "5NA906259E",
+      "5NA907115D",
+      "5NA907115E",
+      "83A907115E"
+    ],
+    "source": "opendbc",
+    "years": "2017-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820527T6050405",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820527T6060405",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820527T6070405",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567T600G500",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567T600G600",
+      "\\xf1\\x875TA907145F \\xf1\\x891063\\xf1\\x82\\x0025T6BA25OM",
+      "\\xf1\\x875TA907145F \\xf1\\x891063\\xf1\\x82\\x002LT61A2LOM"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kodiaq"
+    ],
+    "part_numbers": [
+      "0527T6050405",
+      "0527T6060405",
+      "0527T6070405",
+      "25T6BA25OM",
+      "2LT61A2LOM",
+      "5Q0909143P",
+      "5Q0910143C",
+      "5TA907145F",
+      "67T600G500",
+      "67T600G600"
+    ],
+    "source": "opendbc",
+    "years": "2017-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572AB\\xf1\\x890397",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x872Q0907572Q \\xf1\\x890342",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kodiaq"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572AB",
+      "2Q0907572M",
+      "2Q0907572Q",
+      "2Q0907572R",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2017-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655AN\\xf1\\x890306\\xf1\\x82\\x0d11110011110011031111310311",
+      "\\xf1\\x873Q0959655AP\\xf1\\x890306\\xf1\\x82\\x0d11110011110011421111314211",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890703\\xf1\\x82\\x0e1213001211001205212111052100",
+      "\\xf1\\x873Q0959655BJ\\xf1\\x890703\\xf1\\x82\\x0e1213001211001205212111052100",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e1213001211001244212111442100",
+      "\\xf1\\x873Q0959655CN\\xf1\\x890720\\xf1\\x82\\x0e1213001211001205212112052100",
+      "\\xf1\\x873Q0959655CQ\\xf1\\x890720\\xf1\\x82\\x0e1213111211001205212112052111",
+      "\\xf1\\x873Q0959655DJ\\xf1\\x890731\\xf1\\x82\\x0e1513001511001205232113052J00",
+      "\\xf1\\x875QF959655AT\\xf1\\x890755\\xf1\\x82\\x1311110011110011111100010200--1121240749",
+      "\\xf1\\x875QF959655AT\\xf1\\x890755\\xf1\\x82\\x1311110011110011111100010200--1121246149"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kodiaq"
+    ],
+    "part_numbers": [
+      "11110011110011031111310311",
+      "11110011110011111100010200--1121240749",
+      "11110011110011111100010200--1121246149",
+      "11110011110011421111314211",
+      "1213001211001205212111052100",
+      "1213001211001205212112052100",
+      "1213001211001244212111442100",
+      "1213111211001205212112052111",
+      "1513001511001205232113052J00",
+      "3Q0959655AN",
+      "3Q0959655AP",
+      "3Q0959655BH",
+      "3Q0959655BJ",
+      "3Q0959655BK",
+      "3Q0959655CN",
+      "3Q0959655CQ",
+      "3Q0959655DJ",
+      "5QF959655AT"
+    ],
+    "source": "opendbc",
+    "years": "2017-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870D9300014S \\xf1\\x895201",
+      "\\xf1\\x870D9300043  \\xf1\\x895202",
+      "\\xf1\\x870DL300011N \\xf1\\x892014",
+      "\\xf1\\x870DL300012G \\xf1\\x892006",
+      "\\xf1\\x870DL300012M \\xf1\\x892107",
+      "\\xf1\\x870DL300012N \\xf1\\x892110",
+      "\\xf1\\x870DL300013G \\xf1\\x892119",
+      "\\xf1\\x870GC300014N \\xf1\\x892801",
+      "\\xf1\\x870GC300018S \\xf1\\x892803",
+      "\\xf1\\x870GC300019H \\xf1\\x892806",
+      "\\xf1\\x870GC300046Q \\xf1\\x892802"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Kodiaq"
+    ],
+    "part_numbers": [
+      "0D9300014S",
+      "0D9300043",
+      "0DL300011N",
+      "0DL300012G",
+      "0DL300012M",
+      "0DL300012N",
+      "0DL300013G",
+      "0GC300014N",
+      "0GC300018S",
+      "0GC300019H",
+      "0GC300046Q"
+    ],
+    "source": "opendbc",
+    "years": "2017-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704C906025L \\xf1\\x896198",
+      "\\xf1\\x8704C906026AB\\xf1\\x892993",
+      "\\xf1\\x8704E906016ER\\xf1\\x895823",
+      "\\xf1\\x8704E906027HD\\xf1\\x893742",
+      "\\xf1\\x8704E906027MH\\xf1\\x894786",
+      "\\xf1\\x8704L906021DT\\xf1\\x898127",
+      "\\xf1\\x8704L906021ER\\xf1\\x898361",
+      "\\xf1\\x8704L906026BP\\xf1\\x897608",
+      "\\xf1\\x8704L906026BS\\xf1\\x891541",
+      "\\xf1\\x8704L906026BT\\xf1\\x897612",
+      "\\xf1\\x875G0906259C \\xf1\\x890002",
+      "\\xf1\\x875G0906259N \\xf1\\x890003"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Octavia",
+      "Škoda Octavia RS",
+      "Škoda Octavia Scout"
+    ],
+    "part_numbers": [
+      "04C906025L",
+      "04C906026AB",
+      "04E906016ER",
+      "04E906027HD",
+      "04E906027MH",
+      "04L906021DT",
+      "04L906021ER",
+      "04L906026BP",
+      "04L906026BS",
+      "04L906026BT",
+      "5G0906259C",
+      "5G0906259N"
+    ],
+    "source": "opendbc",
+    "years": "2015-2019"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566A01513A1",
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571T01512A1",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521T00403A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521T00403A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521T00603A1",
+      "\\xf1\\x875Q0909144R \\xf1\\x891061\\xf1\\x82\\x0516A00604A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521T00401A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521T00601A1",
+      "\\xf1\\x875QD909144E \\xf1\\x891081\\xf1\\x82\\x0521T00503A1"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Octavia",
+      "Škoda Octavia RS",
+      "Škoda Octavia Scout"
+    ],
+    "part_numbers": [
+      "16A00604A1",
+      "21T00401A1",
+      "21T00403A1",
+      "21T00503A1",
+      "21T00601A1",
+      "21T00603A1",
+      "3Q0909144J",
+      "3Q0909144L",
+      "5Q0909144AA",
+      "5Q0909144AB",
+      "5Q0909144R",
+      "5Q0909144T",
+      "5QD909144E",
+      "66A01513A1",
+      "71T01512A1"
+    ],
+    "source": "opendbc",
+    "years": "2015-2019"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0907567P \\xf1\\x890100\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572D \\xf1\\x890304\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572F \\xf1\\x890400\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572H \\xf1\\x890620",
+      "\\xf1\\x875Q0907572J \\xf1\\x890654",
+      "\\xf1\\x875Q0907572K \\xf1\\x890402\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Octavia",
+      "Škoda Octavia RS",
+      "Škoda Octavia Scout"
+    ],
+    "part_numbers": [
+      "5Q0907567P",
+      "5Q0907572D",
+      "5Q0907572F",
+      "5Q0907572H",
+      "5Q0907572J",
+      "5Q0907572K",
+      "5Q0907572P",
+      "5Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2015-2019"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655AC\\xf1\\x890200\\xf1\\x82\\x0d11120011100010022212110200",
+      "\\xf1\\x873Q0959655AK\\xf1\\x890306\\xf1\\x82\\x0d31210031210021033733310331",
+      "\\xf1\\x873Q0959655AP\\xf1\\x890305\\xf1\\x82\\x0d11110011110011213331312131",
+      "\\xf1\\x873Q0959655AQ\\xf1\\x890200\\xf1\\x82\\x0d11120011100010312212113100",
+      "\\xf1\\x873Q0959655AS\\xf1\\x890200\\xf1\\x82\\x0d11120011100010022212110200",
+      "\\xf1\\x873Q0959655BH\\xf1\\x890703\\xf1\\x82\\x0e3221003221002105755331052100",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e3221003221002132755331322100",
+      "\\xf1\\x873Q0959655CM\\xf1\\x890720\\xf1\\x82\\x0e3221003221002105755331052100",
+      "\\xf1\\x873Q0959655CN\\xf1\\x890720\\xf1\\x82\\x0e3221003221002105755331052100",
+      "\\xf1\\x875QD959655  \\xf1\\x890388\\xf1\\x82\\x111101000011110006110411111111119111"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Octavia",
+      "Škoda Octavia RS",
+      "Škoda Octavia Scout"
+    ],
+    "part_numbers": [
+      "1101000011110006110411111111119111",
+      "11110011110011213331312131",
+      "11120011100010022212110200",
+      "11120011100010312212113100",
+      "31210031210021033733310331",
+      "3221003221002105755331052100",
+      "3221003221002132755331322100",
+      "3Q0959655AC",
+      "3Q0959655AK",
+      "3Q0959655AP",
+      "3Q0959655AQ",
+      "3Q0959655AS",
+      "3Q0959655BH",
+      "3Q0959655BK",
+      "3Q0959655CM",
+      "3Q0959655CN",
+      "5QD959655"
+    ],
+    "source": "opendbc",
+    "years": "2015-2019"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041L \\xf1\\x891601",
+      "\\xf1\\x870CW300041N \\xf1\\x891605",
+      "\\xf1\\x870CW300043B \\xf1\\x891601",
+      "\\xf1\\x870CW300043P \\xf1\\x891605",
+      "\\xf1\\x870CW300049M \\xf1\\x890901",
+      "\\xf1\\x870D9300012H \\xf1\\x894518",
+      "\\xf1\\x870D9300014T \\xf1\\x895221",
+      "\\xf1\\x870D9300041C \\xf1\\x894936",
+      "\\xf1\\x870D9300041H \\xf1\\x895220",
+      "\\xf1\\x870D9300041J \\xf1\\x894902",
+      "\\xf1\\x870D9300041P \\xf1\\x894507"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Octavia",
+      "Škoda Octavia RS",
+      "Škoda Octavia Scout"
+    ],
+    "part_numbers": [
+      "0CW300041L",
+      "0CW300041N",
+      "0CW300043B",
+      "0CW300043P",
+      "0CW300049M",
+      "0D9300012H",
+      "0D9300014T",
+      "0D9300041C",
+      "0D9300041H",
+      "0D9300041J",
+      "0D9300041P"
+    ],
+    "source": "opendbc",
+    "years": "2015-2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906027BS\\xf1\\x892887",
+      "\\xf1\\x8704E906027BT\\xf1\\x899042",
+      "\\xf1\\x8704E906027EA\\xf1\\x892929",
+      "\\xf1\\x8704L906026ET\\xf1\\x891343",
+      "\\xf1\\x8704L906026ET\\xf1\\x891990",
+      "\\xf1\\x8704L906026FP\\xf1\\x891196",
+      "\\xf1\\x8704L906026KA\\xf1\\x896014",
+      "\\xf1\\x8704L906026KB\\xf1\\x894071",
+      "\\xf1\\x8704L906026KD\\xf1\\x894798",
+      "\\xf1\\x8704L906026MT\\xf1\\x893076",
+      "\\xf1\\x8705L906022BK\\xf1\\x899971",
+      "\\xf1\\x873G0906259  \\xf1\\x890004",
+      "\\xf1\\x873G0906259B \\xf1\\x890002",
+      "\\xf1\\x873G0906259L \\xf1\\x890003",
+      "\\xf1\\x873G0906264A \\xf1\\x890002"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Superb"
+    ],
+    "part_numbers": [
+      "04E906027BS",
+      "04E906027BT",
+      "04E906027EA",
+      "04L906026ET",
+      "04L906026FP",
+      "04L906026KA",
+      "04L906026KB",
+      "04L906026KD",
+      "04L906026MT",
+      "05L906022BK",
+      "3G0906259",
+      "3G0906259B",
+      "3G0906259L",
+      "3G0906264A"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0909143K \\xf1\\x892033\\xf1\\x820514UZ070203",
+      "\\xf1\\x875Q0909143M \\xf1\\x892041\\xf1\\x820522UZ050303",
+      "\\xf1\\x875Q0909143M \\xf1\\x892041\\xf1\\x820522UZ070303",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820526UZ060505",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820526UZ070505",
+      "\\xf1\\x875Q0910143B \\xf1\\x892201\\xf1\\x82\\x0563UZ060600",
+      "\\xf1\\x875Q0910143B \\xf1\\x892201\\xf1\\x82\\x0563UZ060700",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567UZ070500",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567UZ070600",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567UZ070700",
+      "\\xf1\\x875QD909144B \\xf1\\x891072\\xf1\\x82\\x0521B00503A1"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Superb"
+    ],
+    "part_numbers": [
+      "0514UZ070203",
+      "0522UZ050303",
+      "0522UZ070303",
+      "0526UZ060505",
+      "0526UZ070505",
+      "21B00503A1",
+      "5Q0909143K",
+      "5Q0909143M",
+      "5Q0909143P",
+      "5Q0910143B",
+      "5Q0910143C",
+      "5QD909144B",
+      "63UZ060600",
+      "63UZ060700",
+      "67UZ070500",
+      "67UZ070600",
+      "67UZ070700"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572T \\xf1\\x89X383",
+      "\\xf1\\x873Q0907572B \\xf1\\x890192",
+      "\\xf1\\x873Q0907572B \\xf1\\x890194",
+      "\\xf1\\x873Q0907572C \\xf1\\x890195",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771",
+      "\\xf1\\x875Q0907572S \\xf1\\x890780"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Superb"
+    ],
+    "part_numbers": [
+      "2Q0907572T",
+      "3Q0907572B",
+      "3Q0907572C",
+      "5Q0907572R",
+      "5Q0907572S"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AE\\xf1\\x890130\\xf1\\x82\\x12111200111121001121110012211292221111",
+      "\\xf1\\x875Q0959655AE\\xf1\\x890130\\xf1\\x82\\x12111200111121001121118112231292221111",
+      "\\xf1\\x875Q0959655AK\\xf1\\x890130\\xf1\\x82\\x12111200111121001121110012211292221111",
+      "\\xf1\\x875Q0959655AS\\xf1\\x890317\\xf1\\x82\\x1331310031313100313131823133319331313100",
+      "\\xf1\\x875Q0959655AT\\xf1\\x890317\\xf1\\x82\\x1331310031313100313131013131319331313100",
+      "\\xf1\\x875Q0959655BH\\xf1\\x890336\\xf1\\x82\\x1331310031313100313131013141319331413100",
+      "\\xf1\\x875Q0959655BK\\xf1\\x890336\\xf1\\x82\\x1331310031313100313131013141319331413100",
+      "\\xf1\\x875Q0959655BS\\xf1\\x890403\\xf1\\x82\\x1333310031313100313152015351539331423100",
+      "\\xf1\\x875Q0959655CA\\xf1\\x890403\\xf1\\x82\\x1331310031313100313151013141319331423100",
+      "\\xf1\\x875Q0959655CA\\xf1\\x890403\\xf1\\x82\\x1331310031313100313151823143319331423100",
+      "\\xf1\\x875Q0959655CH\\xf1\\x890421\\xf1\\x82\\x1333310031313100313152025350539331463100",
+      "\\xf1\\x875Q0959655CH\\xf1\\x890421\\xf1\\x82\\x1333310031313100313152855372539331463100",
+      "\\xf1\\x875QD959655L \\xf1\\x890318\\xf1\\x82\\x1331310031413100313131014131419331313100"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Superb"
+    ],
+    "part_numbers": [
+      "111200111121001121110012211292221111",
+      "111200111121001121118112231292221111",
+      "31310031313100313131013131319331313100",
+      "31310031313100313131013141319331413100",
+      "31310031313100313131823133319331313100",
+      "31310031313100313151013141319331423100",
+      "31310031313100313151823143319331423100",
+      "31310031413100313131014131419331313100",
+      "33310031313100313152015351539331423100",
+      "33310031313100313152025350539331463100",
+      "33310031313100313152855372539331463100",
+      "5Q0959655AE",
+      "5Q0959655AK",
+      "5Q0959655AS",
+      "5Q0959655AT",
+      "5Q0959655BH",
+      "5Q0959655BK",
+      "5Q0959655BS",
+      "5Q0959655CA",
+      "5Q0959655CH",
+      "5QD959655L"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041H \\xf1\\x891009",
+      "\\xf1\\x870CW300042H \\xf1\\x891601",
+      "\\xf1\\x870CW300043B \\xf1\\x891603",
+      "\\xf1\\x870CW300049Q \\xf1\\x890906",
+      "\\xf1\\x870D9300011T \\xf1\\x894801",
+      "\\xf1\\x870D9300012  \\xf1\\x894940",
+      "\\xf1\\x870D9300013A \\xf1\\x894905",
+      "\\xf1\\x870D9300014K \\xf1\\x895006",
+      "\\xf1\\x870D9300041H \\xf1\\x894905",
+      "\\xf1\\x870D9300042M \\xf1\\x895013",
+      "\\xf1\\x870D9300043F \\xf1\\x895202",
+      "\\xf1\\x870GC300013K \\xf1\\x892403",
+      "\\xf1\\x870GC300014M \\xf1\\x892801",
+      "\\xf1\\x870GC300019G \\xf1\\x892803",
+      "\\xf1\\x870GC300043  \\xf1\\x892301",
+      "\\xf1\\x870GC300046D \\xf1\\x892402"
+    ],
+    "make": "Škoda",
+    "models": [
+      "Škoda Superb"
+    ],
+    "part_numbers": [
+      "0CW300041H",
+      "0CW300042H",
+      "0CW300043B",
+      "0CW300049Q",
+      "0D9300011T",
+      "0D9300012",
+      "0D9300013A",
+      "0D9300014K",
+      "0D9300041H",
+      "0D9300042M",
+      "0D9300043F",
+      "0GC300013K",
+      "0GC300014M",
+      "0GC300019G",
+      "0GC300043",
+      "0GC300046D"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704L906026TM\\xf1\\x896847",
+      "\\xf1\\x873G0906259AH\\xf1\\x890001",
+      "\\xf1\\x873G0906259F \\xf1\\x890004",
+      "\\xf1\\x873G0906259G \\xf1\\x890004",
+      "\\xf1\\x873G0906259G \\xf1\\x890005",
+      "\\xf1\\x873G0906259J \\xf1\\x890002",
+      "\\xf1\\x873G0906259M \\xf1\\x890003",
+      "\\xf1\\x873G0906259N \\xf1\\x890004",
+      "\\xf1\\x873G0906259P \\xf1\\x890001",
+      "\\xf1\\x875NA907115H \\xf1\\x890002"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Arteon",
+      "Volkswagen Arteon R",
+      "Volkswagen Arteon eHybrid",
+      "Volkswagen Arteon Shooting Brake",
+      "Volkswagen CC"
+    ],
+    "part_numbers": [
+      "04L906026TM",
+      "3G0906259AH",
+      "3G0906259F",
+      "3G0906259G",
+      "3G0906259J",
+      "3G0906259M",
+      "3G0906259N",
+      "3G0906259P",
+      "5NA907115H"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571B41815A1",
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571B00817A1",
+      "\\xf1\\x873Q0909144M \\xf1\\x895082\\xf1\\x82\\x0571B00818A1",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567B0020800",
+      "\\xf1\\x875WA907145M \\xf1\\x891051\\xf1\\x82\\x002MB4092M7N",
+      "\\xf1\\x875WA907145M \\xf1\\x891051\\xf1\\x82\\x002NB4202N7N",
+      "\\xf1\\x875WA907145Q \\xf1\\x891063\\xf1\\x82\\x002KB4092KOM"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Arteon",
+      "Volkswagen Arteon R",
+      "Volkswagen Arteon eHybrid",
+      "Volkswagen Arteon Shooting Brake",
+      "Volkswagen CC"
+    ],
+    "part_numbers": [
+      "2KB4092KOM",
+      "2MB4092M7N",
+      "2NB4202N7N",
+      "3Q0909144K",
+      "3Q0909144L",
+      "3Q0909144M",
+      "5Q0910143C",
+      "5WA907145M",
+      "5WA907145Q",
+      "67B0020800",
+      "71B00817A1",
+      "71B00818A1",
+      "71B41815A1"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383",
+      "\\xf1\\x875Q0907572J \\xf1\\x890654",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Arteon",
+      "Volkswagen Arteon R",
+      "Volkswagen Arteon eHybrid",
+      "Volkswagen Arteon Shooting Brake",
+      "Volkswagen CC"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572T",
+      "5Q0907572J",
+      "5Q0907572P",
+      "5Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e1616001613121157161111572900",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e1616001613121177161113772900",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890712\\xf1\\x82\\x0e1616001613121157161111572C00",
+      "\\xf1\\x873Q0959655CK\\xf1\\x890711\\xf1\\x82\\x0e1712141712141105121122052900",
+      "\\xf1\\x873Q0959655CR\\xf1\\x890720\\xf1\\x82\\x0e1616001613121105161111052900",
+      "\\xf1\\x873Q0959655DA\\xf1\\x890720\\xf1\\x82\\x0e1712141712141105121122052900",
+      "\\xf1\\x873Q0959655DL\\xf1\\x890732\\xf1\\x82\\x0e1812141812171105141123052J00",
+      "\\xf1\\x875QF959655AP\\xf1\\x890755\\xf1\\x82\\x1311110011111311111100110200--1611125F49"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Arteon",
+      "Volkswagen Arteon R",
+      "Volkswagen Arteon eHybrid",
+      "Volkswagen Arteon Shooting Brake",
+      "Volkswagen CC"
+    ],
+    "part_numbers": [
+      "11110011111311111100110200--1611125F49",
+      "1616001613121105161111052900",
+      "1616001613121157161111572900",
+      "1616001613121157161111572C00",
+      "1616001613121177161113772900",
+      "1712141712141105121122052900",
+      "1812141812171105141123052J00",
+      "3Q0959655BK",
+      "3Q0959655CK",
+      "3Q0959655CR",
+      "3Q0959655DA",
+      "3Q0959655DL",
+      "5QF959655AP"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158L \\xf1\\x893611",
+      "\\xf1\\x870DL300014C \\xf1\\x893704",
+      "\\xf1\\x870GC300011L \\xf1\\x891401",
+      "\\xf1\\x870GC300013Q \\xf1\\x892402",
+      "\\xf1\\x870GC300014M \\xf1\\x892802",
+      "\\xf1\\x870GC300019G \\xf1\\x892804",
+      "\\xf1\\x870GC300040P \\xf1\\x891401",
+      "\\xf1\\x870GC300043  \\xf1\\x892303"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Arteon",
+      "Volkswagen Arteon R",
+      "Volkswagen Arteon eHybrid",
+      "Volkswagen Arteon Shooting Brake",
+      "Volkswagen CC"
+    ],
+    "part_numbers": [
+      "09G927158L",
+      "0DL300014C",
+      "0GC300011L",
+      "0GC300013Q",
+      "0GC300014M",
+      "0GC300019G",
+      "0GC300040P",
+      "0GC300043"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8703H906026AA\\xf1\\x899970",
+      "\\xf1\\x8703H906026AG\\xf1\\x899971",
+      "\\xf1\\x8703H906026AG\\xf1\\x899973",
+      "\\xf1\\x8703H906026AJ\\xf1\\x890638",
+      "\\xf1\\x8703H906026AJ\\xf1\\x891017",
+      "\\xf1\\x8703H906026AT\\xf1\\x891922",
+      "\\xf1\\x8703H906026BC\\xf1\\x892664",
+      "\\xf1\\x8703H906026F \\xf1\\x896696",
+      "\\xf1\\x8703H906026F \\xf1\\x899970",
+      "\\xf1\\x8703H906026F \\xf1\\x899973",
+      "\\xf1\\x8703H906026J \\xf1\\x896026",
+      "\\xf1\\x8703H906026J \\xf1\\x899970",
+      "\\xf1\\x8703H906026J \\xf1\\x899971",
+      "\\xf1\\x8703H906026J \\xf1\\x899972",
+      "\\xf1\\x8703H906026S \\xf1\\x896693",
+      "\\xf1\\x8703H906026S \\xf1\\x899970",
+      "\\xf1\\x8703H906026S \\xf1\\x899972",
+      "\\xf1\\x873CN906259  \\xf1\\x890005",
+      "\\xf1\\x873CN906259F \\xf1\\x890002",
+      "\\xf1\\x873CN906259K \\xf1\\x890002"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Atlas",
+      "Volkswagen Atlas Cross Sport",
+      "Volkswagen Teramont",
+      "Volkswagen Teramont Cross Sport",
+      "Volkswagen Teramont X"
+    ],
+    "part_numbers": [
+      "03H906026AA",
+      "03H906026AG",
+      "03H906026AJ",
+      "03H906026AT",
+      "03H906026BC",
+      "03H906026F",
+      "03H906026J",
+      "03H906026S",
+      "3CN906259",
+      "3CN906259F",
+      "3CN906259K"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873QF909144B \\xf1\\x891582\\xf1\\x82\\x0571B60924A1",
+      "\\xf1\\x873QF909144B \\xf1\\x891582\\xf1\\x82\\x0571B6G920A1",
+      "\\xf1\\x873QF909144B \\xf1\\x891582\\xf1\\x82\\x0571B6M921A1",
+      "\\xf1\\x873QF909144B \\xf1\\x891582\\xf1\\x82\\x0571B6N920A1",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820528B6080105",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820528B6090105"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Atlas",
+      "Volkswagen Atlas Cross Sport",
+      "Volkswagen Teramont",
+      "Volkswagen Teramont Cross Sport",
+      "Volkswagen Teramont X"
+    ],
+    "part_numbers": [
+      "0528B6080105",
+      "0528B6090105",
+      "3QF909144B",
+      "5Q0909143P",
+      "71B60924A1",
+      "71B6G920A1",
+      "71B6M921A1",
+      "71B6N920A1"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383",
+      "\\xf1\\x875Q0907572H \\xf1\\x890620",
+      "\\xf1\\x875Q0907572J \\xf1\\x890654",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572S \\xf1\\x890780"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Atlas",
+      "Volkswagen Atlas Cross Sport",
+      "Volkswagen Teramont",
+      "Volkswagen Teramont Cross Sport",
+      "Volkswagen Teramont X"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572R",
+      "2Q0907572T",
+      "5Q0907572H",
+      "5Q0907572J",
+      "5Q0907572P",
+      "5Q0907572S"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655BC\\xf1\\x890503\\xf1\\x82\\x0e1914151912001103111122031200",
+      "\\xf1\\x873Q0959655BN\\xf1\\x890713\\xf1\\x82\\x0e2214152212001105141122052900",
+      "\\xf1\\x873Q0959655DB\\xf1\\x890720\\xf1\\x82\\x0e1114151112001105111122052900",
+      "\\xf1\\x873Q0959655DB\\xf1\\x890720\\xf1\\x82\\x0e2214152212001105141122052900",
+      "\\xf1\\x873Q0959655DM\\xf1\\x890732\\xf1\\x82\\x0e1114151112001105111122052J00",
+      "\\xf1\\x873Q0959655DM\\xf1\\x890732\\xf1\\x82\\x0e1114151112001105161122052J00",
+      "\\xf1\\x873Q0959655DM\\xf1\\x890732\\xf1\\x82\\x0e1115151112001105121122052J00",
+      "\\xf1\\x873Q0959655DM\\xf1\\x890732\\xf1\\x82\\x0e1115151112001105171122052J00"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Atlas",
+      "Volkswagen Atlas Cross Sport",
+      "Volkswagen Teramont",
+      "Volkswagen Teramont Cross Sport",
+      "Volkswagen Teramont X"
+    ],
+    "part_numbers": [
+      "1114151112001105111122052900",
+      "1114151112001105111122052J00",
+      "1114151112001105161122052J00",
+      "1115151112001105121122052J00",
+      "1115151112001105171122052J00",
+      "1914151912001103111122031200",
+      "2214152212001105141122052900",
+      "3Q0959655BC",
+      "3Q0959655BN",
+      "3Q0959655DB",
+      "3Q0959655DM"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158A \\xf1\\x893387",
+      "\\xf1\\x8709G927158DR\\xf1\\x893536",
+      "\\xf1\\x8709G927158DR\\xf1\\x893742",
+      "\\xf1\\x8709G927158EN\\xf1\\x893691",
+      "\\xf1\\x8709G927158F \\xf1\\x893489",
+      "\\xf1\\x8709G927158FT\\xf1\\x893835",
+      "\\xf1\\x8709G927158GK\\xf1\\x893941",
+      "\\xf1\\x8709G927158GL\\xf1\\x893939"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Atlas",
+      "Volkswagen Atlas Cross Sport",
+      "Volkswagen Teramont",
+      "Volkswagen Teramont Cross Sport",
+      "Volkswagen Teramont X"
+    ],
+    "part_numbers": [
+      "09G927158A",
+      "09G927158DR",
+      "09G927158EN",
+      "09G927158F",
+      "09G927158FT",
+      "09G927158GK",
+      "09G927158GL"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906027T \\xf1\\x892363"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caddy",
+      "Volkswagen Caddy Maxi"
+    ],
+    "part_numbers": [
+      "04E906027T"
+    ],
+    "source": "opendbc",
+    "years": "2019"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x877N0907572C \\xf1\\x890211\\xf1\\x82\\x0155"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caddy",
+      "Volkswagen Caddy Maxi"
+    ],
+    "part_numbers": [
+      "7N0907572C"
+    ],
+    "source": "opendbc",
+    "years": "2019"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872K5959655E \\xf1\\x890018\\xf1\\x82\\x05000P037605"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caddy",
+      "Volkswagen Caddy Maxi"
+    ],
+    "part_numbers": [
+      "000P037605",
+      "2K5959655E"
+    ],
+    "source": "opendbc",
+    "years": "2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704L906056BP\\xf1\\x894729",
+      "\\xf1\\x8704L906056EK\\xf1\\x896391",
+      "\\xf1\\x8704L906056SH\\xf1\\x899973",
+      "\\xf1\\x8705L906023BC\\xf1\\x892688",
+      "\\xf1\\x8705L906023MH\\xf1\\x892588"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Crafter",
+      "Volkswagen e-Crafter",
+      "Volkswagen Grand California",
+      "MAN TGE",
+      "MAN eTGE"
+    ],
+    "part_numbers": [
+      "04L906056BP",
+      "04L906056EK",
+      "04L906056SH",
+      "05L906023BC",
+      "05L906023MH"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872N0909143D\\x00\\xf1\\x897010\\xf1\\x82\\x05183AZ306A2",
+      "\\xf1\\x872N0909143E \\xf1\\x897021\\xf1\\x82\\x05163AZ306A2",
+      "\\xf1\\x872N0909143H \\xf1\\x897045\\xf1\\x82\\x05263AZ309A2",
+      "\\xf1\\x872N0909144K \\xf1\\x897045\\xf1\\x82\\x05233AZ810A2"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Crafter",
+      "Volkswagen e-Crafter",
+      "Volkswagen Grand California",
+      "MAN TGE",
+      "MAN eTGE"
+    ],
+    "part_numbers": [
+      "163AZ306A2",
+      "183AZ306A2",
+      "233AZ810A2",
+      "263AZ309A2",
+      "2N0909143D",
+      "2N0909143E",
+      "2N0909143H",
+      "2N0909144K"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572J \\xf1\\x890156",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Crafter",
+      "Volkswagen e-Crafter",
+      "Volkswagen Grand California",
+      "MAN TGE",
+      "MAN eTGE"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572J",
+      "2Q0907572M",
+      "2Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655AL\\xf1\\x890505\\xf1\\x82\\x0e1411001413001203151311031100",
+      "\\xf1\\x873Q0959655BG\\xf1\\x890703\\xf1\\x82\\x0e16120016130012051G1313052900",
+      "\\xf1\\x875QF959655AG\\xf1\\x890753\\xf1\\x82\\x13151300151500111111000502----1111120749",
+      "\\xf1\\x875QF959655AS\\xf1\\x890755\\xf1\\x82\\x1315140015150011111100050200--1311120749"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Crafter",
+      "Volkswagen e-Crafter",
+      "Volkswagen Grand California",
+      "MAN TGE",
+      "MAN eTGE"
+    ],
+    "part_numbers": [
+      "1411001413001203151311031100",
+      "151300151500111111000502----1111120749",
+      "15140015150011111100050200--1311120749",
+      "16120016130012051G1313052900",
+      "3Q0959655AL",
+      "3Q0959655BG",
+      "5QF959655AG",
+      "5QF959655AS"
+    ],
+    "source": "opendbc",
+    "years": "2017-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906016A \\xf1\\x897697",
+      "\\xf1\\x8704E906016AD\\xf1\\x895758",
+      "\\xf1\\x8704E906016CE\\xf1\\x899096",
+      "\\xf1\\x8704E906016CH\\xf1\\x899226",
+      "\\xf1\\x8704E906016DF\\xf1\\x896188",
+      "\\xf1\\x8704E906016N \\xf1\\x899105",
+      "\\xf1\\x8704E906023AG\\xf1\\x891726",
+      "\\xf1\\x8704E906023BN\\xf1\\x894518",
+      "\\xf1\\x8704E906024K \\xf1\\x896811",
+      "\\xf1\\x8704E906024K \\xf1\\x899970",
+      "\\xf1\\x8704E906027GR\\xf1\\x892394",
+      "\\xf1\\x8704E906027HD\\xf1\\x892603",
+      "\\xf1\\x8704E906027HD\\xf1\\x893742",
+      "\\xf1\\x8704E906027MA\\xf1\\x894958",
+      "\\xf1\\x8704L906021DT\\xf1\\x895520",
+      "\\xf1\\x8704L906021DT\\xf1\\x898127",
+      "\\xf1\\x8704L906021N \\xf1\\x895518",
+      "\\xf1\\x8704L906021N \\xf1\\x898138",
+      "\\xf1\\x8704L906026BN\\xf1\\x891197",
+      "\\xf1\\x8704L906026BP\\xf1\\x897608",
+      "\\xf1\\x8704L906026NF\\xf1\\x899528",
+      "\\xf1\\x8704L906027AA\\xf1\\x899525",
+      "\\xf1\\x8704L906056CL\\xf1\\x893823",
+      "\\xf1\\x8704L906056CR\\xf1\\x895813",
+      "\\xf1\\x8704L906056HE\\xf1\\x893758",
+      "\\xf1\\x8704L906056HN\\xf1\\x896590",
+      "\\xf1\\x8704L906056HT\\xf1\\x896591",
+      "\\xf1\\x8704L997022N \\xf1\\x899459",
+      "\\xf1\\x870EA906016A \\xf1\\x898343",
+      "\\xf1\\x870EA906016E \\xf1\\x894219",
+      "\\xf1\\x870EA906016F \\xf1\\x894238",
+      "\\xf1\\x870EA906016F \\xf1\\x895002",
+      "\\xf1\\x870EA906016Q \\xf1\\x895993",
+      "\\xf1\\x870EA906016S \\xf1\\x897207",
+      "\\xf1\\x875G0906259  \\xf1\\x890007",
+      "\\xf1\\x875G0906259C \\xf1\\x890002",
+      "\\xf1\\x875G0906259D \\xf1\\x890002",
+      "\\xf1\\x875G0906259J \\xf1\\x890002",
+      "\\xf1\\x875G0906259L \\xf1\\x890002",
+      "\\xf1\\x875G0906259N \\xf1\\x890003",
+      "\\xf1\\x875G0906259Q \\xf1\\x890002",
+      "\\xf1\\x875G0906259Q \\xf1\\x892313",
+      "\\xf1\\x875G0906259T \\xf1\\x890003",
+      "\\xf1\\x878V0906259H \\xf1\\x890002",
+      "\\xf1\\x878V0906259J \\xf1\\x890003",
+      "\\xf1\\x878V0906259J \\xf1\\x890103",
+      "\\xf1\\x878V0906259K \\xf1\\x890001",
+      "\\xf1\\x878V0906259K \\xf1\\x890003",
+      "\\xf1\\x878V0906259P \\xf1\\x890001",
+      "\\xf1\\x878V0906259Q \\xf1\\x890002",
+      "\\xf1\\x878V0906259R \\xf1\\x890002",
+      "\\xf1\\x878V0906264F \\xf1\\x890003",
+      "\\xf1\\x878V0906264L \\xf1\\x890002",
+      "\\xf1\\x878V0906264M \\xf1\\x890001",
+      "\\xf1\\x878V09C0BB01 \\xf1\\x890001"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen e-Golf",
+      "Volkswagen Golf",
+      "Volkswagen Golf Alltrack",
+      "Volkswagen Golf GTD",
+      "Volkswagen Golf GTE",
+      "Volkswagen Golf GTI",
+      "Volkswagen Golf R",
+      "Volkswagen Golf SportsVan"
+    ],
+    "part_numbers": [
+      "04E906016A",
+      "04E906016AD",
+      "04E906016CE",
+      "04E906016CH",
+      "04E906016DF",
+      "04E906016N",
+      "04E906023AG",
+      "04E906023BN",
+      "04E906024K",
+      "04E906027GR",
+      "04E906027HD",
+      "04E906027MA",
+      "04L906021DT",
+      "04L906021N",
+      "04L906026BN",
+      "04L906026BP",
+      "04L906026NF",
+      "04L906027AA",
+      "04L906056CL",
+      "04L906056CR",
+      "04L906056HE",
+      "04L906056HN",
+      "04L906056HT",
+      "04L997022N",
+      "0EA906016A",
+      "0EA906016E",
+      "0EA906016F",
+      "0EA906016Q",
+      "0EA906016S",
+      "5G0906259",
+      "5G0906259C",
+      "5G0906259D",
+      "5G0906259J",
+      "5G0906259L",
+      "5G0906259N",
+      "5G0906259Q",
+      "5G0906259T",
+      "8V0906259H",
+      "8V0906259J",
+      "8V0906259K",
+      "8V0906259P",
+      "8V0906259Q",
+      "8V0906259R",
+      "8V0906264F",
+      "8V0906264L",
+      "8V0906264M",
+      "8V09C0BB01"
+    ],
+    "source": "opendbc",
+    "years": "2014-2021"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144F \\xf1\\x895043\\xf1\\x82\\x0561A01612A0",
+      "\\xf1\\x873Q0909144H \\xf1\\x895061\\xf1\\x82\\x0566A0J612A1",
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566A00514A1",
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566A01613A1",
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566A0J712A1",
+      "\\xf1\\x873Q0909144K \\xf1\\x895072\\xf1\\x82\\x0571A0J714A1",
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571A01A16A1",
+      "\\xf1\\x873Q0909144L \\xf1\\x895081\\xf1\\x82\\x0571A0JA15A1",
+      "\\xf1\\x873Q0909144M \\xf1\\x895082\\xf1\\x82\\x0571A01A18A1",
+      "\\xf1\\x873Q0909144M \\xf1\\x895082\\xf1\\x82\\x0571A02A16A1",
+      "\\xf1\\x873Q0909144M \\xf1\\x895082\\xf1\\x82\\x0571A0JA16A1",
+      "\\xf1\\x873QM909144  \\xf1\\x895072\\xf1\\x82\\x0571A01714A1",
+      "\\xf1\\x875Q0909143K \\xf1\\x892033\\xf1\\x820519A9040203",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521A00441A1",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521A00608A1",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521A00641A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521A00442A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521A00642A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521A07B05A1",
+      "\\xf1\\x875Q0909144L \\xf1\\x891021\\xf1\\x82\\x0521A00502A0",
+      "\\xf1\\x875Q0909144L \\xf1\\x891021\\xf1\\x82\\x0521A00602A0",
+      "\\xf1\\x875Q0909144L \\xf1\\x891021\\xf1\\x82\\x0522A00402A0",
+      "\\xf1\\x875Q0909144P \\xf1\\x891043\\xf1\\x82\\x0511A00403A0",
+      "\\xf1\\x875Q0909144R \\xf1\\x891061\\xf1\\x82\\x0516A00604A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516A00404A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516A00504A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516A00604A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516A07A02A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521A00407A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521A00507A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521A07B04A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521A20B03A1",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567A2000400",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567A2000600",
+      "\\xf1\\x875QD909144B \\xf1\\x891072\\xf1\\x82\\x0521A00507A1",
+      "\\xf1\\x875QM909144A \\xf1\\x891072\\xf1\\x82\\x0521A20B03A1",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521A00442A1",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521A00642A1",
+      "\\xf1\\x875QN909144A \\xf1\\x895081\\xf1\\x82\\x0571A01A16A1",
+      "\\xf1\\x875QN909144A \\xf1\\x895081\\xf1\\x82\\x0571A01A17A1",
+      "\\xf1\\x875QN909144A \\xf1\\x895081\\xf1\\x82\\x0571A01A18A1",
+      "\\xf1\\x875QN909144B \\xf1\\x895082\\xf1\\x82\\x0571A01A18A1"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen e-Golf",
+      "Volkswagen Golf",
+      "Volkswagen Golf Alltrack",
+      "Volkswagen Golf GTD",
+      "Volkswagen Golf GTE",
+      "Volkswagen Golf GTI",
+      "Volkswagen Golf R",
+      "Volkswagen Golf SportsVan"
+    ],
+    "part_numbers": [
+      "0519A9040203",
+      "11A00403A0",
+      "16A00404A1",
+      "16A00504A1",
+      "16A00604A1",
+      "16A07A02A1",
+      "21A00407A1",
+      "21A00441A1",
+      "21A00442A1",
+      "21A00502A0",
+      "21A00507A1",
+      "21A00602A0",
+      "21A00608A1",
+      "21A00641A1",
+      "21A00642A1",
+      "21A07B04A1",
+      "21A07B05A1",
+      "21A20B03A1",
+      "22A00402A0",
+      "3Q0909144F",
+      "3Q0909144H",
+      "3Q0909144J",
+      "3Q0909144K",
+      "3Q0909144L",
+      "3Q0909144M",
+      "3QM909144",
+      "5Q0909143K",
+      "5Q0909144AA",
+      "5Q0909144AB",
+      "5Q0909144L",
+      "5Q0909144P",
+      "5Q0909144R",
+      "5Q0909144S",
+      "5Q0909144T",
+      "5Q0910143C",
+      "5QD909144B",
+      "5QM909144A",
+      "5QM909144B",
+      "5QN909144A",
+      "5QN909144B",
+      "61A01612A0",
+      "66A00514A1",
+      "66A01613A1",
+      "66A0J612A1",
+      "66A0J712A1",
+      "67A2000400",
+      "67A2000600",
+      "71A01714A1",
+      "71A01A16A1",
+      "71A01A17A1",
+      "71A01A18A1",
+      "71A02A16A1",
+      "71A0J714A1",
+      "71A0JA15A1",
+      "71A0JA16A1"
+    ],
+    "source": "opendbc",
+    "years": "2014-2021"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0907567G \\xf1\\x890390\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907567J \\xf1\\x890396\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907567L \\xf1\\x890098\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572A \\xf1\\x890141\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572B \\xf1\\x890200\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572C \\xf1\\x890210\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572D \\xf1\\x890304\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572E \\xf1\\x89X310\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572F \\xf1\\x890400\\xf1\\x82\\x0101",
+      "\\xf1\\x875Q0907572G \\xf1\\x890571",
+      "\\xf1\\x875Q0907572H \\xf1\\x890620",
+      "\\xf1\\x875Q0907572J \\xf1\\x890653",
+      "\\xf1\\x875Q0907572J \\xf1\\x890654",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771",
+      "\\xf1\\x875Q0907572S \\xf1\\x890780"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen e-Golf",
+      "Volkswagen Golf",
+      "Volkswagen Golf Alltrack",
+      "Volkswagen Golf GTD",
+      "Volkswagen Golf GTE",
+      "Volkswagen Golf GTI",
+      "Volkswagen Golf R",
+      "Volkswagen Golf SportsVan"
+    ],
+    "part_numbers": [
+      "5Q0907567G",
+      "5Q0907567J",
+      "5Q0907567L",
+      "5Q0907572A",
+      "5Q0907572B",
+      "5Q0907572C",
+      "5Q0907572D",
+      "5Q0907572E",
+      "5Q0907572F",
+      "5Q0907572G",
+      "5Q0907572H",
+      "5Q0907572J",
+      "5Q0907572P",
+      "5Q0907572R",
+      "5Q0907572S"
+    ],
+    "source": "opendbc",
+    "years": "2014-2021"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AA\\xf1\\x890386\\xf1\\x82\\x111413001113120043114317121C111C9113",
+      "\\xf1\\x875Q0959655AA\\xf1\\x890386\\xf1\\x82\\x111413001113120053114317121C111C9113",
+      "\\xf1\\x875Q0959655AA\\xf1\\x890388\\xf1\\x82\\x111413001113120043114317121C111C9113",
+      "\\xf1\\x875Q0959655AA\\xf1\\x890388\\xf1\\x82\\x111413001113120043114417121411149113",
+      "\\xf1\\x875Q0959655AA\\xf1\\x890388\\xf1\\x82\\x111413001113120053114317121C111C9113",
+      "\\xf1\\x875Q0959655AR\\xf1\\x890317\\xf1\\x82\\x13141500111233003142114A2131219333313100",
+      "\\xf1\\x875Q0959655BH\\xf1\\x890336\\xf1\\x82\\x1314160011123300314211012230229333423100",
+      "\\xf1\\x875Q0959655BH\\xf1\\x890336\\xf1\\x82\\x1314160011123300314211012230229333463100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890336\\xf1\\x82\\x13141300111233003142115A1932199333463100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890336\\xf1\\x82\\x13141600111233003142115A2231229333423100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890339\\xf1\\x82\\x13141600111233003142115A2232229333463100",
+      "\\xf1\\x875Q0959655BS\\xf1\\x890403\\xf1\\x82\\x1314160011123300314240012250229333463100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x13141600111233003142404A2251229333463100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x13141600111233003142404A2252229333463100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x13141600111233003142405A2251229333463100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x13141600111233003142405A2252229333463100",
+      "\\xf1\\x875Q0959655C \\xf1\\x890361\\xf1\\x82\\x111413001112120004110415121610169112",
+      "\\xf1\\x875Q0959655CA\\xf1\\x890403\\xf1\\x82\\x1314160011123300314240012250229333463100",
+      "\\xf1\\x875Q0959655CA\\xf1\\x890403\\xf1\\x82\\x13141600111233003142405A2251229333463100",
+      "\\xf1\\x875Q0959655D \\xf1\\x890388\\xf1\\x82\\x111413001113120006110417121A101A9113",
+      "\\xf1\\x875Q0959655J \\xf1\\x890825\\xf1\\x82\\x13271112111312--071104171825102591131211",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13271112111312--071104171825102591131211",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13271212111312--071104171838103891131211",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13272512111312--07110417182C102C91131211",
+      "\\xf1\\x875Q0959655J \\xf1\\x890830\\xf1\\x82\\x13341512112212--071104172328102891131211",
+      "\\xf1\\x875Q0959655M \\xf1\\x890361\\xf1\\x82\\x111413001112120041114115121611169112",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1315120011211200061104171717101791132111",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1315120011211200621143171717111791132111",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1324230011211200061104171724102491132111",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1324230011211200621143171724112491132111",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1324230011211200631143171724122491132111",
+      "\\xf1\\x875Q0959655T \\xf1\\x890825\\xf1\\x82\\x13271200111312--071104171837103791132111",
+      "\\xf1\\x875Q0959655T \\xf1\\x890830\\xf1\\x82\\x13271100111312--071104171826102691131211",
+      "\\xf1\\x875QD959655  \\xf1\\x890388\\xf1\\x82\\x111413001113120006110417121D101D9112"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen e-Golf",
+      "Volkswagen Golf",
+      "Volkswagen Golf Alltrack",
+      "Volkswagen Golf GTD",
+      "Volkswagen Golf GTE",
+      "Volkswagen Golf GTI",
+      "Volkswagen Golf R",
+      "Volkswagen Golf SportsVan"
+    ],
+    "part_numbers": [
+      "1413001112120004110415121610169112",
+      "1413001112120041114115121611169112",
+      "141300111233003142115A1932199333463100",
+      "1413001113120006110417121A101A9113",
+      "1413001113120006110417121D101D9112",
+      "1413001113120043114317121C111C9113",
+      "1413001113120043114417121411149113",
+      "1413001113120053114317121C111C9113",
+      "141500111233003142114A2131219333313100",
+      "14160011123300314211012230229333423100",
+      "14160011123300314211012230229333463100",
+      "141600111233003142115A2231229333423100",
+      "141600111233003142115A2232229333463100",
+      "14160011123300314240012250229333463100",
+      "141600111233003142404A2251229333463100",
+      "141600111233003142404A2252229333463100",
+      "141600111233003142405A2251229333463100",
+      "141600111233003142405A2252229333463100",
+      "15120011211200061104171717101791132111",
+      "15120011211200621143171717111791132111",
+      "24230011211200061104171724102491132111",
+      "24230011211200621143171724112491132111",
+      "24230011211200631143171724122491132111",
+      "271100111312--071104171826102691131211",
+      "271112111312--071104171825102591131211",
+      "271200111312--071104171837103791132111",
+      "271212111312--071104171838103891131211",
+      "272512111312--07110417182C102C91131211",
+      "341512112212--071104172328102891131211",
+      "5Q0959655AA",
+      "5Q0959655AR",
+      "5Q0959655BH",
+      "5Q0959655BJ",
+      "5Q0959655BS",
+      "5Q0959655BT",
+      "5Q0959655C",
+      "5Q0959655CA",
+      "5Q0959655D",
+      "5Q0959655J",
+      "5Q0959655M",
+      "5Q0959655S",
+      "5Q0959655T",
+      "5QD959655"
+    ],
+    "source": "opendbc",
+    "years": "2014-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927749AP\\xf1\\x892943",
+      "\\xf1\\x8709S927158A \\xf1\\x893585",
+      "\\xf1\\x870CW300040H \\xf1\\x890606",
+      "\\xf1\\x870CW300041D \\xf1\\x891004",
+      "\\xf1\\x870CW300041H \\xf1\\x891010",
+      "\\xf1\\x870CW300042F \\xf1\\x891604",
+      "\\xf1\\x870CW300043B \\xf1\\x891601",
+      "\\xf1\\x870CW300043E \\xf1\\x891603",
+      "\\xf1\\x870CW300044S \\xf1\\x894530",
+      "\\xf1\\x870CW300044T \\xf1\\x895245",
+      "\\xf1\\x870CW300045  \\xf1\\x894531",
+      "\\xf1\\x870CW300046A \\xf1\\x895113",
+      "\\xf1\\x870CW300047D \\xf1\\x895261",
+      "\\xf1\\x870CW300047E \\xf1\\x895261",
+      "\\xf1\\x870CW300048J \\xf1\\x890611",
+      "\\xf1\\x870CW300049H \\xf1\\x890905",
+      "\\xf1\\x870CW300050G \\xf1\\x891905",
+      "\\xf1\\x870D9300012  \\xf1\\x894904",
+      "\\xf1\\x870D9300012  \\xf1\\x894913",
+      "\\xf1\\x870D9300012  \\xf1\\x894937",
+      "\\xf1\\x870D9300012  \\xf1\\x895045",
+      "\\xf1\\x870D9300012  \\xf1\\x895046",
+      "\\xf1\\x870D9300014M \\xf1\\x895004",
+      "\\xf1\\x870D9300014Q \\xf1\\x895006",
+      "\\xf1\\x870D9300018  \\xf1\\x895201",
+      "\\xf1\\x870D9300020D \\xf1\\x894309",
+      "\\xf1\\x870D9300020J \\xf1\\x894902",
+      "\\xf1\\x870D9300020Q \\xf1\\x895201",
+      "\\xf1\\x870D9300020S \\xf1\\x895201",
+      "\\xf1\\x870D9300040A \\xf1\\x893613",
+      "\\xf1\\x870D9300040S \\xf1\\x894311",
+      "\\xf1\\x870D9300041H \\xf1\\x895220",
+      "\\xf1\\x870D9300041N \\xf1\\x894512",
+      "\\xf1\\x870D9300041P \\xf1\\x894507",
+      "\\xf1\\x870D9300043F \\xf1\\x895204",
+      "\\xf1\\x870DD300045K \\xf1\\x891120",
+      "\\xf1\\x870DD300046F \\xf1\\x891601",
+      "\\xf1\\x870GC300012A \\xf1\\x891401",
+      "\\xf1\\x870GC300012A \\xf1\\x891403",
+      "\\xf1\\x870GC300012A \\xf1\\x891422",
+      "\\xf1\\x870GC300012M \\xf1\\x892301",
+      "\\xf1\\x870GC300014B \\xf1\\x892401",
+      "\\xf1\\x870GC300014B \\xf1\\x892403",
+      "\\xf1\\x870GC300014B \\xf1\\x892405",
+      "\\xf1\\x870GC300014E \\xf1\\x892407",
+      "\\xf1\\x870GC300020G \\xf1\\x892401",
+      "\\xf1\\x870GC300020G \\xf1\\x892403",
+      "\\xf1\\x870GC300020G \\xf1\\x892404",
+      "\\xf1\\x870GC300020N \\xf1\\x892804",
+      "\\xf1\\x870GC300043T \\xf1\\x899999"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen e-Golf",
+      "Volkswagen Golf",
+      "Volkswagen Golf Alltrack",
+      "Volkswagen Golf GTD",
+      "Volkswagen Golf GTE",
+      "Volkswagen Golf GTI",
+      "Volkswagen Golf R",
+      "Volkswagen Golf SportsVan"
+    ],
+    "part_numbers": [
+      "09G927749AP",
+      "09S927158A",
+      "0CW300040H",
+      "0CW300041D",
+      "0CW300041H",
+      "0CW300042F",
+      "0CW300043B",
+      "0CW300043E",
+      "0CW300044S",
+      "0CW300044T",
+      "0CW300045",
+      "0CW300046A",
+      "0CW300047D",
+      "0CW300047E",
+      "0CW300048J",
+      "0CW300049H",
+      "0CW300050G",
+      "0D9300012",
+      "0D9300014M",
+      "0D9300014Q",
+      "0D9300018",
+      "0D9300020D",
+      "0D9300020J",
+      "0D9300020Q",
+      "0D9300020S",
+      "0D9300040A",
+      "0D9300040S",
+      "0D9300041H",
+      "0D9300041N",
+      "0D9300041P",
+      "0D9300043F",
+      "0DD300045K",
+      "0DD300046F",
+      "0GC300012A",
+      "0GC300012M",
+      "0GC300014B",
+      "0GC300014E",
+      "0GC300020G",
+      "0GC300020N",
+      "0GC300043T"
+    ],
+    "source": "opendbc",
+    "years": "2014-2021"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA907144AQ\\xf1\\x895033\\xf1\\x82\\x000_BH0A0_ON"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen ID.4"
+    ],
+    "part_numbers": [
+      "1EA907144AQ"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA907572H \\xf1\\x890234"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen ID.4"
+    ],
+    "part_numbers": [
+      "1EA907572H"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA959655EA\\xf1\\x890376",
+      "\\xf1\\x875WA959655R \\xf1\\x890717"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen ID.4"
+    ],
+    "part_numbers": [
+      "1EA959655EA",
+      "5WA959655R"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x871EA907567C \\xf1\\x890099",
+      "\\xf1\\x871EA907567D \\xf1\\x890250"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen ID.4"
+    ],
+    "part_numbers": [
+      "1EA907567C",
+      "1EA907567D"
+    ],
+    "source": "opendbc",
+    "years": "2024-2025"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x877N0907572C \\xf1\\x890211\\xf1\\x82\\x0151",
+      "\\xf1\\x877N0907572C \\xf1\\x890211\\xf1\\x82\\x0152"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta"
+    ],
+    "part_numbers": [
+      "7N0907572C"
+    ],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875C0959655M \\xf1\\x890726\\xf1\\x82\\x0900NB1108--------24",
+      "\\xf1\\x875K0959655H \\xf1\\x890724\\xf1\\x82\\x0900131108--------02"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta"
+    ],
+    "part_numbers": [
+      "00131108--------02",
+      "00NB1108--------24",
+      "5C0959655M",
+      "5K0959655H"
+    ],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906024AF\\xf1\\x899970",
+      "\\xf1\\x8704E906024AK\\xf1\\x899937",
+      "\\xf1\\x8704E906024AS\\xf1\\x899912",
+      "\\xf1\\x8704E906024AS\\xf1\\x899970",
+      "\\xf1\\x8704E906024B \\xf1\\x895594",
+      "\\xf1\\x8704E906024BC\\xf1\\x899971",
+      "\\xf1\\x8704E906024BG\\xf1\\x891057",
+      "\\xf1\\x8704E906024C \\xf1\\x899970",
+      "\\xf1\\x8704E906024C \\xf1\\x899971",
+      "\\xf1\\x8704E906024L \\xf1\\x895595",
+      "\\xf1\\x8704E906024L \\xf1\\x899970",
+      "\\xf1\\x8704E906027MS\\xf1\\x896223",
+      "\\xf1\\x8705E906013BN\\xf1\\x893711",
+      "\\xf1\\x8705E906013DB\\xf1\\x893361",
+      "\\xf1\\x875G0906259T \\xf1\\x890003",
+      "\\xf1\\x875G09C0BB02 \\xf1\\x890003"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta",
+      "Volkswagen Jetta GLI"
+    ],
+    "part_numbers": [
+      "04E906024AF",
+      "04E906024AK",
+      "04E906024AS",
+      "04E906024B",
+      "04E906024BC",
+      "04E906024BG",
+      "04E906024C",
+      "04E906024L",
+      "04E906027MS",
+      "05E906013BN",
+      "05E906013DB",
+      "5G0906259T",
+      "5G09C0BB02"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144M \\xf1\\x895082\\xf1\\x82\\x0571A10A11A1",
+      "\\xf1\\x875QM907144D \\xf1\\x891063\\xf1\\x82\\x000_A1080_OM",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521A10A01A1",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521B00404A1",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521A00642A1",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521A10A01A1",
+      "\\xf1\\x875QN909144B \\xf1\\x895082\\xf1\\x82\\x0571A10A11A1",
+      "\\xf1\\x875QV907144F \\xf1\\x891122\\xf1\\x82\\x0001A00701]V"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta",
+      "Volkswagen Jetta GLI"
+    ],
+    "part_numbers": [
+      "01A00701",
+      "21A00642A1",
+      "21A10A01A1",
+      "21B00404A1",
+      "3Q0909144M",
+      "5QM907144D",
+      "5QM909144B",
+      "5QM909144C",
+      "5QN909144B",
+      "5QV907144F",
+      "71A10A11A1"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907567B \\xf1\\x890534",
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x875Q0907572N \\xf1\\x890681",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta",
+      "Volkswagen Jetta GLI"
+    ],
+    "part_numbers": [
+      "2Q0907567B",
+      "2Q0907572AA",
+      "5Q0907572N",
+      "5Q0907572P",
+      "5Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AG\\xf1\\x890336\\xf1\\x82\\x1313171231313500314611011530159333463100",
+      "\\xf1\\x875Q0959655AG\\xf1\\x890336\\xf1\\x82\\x1314171231313500314611011630169333463100",
+      "\\xf1\\x875Q0959655AG\\xf1\\x890338\\xf1\\x82\\x1314171231313500314611011630169333463100",
+      "\\xf1\\x875Q0959655BM\\xf1\\x890403\\xf1\\x82\\x1314171231313500314642011650169333463100",
+      "\\xf1\\x875Q0959655BM\\xf1\\x890403\\xf1\\x82\\x1314171231313500314643011650169333463100",
+      "\\xf1\\x875Q0959655BR\\xf1\\x890403\\xf1\\x82\\x1311170031313300314240011150119333433100",
+      "\\xf1\\x875Q0959655BR\\xf1\\x890403\\xf1\\x82\\x1319170031313300314240011550159333463100",
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1314171231313500314642021650169333613100",
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1314171231313500314643021650169333613100",
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1317171231313500314642023050309333613100"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta",
+      "Volkswagen Jetta GLI"
+    ],
+    "part_numbers": [
+      "11170031313300314240011150119333433100",
+      "13171231313500314611011530159333463100",
+      "14171231313500314611011630169333463100",
+      "14171231313500314642011650169333463100",
+      "14171231313500314642021650169333613100",
+      "14171231313500314643011650169333463100",
+      "14171231313500314643021650169333613100",
+      "17171231313500314642023050309333613100",
+      "19170031313300314240011550159333463100",
+      "5Q0959655AG",
+      "5Q0959655BM",
+      "5Q0959655BR",
+      "5Q0959655CB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158BQ\\xf1\\x893545",
+      "\\xf1\\x8709H927158  \\xf1\\x890515",
+      "\\xf1\\x8709S927158BS\\xf1\\x893642",
+      "\\xf1\\x8709S927158BS\\xf1\\x893694",
+      "\\xf1\\x8709S927158CK\\xf1\\x893770",
+      "\\xf1\\x8709S927158JC\\xf1\\x894113",
+      "\\xf1\\x8709S927158R \\xf1\\x893552",
+      "\\xf1\\x8709S927158R \\xf1\\x893587",
+      "\\xf1\\x870GC300020N \\xf1\\x892803",
+      "\\xf1\\x870GC300020N \\xf1\\x892804"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Jetta",
+      "Volkswagen Jetta GLI"
+    ],
+    "part_numbers": [
+      "09G927158BQ",
+      "09H927158",
+      "09S927158BS",
+      "09S927158CK",
+      "09S927158JC",
+      "09S927158R",
+      "0GC300020N"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8703N906026E \\xf1\\x892114",
+      "\\xf1\\x8704E906023AH\\xf1\\x893379",
+      "\\xf1\\x8704E906023BF\\xf1\\x893842",
+      "\\xf1\\x8704E906023BM\\xf1\\x894522",
+      "\\xf1\\x8704L906026DP\\xf1\\x891538",
+      "\\xf1\\x8704L906026ET\\xf1\\x891990",
+      "\\xf1\\x8704L906026FP\\xf1\\x892012",
+      "\\xf1\\x8704L906026GA\\xf1\\x892013",
+      "\\xf1\\x8704L906026GK\\xf1\\x899971",
+      "\\xf1\\x8704L906026KD\\xf1\\x894798",
+      "\\xf1\\x8705L906022A \\xf1\\x890827",
+      "\\xf1\\x873G0906259  \\xf1\\x890004",
+      "\\xf1\\x873G0906259B \\xf1\\x890002",
+      "\\xf1\\x873G0906264  \\xf1\\x890004"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat",
+      "Volkswagen Passat Alltrack",
+      "Volkswagen Passat GTE"
+    ],
+    "part_numbers": [
+      "03N906026E",
+      "04E906023AH",
+      "04E906023BF",
+      "04E906023BM",
+      "04L906026DP",
+      "04L906026ET",
+      "04L906026FP",
+      "04L906026GA",
+      "04L906026GK",
+      "04L906026KD",
+      "05L906022A",
+      "3G0906259",
+      "3G0906259B",
+      "3G0906264"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566B00611A1",
+      "\\xf1\\x873Q0909144J \\xf1\\x895063\\xf1\\x82\\x0566B00711A1",
+      "\\xf1\\x875Q0909143K \\xf1\\x892033\\xf1\\x820514B0060703",
+      "\\xf1\\x875Q0909143M \\xf1\\x892041\\xf1\\x820522B0060803",
+      "\\xf1\\x875Q0909143M \\xf1\\x892041\\xf1\\x820522B0080803",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820526B0060905",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820531B0062105",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521B00606A1",
+      "\\xf1\\x875Q0909144S \\xf1\\x891063\\xf1\\x82\\x0516B00501A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521B00603A1",
+      "\\xf1\\x875Q0909144T \\xf1\\x891072\\xf1\\x82\\x0521B00703A1",
+      "\\xf1\\x875Q0910143B \\xf1\\x892201\\xf1\\x82\\x0563B0000600",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567B0020600"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat",
+      "Volkswagen Passat Alltrack",
+      "Volkswagen Passat GTE"
+    ],
+    "part_numbers": [
+      "0514B0060703",
+      "0522B0060803",
+      "0522B0080803",
+      "0526B0060905",
+      "0531B0062105",
+      "16B00501A1",
+      "21B00603A1",
+      "21B00606A1",
+      "21B00703A1",
+      "3Q0909144J",
+      "5Q0909143K",
+      "5Q0909143M",
+      "5Q0909143P",
+      "5Q0909144AB",
+      "5Q0909144S",
+      "5Q0909144T",
+      "5Q0910143B",
+      "5Q0910143C",
+      "63B0000600",
+      "66B00611A1",
+      "66B00711A1",
+      "67B0020600"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0907572A \\xf1\\x890126",
+      "\\xf1\\x873Q0907572A \\xf1\\x890130",
+      "\\xf1\\x873Q0907572B \\xf1\\x890192",
+      "\\xf1\\x873Q0907572B \\xf1\\x890194",
+      "\\xf1\\x873Q0907572C \\xf1\\x890195",
+      "\\xf1\\x873Q0907572C \\xf1\\x890196",
+      "\\xf1\\x875Q0907572P \\xf1\\x890682",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771",
+      "\\xf1\\x875Q0907572S \\xf1\\x890780"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat",
+      "Volkswagen Passat Alltrack",
+      "Volkswagen Passat GTE"
+    ],
+    "part_numbers": [
+      "3Q0907572A",
+      "3Q0907572B",
+      "3Q0907572C",
+      "5Q0907572P",
+      "5Q0907572R",
+      "5Q0907572S"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655AE\\xf1\\x890195\\xf1\\x82\\x0d56140056130012416612124111",
+      "\\xf1\\x873Q0959655AF\\xf1\\x890195\\xf1\\x82\\x0d56140056130012026612120211",
+      "\\xf1\\x873Q0959655AN\\xf1\\x890305\\xf1\\x82\\x0d58160058140013036914110311",
+      "\\xf1\\x873Q0959655AN\\xf1\\x890306\\xf1\\x82\\x0d58160058140013036914110311",
+      "\\xf1\\x873Q0959655BA\\xf1\\x890195\\xf1\\x82\\x0d56140056130012416612124111",
+      "\\xf1\\x873Q0959655BA\\xf1\\x890195\\xf1\\x82\\x0d56140056130012516612125111",
+      "\\xf1\\x873Q0959655BB\\xf1\\x890195\\xf1\\x82\\x0d56140056130012026612120211",
+      "\\xf1\\x873Q0959655BG\\xf1\\x890712\\xf1\\x82\\x0e5915005914001305701311052900",
+      "\\xf1\\x873Q0959655BJ\\xf1\\x890703\\xf1\\x82\\x0e5915005914001305701311052900",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e5915005914001344701311442900",
+      "\\xf1\\x873Q0959655BK\\xf1\\x890703\\xf1\\x82\\x0e5915005914001354701311542900",
+      "\\xf1\\x873Q0959655CN\\xf1\\x890720\\xf1\\x82\\x0e5915005914001305701311052900",
+      "\\xf1\\x875Q0959655S \\xf1\\x890870\\xf1\\x82\\x1315120011111200631145171716121691132111",
+      "\\xf1\\x875QF959655S \\xf1\\x890639\\xf1\\x82\\x13131100131300111111000120----2211114A48"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat",
+      "Volkswagen Passat Alltrack",
+      "Volkswagen Passat GTE"
+    ],
+    "part_numbers": [
+      "131100131300111111000120----2211114A48",
+      "15120011111200631145171716121691132111",
+      "3Q0959655AE",
+      "3Q0959655AF",
+      "3Q0959655AN",
+      "3Q0959655BA",
+      "3Q0959655BB",
+      "3Q0959655BG",
+      "3Q0959655BJ",
+      "3Q0959655BK",
+      "3Q0959655CN",
+      "56140056130012026612120211",
+      "56140056130012416612124111",
+      "56140056130012516612125111",
+      "58160058140013036914110311",
+      "5915005914001305701311052900",
+      "5915005914001344701311442900",
+      "5915005914001354701311542900",
+      "5Q0959655S",
+      "5QF959655S"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041E \\xf1\\x891006",
+      "\\xf1\\x870CW300042H \\xf1\\x891601",
+      "\\xf1\\x870CW300042H \\xf1\\x891607",
+      "\\xf1\\x870CW300043H \\xf1\\x891601",
+      "\\xf1\\x870CW300048R \\xf1\\x890610",
+      "\\xf1\\x870D9300013A \\xf1\\x894905",
+      "\\xf1\\x870D9300014L \\xf1\\x895002",
+      "\\xf1\\x870D9300018C \\xf1\\x895297",
+      "\\xf1\\x870D9300041A \\xf1\\x894801",
+      "\\xf1\\x870D9300041H \\xf1\\x894905",
+      "\\xf1\\x870D9300042H \\xf1\\x894901",
+      "\\xf1\\x870DD300045T \\xf1\\x891601",
+      "\\xf1\\x870DD300046B \\xf1\\x891601",
+      "\\xf1\\x870DD300046H \\xf1\\x891601",
+      "\\xf1\\x870DL300011H \\xf1\\x895201",
+      "\\xf1\\x870GC300042H \\xf1\\x891404",
+      "\\xf1\\x870GC300043  \\xf1\\x892301",
+      "\\xf1\\x870GC300046P \\xf1\\x892805"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat",
+      "Volkswagen Passat Alltrack",
+      "Volkswagen Passat GTE"
+    ],
+    "part_numbers": [
+      "0CW300041E",
+      "0CW300042H",
+      "0CW300043H",
+      "0CW300048R",
+      "0D9300013A",
+      "0D9300014L",
+      "0D9300018C",
+      "0D9300041A",
+      "0D9300041H",
+      "0D9300042H",
+      "0DD300045T",
+      "0DD300046B",
+      "0DD300046H",
+      "0DL300011H",
+      "0GC300042H",
+      "0GC300043",
+      "0GC300046P"
+    ],
+    "source": "opendbc",
+    "years": "2015-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8706K906016C \\xf1\\x899609",
+      "\\xf1\\x8706K906016E \\xf1\\x899830",
+      "\\xf1\\x8706K906016G \\xf1\\x891124",
+      "\\xf1\\x8706K906071BJ\\xf1\\x894891"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat NMS"
+    ],
+    "part_numbers": [
+      "06K906016C",
+      "06K906016E",
+      "06K906016G",
+      "06K906071BJ"
+    ],
+    "source": "opendbc",
+    "years": "2017-2022"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x87561907567A \\xf1\\x890132",
+      "\\xf1\\x877N0907572C \\xf1\\x890211\\xf1\\x82\\x0152"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat NMS"
+    ],
+    "part_numbers": [
+      "561907567A",
+      "7N0907572C"
+    ],
+    "source": "opendbc",
+    "years": "2017-2022"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x87561959655  \\xf1\\x890210\\xf1\\x82\\x1212121111113000102011--121012--101312",
+      "\\xf1\\x87561959655C \\xf1\\x890508\\xf1\\x82\\x1215141111121100314919--153015--304831"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat NMS"
+    ],
+    "part_numbers": [
+      "12121111113000102011--121012--101312",
+      "15141111121100314919--153015--304831",
+      "561959655",
+      "561959655C"
+    ],
+    "source": "opendbc",
+    "years": "2017-2022"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158AB\\xf1\\x893318",
+      "\\xf1\\x8709G927158BD\\xf1\\x893121",
+      "\\xf1\\x8709G927158DK\\xf1\\x893594",
+      "\\xf1\\x8709G927158FQ\\xf1\\x893745"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Passat NMS"
+    ],
+    "part_numbers": [
+      "09G927158AB",
+      "09G927158BD",
+      "09G927158DK",
+      "09G927158FQ"
+    ],
+    "source": "opendbc",
+    "years": "2017-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704C906025H \\xf1\\x895177",
+      "\\xf1\\x8705C906032J \\xf1\\x891702"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Polo",
+      "Volkswagen Polo GTI"
+    ],
+    "part_numbers": [
+      "04C906025H",
+      "05C906032J"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q1909144M \\xf1\\x896041",
+      "\\xf1\\x872Q2909144AB\\xf1\\x896050"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Polo",
+      "Volkswagen Polo GTI"
+    ],
+    "part_numbers": [
+      "2Q1909144M",
+      "2Q2909144AB"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Polo",
+      "Volkswagen Polo GTI"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0959655AG\\xf1\\x890248\\xf1\\x82\\x1218130411110411--04040404231811152H14",
+      "\\xf1\\x872Q0959655AJ\\xf1\\x890250\\xf1\\x82\\x1248130411110416--04040404784811152H14",
+      "\\xf1\\x872Q0959655AS\\xf1\\x890411\\xf1\\x82\\x1384830511110516041405820599841215391471"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Polo",
+      "Volkswagen Polo GTI"
+    ],
+    "part_numbers": [
+      "18130411110411--04040404231811152H14",
+      "2Q0959655AG",
+      "2Q0959655AJ",
+      "2Q0959655AS",
+      "48130411110416--04040404784811152H14",
+      "84830511110516041405820599841215391471"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300042D \\xf1\\x891612",
+      "\\xf1\\x870CW300050D \\xf1\\x891908",
+      "\\xf1\\x870CW300051G \\xf1\\x891909"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Polo",
+      "Volkswagen Polo GTI"
+    ],
+    "part_numbers": [
+      "0CW300042D",
+      "0CW300050D",
+      "0CW300051G"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704L906016HE\\xf1\\x894635"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Sharan",
+      "SEAT Alhambra"
+    ],
+    "part_numbers": [
+      "04L906016HE"
+    ],
+    "source": "opendbc",
+    "years": "2018-2022"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x877N0907572C \\xf1\\x890211\\xf1\\x82\\x0153"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Sharan",
+      "SEAT Alhambra"
+    ],
+    "part_numbers": [
+      "7N0907572C"
+    ],
+    "source": "opendbc",
+    "years": "2018-2022"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x877N0959655D \\xf1\\x890016\\xf1\\x82\\x0801100705----10--"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Sharan",
+      "SEAT Alhambra"
+    ],
+    "part_numbers": [
+      "01100705----10--",
+      "7N0959655D"
+    ],
+    "source": "opendbc",
+    "years": "2018-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906025CK\\xf1\\x892228",
+      "\\xf1\\x8704E906027NJ\\xf1\\x891445",
+      "\\xf1\\x8704E906027NP\\xf1\\x891286",
+      "\\xf1\\x8705E906013BD\\xf1\\x892496",
+      "\\xf1\\x8705E906013DF\\xf1\\x893365",
+      "\\xf1\\x8705E906013E \\xf1\\x891624"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Taos"
+    ],
+    "part_numbers": [
+      "04E906025CK",
+      "04E906027NJ",
+      "04E906027NP",
+      "05E906013BD",
+      "05E906013DF",
+      "05E906013E"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875QM907144D \\xf1\\x891063\\xf1\\x82\\x001O06081OOM",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521060405A1",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521060605A1",
+      "\\xf1\\x875QV907144F \\xf1\\x891122\\xf1\\x82\\x0001060801]V"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Taos"
+    ],
+    "part_numbers": [
+      "01060801",
+      "1O06081OOM",
+      "21060405A1",
+      "21060605A1",
+      "5QM907144D",
+      "5QM909144C",
+      "5QV907144F"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907567B \\xf1\\x890534",
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Taos"
+    ],
+    "part_numbers": [
+      "2Q0907567B",
+      "2Q0907572AA",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1311111111333500314646021450149333613100",
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1312111111333500314646021550159333613100",
+      "\\xf1\\x875Q0959655CE\\xf1\\x890421\\xf1\\x82\\x1311110011333300314240021350139333613100"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Taos"
+    ],
+    "part_numbers": [
+      "11110011333300314240021350139333613100",
+      "11111111333500314646021450149333613100",
+      "12111111333500314646021550159333613100",
+      "5Q0959655CB",
+      "5Q0959655CE"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158EM\\xf1\\x893812",
+      "\\xf1\\x8709S927158BL\\xf1\\x893791",
+      "\\xf1\\x8709S927158CR\\xf1\\x893924",
+      "\\xf1\\x8709S927158DN\\xf1\\x893946",
+      "\\xf1\\x8709S927158FF\\xf1\\x893876",
+      "\\xf1\\x8709S927158HM\\xf1\\x894112"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Taos"
+    ],
+    "part_numbers": [
+      "09G927158EM",
+      "09S927158BL",
+      "09S927158CR",
+      "09S927158DN",
+      "09S927158FF",
+      "09S927158HM"
+    ],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704C906025AK\\xf1\\x897053"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Cross"
+    ],
+    "part_numbers": [
+      "04C906025AK"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q1909144M \\xf1\\x896041"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Cross"
+    ],
+    "part_numbers": [
+      "2Q1909144M"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Cross"
+    ],
+    "part_numbers": [
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0959655AJ\\xf1\\x890250\\xf1\\x82\\x1212130411110411--04041104141311152H14"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Cross"
+    ],
+    "part_numbers": [
+      "12130411110411--04041104141311152H14",
+      "2Q0959655AJ"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300050E \\xf1\\x891903"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Cross"
+    ],
+    "part_numbers": [
+      "0CW300050E"
+    ],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8703N906026D \\xf1\\x893680",
+      "\\xf1\\x8704E906024AP\\xf1\\x891461",
+      "\\xf1\\x8704E906027NB\\xf1\\x899504",
+      "\\xf1\\x8704L906026EJ\\xf1\\x893661",
+      "\\xf1\\x8704L906026EJ\\xf1\\x893916",
+      "\\xf1\\x8704L906026KR\\xf1\\x893919",
+      "\\xf1\\x8704L906027G \\xf1\\x899893",
+      "\\xf1\\x8705E906018BS\\xf1\\x890914",
+      "\\xf1\\x8705L906022GL\\xf1\\x892112",
+      "\\xf1\\x875N0906259  \\xf1\\x890002",
+      "\\xf1\\x875NA906259H \\xf1\\x890002",
+      "\\xf1\\x875NA907115E \\xf1\\x890003",
+      "\\xf1\\x875NA907115E \\xf1\\x890005",
+      "\\xf1\\x875NA907115J \\xf1\\x890002",
+      "\\xf1\\x875NA907115K \\xf1\\x890004",
+      "\\xf1\\x8783A907115  \\xf1\\x890007",
+      "\\xf1\\x8783A907115B \\xf1\\x890005",
+      "\\xf1\\x8783A907115F \\xf1\\x890002",
+      "\\xf1\\x8783A907115G \\xf1\\x890001",
+      "\\xf1\\x8783A907115K \\xf1\\x890001",
+      "\\xf1\\x8783A907115K \\xf1\\x890002",
+      "\\xf1\\x8783A907115Q \\xf1\\x890001",
+      "\\xf1\\x8783A907115Q \\xf1\\x890002"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Tiguan",
+      "Volkswagen Tiguan eHybrid"
+    ],
+    "part_numbers": [
+      "03N906026D",
+      "04E906024AP",
+      "04E906027NB",
+      "04L906026EJ",
+      "04L906026KR",
+      "04L906027G",
+      "05E906018BS",
+      "05L906022GL",
+      "5N0906259",
+      "5NA906259H",
+      "5NA907115E",
+      "5NA907115J",
+      "5NA907115K",
+      "83A907115",
+      "83A907115B",
+      "83A907115F",
+      "83A907115G",
+      "83A907115K",
+      "83A907115Q"
+    ],
+    "source": "opendbc",
+    "years": "2018-2024"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0909143M \\xf1\\x892041\\xf1\\x820529A6060603",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820527A6050705",
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820527A6070705",
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521A60803A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521A60604A1",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567A6000600",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567A6017A00",
+      "\\xf1\\x875QF909144  \\xf1\\x895572\\xf1\\x82\\x0571A60833A1",
+      "\\xf1\\x875QF909144A \\xf1\\x895581\\xf1\\x82\\x0571A60834A1",
+      "\\xf1\\x875QF909144B \\xf1\\x895582\\xf1\\x82\\x0571A60634A1",
+      "\\xf1\\x875QF909144B \\xf1\\x895582\\xf1\\x82\\x0571A62A32A1",
+      "\\xf1\\x875QM907144D \\xf1\\x891063\\xf1\\x82\\x002RA60A2ROM",
+      "\\xf1\\x875QM907144D \\xf1\\x891063\\xf1\\x82\\x002SA6092SOM",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521A60604A1",
+      "\\xf1\\x875QM909144B \\xf1\\x891081\\xf1\\x82\\x0521A60804A1",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521A60604A1",
+      "\\xf1\\x875QM909144C \\xf1\\x891082\\xf1\\x82\\x0521A60804A1",
+      "\\xf1\\x875QV907144F \\xf1\\x891122\\xf1\\x82\\x0001A6CA01]V"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Tiguan",
+      "Volkswagen Tiguan eHybrid"
+    ],
+    "part_numbers": [
+      "01A6CA01",
+      "0527A6050705",
+      "0527A6070705",
+      "0529A6060603",
+      "21A60604A1",
+      "21A60803A1",
+      "21A60804A1",
+      "2RA60A2ROM",
+      "2SA6092SOM",
+      "5Q0909143M",
+      "5Q0909143P",
+      "5Q0909144AA",
+      "5Q0909144AB",
+      "5Q0910143C",
+      "5QF909144",
+      "5QF909144A",
+      "5QF909144B",
+      "5QM907144D",
+      "5QM909144B",
+      "5QM909144C",
+      "5QV907144F",
+      "67A6000600",
+      "67A6017A00",
+      "71A60634A1",
+      "71A60833A1",
+      "71A60834A1",
+      "71A62A32A1"
+    ],
+    "source": "opendbc",
+    "years": "2018-2024"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907567B \\xf1\\x890534",
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572AB\\xf1\\x890397",
+      "\\xf1\\x872Q0907572AC\\xf1\\x890401",
+      "\\xf1\\x872Q0907572J \\xf1\\x890156",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x872Q0907572Q \\xf1\\x890342",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Tiguan",
+      "Volkswagen Tiguan eHybrid"
+    ],
+    "part_numbers": [
+      "2Q0907567B",
+      "2Q0907572AA",
+      "2Q0907572AB",
+      "2Q0907572AC",
+      "2Q0907572J",
+      "2Q0907572M",
+      "2Q0907572Q",
+      "2Q0907572R",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2018-2024"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AG\\xf1\\x890336\\xf1\\x82\\x1316143231313500314617011730179333423100",
+      "\\xf1\\x875Q0959655AG\\xf1\\x890338\\xf1\\x82\\x1316143231313500314617011730179333423100",
+      "\\xf1\\x875Q0959655AR\\xf1\\x890317\\xf1\\x82\\x1331310031333334313132573732379333313100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890336\\xf1\\x82\\x1311140031333300314232583632369333423100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890336\\xf1\\x82\\x1312110031333300314232583732379333423100",
+      "\\xf1\\x875Q0959655BJ\\xf1\\x890339\\xf1\\x82\\x1331310031333334313132013730379333423100",
+      "\\xf1\\x875Q0959655BK\\xf1\\x890339\\xf1\\x82\\x1331310031333334313132573732379333423100",
+      "\\xf1\\x875Q0959655BM\\xf1\\x890403\\xf1\\x82\\x1316143231313500314641011750179333423100",
+      "\\xf1\\x875Q0959655BR\\xf1\\x890403\\xf1\\x82\\x1312110031333300314240013750379333423100",
+      "\\xf1\\x875Q0959655BS\\xf1\\x890403\\xf1\\x82\\x1312110031333300314240013750379333423100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1312110031333300314240583752379333423100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1331310031333334313140013750379333423100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1331310031333334313140573752379333423100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1331310031333336313140013950399333423100",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1331310031333336313140573952399333423100",
+      "\\xf1\\x875Q0959655CB\\xf1\\x890421\\xf1\\x82\\x1316143231313500314647021750179333613100",
+      "\\xf1\\x875Q0959655CD\\xf1\\x890421\\xf1\\x82\\x13123112313333003145406F6154619333613100",
+      "\\xf1\\x875Q0959655CG\\xf1\\x890421\\xf1\\x82\\x1331310031333300314240024050409333613100",
+      "\\xf1\\x875Q0959655CH\\xf1\\x890421\\xf1\\x82\\x13121100313333003142405G3754379333613100"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Tiguan",
+      "Volkswagen Tiguan eHybrid"
+    ],
+    "part_numbers": [
+      "11140031333300314232583632369333423100",
+      "12110031333300314232583732379333423100",
+      "12110031333300314240013750379333423100",
+      "12110031333300314240583752379333423100",
+      "121100313333003142405G3754379333613100",
+      "123112313333003145406F6154619333613100",
+      "16143231313500314617011730179333423100",
+      "16143231313500314641011750179333423100",
+      "16143231313500314647021750179333613100",
+      "31310031333300314240024050409333613100",
+      "31310031333334313132013730379333423100",
+      "31310031333334313132573732379333313100",
+      "31310031333334313132573732379333423100",
+      "31310031333334313140013750379333423100",
+      "31310031333334313140573752379333423100",
+      "31310031333336313140013950399333423100",
+      "31310031333336313140573952399333423100",
+      "5Q0959655AG",
+      "5Q0959655AR",
+      "5Q0959655BJ",
+      "5Q0959655BK",
+      "5Q0959655BM",
+      "5Q0959655BR",
+      "5Q0959655BS",
+      "5Q0959655BT",
+      "5Q0959655CB",
+      "5Q0959655CD",
+      "5Q0959655CG",
+      "5Q0959655CH"
+    ],
+    "source": "opendbc",
+    "years": "2018-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8709G927158DS\\xf1\\x893699",
+      "\\xf1\\x8709G927158DT\\xf1\\x893698",
+      "\\xf1\\x8709G927158FM\\xf1\\x893757",
+      "\\xf1\\x8709G927158GC\\xf1\\x893821",
+      "\\xf1\\x8709G927158GD\\xf1\\x893820",
+      "\\xf1\\x8709G927158GM\\xf1\\x893936",
+      "\\xf1\\x8709G927158GN\\xf1\\x893938",
+      "\\xf1\\x8709G927158HB\\xf1\\x894069",
+      "\\xf1\\x8709G927158HC\\xf1\\x894070",
+      "\\xf1\\x870D9300043  \\xf1\\x895202",
+      "\\xf1\\x870DD300046K \\xf1\\x892302",
+      "\\xf1\\x870DL300011N \\xf1\\x892001",
+      "\\xf1\\x870DL300011N \\xf1\\x892012",
+      "\\xf1\\x870DL300011N \\xf1\\x892014",
+      "\\xf1\\x870DL300012M \\xf1\\x892107",
+      "\\xf1\\x870DL300012N \\xf1\\x892110",
+      "\\xf1\\x870DL300012P \\xf1\\x892103",
+      "\\xf1\\x870DL300013A \\xf1\\x893005",
+      "\\xf1\\x870DL300013G \\xf1\\x892119",
+      "\\xf1\\x870DL300013G \\xf1\\x892120",
+      "\\xf1\\x870DL300013G \\xf1\\x892620",
+      "\\xf1\\x870DL300014C \\xf1\\x893703",
+      "\\xf1\\x870GC300013P \\xf1\\x892401",
+      "\\xf1\\x870GC300018R \\xf1\\x892802",
+      "\\xf1\\x870GC300046Q \\xf1\\x892802"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Tiguan",
+      "Volkswagen Tiguan eHybrid"
+    ],
+    "part_numbers": [
+      "09G927158DS",
+      "09G927158DT",
+      "09G927158FM",
+      "09G927158GC",
+      "09G927158GD",
+      "09G927158GM",
+      "09G927158GN",
+      "09G927158HB",
+      "09G927158HC",
+      "0D9300043",
+      "0DD300046K",
+      "0DL300011N",
+      "0DL300012M",
+      "0DL300012N",
+      "0DL300012P",
+      "0DL300013A",
+      "0DL300013G",
+      "0DL300014C",
+      "0GC300013P",
+      "0GC300018R",
+      "0GC300046Q"
+    ],
+    "source": "opendbc",
+    "years": "2018-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704E906025BE\\xf1\\x890720",
+      "\\xf1\\x8704E906027HQ\\xf1\\x893746",
+      "\\xf1\\x8704L906026HM\\xf1\\x893017",
+      "\\xf1\\x8705E906018CQ\\xf1\\x890808"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Touran"
+    ],
+    "part_numbers": [
+      "04E906025BE",
+      "04E906027HQ",
+      "04L906026HM",
+      "05E906018CQ"
+    ],
+    "source": "opendbc",
+    "years": "2016-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0909143P \\xf1\\x892051\\xf1\\x820531B0062105",
+      "\\xf1\\x875Q0910143C \\xf1\\x892211\\xf1\\x82\\x0567A8090400",
+      "\\xf1\\x875QD909144F \\xf1\\x891082\\xf1\\x82\\x0521A00642A1"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Touran"
+    ],
+    "part_numbers": [
+      "0531B0062105",
+      "21A00642A1",
+      "5Q0909143P",
+      "5Q0910143C",
+      "5QD909144F",
+      "67A8090400"
+    ],
+    "source": "opendbc",
+    "years": "2016-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x873Q0907572C \\xf1\\x890195",
+      "\\xf1\\x875Q0907572R \\xf1\\x890771"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Touran"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "3Q0907572C",
+      "5Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2016-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0959655AS\\xf1\\x890318\\xf1\\x82\\x1336350021353335314132014730479333313100",
+      "\\xf1\\x875Q0959655AS\\xf1\\x890318\\xf1\\x82\\x13363500213533353141324C4732479333313100",
+      "\\xf1\\x875Q0959655CH\\xf1\\x890421\\xf1\\x82\\x1336350021353336314740025250529333613100",
+      "\\xf1\\x875QD959655AJ\\xf1\\x890421\\xf1\\x82\\x1336350021313300314240023330339333663100"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Touran"
+    ],
+    "part_numbers": [
+      "36350021313300314240023330339333663100",
+      "36350021353335314132014730479333313100",
+      "363500213533353141324C4732479333313100",
+      "36350021353336314740025250529333613100",
+      "5Q0959655AS",
+      "5Q0959655CH",
+      "5QD959655AJ"
+    ],
+    "source": "opendbc",
+    "years": "2016-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300020A \\xf1\\x891936",
+      "\\xf1\\x870CW300041E \\xf1\\x891005",
+      "\\xf1\\x870CW300041Q \\xf1\\x891606",
+      "\\xf1\\x870CW300051M \\xf1\\x891926"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Touran"
+    ],
+    "part_numbers": [
+      "0CW300020A",
+      "0CW300041E",
+      "0CW300041Q",
+      "0CW300051M"
+    ],
+    "source": "opendbc",
+    "years": "2016-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8704L906056AG\\xf1\\x899970",
+      "\\xf1\\x8704L906056AL\\xf1\\x899970",
+      "\\xf1\\x8704L906057AP\\xf1\\x891186",
+      "\\xf1\\x8704L906057N \\xf1\\x890413",
+      "\\xf1\\x8705L906023E \\xf1\\x891352",
+      "\\xf1\\x8705L906023MR\\xf1\\x892582"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caravelle",
+      "Volkswagen California"
+    ],
+    "part_numbers": [
+      "04L906056AG",
+      "04L906056AL",
+      "04L906057AP",
+      "04L906057N",
+      "05L906023E",
+      "05L906023MR"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x877LA909144F \\xf1\\x897150\\xf1\\x82\\x0532380518A2",
+      "\\xf1\\x877LA909144F \\xf1\\x897150\\xf1\\x82\\x05323A5519A2",
+      "\\xf1\\x877LA909144G \\xf1\\x897160\\xf1\\x82\\x05333A5519A2"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caravelle",
+      "Volkswagen California"
+    ],
+    "part_numbers": [
+      "32380518A2",
+      "323A5519A2",
+      "333A5519A2",
+      "7LA909144F",
+      "7LA909144G"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572R \\xf1\\x890372"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caravelle",
+      "Volkswagen California"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572R"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0959655AE\\xf1\\x890506\\xf1\\x82\\x1316170411110411--04041704161611152S1411",
+      "\\xf1\\x872Q0959655AE\\xf1\\x890506\\xf1\\x82\\x1316170411110411--04041704171711152S1411",
+      "\\xf1\\x872Q0959655AF\\xf1\\x890506\\xf1\\x82\\x1316171111110411--04041711121211152S1413",
+      "\\xf1\\x872Q0959655AQ\\xf1\\x890511\\xf1\\x82\\x1316170411110411--0404170426261215391421"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caravelle",
+      "Volkswagen California"
+    ],
+    "part_numbers": [
+      "16170411110411--04041704161611152S1411",
+      "16170411110411--04041704171711152S1411",
+      "16170411110411--0404170426261215391421",
+      "16171111110411--04041711121211152S1413",
+      "2Q0959655AE",
+      "2Q0959655AF",
+      "2Q0959655AQ"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870BT300012E \\xf1\\x893105",
+      "\\xf1\\x870BT300012G \\xf1\\x893102",
+      "\\xf1\\x870BT300046R \\xf1\\x893102",
+      "\\xf1\\x870DV300012B \\xf1\\x893701",
+      "\\xf1\\x870DV300012B \\xf1\\x893702"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Caravelle",
+      "Volkswagen California"
+    ],
+    "part_numbers": [
+      "0BT300012E",
+      "0BT300012G",
+      "0BT300046R",
+      "0DV300012B"
+    ],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x8705E906018AT\\xf1\\x899640",
+      "\\xf1\\x8705E906018CK\\xf1\\x890863",
+      "\\xf1\\x8705E906018P \\xf1\\x896020"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Roc"
+    ],
+    "part_numbers": [
+      "05E906018AT",
+      "05E906018CK",
+      "05E906018P"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x712"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x875Q0909144AA\\xf1\\x891081\\xf1\\x82\\x0521060403A1",
+      "\\xf1\\x875Q0909144AB\\xf1\\x891082\\xf1\\x82\\x0521060405A1",
+      "\\xf1\\x875WA907144M \\xf1\\x891051\\xf1\\x82\\x001T06081T7N",
+      "\\xf1\\x875WA907144Q \\xf1\\x891063\\xf1\\x82\\x001O06081OOM"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Roc"
+    ],
+    "part_numbers": [
+      "1O06081OOM",
+      "1T06081T7N",
+      "21060403A1",
+      "21060405A1",
+      "5Q0909144AA",
+      "5Q0909144AB",
+      "5WA907144M",
+      "5WA907144Q"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x757"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x872Q0907572AA\\xf1\\x890396",
+      "\\xf1\\x872Q0907572M \\xf1\\x890233",
+      "\\xf1\\x872Q0907572T \\xf1\\x890383"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Roc"
+    ],
+    "part_numbers": [
+      "2Q0907572AA",
+      "2Q0907572M",
+      "2Q0907572T"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x715"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x873Q0959655BH\\xf1\\x890712\\xf1\\x82\\x0e1111001111001105111111052900",
+      "\\xf1\\x875Q0959655BT\\xf1\\x890403\\xf1\\x82\\x1311110012333300314240681152119333463100",
+      "\\xf1\\x875Q0959655CF\\xf1\\x890421\\xf1\\x82\\x1311110012333300314240021150119333613100",
+      "\\xf1\\x875Q0959655CG\\xf1\\x890421\\xf1\\x82\\x13111100123333003142404M1152119333613100",
+      "\\xf1\\x875Q0959655CG\\xf1\\x890421\\xf1\\x82\\x13111100123333003142404M1154119333613100"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Roc"
+    ],
+    "part_numbers": [
+      "1111001111001105111111052900",
+      "11110012333300314240021150119333613100",
+      "111100123333003142404M1152119333613100",
+      "111100123333003142404M1154119333613100",
+      "11110012333300314240681152119333463100",
+      "3Q0959655BH",
+      "5Q0959655BT",
+      "5Q0959655CF",
+      "5Q0959655CG"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xf1\\x870CW300041S \\xf1\\x891615",
+      "\\xf1\\x870CW300050J \\xf1\\x891911",
+      "\\xf1\\x870CW300051M \\xf1\\x891925",
+      "\\xf1\\x870CW300051M \\xf1\\x891928"
+    ],
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen T-Roc"
+    ],
+    "part_numbers": [
+      "0CW300041S",
+      "0CW300050J",
+      "0CW300051M"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  }
+]

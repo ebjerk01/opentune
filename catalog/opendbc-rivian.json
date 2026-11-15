@@ -1,0 +1,22 @@
+[
+  {
+    "addresses": [
+      "0x733"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "R1TS_v3.4.1(51),3.4.1\\x00",
+      "R1TS_v4.4.1(63),4.4.1\\x00"
+    ],
+    "make": "Rivian",
+    "models": [
+      "Rivian R1S",
+      "Rivian R1T"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  }
+]

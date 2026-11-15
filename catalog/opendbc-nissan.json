@@ -1,0 +1,416 @@
+[
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "237106GU3B",
+      "237106GV3A",
+      "237109HE2B"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Altima"
+    ],
+    "part_numbers": [
+      "237106GU3B",
+      "237106GV3A",
+      "237109HE2B"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "6CA2B\\xa9A\\x02\\x02G8A89P90D6A\\x00\\x00\\x01\\x80",
+      "6CA2C\\xa9A\\x02\\x02G8A89P90D6A\\x00\\x00\\x01\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Altima"
+    ],
+    "part_numbers": [
+      "G8A89P90D6A"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x707"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284N86CA1D"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Altima"
+    ],
+    "part_numbers": [
+      "284N86CA1D"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x18dad0f1"
+    ],
+    "ecu": "gateway",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284U29HE0A",
+      "284U29HF0A"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Altima"
+    ],
+    "part_numbers": [
+      "284U29HE0A",
+      "284U29HF0A"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x740"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "476605SA1C",
+      "476605SA7D",
+      "476605SC2D",
+      "476606WK7B",
+      "476606WK9B"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Leaf"
+    ],
+    "part_numbers": [
+      "476605SA1C",
+      "476605SA7D",
+      "476605SC2D",
+      "476606WK7B",
+      "476606WK9B"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "5SA2A\\x99A\\x05\\x02N123F\\x15b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SA2A\\xb7A\\x05\\x02N123F\\x15\\xa2\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SN2A\\xb7A\\x05\\x02N123F\\x15\\xa2\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SN2A\\xb7A\\x05\\x02N126F\\x15\\xb2\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Leaf"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x707"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "5SA0ADB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_*6\\x04\\x94a\\x00\\x00\\x00\\x80",
+      "5SA2ADB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_*6\\x04\\x94a\\x00\\x00\\x00\\x80",
+      "6WK2ADB\\x04\\x18\\x00\\x00\\x00\\x00\\x00R;1\\x18\\x99\\x10\\x00\\x00\\x00\\x80",
+      "6WK2BDB\\x04\\x18\\x00\\x00\\x00\\x00\\x00R;1\\x18\\x99\\x10\\x00\\x00\\x00\\x80",
+      "6WK2CDB\\x04\\x18\\x00\\x00\\x00\\x00\\x00R=1\\x18\\x99\\x10\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Leaf"
+    ],
+    "part_numbers": [
+      "5SA0ADB",
+      "5SA2ADB",
+      "6WK2ADB",
+      "6WK2BDB",
+      "6WK2CDB"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x18dad0f1"
+    ],
+    "ecu": "gateway",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284U25SA3C",
+      "284U25SP0C",
+      "284U25SP1C",
+      "284U26WK0A",
+      "284U26WK0C"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan Leaf"
+    ],
+    "part_numbers": [
+      "284U25SA3C",
+      "284U25SP0C",
+      "284U25SP1C",
+      "284U26WK0A",
+      "284U26WK0C"
+    ],
+    "source": "opendbc",
+    "years": "2018-2023"
+  },
+  {
+    "addresses": [
+      "0x740"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "476605SD2D",
+      "476605SD2E",
+      "476605SH1D",
+      "476605SH7D",
+      "476605SH7E",
+      "476605SK2A"
+    ],
+    "make": "Nissan",
+    "models": [
+      "NISSAN_LEAF_IC"
+    ],
+    "part_numbers": [
+      "476605SD2D",
+      "476605SD2E",
+      "476605SH1D",
+      "476605SH7D",
+      "476605SH7E",
+      "476605SK2A"
+    ],
+    "source": "opendbc"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "5SH2A\\x99A\\x05\\x02N123F\\x15\\x81\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SH2A\\xb7A\\x05\\x02N123F\\x15\\xa3\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SH2C\\xb7A\\x05\\x02N123F\\x15\\xa3\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SH3A\\x99A\\x05\\x02N123F\\x15\\x81\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SH3C\\xb7A\\x05\\x02N123F\\x15\\xa3\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "5SK3A\\x99A\\x05\\x02N123F\\x15u\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "NISSAN_LEAF_IC"
+    ],
+    "part_numbers": [],
+    "source": "opendbc"
+  },
+  {
+    "addresses": [
+      "0x707"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "5SH1BDB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_-?\\x04\\x91\\xf2\\x00\\x00\\x00\\x80",
+      "5SH3BDB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_-?\\x04\\x91\\xf2\\x00\\x00\\x00\\x80",
+      "5SH4BDB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_-?\\x04\\x91\\xf2\\x00\\x00\\x00\\x80",
+      "5SK0ADB\\x04\\x18\\x00\\x00\\x00\\x00\\x00_(5\\x07\\x9aQ\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "NISSAN_LEAF_IC"
+    ],
+    "part_numbers": [
+      "5SH1BDB",
+      "5SH3BDB",
+      "5SH4BDB",
+      "5SK0ADB"
+    ],
+    "source": "opendbc"
+  },
+  {
+    "addresses": [
+      "0x18dad0f1"
+    ],
+    "ecu": "gateway",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284U25SF0C",
+      "284U25SH3A",
+      "284U25SH3B",
+      "284U25SK2D",
+      "284U25SR0B",
+      "284U25SR0C"
+    ],
+    "make": "Nissan",
+    "models": [
+      "NISSAN_LEAF_IC"
+    ],
+    "part_numbers": [
+      "284U25SF0C",
+      "284U25SH3A",
+      "284U25SH3B",
+      "284U25SK2D",
+      "284U25SR0B",
+      "284U25SR0C"
+    ],
+    "source": "opendbc"
+  },
+  {
+    "addresses": [
+      "0x740"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "6FU0AD\\x11\\x02\\x00\\x02e\\x95e\\x80iQ#\\x01\\x00\\x00\\x00\\x00\\x00\\x80",
+      "6FU1BD\\x11\\x02\\x00\\x02e\\x95e\\x80iX#\\x01\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [
+      "6FU0AD",
+      "6FU1BD"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x743"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "6FR2A\\x18B\\x05\\x17\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "6FR9A\\xa0A\\x06\\x04\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80",
+      "6FU9B\\xa0A\\x06\\x04\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "6FP2A\\x99A\\x05\\x02N123F\\x18\\x02\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x707"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284N86FR2A"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [
+      "284N86FR2A"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  },
+  {
+    "addresses": [
+      "0x18dad0f1"
+    ],
+    "ecu": "gateway",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "284U26FR0E"
+    ],
+    "make": "Nissan",
+    "models": [
+      "Nissan X-Trail"
+    ],
+    "part_numbers": [
+      "284U26FR0E"
+    ],
+    "source": "opendbc",
+    "years": "2017"
+  }
+]

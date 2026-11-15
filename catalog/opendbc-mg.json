@@ -1,0 +1,56 @@
+[
+  {
+    "addresses": [
+      "0x721"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x10gs\\x16\\x01"
+    ],
+    "make": "MG",
+    "models": [
+      "MG 5 EV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x733"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x10y\\x00 \\x01"
+    ],
+    "make": "MG",
+    "models": [
+      "MG 5 EV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2021"
+  },
+  {
+    "addresses": [
+      "0x734"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x10y\\x000\\x01"
+    ],
+    "make": "MG",
+    "models": [
+      "MG 5 EV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2021"
+  }
+]

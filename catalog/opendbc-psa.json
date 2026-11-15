@@ -1,0 +1,22 @@
+[
+  {
+    "addresses": [
+      "0x6b6"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "212053276"
+    ],
+    "make": "Peugeot",
+    "models": [
+      "Peugeot 208"
+    ],
+    "part_numbers": [
+      "212053276"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  }
+]

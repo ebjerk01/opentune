@@ -1,0 +1,1042 @@
+[
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B45A-437AS-0-08\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "B45A-437AS-0-08"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "P5JD-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PY2P-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYJW-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYKC-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYKE-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "P5JD-188K2-B",
+      "PY2P-188K2-C",
+      "PYJW-188K2-C",
+      "PYKC-188K2-D",
+      "PYKE-188K2-B"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "BHN1-3210X-J-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K070-3210X-C-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KR11-3210X-K-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "BHN1-3210X-J-00",
+      "K070-3210X-C-00",
+      "KR11-3210X-K-00"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B61L-67XK2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-P\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-Q\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-T\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "B61L-67XK2-D",
+      "B61L-67XK2-P",
+      "B61L-67XK2-Q",
+      "B61L-67XK2-T"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B63C-67XK2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GHP9-67Y10---41\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "B63C-67XK2-C",
+      "GHP9-67Y10---41",
+      "K131-67XK2-C"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "P52G-21PS1-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PY2S-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYKA-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYKE-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYKE-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 3"
+    ],
+    "part_numbers": [
+      "P52G-21PS1-F",
+      "PY2S-21PS1-C",
+      "PYKA-21PS1-A",
+      "PYKE-21PS1-A",
+      "PYKE-21PS1-B"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "GBVH-437K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GBVH-437K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GDDM-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "GBVH-437K2-B",
+      "GBVH-437K2-C",
+      "GDDM-437K2-A"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PA34-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX4C-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX4F-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYH7-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYH7-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "PA34-188K2-A",
+      "PX4C-188K2-A",
+      "PX4F-188K2-D",
+      "PYH7-188K2-C",
+      "PYH7-188K2-E"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "GBEF-3210X-B-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GBEF-3210X-C-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GFBC-3210X-A-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "GBEF-3210X-B-00",
+      "GBEF-3210X-C-00",
+      "GFBC-3210X-A-00"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B61L-67XK2-S\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-T\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-K\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-P\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "B61L-67XK2-S",
+      "B61L-67XK2-T",
+      "GSH7-67XK2-K",
+      "GSH7-67XK2-P"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K131-67XK2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "K131-67XK2-A",
+      "K131-67XK2-E"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PA28-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYH3-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYH7-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYH7-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda 6"
+    ],
+    "part_numbers": [
+      "PA28-21PS1-A",
+      "PYH3-21PS1-D",
+      "PYH7-21PS1-B",
+      "PYH7-21PS1-D"
+    ],
+    "source": "opendbc",
+    "years": "2017-2020"
+  },
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K123-437K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KBJ5-437K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KL2K-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KN0W-437K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "K123-437K2-E",
+      "KBJ5-437K2-B",
+      "KL2K-437K2-A",
+      "KN0W-437K2-C"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PA53-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PAR4-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2E-188K2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2F-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2G-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2H-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2H-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2H-188K2-G\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2K-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX38-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX42-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX68-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFA-188K2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFC-188K2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFD-188K2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYNF-188K2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "SHKT-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "PA53-188K2-A",
+      "PAR4-188K2-E",
+      "PX2E-188K2-F",
+      "PX2F-188K2-C",
+      "PX2G-188K2-D",
+      "PX2H-188K2-B",
+      "PX2H-188K2-D",
+      "PX2H-188K2-G",
+      "PX2K-188K2-B",
+      "PX38-188K2-B",
+      "PX42-188K2-C",
+      "PX68-188K2-B",
+      "PYFA-188K2-J",
+      "PYFC-188K2-J",
+      "PYFD-188K2-J",
+      "PYNF-188K2-F",
+      "SHKT-188K2-D"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K319-3210X-A-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KCB8-3210X-B-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KJ01-3210X-G-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KJ01-3210X-J-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KJ01-3210X-M-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "K319-3210X-A-00",
+      "KCB8-3210X-B-00",
+      "KJ01-3210X-G-00",
+      "KJ01-3210X-J-00",
+      "KJ01-3210X-M-00"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B61L-67XK2-R\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-S\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-T\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-V\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-M\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-N\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-R\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "B61L-67XK2-R",
+      "B61L-67XK2-S",
+      "B61L-67XK2-T",
+      "B61L-67XK2-V",
+      "GSH7-67XK2-J",
+      "GSH7-67XK2-M",
+      "GSH7-67XK2-N",
+      "GSH7-67XK2-R"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K123-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "K123-67XK2-F",
+      "K131-67XK2-A",
+      "K131-67XK2-B",
+      "K131-67XK2-C",
+      "K131-67XK2-E",
+      "K131-67XK2-F"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PA66-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PA66-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX39-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX39-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX68-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB1-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB1-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB1-21PS1-G\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-G\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYNC-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "SH9T-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "PA66-21PS1-A",
+      "PA66-21PS1-D",
+      "PX39-21PS1-B",
+      "PX39-21PS1-D",
+      "PX68-21PS1-B",
+      "PYB1-21PS1-B",
+      "PYB1-21PS1-C",
+      "PYB1-21PS1-G",
+      "PYB2-21PS1-B",
+      "PYB2-21PS1-C",
+      "PYB2-21PS1-D",
+      "PYB2-21PS1-G",
+      "PYB2-21PS1-H",
+      "PYNC-21PS1-B",
+      "SH9T-21PS1-D"
+    ],
+    "source": "opendbc",
+    "years": "2017-2021"
+  },
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "KBSV-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KGWD-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KSD5-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "KBSV-437K2-A",
+      "KGWD-437K2-A",
+      "KSD5-437K2-A"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PEW5-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PF10-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PGK4-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW67-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW67-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW8F-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW8G-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2C-188K2-G\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2D-188K2-G\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2D-188K2-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2G-188K2-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2H-188K2-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX2H-188K2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX85-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXFG-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXFG-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXGC-188K2-\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PY40-188K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "SH54-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "PEW5-188K2-A",
+      "PF10-188K2-A",
+      "PGK4-188K2-C",
+      "PW67-188K2-C",
+      "PW67-188K2-E",
+      "PW8F-188K2-A",
+      "PW8G-188K2-A",
+      "PX2C-188K2-G",
+      "PX2D-188K2-G",
+      "PX2D-188K2-H",
+      "PX2G-188K2-H",
+      "PX2H-188K2-H",
+      "PX2H-188K2-J",
+      "PX85-188K2-E",
+      "PXFG-188K2-B",
+      "PXFG-188K2-C",
+      "PXGC-188K2-",
+      "PY40-188K2-A",
+      "SH54-188K2-D"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "KBST-3210X-A-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KSD5-3210X-C-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "KBST-3210X-A-00",
+      "KSD5-3210X-C-00"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "GSH7-67XK2-S\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-T\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-U\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "GSH7-67XK2-S",
+      "GSH7-67XK2-T",
+      "GSH7-67XK2-U"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K131-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "K131-67XK2-F"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PG69-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PG69-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PGG4-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW66-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PW66-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXDL-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXFG-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXFG-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXGG-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYA4-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYB2-21PS1-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYJ3-21PS1-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYJ3-21PS1-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "SH51-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-5"
+    ],
+    "part_numbers": [
+      "PG69-21PS1-A",
+      "PG69-21PS1-B",
+      "PGG4-21PS1-C",
+      "PW66-21PS1-B",
+      "PW66-21PS1-C",
+      "PXDL-21PS1-B",
+      "PXFG-21PS1-A",
+      "PXFG-21PS1-B",
+      "PXGG-21PS1-B",
+      "PYA4-21PS1-C",
+      "PYB2-21PS1-H",
+      "PYB2-21PS1-J",
+      "PYJ3-21PS1-H",
+      "PYJ3-21PS1-J",
+      "SH51-21PS1-C"
+    ],
+    "source": "opendbc",
+    "years": "2022-2025"
+  },
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "TA0B-437K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TK79-437K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TK79-437K2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TM53-437K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TN40-437K2-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "TA0B-437K2-C",
+      "TK79-437K2-E",
+      "TK79-437K2-F",
+      "TM53-437K2-B",
+      "TN40-437K2-A"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PX23-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PX24-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM4-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXN8-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXN8-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD7-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD8-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFM-188K2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFM-188K2-H\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "PX23-188K2-B",
+      "PX24-188K2-B",
+      "PXM4-188K2-B",
+      "PXN8-188K2-B",
+      "PXN8-188K2-C",
+      "PYD7-188K2-B",
+      "PYD8-188K2-B",
+      "PYFM-188K2-F",
+      "PYFM-188K2-H"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K070-3210X-C-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KJ01-3210X-G-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "KJ01-3210X-L-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "K070-3210X-C-00",
+      "KJ01-3210X-G-00",
+      "KJ01-3210X-L-00"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "B61L-67XK2-P\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "B61L-67XK2-V\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-J\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-K\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TK80-67XK2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "B61L-67XK2-P",
+      "B61L-67XK2-V",
+      "GSH7-67XK2-J",
+      "GSH7-67XK2-K",
+      "TK80-67XK2-C"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K123-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TK80-67XK2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "TK80-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "K123-67XK2-F",
+      "K131-67XK2-B",
+      "K131-67XK2-C",
+      "TK80-67XK2-E",
+      "TK80-67XK2-F"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PXM4-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM7-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM7-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD5-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD5-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD6-21PS1-A\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYD6-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFM-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PYFM-21PS1-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "PXM4-21PS1-A",
+      "PXM7-21PS1-A",
+      "PXM7-21PS1-B",
+      "PYD5-21PS1-A",
+      "PYD5-21PS1-B",
+      "PYD6-21PS1-A",
+      "PYD6-21PS1-B",
+      "PYFM-21PS1-C",
+      "PYFM-21PS1-D"
+    ],
+    "source": "opendbc",
+    "years": "2016-2020"
+  },
+  {
+    "addresses": [
+      "0x760"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "TA0B-437K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "TA0B-437K2-C"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PXGW-188K2-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXGW-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM4-188K2-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM4-188K2-D\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM6-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM7-188K2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "PXGW-188K2-B",
+      "PXGW-188K2-C",
+      "PXM4-188K2-C",
+      "PXM4-188K2-D",
+      "PXM6-188K2-E",
+      "PXM7-188K2-E"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x730"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "TC3M-3210X-A-00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "TC3M-3210X-A-00"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x706"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "GSH7-67XK2-M\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-N\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-P\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-S\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-T\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "GSH7-67XK2-U\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "GSH7-67XK2-M",
+      "GSH7-67XK2-N",
+      "GSH7-67XK2-P",
+      "GSH7-67XK2-S",
+      "GSH7-67XK2-T",
+      "GSH7-67XK2-U"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x764"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K131-67XK2-E\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "K131-67XK2-F\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "K131-67XK2-E",
+      "K131-67XK2-F"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "PXM4-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM6-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM7-21PS1-B\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00",
+      "PXM7-21PS1-C\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Mazda",
+    "models": [
+      "Mazda CX-9"
+    ],
+    "part_numbers": [
+      "PXM4-21PS1-B",
+      "PXM6-21PS1-B",
+      "PXM7-21PS1-B",
+      "PXM7-21PS1-C"
+    ],
+    "source": "opendbc",
+    "years": "2021-2023"
+  }
+]

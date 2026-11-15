@@ -1,0 +1,1684 @@
+[
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa5 !\\x02\\x00",
+      "\\xa5 \\x19\\x02\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbb,\\xa0t\\x07",
+      "\\xd1,\\xa0q\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x05\\xc0\\xd0\\x00",
+      "\\x85\\xc0\\xd0\\x00",
+      "\\x95\\xc0\\xd0\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00d\\xb9\\x00\\x00\\x00\\x00",
+      "\\x00\\x00d\\xb9\\x1f@ \\x10",
+      "\\x00\\x00e@\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e@\\x1f@ $",
+      "\\x00\\x00e~\\x1f@ '"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00>\\xf0\\x00\\x00",
+      "\\x00\\xfe\\xf7\\x00\\x00",
+      "\\x01\\xfe\\xf7\\x00\\x00",
+      "\\x01\\xfe\\xf9\\x00\\x00",
+      "\\x01\\xfe\\xfa\\x00\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa5 #\\x03\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a2"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xe5,\\xa0P\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "%\\xc0\\xd0\\x11"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x05!\\x08\\x1dK\\x05!\\x08\\x01/"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a3"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x04\\xfe\\xf3\\x00\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Ascent"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa2 !e\\x01",
+      "\\xa2 \\x19e\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Crosstrek Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xd7!`@\\x07",
+      "\\xd7!`p\\x07",
+      "\\xf4!`0\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Crosstrek Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0a\\xc2\\x01\\x00",
+      "\\x9a\\xc2\\x01\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Crosstrek Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00el\\x1f@ #"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Crosstrek Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa3  \\x14\\x00",
+      "\\xa3  \\x14\\x01",
+      "\\xa3 \\x18&\\x00",
+      "\\xa3 \\x18\\x14\\x00",
+      "\\xa3 \\x19&\\x00",
+      "\\xa3 \\x19\\x14\\x00",
+      "\\xa3 \\x19h\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xb6\"`A\\x07",
+      "\\xb6\\xa2`A\\x07",
+      "\\xcb\"`@\\x07",
+      "\\xcb\"`p\\x07",
+      "\\xcf\"`0\\x07",
+      "\\xcf\"`p\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x8d\\xc0\\x00\\x00",
+      "\\x8d\\xc0\\x04\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00e!\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e!\\x1f@ \\x11",
+      "\\x00\\x00e\\x97\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\x97\\x1f@ 0",
+      "\\x00\\x00e^\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e^\\x1f@ !",
+      "\\x00\\x00e`\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e`\\x1f@  "
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x1a\\xe6B1\\x00",
+      "\\x1a\\xe6F1\\x00",
+      "\\x1a\\xf6B0\\x00",
+      "\\x1a\\xf6B`\\x00",
+      "\\x1a\\xf6F`\\x00",
+      "\\x1a\\xf6b0\\x00",
+      "\\x1a\\xf6b`\\x00",
+      "\\x1a\\xf6f`\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa3 !v\\x00",
+      "\\xa3 !x\\x00",
+      "\\xa3 \"v\\x00",
+      "\\xa3 \"x\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xd5\"`0\\x07",
+      "\\xd5\"a0\\x07",
+      "\\xf1\"`q\\x07",
+      "\\xf1\"aq\\x07",
+      "\\xfa\"`p\\x07",
+      "\\xfa\"ap\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "-\\xc0%0",
+      "-\\xc0\\x040",
+      "=\\xc0%\\x02",
+      "=\\xc04\\x02"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x04!\\x01\\x1eD\\x07!\\x00\\x04,",
+      "\\x04!\\x08\\x01.\\x07!\\x08\\x022",
+      "\\x0d!\\x08\\x017\\x00\\x00\\x00\\x00\\x00",
+      "\\x0d!\\x08\\x017\\x0a!\\x08\\x003"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x1d\\x86B0\\x00",
+      "\\x1d\\xf6B0\\x00",
+      "\\x1e\\x86B0\\x00",
+      "\\x1e\\x86F0\\x00",
+      "\\x1e\\xf6D0\\x00",
+      "\\x1f\\xf6B1\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2022-2024"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa3 \\x19T\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xd2\\xa1`r\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x8d\\xc2\\x00\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00eY\\x1f@ !"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x1b\\xa7@a\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester Hybrid"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "m\\x97\\x14@",
+      "}\\x97\\x14@"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa7\"@0\\x07",
+      "\\xa7\"@p\\x07",
+      "\\xa7)\\xa0q\\x07",
+      "\\xba\"@@\\x07",
+      "\\xba\"@p\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "m\\xc0\\x10\\x00",
+      "}\\xc0\\x10\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00c\\xe9\\x00\\x00\\x00\\x00",
+      "\\x00\\x00c\\xe9\\x1f@ \\x03",
+      "\\x00\\x00d5\\x1f@ \\x09",
+      "\\x00\\x00d\\xd3\\x1f@ \\x09"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x1a\\xf6F`\\x00",
+      "\\xda\\xf2`\\x80\\x00",
+      "\\xda\\xf2`p\\x00",
+      "\\xda\\xfd\\xe0\\x80\\x00",
+      "\\xdc\\xf2@`\\x00",
+      "\\xdc\\xf2`\\x80\\x00",
+      "\\xdc\\xf2`\\x81\\x00",
+      "\\xdc\\xf2``\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Forester"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa2  5\\x00",
+      "\\xa2 \\x185\\x00",
+      "\\xa2 \\x193\\x00",
+      "\\xa2 \\x194\\x00",
+      "\\xa2 \\x19`\\x00",
+      "z\\x84\\x19\\x90\\x00",
+      "z\\x94.\\x90\\x00",
+      "z\\x94?\\x90\\x00",
+      "z\\x94\\x08\\x90\\x00",
+      "z\\x94\\x08\\x90\\x01",
+      "z\\x94\\x0c\\x90\\x00",
+      "z\\x94\\x0c\\x90\\x01",
+      "z\\x9c\\x19\\x80\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xaa!`u\\x07",
+      "\\xaa!au\\x07",
+      "\\xaa!av\\x07",
+      "\\xaa!aw\\x07",
+      "\\xaa!dq\\x07",
+      "\\xaa!ds\\x07",
+      "\\xaa!dt\\x07",
+      "\\xaa\\x00Bu\\x07",
+      "\\xaa\\x01bt\\x07",
+      "\\xaa\\x01fr\\x07",
+      "\\xaaafs\\x07",
+      "\\xbe!as\\x07",
+      "\\xbe!at\\x07",
+      "\\xbeacr\\x07",
+      "\\xc5!`r\\x07",
+      "\\xc5!`s\\x07",
+      "\\xc5!ap\\x07",
+      "\\xc5!ar\\x07",
+      "\\xc5!as\\x07",
+      "\\xc5!au\\x07",
+      "\\xc5!dr\\x07",
+      "\\xc5!ds\\x07",
+      "\\xca\\x01b0\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x8a\\xc0\\x00\\x00",
+      "\\x8a\\xc0\\x10\\x00",
+      "\\x9a\\xc0\\x08\\x00",
+      "z\\xc0\\x00\\x00",
+      "z\\xc0\\x04\\x00",
+      "z\\xc0\\x08\\x00",
+      "z\\xc0\\x0a\\x00",
+      "z\\xc0\\x0c\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00c\\xf4\\x00\\x00\\x00\\x00",
+      "\\x00\\x00c\\xf4\\x1f@ \\x07",
+      "\\x00\\x00d)\\x00\\x00\\x00\\x00",
+      "\\x00\\x00d)\\x1f@ \\x07",
+      "\\x00\\x00d\\xb5\\x1f@ \\x0e",
+      "\\x00\\x00d\\xdc\\x00\\x00\\x00\\x00",
+      "\\x00\\x00d\\xdc\\x1f@ \\x0e",
+      "\\x00\\x00dd\\x00\\x00\\x00\\x00",
+      "\\x00\\x00dd\\x1f@ \\x0e",
+      "\\x00\\x00e+\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e+\\x1f@ \\x14",
+      "\\x00\\x00e\\x02\\x1f@ \\x14",
+      "\\x00\\x00e\\x1c\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\x1c\\x1f@ \\x14",
+      "\\x00\\x00eq\\x1f@ \""
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xe3\\xd0\\x081\\x00",
+      "\\xe3\\xd5F1\\x00",
+      "\\xe3\\xd5\\x161\\x00",
+      "\\xe3\\xe5F1\\x00",
+      "\\xe3\\xf5C\\x00\\x00",
+      "\\xe3\\xf5F\\x00\\x00",
+      "\\xe3\\xf5G\\x00\\x00",
+      "\\xe3\\xf5\\x06\\x00\\x00",
+      "\\xe3\\xf5\\x07\\x00\\x00",
+      "\\xe4\\xe5\\x021\\x00",
+      "\\xe4\\xe5\\x061\\x00",
+      "\\xe4\\xf5\\x02\\x00\\x00",
+      "\\xe4\\xf5\\x07\\x00\\x00",
+      "\\xe5\\xf5$\\x00\\x00",
+      "\\xe5\\xf5B\\x00\\x00",
+      "\\xe5\\xf5\\x04\\x00\\x00",
+      "\\xe6\\xd5\\x041\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2017-2019"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa2  `\\x00",
+      "\\xa2 !3\\x00",
+      "\\xa2 !6\\x00",
+      "\\xa2 !`\\x00",
+      "\\xa2 !i\\x00",
+      "\\xa2 \\x193\\x00",
+      "\\xa2 \\x194\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xca!`0\\x07",
+      "\\xca!`p\\x07",
+      "\\xca!`t\\x07",
+      "\\xca!a0\\x07",
+      "\\xca!ap\\x07",
+      "\\xca!f@\\x07",
+      "\\xca!fp\\x07",
+      "\\xcaacp\\x07",
+      "\\xcc!`p\\x07",
+      "\\xcc!fp\\x07",
+      "\\xcc\"f0\\x07",
+      "\\xe6!`@\\x07",
+      "\\xe6!fp\\x07",
+      "\\xe6\"f0\\x07",
+      "\\xe6\"fp\\x07",
+      "\\xf3\"f@\\x07",
+      "\\xf3\"fp\\x07",
+      "\\xf3\"fr\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x0a\\xc0\\x04\\x00",
+      "\\x0a\\xc0\\x04\\x01",
+      "\\x9a\\xc0\\x00\\x00",
+      "\\x9a\\xc0\\x04\\x00",
+      "\\x9a\\xc0\\x0a\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00e\\x8f\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\x8f\\x1f@ )",
+      "\\x00\\x00e\\x92\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\xa4\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\xa4\\x1f@ (",
+      "\\x00\\x00eb\\x1f@ \"",
+      "\\x00\\x00eq\\x00\\x00\\x00\\x00",
+      "\\x00\\x00eq\\x1f@ \""
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xe6\\x15\\x042\\x00",
+      "\\xe6\\xf5$\\x00\\x00",
+      "\\xe6\\xf5D0\\x00",
+      "\\xe6\\xf5\\x04\\x00\\x00",
+      "\\xe7\\xf5D0\\x00",
+      "\\xe7\\xf5\\x04\\x00\\x00",
+      "\\xe7\\xf6B0\\x00",
+      "\\xe9\\xf5\"\\x00\\x00",
+      "\\xe9\\xf5B0\\x00",
+      "\\xe9\\xf6B0\\x00",
+      "\\xe9\\xf6F0\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Impreza",
+      "Subaru Crosstrek",
+      "Subaru XV"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2023"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa1  \\x02\\x01",
+      "\\xa1  \\x02\\x02",
+      "\\xa1  \\x03\\x02",
+      "\\xa1  \\x03\\x03",
+      "\\xa1  \\x04\\x00",
+      "\\xa1  \\x04\\x01",
+      "\\xa1  \\x04\\x02"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbc\"a@\\x07",
+      "\\xde\"a0\\x07",
+      "\\xde,\\xa0@\\x07",
+      "\\xe2\"a0\\x07",
+      "\\xe2\"ap\\x07",
+      "\\xe2\"aq\\x07",
+      "\\xe2,\\xa0@\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x9b\\xc0\\x11\\x00",
+      "\\x9b\\xc0\\x11\\x02"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00eJ\\x00\\x1f@ \\x19\\x00",
+      "\\x00\\x00e\\x80\\x00\\x1f@ \\x19\\x00",
+      "\\x00\\x00e\\x9a\\x00\\x00\\x00\\x00\\x00\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa5\\xf6\\x05@\\x00",
+      "\\xa5\\xfe\\xc7@\\x00",
+      "\\xa7\\xf6\\x04@\\x00",
+      "\\xa7\\xfe\\xc4@\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "[\\x97D\\x00",
+      "[\\xba\\xc4\\x03",
+      "k\\x97D\\x00",
+      "k\\x9aD\\x00",
+      "{\\x97D\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa0\"@q\\x07",
+      "\\xa0+@p\\x07",
+      "\\xab*@r\\x07",
+      "\\xab+@p\\x07",
+      "\\xb4\"@0\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K\\xb0\\x00\\x01",
+      "[\\xb0\\x00\\x01",
+      "k\\xb0\\x00\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00c\\x94\\x1f@\\x10\\x08",
+      "\\x00\\x00c\\xb7\\x1f@\\x10\\x16",
+      "\\x00\\x00c\\xec\\x1f@ \\x04"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbd\\xf2\\x00`\\x00",
+      "\\xbe\\xf2\\x00p\\x00",
+      "\\xbe\\xfb\\xc0p\\x00",
+      "\\xbf\\xf2\\x00\\x80\\x00",
+      "\\xbf\\xfb\\xc0\\x80\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Legacy"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2018"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa1  \\x06\\x00",
+      "\\xa1  \\x06\\x01",
+      "\\xa1  \\x06\\x02",
+      "\\xa1  \\x06\\x03",
+      "\\xa1  \\x07\\x00",
+      "\\xa1  \\x07\\x01",
+      "\\xa1  \\x07\\x02",
+      "\\xa1  \\x07\\x03",
+      "\\xa1  \\x08\\x00",
+      "\\xa1  \\x08\\x01",
+      "\\xa1  \\x08\\x02",
+      "\\xa1 \"\\x09\\x00",
+      "\\xa1 \"\\x09\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbc\"`@\\x07",
+      "\\xbc\"`q\\x07",
+      "\\xbc,\\xa0q\\x07",
+      "\\xbc,\\xa0u\\x07",
+      "\\xde\"`0\\x07",
+      "\\xde,\\xa0@\\x07",
+      "\\xe2\"`0\\x07",
+      "\\xe2\"`p\\x07",
+      "\\xe2\"`q\\x07",
+      "\\xe2\"`t\\x07",
+      "\\xe2,\\xa0@\\x07",
+      "\\xe2,\\xa0p\\x07",
+      "\\xe3,\\xa0@\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x1b\\xc0\\x10\\x00",
+      "\\x9b\\xc0 \\x00",
+      "\\x9b\\xc0\\x10\\x00",
+      "\\x9b\\xc0\\x10\\x02"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00eJ\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x00\\x00eJ\\x00\\x1f@ \\x19\\x00",
+      "\\x00\\x00e\\x80\\x00\\x1f@ \\x19\\x00",
+      "\\x00\\x00e\\x9a\\x00\\x00\\x00\\x00\\x00\\x00",
+      "\\x00\\x00e\\x9a\\x00\\x1f@ 1\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa5\\xf6D@\\x00",
+      "\\xa5\\xfe\\xf6@\\x00",
+      "\\xa5\\xfe\\xf7@\\x00",
+      "\\xa5\\xfe\\xf8@\\x00",
+      "\\xa7\\x8e\\xf40\\x00",
+      "\\xa7\\xf6D@\\x00",
+      "\\xa7\\xfe\\xf4@\\x00",
+      "\\xa7\\xfe\\xf6@\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2020-2022"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa1 #\\x14\\x00",
+      "\\xa1 #\\x17\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a2"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xed,\\xa0q\\x07",
+      "\\xed,\\xa2q\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "+\\xc0\\x10\\x11\\x00",
+      "+\\xc0\\x12\\x11\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x09!\\x08\\x046\\x05!\\x08\\x01/"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7a3"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa8\\x8e\\xf41\\x00",
+      "\\xa8\\xfe\\xf41\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2023"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "[\\xba\\xac\\x03",
+      "[\\xf7\\xac\\x00",
+      "[\\xf7\\xac\\x03",
+      "[\\xf7\\xbc\\x03",
+      "k\\x97\\xac\\x00",
+      "k\\x9a\\xac\\x00",
+      "{\\x97\\xac\\x00",
+      "{\\x9a\\xac\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2017"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xa0\"@\\x80\\x07",
+      "\\xa0*@q\\x07",
+      "\\xa0*@u\\x07",
+      "\\xa0+@@\\x07",
+      "\\xa0bAq\\x07",
+      "\\xab\"@@\\x07",
+      "\\xab\"@s\\x07",
+      "\\xab*@@\\x07",
+      "\\xab+@@\\x07",
+      "\\xb4\"@0\\x07",
+      "\\xb4\"@p\\x07",
+      "\\xb4\"@r\\x07",
+      "\\xb4+@p\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2017"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "K\\xb0\\x00\\x00",
+      "K\\xb0\\x00\\x02",
+      "[\\xb0\\x00\\x00",
+      "k\\xb0\\x00\\x00",
+      "{\\xb0\\x00\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2017"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00c\\x90\\x1f@\\x10\\x0e",
+      "\\x00\\x00c\\x94\\x00\\x00\\x00\\x00",
+      "\\x00\\x00c\\x94\\x1f@\\x10\\x08",
+      "\\x00\\x00c\\xb7\\x1f@\\x10\\x16",
+      "\\x00\\x00c\\xd1\\x1f@\\x10\\x17",
+      "\\x00\\x00c\\xec\\x1f@ \\x04"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2017"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbd\\xf2@\\x81\\x00",
+      "\\xbd\\xf2@`\\x00",
+      "\\xbd\\xfb\\xe0\\x80\\x00",
+      "\\xbe\\xf2@\\x80\\x00",
+      "\\xbe\\xf2@p\\x00",
+      "\\xbe\\xfb\\xe0p\\x00",
+      "\\xbf\\xe2@\\x80\\x00",
+      "\\xbf\\xf2@\\x80\\x00",
+      "\\xbf\\xfb\\xe0b\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2015-2017"
+  },
+  {
+    "addresses": [
+      "0x7b0"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x8b\\x97\\xac\\x00",
+      "\\x8b\\x97\\xbc\\x00",
+      "\\x8b\\x99\\xac\\x00",
+      "\\x8b\\x9a\\xac\\x00",
+      "\\x9b\\x97\\xac\\x00",
+      "\\x9b\\x97\\xbe\\x10",
+      "\\x9b\\x9a\\xac\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xb5\"@P\\x07",
+      "\\xb5\"@p\\x07",
+      "\\xb5+@@\\x07",
+      "\\xb5b@1\\x07",
+      "\\xb5q\\xe0@\\x07",
+      "\\xc4\"@0\\x07",
+      "\\xc4+@0\\x07",
+      "\\xc4b@p\\x07"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x746"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "{\\xb0\\x00\\x00",
+      "{\\xb0\\x00\\x01"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x787"
+    ],
+    "ecu": "fwdCamera",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\x00\\x00d\\x95\\x00\\x00\\x00\\x00",
+      "\\x00\\x00d\\x95\\x1f@ \\x0f",
+      "\\x00\\x00d\\xfe\\x00\\x00\\x00\\x00",
+      "\\x00\\x00d\\xfe\\x1f@ \\x15",
+      "\\x00\\x00df\\x1f@ \\x0a",
+      "\\x00\\x00e\\x19\\x1f@ \\x15"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2019"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "\\xbb\\xf2@`\\x00",
+      "\\xbb\\xfb\\xe0`\\x00",
+      "\\xbc\\xaf\\xe0`\\x00",
+      "\\xbc\\xe2@\\x80\\x00",
+      "\\xbc\\xf2@\\x80\\x00",
+      "\\xbc\\xf2@\\x81\\x00",
+      "\\xbc\\xfb\\xe0\\x80\\x00",
+      "\\xbc\\xfb\\xe0`\\x00"
+    ],
+    "make": "Subaru",
+    "models": [
+      "Subaru Outback"
+    ],
+    "part_numbers": [],
+    "source": "opendbc",
+    "years": "2018-2019"
+  }
+]

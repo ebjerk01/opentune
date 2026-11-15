@@ -1,0 +1,2507 @@
+[
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68222747AG",
+      "68330876AA",
+      "68330876AB",
+      "68352227AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68222747AG",
+      "68330876AA",
+      "68330876AB",
+      "68352227AA"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68227902AF",
+      "68227902AG",
+      "68227902AH",
+      "68227905AG",
+      "68360252AC"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68227902AF",
+      "68227902AG",
+      "68227902AH",
+      "68227905AG",
+      "68360252AC"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68267018AO ",
+      "68267020AJ ",
+      "68303534AG ",
+      "68303534AJ ",
+      "68340762AD ",
+      "68340764AD ",
+      "68352652AE ",
+      "68352654AE ",
+      "68366851AH ",
+      "68366853AE ",
+      "68366853AG ",
+      "68372861AF "
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68267018AO",
+      "68267020AJ",
+      "68303534AG",
+      "68303534AJ",
+      "68340762AD",
+      "68340764AD",
+      "68352652AE",
+      "68352654AE",
+      "68366851AH",
+      "68366853AE",
+      "68366853AG",
+      "68372861AF"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68288891AE",
+      "68378884AA",
+      "68525338AA",
+      "68525338AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68288891AE",
+      "68378884AA",
+      "68525338AA",
+      "68525338AB"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672758AA",
+      "04672758AB",
+      "68226356AF",
+      "68226356AH",
+      "68226356AI"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "04672758AA",
+      "04672758AB",
+      "68226356AF",
+      "68226356AH",
+      "68226356AI"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68211617AF",
+      "68211617AG",
+      "68358974AC",
+      "68405937AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68211617AF",
+      "68211617AG",
+      "68358974AC",
+      "68405937AA"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68277370AJ",
+      "68277370AM",
+      "68277372AD",
+      "68277372AE",
+      "68277372AN",
+      "68277374AA",
+      "68277374AB",
+      "68277374AD",
+      "68277374AN",
+      "68367471AC",
+      "68367471AD",
+      "68380571AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68277370AJ",
+      "68277370AM",
+      "68277372AD",
+      "68277372AE",
+      "68277372AN",
+      "68277374AA",
+      "68277374AB",
+      "68277374AD",
+      "68277374AN",
+      "68367471AC",
+      "68367471AD",
+      "68380571AB"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68239262AH",
+      "68239262AI",
+      "68239262AJ",
+      "68239263AH",
+      "68239263AJ",
+      "68358439AE",
+      "68358439AG"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68239262AH",
+      "68239262AI",
+      "68239262AJ",
+      "68239263AH",
+      "68239263AJ",
+      "68358439AE",
+      "68358439AG"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68277480AV ",
+      "68277480AX ",
+      "68277480AZ ",
+      "68366580AI ",
+      "68366580AK ",
+      "68366580AM "
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68277480AV",
+      "68277480AX",
+      "68277480AZ",
+      "68366580AI",
+      "68366580AK",
+      "68366580AM"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68288309AC",
+      "68288309AD",
+      "68525339AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68288309AC",
+      "68288309AD",
+      "68525339AA"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672758AA",
+      "68226356AI"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "04672758AA",
+      "68226356AI"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x7e2"
+    ],
+    "ecu": "hybrid",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05190175BF",
+      "05190175BH",
+      "05190226AI",
+      "05190226AK",
+      "05190226AM"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "05190175BF",
+      "05190175BH",
+      "05190226AI",
+      "05190226AK",
+      "05190226AM"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68238840AH",
+      "68358990AC",
+      "68405939AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68238840AH",
+      "68358990AC",
+      "68405939AA"
+    ],
+    "source": "opendbc",
+    "years": "2017-2018"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68405292AC",
+      "68434956AC",
+      "68434956AD",
+      "68434960AE",
+      "68434960AF",
+      "68529064AB",
+      "68594990AB",
+      "68594990AD",
+      "68594990AE",
+      "68594991AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68405292AC",
+      "68434956AC",
+      "68434956AD",
+      "68434960AE",
+      "68434960AF",
+      "68529064AB",
+      "68594990AB",
+      "68594990AD",
+      "68594990AE",
+      "68594991AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05190392AB ",
+      "68416680AD ",
+      "68416680AE ",
+      "68416680AF ",
+      "68416680AG ",
+      "68444228AC ",
+      "68444228AD ",
+      "68444228AE ",
+      "68444228AF ",
+      "68499122AD ",
+      "68499122AE ",
+      "68499122AF ",
+      "68526772AD ",
+      "68526772AH ",
+      "68599493AC ",
+      "68657433AA ",
+      "68700317AC "
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "05190392AB",
+      "68416680AD",
+      "68416680AE",
+      "68416680AF",
+      "68416680AG",
+      "68444228AC",
+      "68444228AD",
+      "68444228AE",
+      "68444228AF",
+      "68499122AD",
+      "68499122AE",
+      "68499122AF",
+      "68526772AD",
+      "68526772AH",
+      "68599493AC",
+      "68657433AA",
+      "68700317AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68416741AA",
+      "68460392AA",
+      "68525339AA",
+      "68525339AB",
+      "68594341AB",
+      "68594341AC"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68416741AA",
+      "68460392AA",
+      "68525339AA",
+      "68525339AB",
+      "68594341AB",
+      "68594341AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672758AB",
+      "68417813AF",
+      "68540436AA",
+      "68540436AB",
+      "68540436AC",
+      "68540436AD",
+      "68598670AB",
+      "68598670AC",
+      "68645752AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "04672758AB",
+      "68417813AF",
+      "68540436AA",
+      "68540436AB",
+      "68540436AC",
+      "68540436AD",
+      "68598670AB",
+      "68598670AC",
+      "68645752AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x7e2"
+    ],
+    "ecu": "hybrid",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05185116AF",
+      "05185116AJ",
+      "05185116AK",
+      "05185116AL",
+      "05190240AP",
+      "05190240AQ",
+      "05190240AR",
+      "05190265AG",
+      "05190265AH",
+      "05190289AE",
+      "68540977AH",
+      "68540977AK",
+      "68540977AL",
+      "68597647AE",
+      "68597647AF",
+      "68632416AB",
+      "68632416AC",
+      "68676877AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "05185116AF",
+      "05185116AJ",
+      "05185116AK",
+      "05185116AL",
+      "05190240AP",
+      "05190240AQ",
+      "05190240AR",
+      "05190265AG",
+      "05190265AH",
+      "05190289AE",
+      "68540977AH",
+      "68540977AK",
+      "68540977AL",
+      "68597647AE",
+      "68597647AF",
+      "68632416AB",
+      "68632416AC",
+      "68676877AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68405567AB",
+      "68405567AC",
+      "68453076AD",
+      "68480710AC",
+      "68526665AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica Hybrid"
+    ],
+    "part_numbers": [
+      "68405567AB",
+      "68405567AC",
+      "68453076AD",
+      "68480710AC",
+      "68526665AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2025"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68397394AA",
+      "68433480AB",
+      "68453575AF",
+      "68577676AA",
+      "68593395AA"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68397394AA",
+      "68433480AB",
+      "68453575AF",
+      "68577676AA",
+      "68593395AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68405327AC",
+      "68436233AB",
+      "68436233AC",
+      "68436234AB",
+      "68436250AE",
+      "68529067AA",
+      "68594993AB",
+      "68594994AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68405327AC",
+      "68436233AB",
+      "68436233AC",
+      "68436234AB",
+      "68436250AE",
+      "68529067AA",
+      "68594993AB",
+      "68594994AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68413871AD ",
+      "68413871AE ",
+      "68413871AH ",
+      "68413871AI ",
+      "68413871AJ ",
+      "68413873AH ",
+      "68413873AI ",
+      "68443120AE ",
+      "68443123AC ",
+      "68443125AC ",
+      "68496647AI ",
+      "68496647AJ ",
+      "68496650AH ",
+      "68496650AI ",
+      "68496650AL ",
+      "68496652AH ",
+      "68526752AD ",
+      "68526752AE ",
+      "68526754AD ",
+      "68526754AE ",
+      "68536264AE ",
+      "68700304AB ",
+      "68700306AB "
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68413871AD",
+      "68413871AE",
+      "68413871AH",
+      "68413871AI",
+      "68413871AJ",
+      "68413873AH",
+      "68413873AI",
+      "68443120AE",
+      "68443123AC",
+      "68443125AC",
+      "68496647AI",
+      "68496647AJ",
+      "68496650AH",
+      "68496650AI",
+      "68496650AL",
+      "68496652AH",
+      "68526752AD",
+      "68526752AE",
+      "68526754AD",
+      "68526754AE",
+      "68536264AE",
+      "68700304AB",
+      "68700306AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68416742AA",
+      "68460393AA",
+      "68460393AB",
+      "68494461AB",
+      "68494461AC",
+      "68524936AA",
+      "68524936AB",
+      "68525338AB",
+      "68594337AB",
+      "68594340AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68416742AA",
+      "68460393AA",
+      "68460393AB",
+      "68494461AB",
+      "68494461AC",
+      "68524936AA",
+      "68524936AB",
+      "68525338AB",
+      "68594337AB",
+      "68594340AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672758AA",
+      "04672758AB",
+      "68417813AF",
+      "68540436AA",
+      "68540436AB",
+      "68540436AC",
+      "68540436AD",
+      "68598670AB",
+      "68598670AC"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "04672758AA",
+      "04672758AB",
+      "68417813AF",
+      "68540436AA",
+      "68540436AB",
+      "68540436AC",
+      "68540436AD",
+      "68598670AB",
+      "68598670AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68405565AB",
+      "68405565AC",
+      "68444299AC",
+      "68480707AC",
+      "68480708AC",
+      "68526663AB"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68405565AB",
+      "68405565AC",
+      "68444299AC",
+      "68480707AC",
+      "68480708AC",
+      "68526663AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68414271AC",
+      "68414271AD",
+      "68414275AC",
+      "68414275AD",
+      "68443154AB",
+      "68443154AC",
+      "68443155AC",
+      "68443158AB",
+      "68501050AD",
+      "68501051AD",
+      "68501055AD",
+      "68527221AB",
+      "68527223AB",
+      "68586231AD",
+      "68586233AD"
+    ],
+    "make": "Chrysler",
+    "models": [
+      "Chrysler Pacifica",
+      "Chrysler Pacifica"
+    ],
+    "part_numbers": [
+      "68414271AC",
+      "68414271AD",
+      "68414275AC",
+      "68414275AD",
+      "68443154AB",
+      "68443154AC",
+      "68443155AC",
+      "68443158AB",
+      "68501050AD",
+      "68501051AD",
+      "68501055AD",
+      "68527221AB",
+      "68527223AB",
+      "68586231AD",
+      "68586233AD"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68408639AD",
+      "68499978AB"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "68408639AD",
+      "68499978AB"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68454261AD",
+      "68471535AE"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "68454261AD",
+      "68471535AE"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035786AE ",
+      "68449476AE "
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "05035786AE",
+      "68449476AE"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68453435AA",
+      "68498477AA"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "68453435AA",
+      "68498477AA"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68440581AE",
+      "68456722AC"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "68440581AE",
+      "68456722AC"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68355362AB",
+      "68492238AD"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "68355362AB",
+      "68492238AD"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035826AC",
+      "68449265AC"
+    ],
+    "make": "Dodge",
+    "models": [
+      "Dodge Durango"
+    ],
+    "part_numbers": [
+      "05035826AC",
+      "68449265AC"
+    ],
+    "source": "opendbc",
+    "years": "2020-2021"
+  },
+  {
+    "addresses": [
+      "0x18da28f1"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68477674AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68477674AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x18da60f1"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68492643AC"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68492643AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x18da10f1"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68493558AD "
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68493558AD"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x18da30f1"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68319152AJ"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68319152AJ"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x18dac0f1"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68469498AA"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68469498AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x18da18f1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68492011AD"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Cherokee"
+    ],
+    "part_numbers": [
+      "68492011AD"
+    ],
+    "source": "opendbc",
+    "years": "2019-2023"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68252642AG",
+      "68306178AD",
+      "68336275AB",
+      "68336276AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68252642AG",
+      "68306178AD",
+      "68336275AB",
+      "68336276AB"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68243549AG",
+      "68302211AC",
+      "68302212AD",
+      "68302214AC",
+      "68302223AC",
+      "68302246AC",
+      "68331511AC",
+      "68331574AC",
+      "68331687AC",
+      "68331690AC",
+      "68340272AD",
+      "68353314AD"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68243549AG",
+      "68302211AC",
+      "68302212AD",
+      "68302214AC",
+      "68302223AC",
+      "68302246AC",
+      "68331511AC",
+      "68331574AC",
+      "68331687AC",
+      "68331690AC",
+      "68340272AD",
+      "68353314AD"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035920AE ",
+      "05036124AE ",
+      "68252272AG ",
+      "68284455AI ",
+      "68284456AI ",
+      "68284456AJ ",
+      "68284477AF ",
+      "68325564AH ",
+      "68325564AI ",
+      "68325565AH ",
+      "68325565AI ",
+      "68325565AJ ",
+      "68325618AD "
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "05035920AE",
+      "05036124AE",
+      "68252272AG",
+      "68284455AI",
+      "68284456AI",
+      "68284456AJ",
+      "68284477AF",
+      "68325564AH",
+      "68325564AI",
+      "68325565AH",
+      "68325565AI",
+      "68325565AJ",
+      "68325618AD"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68276201AG",
+      "68321644AB",
+      "68321644AC",
+      "68321646AC",
+      "68321648AC",
+      "68321650AC",
+      "68367342AA"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68276201AG",
+      "68321644AB",
+      "68321644AC",
+      "68321646AC",
+      "68321648AC",
+      "68321650AC",
+      "68367342AA"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672627AB",
+      "68251506AF",
+      "68332015AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "04672627AB",
+      "68251506AF",
+      "68332015AB"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68309533AA",
+      "68316742AB",
+      "68355363AB",
+      "68367618AA"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68309533AA",
+      "68316742AB",
+      "68355363AB",
+      "68367618AA"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035517AH",
+      "05035520AE",
+      "68253222AF",
+      "68311218AC",
+      "68311218AD",
+      "68311223AF",
+      "68311223AG",
+      "68361911AE",
+      "68361911AF",
+      "68361911AH",
+      "68361914AE",
+      "68361916AD"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "05035517AH",
+      "05035520AE",
+      "68253222AF",
+      "68311218AC",
+      "68311218AD",
+      "68311223AF",
+      "68311223AG",
+      "68361911AE",
+      "68361911AF",
+      "68361911AH",
+      "68361914AE",
+      "68361916AD"
+    ],
+    "source": "opendbc",
+    "years": "2016-2018"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68408639AC",
+      "68408639AD",
+      "68499978AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68408639AC",
+      "68408639AD",
+      "68499978AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68402703AB",
+      "68402704AB",
+      "68402707AB",
+      "68402708AB",
+      "68402714AB",
+      "68402736AB",
+      "68402971AD",
+      "68454144AD",
+      "68454145AB",
+      "68454152AB",
+      "68454156AB",
+      "68516650AB",
+      "68516651AB",
+      "68516669AB",
+      "68516671AB",
+      "68516683AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68402703AB",
+      "68402704AB",
+      "68402707AB",
+      "68402708AB",
+      "68402714AB",
+      "68402736AB",
+      "68402971AD",
+      "68454144AD",
+      "68454145AB",
+      "68454152AB",
+      "68454156AB",
+      "68516650AB",
+      "68516651AB",
+      "68516669AB",
+      "68516671AB",
+      "68516683AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035674AB ",
+      "68412635AE ",
+      "68412635AG ",
+      "68412635AH ",
+      "68412660AD ",
+      "68412660AF ",
+      "68422860AB",
+      "68449435AE ",
+      "68496223AA ",
+      "68504959AD ",
+      "68504959AE ",
+      "68504960AD ",
+      "68504993AC "
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "05035674AB",
+      "68412635AE",
+      "68412635AG",
+      "68412635AH",
+      "68412660AD",
+      "68412660AF",
+      "68422860AB",
+      "68449435AE",
+      "68496223AA",
+      "68504959AD",
+      "68504959AE",
+      "68504960AD",
+      "68504993AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68417279AA",
+      "68417280AA",
+      "68417281AA",
+      "68417283AA",
+      "68453431AA",
+      "68453433AA",
+      "68453435AA",
+      "68499171AA",
+      "68499171AB",
+      "68501183AA",
+      "68501186AA"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68417279AA",
+      "68417280AA",
+      "68417281AA",
+      "68417283AA",
+      "68453431AA",
+      "68453433AA",
+      "68453435AA",
+      "68499171AA",
+      "68499171AB",
+      "68501183AA",
+      "68501186AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672788AA",
+      "68456722AC"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "04672788AA",
+      "68456722AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68355363AB",
+      "68355364AB"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "68355363AB",
+      "68355364AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035707AA",
+      "68419672AC",
+      "68419675AC",
+      "68419678AB",
+      "68423905AB",
+      "68449258AC",
+      "68495807AA",
+      "68495807AB",
+      "68503641AC",
+      "68503644AC",
+      "68503664AC"
+    ],
+    "make": "Jeep",
+    "models": [
+      "Jeep Grand Cherokee"
+    ],
+    "part_numbers": [
+      "05035707AA",
+      "68419672AC",
+      "68419675AC",
+      "68419678AB",
+      "68423905AB",
+      "68449258AC",
+      "68495807AA",
+      "68495807AB",
+      "68503641AC",
+      "68503644AC",
+      "68503664AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2021"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68292406AG",
+      "68292406AH",
+      "68432418AB",
+      "68432418AC",
+      "68432418AD",
+      "68436004AD",
+      "68436004AE",
+      "68438454AC",
+      "68438454AD",
+      "68438456AE",
+      "68438456AF",
+      "68535469AB",
+      "68535470AC",
+      "68548900AB",
+      "68548900AC",
+      "68586307AB",
+      "68586307AC",
+      "68728724AA",
+      "68728727AA"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "68292406AG",
+      "68292406AH",
+      "68432418AB",
+      "68432418AC",
+      "68432418AD",
+      "68436004AD",
+      "68436004AE",
+      "68438454AC",
+      "68438454AD",
+      "68438456AE",
+      "68438456AF",
+      "68535469AB",
+      "68535470AC",
+      "68548900AB",
+      "68548900AC",
+      "68586307AB",
+      "68586307AC",
+      "68728724AA",
+      "68728727AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68294051AG",
+      "68294051AI",
+      "68294052AG",
+      "68294052AH",
+      "68294059AI",
+      "68294063AG",
+      "68294063AH",
+      "68294063AI",
+      "68434846AC",
+      "68434847AC",
+      "68434849AC",
+      "68434850AC",
+      "68434855AC",
+      "68434856AC",
+      "68434858AC",
+      "68434859AC",
+      "68434860AC",
+      "68453471AD",
+      "68453483AC",
+      "68453483AD",
+      "68453487AD",
+      "68453491AC",
+      "68453491AD",
+      "68453499AD",
+      "68453502AC",
+      "68453503AC",
+      "68453503AD",
+      "68453505AC",
+      "68453505AD",
+      "68453511AC",
+      "68453513AC",
+      "68453513AD",
+      "68453514AD",
+      "68505633AB",
+      "68510277AG",
+      "68510277AH",
+      "68510280AG",
+      "68510280AH",
+      "68510282AG",
+      "68510282AH",
+      "68510283AG",
+      "68527346AE",
+      "68527361AD",
+      "68527375AD",
+      "68527381AD",
+      "68527381AE",
+      "68527382AE",
+      "68527383AD",
+      "68527383AE",
+      "68527387AE",
+      "68527397AD",
+      "68527403AC",
+      "68527403AD",
+      "68527404AD",
+      "68546047AF",
+      "68631938AA",
+      "68631939AA",
+      "68631940AA",
+      "68631940AB",
+      "68631941AB",
+      "68631942AA",
+      "68631943AB"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "68294051AG",
+      "68294051AI",
+      "68294052AG",
+      "68294052AH",
+      "68294059AI",
+      "68294063AG",
+      "68294063AH",
+      "68294063AI",
+      "68434846AC",
+      "68434847AC",
+      "68434849AC",
+      "68434850AC",
+      "68434855AC",
+      "68434856AC",
+      "68434858AC",
+      "68434859AC",
+      "68434860AC",
+      "68453471AD",
+      "68453483AC",
+      "68453483AD",
+      "68453487AD",
+      "68453491AC",
+      "68453491AD",
+      "68453499AD",
+      "68453502AC",
+      "68453503AC",
+      "68453503AD",
+      "68453505AC",
+      "68453505AD",
+      "68453511AC",
+      "68453513AC",
+      "68453513AD",
+      "68453514AD",
+      "68505633AB",
+      "68510277AG",
+      "68510277AH",
+      "68510280AG",
+      "68510280AH",
+      "68510282AG",
+      "68510282AH",
+      "68510283AG",
+      "68527346AE",
+      "68527361AD",
+      "68527375AD",
+      "68527381AD",
+      "68527381AE",
+      "68527382AE",
+      "68527383AD",
+      "68527383AE",
+      "68527387AE",
+      "68527397AD",
+      "68527403AC",
+      "68527403AD",
+      "68527404AD",
+      "68546047AF",
+      "68631938AA",
+      "68631939AA",
+      "68631940AA",
+      "68631940AB",
+      "68631941AB",
+      "68631942AA",
+      "68631943AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035699AG ",
+      "05035841AC ",
+      "05035841AD ",
+      "05036026AB ",
+      "05036030AC ",
+      "05036065AE ",
+      "05036066AE ",
+      "05036067AE ",
+      "05036193AA ",
+      "05149368AA ",
+      "05149374AA ",
+      "05149591AD ",
+      "05149591AE ",
+      "05149592AE ",
+      "05149599AE ",
+      "05149600AD ",
+      "05149600AE ",
+      "05149605AE ",
+      "05149846AA ",
+      "05149848AA ",
+      "05149848AC ",
+      "05190341AD",
+      "05190346AD",
+      "68378695AI ",
+      "68378695AJ ",
+      "68378695AK ",
+      "68378696AJ ",
+      "68378696AK ",
+      "68378701AI ",
+      "68378702AI ",
+      "68378710AL ",
+      "68378742AI ",
+      "68378742AK ",
+      "68378743AI ",
+      "68378743AM ",
+      "68378748AL ",
+      "68378758AM ",
+      "68378759AM ",
+      "68448163AJ",
+      "68448163AK",
+      "68448163AL",
+      "68448165AG",
+      "68448165AK",
+      "68455111AC ",
+      "68455119AC ",
+      "68455137AC ",
+      "68455142AC ",
+      "68455142AE ",
+      "68455145AC ",
+      "68455145AE ",
+      "68455146AC ",
+      "68460927AA ",
+      "68467909AB ",
+      "68467909AC ",
+      "68467915AC ",
+      "68467916AC ",
+      "68467936AC ",
+      "68500630AD",
+      "68500630AE",
+      "68500630AF",
+      "68500631AE",
+      "68502719AC ",
+      "68502722AC ",
+      "68502733AC ",
+      "68502734AF ",
+      "68502737AF ",
+      "68502740AF ",
+      "68502741AF ",
+      "68502742AC ",
+      "68502742AF ",
+      "68539650AD",
+      "68539650AF",
+      "68539651AD",
+      "68586101AA ",
+      "68586102AA ",
+      "68586105AB ",
+      "68629917AC ",
+      "68629919AC ",
+      "68629919AD ",
+      "68629922AC ",
+      "68629925AC ",
+      "68629926AC "
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "05035699AG",
+      "05035841AC",
+      "05035841AD",
+      "05036026AB",
+      "05036030AC",
+      "05036065AE",
+      "05036066AE",
+      "05036067AE",
+      "05036193AA",
+      "05149368AA",
+      "05149374AA",
+      "05149591AD",
+      "05149591AE",
+      "05149592AE",
+      "05149599AE",
+      "05149600AD",
+      "05149600AE",
+      "05149605AE",
+      "05149846AA",
+      "05149848AA",
+      "05149848AC",
+      "05190341AD",
+      "05190346AD",
+      "68378695AI",
+      "68378695AJ",
+      "68378695AK",
+      "68378696AJ",
+      "68378696AK",
+      "68378701AI",
+      "68378702AI",
+      "68378710AL",
+      "68378742AI",
+      "68378742AK",
+      "68378743AI",
+      "68378743AM",
+      "68378748AL",
+      "68378758AM",
+      "68378759AM",
+      "68448163AJ",
+      "68448163AK",
+      "68448163AL",
+      "68448165AG",
+      "68448165AK",
+      "68455111AC",
+      "68455119AC",
+      "68455137AC",
+      "68455142AC",
+      "68455142AE",
+      "68455145AC",
+      "68455145AE",
+      "68455146AC",
+      "68460927AA",
+      "68467909AB",
+      "68467909AC",
+      "68467915AC",
+      "68467916AC",
+      "68467936AC",
+      "68500630AD",
+      "68500630AE",
+      "68500630AF",
+      "68500631AE",
+      "68502719AC",
+      "68502722AC",
+      "68502733AC",
+      "68502734AF",
+      "68502737AF",
+      "68502740AF",
+      "68502741AF",
+      "68502742AC",
+      "68502742AF",
+      "68539650AD",
+      "68539650AF",
+      "68539651AD",
+      "68586101AA",
+      "68586102AA",
+      "68586105AB",
+      "68629917AC",
+      "68629919AC",
+      "68629919AD",
+      "68629922AC",
+      "68629925AC",
+      "68629926AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x75a"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "21590101AA",
+      "21590101AB",
+      "22490101AB",
+      "68273275AF",
+      "68273275AG",
+      "68273275AH",
+      "68312176AE",
+      "68312176AF",
+      "68312176AG",
+      "68440789AC",
+      "68466110AA",
+      "68466110AB",
+      "68466113AA",
+      "68466116AA",
+      "68469901AA",
+      "68469904AA",
+      "68469907AA",
+      "68522583AA",
+      "68522583AB",
+      "68522584AA",
+      "68522585AB",
+      "68552788AA",
+      "68552789AA",
+      "68552790AA",
+      "68552791AB",
+      "68552794AA",
+      "68552794AD",
+      "68585106AB",
+      "68585107AB",
+      "68585108AB",
+      "68585109AB",
+      "68585112AB"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "21590101AA",
+      "21590101AB",
+      "22490101AB",
+      "68273275AF",
+      "68273275AG",
+      "68273275AH",
+      "68312176AE",
+      "68312176AF",
+      "68312176AG",
+      "68440789AC",
+      "68466110AA",
+      "68466110AB",
+      "68466113AA",
+      "68466116AA",
+      "68469901AA",
+      "68469904AA",
+      "68469907AA",
+      "68522583AA",
+      "68522583AB",
+      "68522584AA",
+      "68522585AB",
+      "68552788AA",
+      "68552789AA",
+      "68552790AA",
+      "68552791AB",
+      "68552794AA",
+      "68552794AD",
+      "68585106AB",
+      "68585107AB",
+      "68585108AB",
+      "68585109AB",
+      "68585112AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672892AB",
+      "04672932AB",
+      "04672932AC",
+      "22DTRHD_AA",
+      "68320950AH",
+      "68320950AI",
+      "68320950AJ",
+      "68320950AL",
+      "68320950AM",
+      "68454268AB",
+      "68454268AC",
+      "68475160AE",
+      "68475160AF",
+      "68475160AG"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "04672892AB",
+      "04672932AB",
+      "04672932AC",
+      "22DTRHD",
+      "68320950AH",
+      "68320950AI",
+      "68320950AJ",
+      "68320950AL",
+      "68320950AM",
+      "68454268AB",
+      "68454268AC",
+      "68475160AE",
+      "68475160AF",
+      "68475160AG"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68428609AB",
+      "68441329AA",
+      "68441329AB",
+      "68473844AB",
+      "68490898AA",
+      "68500728AA",
+      "68615033AA",
+      "68615034AA"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "68428609AB",
+      "68441329AA",
+      "68441329AB",
+      "68473844AB",
+      "68490898AA",
+      "68500728AA",
+      "68615033AA",
+      "68615034AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7e1"
+    ],
+    "ecu": "transmission",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "05035706AD",
+      "05035842AB",
+      "05036069AA",
+      "05036181AA",
+      "05149536AC",
+      "05149537AC",
+      "05149543AC",
+      "68360078AL",
+      "68360080AL",
+      "68360080AM",
+      "68360081AM",
+      "68360081AN",
+      "68360085AH",
+      "68360085AJ",
+      "68360085AK",
+      "68360085AL",
+      "68360085AO",
+      "68360086AH",
+      "68360086AK",
+      "68360086AN",
+      "68384328AD",
+      "68384332AD",
+      "68445531AC",
+      "68445532AB",
+      "68445533AB",
+      "68445536AB",
+      "68445537AB",
+      "68466081AB",
+      "68466086AB",
+      "68466087AB",
+      "68484466AC",
+      "68484467AC",
+      "68484471AC",
+      "68502994AC",
+      "68502994AD",
+      "68502996AD",
+      "68520867AE",
+      "68520867AF",
+      "68520870AC",
+      "68520871AC",
+      "68528325AE",
+      "68540431AB",
+      "68540433AB",
+      "68551676AA",
+      "68629935AB",
+      "68629936AC"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 1500"
+    ],
+    "part_numbers": [
+      "05035706AD",
+      "05035842AB",
+      "05036069AA",
+      "05036181AA",
+      "05149536AC",
+      "05149537AC",
+      "05149543AC",
+      "68360078AL",
+      "68360080AL",
+      "68360080AM",
+      "68360081AM",
+      "68360081AN",
+      "68360085AH",
+      "68360085AJ",
+      "68360085AK",
+      "68360085AL",
+      "68360085AO",
+      "68360086AH",
+      "68360086AK",
+      "68360086AN",
+      "68384328AD",
+      "68384332AD",
+      "68445531AC",
+      "68445532AB",
+      "68445533AB",
+      "68445536AB",
+      "68445537AB",
+      "68466081AB",
+      "68466086AB",
+      "68466087AB",
+      "68484466AC",
+      "68484467AC",
+      "68484471AC",
+      "68502994AC",
+      "68502994AD",
+      "68502996AD",
+      "68520867AE",
+      "68520867AF",
+      "68520870AC",
+      "68520871AC",
+      "68528325AE",
+      "68540431AB",
+      "68540433AB",
+      "68551676AA",
+      "68629935AB",
+      "68629936AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x747"
+    ],
+    "ecu": "abs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68334977AH",
+      "68455481AC",
+      "68504022AA",
+      "68504022AB",
+      "68504022AC",
+      "68530686AB",
+      "68530686AC",
+      "68544596AC",
+      "68641704AA"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "68334977AH",
+      "68455481AC",
+      "68504022AA",
+      "68504022AB",
+      "68504022AC",
+      "68530686AB",
+      "68530686AC",
+      "68544596AC",
+      "68641704AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x742"
+    ],
+    "ecu": "combinationMeter",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68361606AH",
+      "68437735AC",
+      "68492693AD",
+      "68525485AB",
+      "68525487AB",
+      "68525498AB",
+      "68528791AF",
+      "68628474AB"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "68361606AH",
+      "68437735AC",
+      "68492693AD",
+      "68525485AB",
+      "68525487AB",
+      "68525498AB",
+      "68528791AF",
+      "68628474AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x7e0"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "52370131AF",
+      "52370231AF",
+      "52370231AG",
+      "52370491AA",
+      "52370931CT",
+      "52401032AE",
+      "52421132AF",
+      "52421332AF",
+      "68527616AD ",
+      "M2370131MB",
+      "M2421132MB"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "52370131AF",
+      "52370231AF",
+      "52370231AG",
+      "52370491AA",
+      "52370931CT",
+      "52401032AE",
+      "52421132AF",
+      "52421332AF",
+      "68527616AD",
+      "M2370131MB",
+      "M2421132MB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x761"
+    ],
+    "ecu": "eps",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68421036AC",
+      "68507906AB",
+      "68534023AC"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "68421036AC",
+      "68507906AB",
+      "68534023AC"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x753"
+    ],
+    "ecu": "fwdRadar",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "04672895AB",
+      "04672934AB",
+      "56029827AG",
+      "56029827AH",
+      "68462657AE",
+      "68484694AD",
+      "68484694AE",
+      "68615489AB"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "04672895AB",
+      "04672934AB",
+      "56029827AG",
+      "56029827AH",
+      "68462657AE",
+      "68484694AD",
+      "68484694AE",
+      "68615489AB"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  },
+  {
+    "addresses": [
+      "0x744"
+    ],
+    "ecu": "srs",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "68399794AC",
+      "68428503AA",
+      "68428505AA",
+      "68428507AA"
+    ],
+    "make": "Ram",
+    "models": [
+      "Ram 2500",
+      "Ram 3500"
+    ],
+    "part_numbers": [
+      "68399794AC",
+      "68428503AA",
+      "68428505AA",
+      "68428507AA"
+    ],
+    "source": "opendbc",
+    "years": "2019-2024"
+  }
+]

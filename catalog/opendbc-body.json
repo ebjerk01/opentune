@@ -1,0 +1,42 @@
+[
+  {
+    "addresses": [
+      "0x721"
+    ],
+    "ecu": "debug",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "166bd860",
+      "dc780f85"
+    ],
+    "make": "comma",
+    "models": [
+      "comma body"
+    ],
+    "part_numbers": [
+      "166bd860",
+      "dc780f85"
+    ],
+    "source": "opendbc"
+  },
+  {
+    "addresses": [
+      "0x720"
+    ],
+    "ecu": "engine",
+    "ecudef_id": null,
+    "family": null,
+    "fw_versions": [
+      "0.0.01",
+      "0.3.00a",
+      "02/27/2022"
+    ],
+    "make": "comma",
+    "models": [
+      "comma body"
+    ],
+    "part_numbers": [],
+    "source": "opendbc"
+  }
+]

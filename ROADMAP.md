@@ -31,7 +31,7 @@ Everything you can do with a `.bin` and no car.
 - [x] Map diff (compare stock vs modified, byte and region level)
 - [~] **ECU auto-identification** (`identify` command): read UDS/KWP DIDs → match `EcuDef.identify` keys + a vehicle catalog
   - [x] `identify` field on ECU defs + `opentune identify` (defs + catalog matching)
-  - [ ] harvest comma.ai opendbc/openpilot FW fingerprints (MIT) into a catalog
+  - [x] harvest comma.ai opendbc FW fingerprints (MIT) into a catalog — 998 entries, 14 brands
   - [ ] read the real identity DIDs in the drivers (0xF187/F189/F190/F18A…)
 - [x] ECU definition format (JSON) + 5 fleet defs + parse test
 - [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
