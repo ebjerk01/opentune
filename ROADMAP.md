@@ -9,27 +9,27 @@ Progress is tracked here. Checked = done and on `main`. This is a living documen
 ## M0 — Foundation (in progress)
 The compiling skeleton everything else builds on.
 
-- [~] Cargo workspace, Rust toolchain pin, release profile
-- [~] `opentune-core`: `Interface` driver trait, error/result types, capabilities
-- [~] Core types: protocols, memory regions, ECU identity, progress reporting
-- [~] Driver registry (enumerate + construct drivers by id)
-- [~] `mock`/file driver (operate on local `.bin`, no hardware)
-- [~] `opentune-cli` wired to the mock driver
+- [x] Cargo workspace, Rust toolchain pin, release profile
+- [x] `opentune-core`: `Interface` driver trait, error/result types, capabilities
+- [x] Core types: protocols, memory regions, ECU identity, progress reporting
+- [x] Driver registry (enumerate + construct drivers by id)
+- [x] `mock`/file driver (operate on local `.bin`, no hardware)
+- [x] `opentune-cli` wired to the mock driver
 - [x] GPL-3.0 licence, README, this roadmap
 - [ ] GitHub Actions CI (fmt + clippy + test)
-- [ ] Unit tests for core (ISO-TP framing, NRC parsing, checksum)
+- [~] Unit tests for core (NRC parsing, CRC32 done; ISO-TP framing next)
 
 ## M1 — Offline calibration tooling
 Everything you can do with a `.bin` and no car.
 
 - [ ] Binary model: load/save, region map, metadata
-- [ ] **Checksum engine**: trait + verify + correct
-  - [ ] generic (sum / CRC32)
+- [~] **Checksum engine**: trait + verify + correct
+  - [x] generic (CRC32-tail example + CRC32 helper)
   - [ ] Bosch EDC16 blocks (validated against reference files)
   - [ ] EDC17, PCR2.1 (later)
-- [ ] Map diff (compare stock vs modified, byte and region level)
-- [ ] ECU definition format (JSON): id, protocol, memory map, checksum type, seed/key id
-- [ ] `opentune-cli`: `checksum verify|fix`, `diff`, `info`, `backup`
+- [x] Map diff (compare stock vs modified, byte and region level)
+- [~] ECU definition format (JSON): id, protocol, memory map, checksum type, seed/key id
+- [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
 
 ## M2 — Read path (hardware)
 Identify and read a real ECU.
@@ -52,8 +52,8 @@ Write a calibration back, safely.
 - [ ] EDC16 end-to-end on the bench, then in-car
 
 ## M4 — Safety & recovery
-- [ ] Flash orchestrator state machine (backup → verify id → write → verify)
-- [ ] Voltage gate (refuse to flash below threshold)
+- [x] Flash orchestrator state machine (backup → write → verify)
+- [x] Voltage gate (refuse to flash below threshold)
 - [ ] Resumable / recoverable flash
 - [ ] Backup vault (every read archived with ECU id + timestamp + hash)
 - [ ] Structured logging of every session

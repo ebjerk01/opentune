@@ -1,0 +1,20 @@
+[package]
+name = "opentune-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "opentune"
+path = "src/main.rs"
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+opentune-checksum = { path = "../opentune-checksum" }
+opentune-flash = { path = "../opentune-flash" }
+opentune-driver-mock = { path = "../drivers/mock" }
+opentune-driver-openport2 = { path = "../drivers/j2534-openport" }
+opentune-driver-socketcan = { path = "../drivers/socketcan" }
+opentune-driver-elm327 = { path = "../drivers/kline-elm327" }
+clap.workspace = true
+anyhow.workspace = true
