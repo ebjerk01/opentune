@@ -1,0 +1,40 @@
+# Rust build output (OpenTune builds into /opt/nvme-fw via CARGO_TARGET_DIR)
+/target
+**/target
+Cargo.lock.bak
+
+# Node / Tauri / Android
+node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.keystore
+*.jks
+
+# Proprietary vendor installers and any OEM/vendor binaries — NEVER publish
+vendor/
+*.exe
+*.dll
+
+# ECU firmware images / dumps — keep out of the repo
+*.bin
+*.ori
+*.mod
+*.org
+*.frf
+*.odx
+*.sgo
+*.cbf
+*.hex
+*.s19
+*.a2l
+ecudumps/
+backups/
+
+# Local notes, secrets, scratch
+*-PRIVATE-*.md
+.env
+*.log
+.DS_Store
