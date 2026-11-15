@@ -51,7 +51,7 @@ Identify and read a real ECU.
   - [ ] OpenPort 2.0 clones (via the openport2 driver) — verified on a clone
   - [ ] ELM327 clones (read/log; most can't flash) via the elm327 driver
   - [x] **KKL 409.1 raw-K-line driver** (FTDI/CH340; real BREAK init, ISO14230 framing) — awaiting hardware test
-  - [ ] **slcan / gs_usb USB-CAN driver** (CANable/CANtact/CH340 clones)
+  - [~] **slcan USB-CAN driver** (CANable/CANtact) — implemented, awaiting hardware
   - [ ] **Generic J2534 driver** (Mongoose/VNCI/SVCI/Scanmatik clones)
 - [ ] ECU identify (part/SW number, VIN)
 - [ ] Full OBD read — Bosch EDC16 first

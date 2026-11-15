@@ -1,0 +1,9 @@
+[package]
+name = "opentune-driver-slcan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+serialport.workspace = true

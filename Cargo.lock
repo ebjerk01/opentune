@@ -351,6 +351,7 @@ dependencies = [
  "opentune-driver-kline-bridge",
  "opentune-driver-mock",
  "opentune-driver-openport2",
+ "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-flash",
  "serde_json",
@@ -398,6 +399,14 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-openport2"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-slcan"
 version = "0.1.0"
 dependencies = [
  "opentune-core",

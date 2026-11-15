@@ -11,6 +11,7 @@ members = [
     "crates/drivers/kline-elm327",
     "crates/drivers/kkl",
     "crates/drivers/kline-bridge",
+    "crates/drivers/slcan",
 ]
 
 [workspace.package]

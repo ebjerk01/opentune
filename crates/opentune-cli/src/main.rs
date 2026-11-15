@@ -158,6 +158,9 @@ fn registry() -> Registry {
     r.register("kline-bridge", "Arduino K-line bridge", || {
         Box::new(opentune_driver_kline_bridge::BridgeDriver::new())
     });
+    r.register("slcan", "slcan USB-CAN (CANable/CANtact)", || {
+        Box::new(opentune_driver_slcan::SlcanDriver::new())
+    });
     r
 }
 

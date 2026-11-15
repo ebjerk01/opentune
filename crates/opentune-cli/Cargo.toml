@@ -18,6 +18,7 @@ opentune-driver-socketcan = { path = "../drivers/socketcan" }
 opentune-driver-elm327 = { path = "../drivers/kline-elm327" }
 opentune-driver-kkl = { path = "../drivers/kkl" }
 opentune-driver-kline-bridge = { path = "../drivers/kline-bridge" }
+opentune-driver-slcan = { path = "../drivers/slcan" }
 clap.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
