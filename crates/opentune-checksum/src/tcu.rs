@@ -9,9 +9,11 @@
 //!   little-endian in the **last 4 bytes** of each flash block; SBOOT checks it
 //!   on every boot.
 //! * **CRC32-VW (DQ381)** and **CRC-CCITT (ZF 8HP)** — `dspl1236/vag-tcu-tools`
-//!   (MIT). DQ381 protects its CAL block with a big-endian zlib **CRC-32**; the
-//!   block is self-describing (big-endian range pointers at `+0x38`/`+0x3C`, CRC
-//!   at `+0x44`, block base `0x14_0200`). ZF 8HP uses a **CRC-CCITT**.
+//!   (MIT). DQ381 protects each of its **BOOT, ASW and CAL** programming blocks
+//!   with a big-endian zlib **CRC-32**; every block is self-describing with the
+//!   same header (big-endian range pointers at `+0x38`/`+0x3C`, inclusive end,
+//!   CRC at `+0x44`) at its flash base (BOOT `0x01_0200`, ASW `0x03_0200`, CAL
+//!   `0x14_0200`). ZF 8HP uses a **CRC-CCITT**.
 //!
 //! OpenTune is GPL-3.0-or-later; GPL-3 and MIT sources are both compatible. The
 //! MIT copyright notice is retained here per the licence:
@@ -24,7 +26,7 @@
 //!
 //! | id           | family      | algorithm                       | validated against |
 //! |--------------|-------------|---------------------------------|-------------------|
-//! | `dq381`      | CRC32-VW    | zlib CRC-32, BE, self-describing| real `DQ381 full.bin` (CAL CRC `0x3D34EE10`) |
+//! | `dq381`      | CRC32-VW    | zlib CRC-32, BE, self-describing| real `dq381_full.bin` (BOOT `0xADCC4D12`, ASW `0x828A625B`, CAL `0x3D34EE10`) |
 //! | `dq250`      | JAMCRC      | `!crc32`, LE, per-block trailer | algorithm vectors + synthetic (no 0D9 bench dump on hand — validation pending) |
 //! | `tcu-ccitt`  | CRC-CCITT   | CCITT `0x1021`, BE trailer      | CCITT vectors (no CCITT-protected dump on hand — validation pending) |
 //!
@@ -33,9 +35,12 @@
 //! Each scheme refuses an image it cannot confirm. `dq250` only writes when the
 //! block layout fits **and at least one block's JAMCRC already matches** (so the
 //! algorithm is proven against a real stored value before any write). `dq381`
-//! only writes when the self-describing CAL header is present at the known base.
-//! A value that cannot be computed is never guessed.
-use crate::{crc32, BlockStatus, ChecksumAlgo, Fix};
+//! only writes a block whose self-describing header is present at a known base
+//! and whose covered region validates structurally; each of BOOT/ASW/CAL is
+//! handled independently. A value that cannot be computed is never guessed.
+use crate::{
+    crc32, BlockReport, BlockStatus, ChecksumAlgo, ChecksumKind, Fix, Recognition, Representation,
+};
 use opentune_core::{Error, MemoryRegion, Result};
 
 // ---------------------------------------------------------------------------
@@ -158,6 +163,29 @@ impl ChecksumAlgo for Dq250Jamcrc {
         Ok(out)
     }
 
+    /// A DQ250-MQB image is only *recognised* once at least one block's stored
+    /// JAMCRC proves the algorithm against a real value (see [`Self::recognised`]).
+    /// Until then the per-block results are merely mathematically consistent, so
+    /// they are reported [`Recognition::Consistent`] and never "supported".
+    fn verify_report(
+        &self,
+        image: &[u8],
+        representation: Representation,
+    ) -> Result<Vec<BlockReport>> {
+        let recognition = if Self::recognised(image) {
+            Recognition::Recognised
+        } else {
+            Recognition::Consistent
+        };
+        Ok(self
+            .verify(image)?
+            .into_iter()
+            .map(|status| {
+                BlockReport::new(status, representation, ChecksumKind::Embedded, recognition)
+            })
+            .collect())
+    }
+
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
         if !Self::recognised(image) {
             return Err(Error::Unsupported(
@@ -187,36 +215,67 @@ impl ChecksumAlgo for Dq250Jamcrc {
 }
 
 // ---------------------------------------------------------------------------
-// DQ381 — self-describing CAL CRC32 (big-endian zlib CRC-32)
+// DQ381 — self-describing BOOT/ASW/CAL CRC32 (big-endian zlib CRC-32)
 // ---------------------------------------------------------------------------
 
-/// DQ381 flash base of the CAL block; stored range pointers are absolute, so the
-/// region offset within the CAL block is `pointer - DQ381_CAL_BASE`.
-const DQ381_CAL_BASE: u32 = 0x14_0200;
-/// Offset (within the CAL block) of the big-endian range-start pointer.
+/// Offset (within a block header) of the big-endian range-start pointer.
 const DQ381_PTR_START: usize = 0x38;
 /// Offset of the big-endian range-end pointer (inclusive).
 const DQ381_PTR_END: usize = 0x3C;
 /// Offset of the big-endian stored CRC-32.
 const DQ381_CRC_OFF: usize = 0x44;
-/// Candidate file offsets of the CAL block: a full dump maps it at its flash
-/// base; an extracted CAL block starts at 0.
-const DQ381_CAL_CANDIDATES: &[usize] = &[0x14_0200, 0x0];
 
-/// A located DQ381 CAL block: its file offset and the region `[start, end]`
+/// Minimum covered-region length for a block header to be believed (guards
+/// against a coincidental sane-looking header over tiny/garbage ranges).
+const DQ381_MIN_REGION: usize = 0x1000;
+
+/// One VW_Flash DQ381 programming block. Every block is self-describing with the
+/// **same** header layout (`+0x38` start, `+0x3C` inclusive end, `+0x44` CRC-32,
+/// all big-endian); `base` is the block's flash base, i.e. its file offset in a
+/// full ECU read, and the stored range pointers are absolute to that base.
+///
+/// Validated against the owner's real `dq381_full.bin`: an independent
+/// `struct`/`zlib.crc32` cross-check matched all three stored CRCs — BOOT
+/// `0xADCC4D12`, ASW `0x828A625B`, CAL `0x3D34EE10` (see `TCU-DQ381-VALIDATION.md`).
+/// The CRC covers the pointer-declared range only, so OpenTune is unaffected by
+/// the `ecudefs` CAL writable-extent discrepancy noted there (it uses the
+/// embedded pointers, never a declared block length).
+#[derive(Debug, Clone, Copy)]
+struct Dq381BlockDef {
+    name: &'static str,
+    base: u32,
+}
+
+/// The three DQ381 blocks in flash order.
+const DQ381_BLOCKS: &[Dq381BlockDef] = &[
+    Dq381BlockDef {
+        name: "BOOT",
+        base: 0x01_0200,
+    },
+    Dq381BlockDef {
+        name: "ASW",
+        base: 0x03_0200,
+    },
+    Dq381BlockDef {
+        name: "CAL",
+        base: 0x14_0200,
+    },
+];
+
+/// A located DQ381 block: its header's file offset and the region `[start, end]`
 /// (inclusive file offsets) the CRC covers.
 #[derive(Debug, Clone, Copy)]
-struct Dq381Cal {
-    cal_off: usize,
+struct Dq381Located {
+    name: &'static str,
     region_start: usize,
     region_end: usize,
     crc_off: usize,
 }
 
-impl Dq381Cal {
+impl Dq381Located {
     /// Compute the zlib CRC-32 over the covered region. If the stored CRC field
     /// falls inside the region it is treated as zero for the computation (as the
-    /// ECU does); on the observed DQ381 layout the CRC field sits *before* the
+    /// ECU does); on the observed DQ381 layout the CRC field sits *before* each
     /// region, so this branch is usually inert.
     fn compute(&self, img: &[u8]) -> Option<u32> {
         let region = img.get(self.region_start..=self.region_end)?;
@@ -229,46 +288,86 @@ impl Dq381Cal {
             Some(crc32(region))
         }
     }
+
     fn stored(&self, img: &[u8]) -> Option<u32> {
         u32be(img, self.crc_off)
     }
-}
 
-/// Locate the DQ381 CAL block from its self-describing header (data-independent:
-/// the range pointers do not change when the calibration is edited). Returns the
-/// block with region as file offsets, or `None` if no candidate has a sane header.
-fn find_dq381_cal(img: &[u8]) -> Option<Dq381Cal> {
-    let len = img.len();
-    for &cal in DQ381_CAL_CANDIDATES {
-        if cal + DQ381_CRC_OFF + 4 > len {
-            continue;
-        }
-        let (Some(ps), Some(pe)) = (
-            u32be(img, cal + DQ381_PTR_START),
-            u32be(img, cal + DQ381_PTR_END),
-        ) else {
-            continue;
-        };
-        if ps < DQ381_CAL_BASE || pe <= ps {
-            continue;
-        }
-        let rs = cal + (ps - DQ381_CAL_BASE) as usize;
-        let re = cal + (pe - DQ381_CAL_BASE) as usize;
-        // Region must be substantial and inside the file.
-        if re <= rs || re >= len || (re - rs) < 0x1000 {
-            continue;
-        }
-        return Some(Dq381Cal {
-            cal_off: cal,
-            region_start: rs,
-            region_end: re,
-            crc_off: cal + DQ381_CRC_OFF,
-        });
+    fn status(&self, img: &[u8]) -> Option<BlockStatus> {
+        let (computed, stored) = (self.compute(img)?, self.stored(img)?);
+        Some(BlockStatus {
+            name: format!("dq381-{}", self.name),
+            region: MemoryRegion::new(
+                self.region_start as u32,
+                (self.region_end - self.region_start + 1) as u32,
+            ),
+            stored: stored as u64,
+            computed: computed as u64,
+            ok: stored == computed,
+        })
     }
-    None
 }
 
-/// VAG **DQ381** DSG TCU — self-describing CAL **CRC32-VW** (big-endian zlib CRC-32).
+/// Try to read a sane self-describing header for `block` with its header at file
+/// offset `base_off`. The range pointers are absolute to the block's flash
+/// `base`, so the covered file offsets are `base_off + (pointer - base)`. Returns
+/// `None` unless the pointers are well-formed and the region fits in the file and
+/// is at least [`DQ381_MIN_REGION`] long (data-independent: editing the
+/// calibration never moves these pointers).
+fn locate_dq381(block: Dq381BlockDef, base_off: usize, img: &[u8]) -> Option<Dq381Located> {
+    let len = img.len();
+    if base_off + DQ381_CRC_OFF + 4 > len {
+        return None;
+    }
+    let ps = u32be(img, base_off + DQ381_PTR_START)?;
+    let pe = u32be(img, base_off + DQ381_PTR_END)?;
+    // Pointers are absolute to the block base: start at/after the base, end after
+    // start. This also disambiguates an extracted block — only the descriptor
+    // whose base matches the header's own pointers yields an in-range region.
+    if ps < block.base || pe <= ps {
+        return None;
+    }
+    let rs = base_off + (ps - block.base) as usize;
+    let re = base_off + (pe - block.base) as usize;
+    if re <= rs || re >= len || (re - rs) < DQ381_MIN_REGION {
+        return None;
+    }
+    Some(Dq381Located {
+        name: block.name,
+        region_start: rs,
+        region_end: re,
+        crc_off: base_off + DQ381_CRC_OFF,
+    })
+}
+
+/// Locate every DQ381 block present and classify the representation.
+///
+/// * **Full ECU read** ([`Representation::RawFullImage`]): one or more block
+///   headers sit at their absolute flash bases. Each block found is returned.
+/// * **Extracted block** ([`Representation::ProgrammingBlock`]): no full-image
+///   header, but a header at file offset 0 whose absolute pointers identify
+///   exactly one block.
+///
+/// Returns [`Representation::Unknown`] with an empty list when nothing validates
+/// structurally — the caller then refuses to guess.
+fn find_dq381_blocks(img: &[u8]) -> (Representation, Vec<Dq381Located>) {
+    let full: Vec<Dq381Located> = DQ381_BLOCKS
+        .iter()
+        .filter_map(|&b| locate_dq381(b, b.base as usize, img))
+        .collect();
+    if !full.is_empty() {
+        return (Representation::RawFullImage, full);
+    }
+    for &b in DQ381_BLOCKS {
+        if let Some(l) = locate_dq381(b, 0, img) {
+            return (Representation::ProgrammingBlock, vec![l]);
+        }
+    }
+    (Representation::Unknown, Vec::new())
+}
+
+/// VAG **DQ381** DSG TCU — self-describing **CRC32-VW** (big-endian zlib CRC-32)
+/// over the BOOT, ASW and CAL programming blocks.
 pub struct Dq381Crc32;
 
 impl ChecksumAlgo for Dq381Crc32 {
@@ -277,46 +376,66 @@ impl ChecksumAlgo for Dq381Crc32 {
     }
 
     fn verify(&self, image: &[u8]) -> Result<Vec<BlockStatus>> {
-        let mut out = Vec::new();
-        if let Some(cal) = find_dq381_cal(image) {
-            if let (Some(computed), Some(stored)) = (cal.compute(image), cal.stored(image)) {
-                out.push(BlockStatus {
-                    name: "dq381-CAL".into(),
-                    region: MemoryRegion::new(
-                        cal.region_start as u32,
-                        (cal.region_end - cal.region_start + 1) as u32,
-                    ),
-                    stored: stored as u64,
-                    computed: computed as u64,
-                    ok: stored == computed,
-                });
-            }
-        }
-        Ok(out)
+        let (_, blocks) = find_dq381_blocks(image);
+        Ok(blocks.iter().filter_map(|b| b.status(image)).collect())
+    }
+
+    /// Representation-aware report. Each located block carries the detected
+    /// representation (full read vs extracted block — more specific than the
+    /// caller's declaration), [`ChecksumKind::Embedded`] (the internal CRC the
+    /// ECU checks; the external UDS/transfer checksum is a separate
+    /// [`ChecksumKind::Transfer`] concern not computed here), and
+    /// [`Recognition::Recognised`] because a self-describing header was found at a
+    /// documented base — so a match is a confirmed-family result, never a
+    /// coincidence. When nothing is located, the declared `representation` is
+    /// echoed and the (empty) list carries no recognised claim.
+    fn verify_report(
+        &self,
+        image: &[u8],
+        representation: Representation,
+    ) -> Result<Vec<BlockReport>> {
+        let (detected, blocks) = find_dq381_blocks(image);
+        let rep = if blocks.is_empty() {
+            representation
+        } else {
+            detected
+        };
+        Ok(blocks
+            .iter()
+            .filter_map(|b| b.status(image))
+            .map(|status| {
+                BlockReport::new(status, rep, ChecksumKind::Embedded, Recognition::Recognised)
+            })
+            .collect())
     }
 
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
-        let Some(cal) = find_dq381_cal(image) else {
+        let (_, blocks) = find_dq381_blocks(image);
+        if blocks.is_empty() {
             return Err(Error::Unsupported(
-                "not a recognised DQ381 CAL image (no self-describing CRC32 header at the known \
-                 base); refusing to guess (see crate::tcu docs)"
+                "not a recognised DQ381 image (no self-describing CRC32 header for BOOT/ASW/CAL \
+                 at a known base); refusing to guess (see crate::tcu docs)"
                     .into(),
             ));
-        };
-        let (Some(computed), Some(stored)) = (cal.compute(image), cal.stored(image)) else {
-            return Err(Error::Config("DQ381 CAL region out of range".into()));
-        };
-        let mut fixes = Vec::new();
-        if computed != stored {
-            image[cal.crc_off..cal.crc_off + 4].copy_from_slice(&computed.to_be_bytes());
-            fixes.push(Fix {
-                name: "dq381-CAL".into(),
-                offset: cal.crc_off as u32,
-                old: stored as u64,
-                new: computed as u64,
-            });
         }
-        let _ = cal.cal_off;
+        let mut fixes = Vec::new();
+        for b in &blocks {
+            // Anti-brick: only correct a block that structurally validates (its
+            // region computes and its stored field reads). A block whose region
+            // is out of range is skipped, never guessed.
+            let (Some(computed), Some(stored)) = (b.compute(image), b.stored(image)) else {
+                continue;
+            };
+            if computed != stored {
+                image[b.crc_off..b.crc_off + 4].copy_from_slice(&computed.to_be_bytes());
+                fixes.push(Fix {
+                    name: format!("dq381-{}", b.name),
+                    offset: b.crc_off as u32,
+                    old: stored as u64,
+                    new: computed as u64,
+                });
+            }
+        }
         Ok(fixes)
     }
 }
@@ -449,34 +568,125 @@ mod tests {
         ));
     }
 
-    /// Build a synthetic DQ381-style CAL block (standalone, base 0) with a
-    /// self-describing header and a correct big-endian zlib CRC-32.
-    fn synthetic_dq381() -> Vec<u8> {
+    /// Look up a block descriptor by name.
+    fn dq381_def(name: &str) -> Dq381BlockDef {
+        DQ381_BLOCKS
+            .iter()
+            .find(|b| b.name == name)
+            .copied()
+            .unwrap()
+    }
+
+    /// Write a self-describing DQ381 block header for `def` at file offset
+    /// `header_off`, declaring absolute pointers `[ptr_start, ptr_end_incl]`, and
+    /// fill in the correct big-endian zlib CRC-32. For a full read `header_off`
+    /// equals the flash base; for an extracted block it is 0.
+    fn put_dq381_block(
+        img: &mut [u8],
+        def: Dq381BlockDef,
+        header_off: usize,
+        ptr_start: usize,
+        ptr_end_incl: usize,
+    ) {
+        img[header_off + DQ381_PTR_START..header_off + DQ381_PTR_START + 4]
+            .copy_from_slice(&(ptr_start as u32).to_be_bytes());
+        img[header_off + DQ381_PTR_END..header_off + DQ381_PTR_END + 4]
+            .copy_from_slice(&(ptr_end_incl as u32).to_be_bytes());
+        let loc = locate_dq381(def, header_off, img).unwrap();
+        let c = loc.compute(img).unwrap();
+        img[loc.crc_off..loc.crc_off + 4].copy_from_slice(&c.to_be_bytes());
+    }
+
+    /// Build a synthetic **full-read** DQ381 image with all three self-describing
+    /// blocks (BOOT/ASW/CAL) at their flash bases, each with a correct CRC-32.
+    fn synthetic_dq381_full() -> Vec<u8> {
+        let size = 0x18_0000usize;
+        let mut img = vec![0u8; size];
+        for (i, b) in img.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(13).wrapping_add(7);
+        }
+        put_dq381_block(&mut img, dq381_def("BOOT"), 0x01_0200, 0x01_0300, 0x02_F000);
+        put_dq381_block(&mut img, dq381_def("ASW"), 0x03_0200, 0x03_0300, 0x13_F000);
+        put_dq381_block(&mut img, dq381_def("CAL"), 0x14_0200, 0x14_0300, 0x17_F000);
+        img
+    }
+
+    /// Build a synthetic **extracted CAL** block (standalone, header at offset 0)
+    /// carrying absolute DQ381 pointers, with a correct big-endian zlib CRC-32.
+    fn synthetic_dq381_cal_block() -> Vec<u8> {
+        const CAL_BASE: usize = 0x14_0200;
         let size = 0x4_0000usize;
         let mut img = vec![0u8; size];
         for (i, b) in img.iter_mut().enumerate() {
             *b = (i as u8).wrapping_mul(13).wrapping_add(7);
         }
-        // region [0x100, 0x3F000] (so the CRC field at 0x44 is outside it).
-        let rs = 0x100u32 + DQ381_CAL_BASE;
-        let re = 0x3F000u32 + DQ381_CAL_BASE;
-        img[DQ381_PTR_START..DQ381_PTR_START + 4].copy_from_slice(&rs.to_be_bytes());
-        img[DQ381_PTR_END..DQ381_PTR_END + 4].copy_from_slice(&re.to_be_bytes());
-        // compute CRC over [0x100, 0x3F000] and store big-endian at 0x44
-        let cal = find_dq381_cal(&img).unwrap();
-        let c = cal.compute(&img).unwrap();
-        img[DQ381_CRC_OFF..DQ381_CRC_OFF + 4].copy_from_slice(&c.to_be_bytes());
+        // Absolute pointers [CAL_BASE+0x100, CAL_BASE+0x3F000]; with the header at
+        // file offset 0 these map to covered file offsets [0x100, 0x3F000].
+        put_dq381_block(
+            &mut img,
+            dq381_def("CAL"),
+            0,
+            CAL_BASE + 0x100,
+            CAL_BASE + 0x3F000,
+        );
         img
     }
 
     #[test]
-    fn dq381_verify_correct_roundtrip() {
-        let img = synthetic_dq381();
+    fn dq381_full_three_blocks_verify_correct() {
+        let img = synthetic_dq381_full();
+        let algo = Dq381Crc32;
+        let st = algo.verify(&img).unwrap();
+        assert_eq!(st.len(), 3, "BOOT + ASW + CAL located");
+        let names: Vec<_> = st.iter().map(|s| s.name.clone()).collect();
+        assert_eq!(names, ["dq381-BOOT", "dq381-ASW", "dq381-CAL"]);
+        assert!(st.iter().all(|s| s.ok), "all three must verify as built");
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+
+        // Representation is detected as a full read; every block recognised.
+        let rep = algo.verify_report(&img, Representation::Unknown).unwrap();
+        assert_eq!(rep.len(), 3);
+        assert!(rep
+            .iter()
+            .all(|r| r.representation == Representation::RawFullImage));
+        assert!(rep.iter().all(|r| r.recognition == Recognition::Recognised));
+        assert!(rep
+            .iter()
+            .all(|r| r.checksum_kind == ChecksumKind::Embedded));
+        assert!(rep.iter().all(|r| r.is_supported()));
+
+        // Edit the ASW region; only ASW goes stale and is re-derived, BOOT/CAL
+        // stay byte-for-byte untouched.
+        let mut m = img.clone();
+        m[0x03_1000] ^= 0xFF;
+        let bad = algo.verify(&m).unwrap();
+        assert_eq!(bad.iter().filter(|s| !s.ok).count(), 1);
+        assert!(!bad.iter().find(|s| s.name == "dq381-ASW").unwrap().ok);
+        let fixes = algo.correct(&mut m).unwrap();
+        assert_eq!(fixes.len(), 1, "only the touched block corrected");
+        assert_eq!(fixes[0].name, "dq381-ASW");
+        assert!(algo.verify(&m).unwrap().iter().all(|s| s.ok));
+        assert!(algo.correct(&mut m.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn dq381_extracted_cal_block() {
+        let img = synthetic_dq381_cal_block();
         let algo = Dq381Crc32;
         let st = algo.verify(&img).unwrap();
         assert_eq!(st.len(), 1);
-        assert!(st[0].ok, "freshly built DQ381 CAL must verify");
-        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+        assert_eq!(st[0].name, "dq381-CAL");
+        assert!(st[0].ok, "freshly built extracted CAL must verify");
+
+        let rep = algo.verify_report(&img, Representation::Unknown).unwrap();
+        assert_eq!(rep.len(), 1);
+        assert_eq!(
+            rep[0].representation,
+            Representation::ProgrammingBlock,
+            "an extracted block is recognised as a programming block"
+        );
+        assert_eq!(rep[0].recognition, Recognition::Recognised);
+        assert!(rep[0].is_supported());
 
         // Edit the calibration; the CAL CRC goes stale and is re-derived.
         let mut m = img.clone();
@@ -496,6 +706,11 @@ mod tests {
             algo.correct(&mut img).unwrap_err(),
             Error::Unsupported(_)
         ));
+        // No recognised block → an empty, un-supported detailed report.
+        let rep = algo
+            .verify_report(&img, Representation::RawFullImage)
+            .unwrap();
+        assert!(rep.is_empty());
     }
 
     #[test]
@@ -529,17 +744,37 @@ mod tests {
         };
         let algo = Dq381Crc32;
         let st = algo.verify(&img).unwrap();
-        assert_eq!(st.len(), 1, "one DQ381 CAL block located");
-        assert_eq!(st[0].stored, 0x3D34_EE10, "known stored CAL CRC");
-        assert!(st[0].ok, "real DQ381 CAL CRC must verify");
+        assert_eq!(st.len(), 3, "BOOT + ASW + CAL located in the full read");
+        // Independently cross-checked stored CRCs (TCU-DQ381-VALIDATION.md).
+        let stored_of = |name: &str| st.iter().find(|s| s.name == name).unwrap().stored;
+        assert_eq!(stored_of("dq381-BOOT"), 0xADCC_4D12);
+        assert_eq!(stored_of("dq381-ASW"), 0x828A_625B);
+        assert_eq!(stored_of("dq381-CAL"), 0x3D34_EE10);
+        assert!(
+            st.iter().all(|s| s.ok),
+            "every real DQ381 block CRC must verify (computed == stored)"
+        );
         assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
-        // wipe the CRC, correct, confirm the ECU's value is restored exactly
-        let cal = find_dq381_cal(&img).unwrap();
+
+        // Detailed report: full read, all three recognised and supported.
+        let rep = algo.verify_report(&img, Representation::Unknown).unwrap();
+        assert_eq!(rep.len(), 3);
+        assert!(rep
+            .iter()
+            .all(|r| r.representation == Representation::RawFullImage
+                && r.recognition == Recognition::Recognised
+                && r.is_supported()));
+
+        // Wipe every stored CRC, correct, confirm the ECU's values are restored
+        // exactly (byte-identical to the real dump).
+        let (_, blocks) = find_dq381_blocks(&img);
+        assert_eq!(blocks.len(), 3);
         let mut m = img.clone();
-        m[cal.crc_off..cal.crc_off + 4].copy_from_slice(&[0, 0, 0, 0]);
+        for b in &blocks {
+            m[b.crc_off..b.crc_off + 4].copy_from_slice(&[0, 0, 0, 0]);
+        }
         let fixes = algo.correct(&mut m).unwrap();
-        assert_eq!(fixes.len(), 1);
-        assert_eq!(fixes[0].new, 0x3D34_EE10);
+        assert_eq!(fixes.len(), 3, "all three CRCs re-derived");
         assert_eq!(m, img, "corrected image byte-identical to the real dump");
     }
 }

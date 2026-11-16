@@ -33,11 +33,145 @@ pub struct Fix {
     pub new: u64,
 }
 
+/// Which *representation* of a firmware image a checksum result applies to.
+///
+/// The same bytes mean different things depending on how they were obtained: a
+/// full ECU read places every programming block at its flash base, an extracted
+/// block is base-relative, and a container segment is carved from a transport
+/// container. This is declared by the caller (it cannot always be inferred from
+/// the bytes); an algorithm that can positively identify the representation
+/// (e.g. DQ381, from its self-describing block headers) may report a more
+/// specific value than the one declared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Representation {
+    /// A full ECU read: all programming blocks present in one image at their
+    /// absolute flash bases.
+    RawFullImage,
+    /// A single extracted programming block (e.g. a VW_Flash/ODX block), which is
+    /// addressed relative to its own base.
+    ProgrammingBlock,
+    /// A segment carved from a transport/update container (e.g. an ODX-F frame).
+    ContainerSegment,
+    /// Not declared by the caller and not determined.
+    #[default]
+    Unknown,
+}
+
+/// Whether a checksum lives *inside* the running image or guards a *transfer*.
+///
+/// Some families carry both: a DSG image has an internal CRC the ECU checks at
+/// boot (**embedded**) and, separately, an external UDS/container checksum over
+/// the programming payload in transit (**transfer**). Distinguishing them stops
+/// an embedded-CRC result from being read as transfer integrity, or vice versa.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChecksumKind {
+    /// Stored in the image and verified by the ECU at boot/run (internal CRC).
+    #[default]
+    Embedded,
+    /// External integrity over a programming payload in transit (e.g. a UDS
+    /// transfer or container CRC); not part of the running image.
+    Transfer,
+}
+
+/// How strongly a block result is tied to a *known, confirmed* checksum family.
+///
+/// This is the guard against over-claiming: arithmetic agreement alone does not
+/// prove an image belongs to a family (a short field can match by chance, and a
+/// generic trailer matches any bytes once corrected).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Recognition {
+    /// A known family was structurally identified and validated — e.g. a
+    /// self-describing header found at its documented base, or a real stored
+    /// value proven against the algorithm. A match here is genuinely supported.
+    Recognised,
+    /// The math checked out, but the layout/identity was **not** confirmed, so
+    /// the match may be coincidental. Never reported as "supported".
+    #[default]
+    Consistent,
+}
+
+/// A representation-aware report for one checksum-protected block: the plain
+/// [`BlockStatus`] plus how it must be interpreted.
+///
+/// Additive wrapper — code that only needs stored/computed/OK keeps using
+/// [`BlockStatus`] via [`ChecksumAlgo::verify`]; callers that must know *which*
+/// representation and *how confident* the recognition is use
+/// [`ChecksumAlgo::verify_report`] / [`report_detailed`].
+#[derive(Debug, Clone)]
+pub struct BlockReport {
+    /// The underlying stored-vs-computed status.
+    pub status: BlockStatus,
+    /// The representation this result applies to.
+    pub representation: Representation,
+    /// Embedded (internal) vs transfer (external) checksum.
+    pub checksum_kind: ChecksumKind,
+    /// Whether the family was recognised or the match is merely consistent.
+    pub recognition: Recognition,
+}
+
+impl BlockReport {
+    /// Construct a report from its parts.
+    pub fn new(
+        status: BlockStatus,
+        representation: Representation,
+        checksum_kind: ChecksumKind,
+        recognition: Recognition,
+    ) -> Self {
+        Self {
+            status,
+            representation,
+            checksum_kind,
+            recognition,
+        }
+    }
+
+    /// `true` only when the block both verifies **and** belongs to a recognised
+    /// family — i.e. it is safe to report as "supported". A merely
+    /// mathematically-consistent (possibly coincidental) match returns `false`
+    /// even when [`status.ok`](BlockStatus::ok) is set, so an unverified or
+    /// chance match is never surfaced as supported.
+    pub fn is_supported(&self) -> bool {
+        self.status.ok && self.recognition == Recognition::Recognised
+    }
+}
+
 /// A checksum scheme for one ECU family.
 pub trait ChecksumAlgo {
     fn id(&self) -> &str;
     /// Report each protected block and whether its stored checksum matches.
     fn verify(&self, image: &[u8]) -> Result<Vec<BlockStatus>>;
+
+    /// Representation-aware [`verify`](Self::verify): each block as a
+    /// [`BlockReport`] carrying the declared [`Representation`], the
+    /// [`ChecksumKind`] (embedded vs transfer) and a [`Recognition`] flag.
+    ///
+    /// The default wraps [`verify`](Self::verify) conservatively: it echoes the
+    /// caller-declared `representation`, marks every block [`ChecksumKind::Embedded`]
+    /// and — crucially — [`Recognition::Consistent`], **not** `Recognised`. The
+    /// default never claims family recognition, so an algorithm whose `verify`
+    /// can match coincidentally (e.g. a generic trailer) is never reported as
+    /// "supported". Algorithms that structurally identify their family (DQ381's
+    /// self-describing headers, DQ250's proven stored value) override this to
+    /// mark [`Recognition::Recognised`] and may report a more specific
+    /// representation than the one declared.
+    fn verify_report(
+        &self,
+        image: &[u8],
+        representation: Representation,
+    ) -> Result<Vec<BlockReport>> {
+        Ok(self
+            .verify(image)?
+            .into_iter()
+            .map(|status| {
+                BlockReport::new(
+                    status,
+                    representation,
+                    ChecksumKind::Embedded,
+                    Recognition::Consistent,
+                )
+            })
+            .collect())
+    }
     /// Recompute and write correct checksums in place; return what changed.
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>>;
 
@@ -84,6 +218,21 @@ pub fn report(algo: &dyn ChecksumAlgo, image: &[u8]) -> Result<Vec<BlockStatus>>
 /// whose correct value cannot be computed is never guessed.
 pub fn correct_bad_only(algo: &dyn ChecksumAlgo, image: &mut [u8]) -> Result<Vec<Fix>> {
     algo.correct_bad_blocks(image)
+}
+
+/// Representation-aware counterpart to [`report`]: every protected block as a
+/// [`BlockReport`] that says which [`Representation`] it applies to, whether the
+/// checksum is [`ChecksumKind::Embedded`] or [`ChecksumKind::Transfer`], and
+/// whether the family was [`Recognition::Recognised`] or the match is merely
+/// [`Recognition::Consistent`]. Dispatches through
+/// [`ChecksumAlgo::verify_report`]; use [`BlockReport::is_supported`] to render a
+/// coincidental/unverified match without ever labelling it "supported".
+pub fn report_detailed(
+    algo: &dyn ChecksumAlgo,
+    image: &[u8],
+    representation: Representation,
+) -> Result<Vec<BlockReport>> {
+    algo.verify_report(image, representation)
 }
 
 /// Look up a checksum algorithm by id (as named in an ECU definition).
@@ -207,9 +356,10 @@ pub fn algorithms() -> Vec<AlgoInfo> {
             name: "VAG DQ381 DSG (CRC32-VW)",
             family: "tcu",
             needs_reference: false,
-            notes: "Alias: tcu-crc32. Self-describing CAL CRC-32 (big-endian zlib, \
-                    base 0x140200, pointers @0x38/0x3C, CRC @0x44). Validated on a \
-                    real DQ381 full dump.",
+            notes: "Alias: tcu-crc32. Self-describing BOOT/ASW/CAL CRC-32 (big-endian \
+                    zlib; pointers @0x38/0x3C inclusive, CRC @0x44; bases BOOT \
+                    0x10200, ASW 0x30200, CAL 0x140200). All three validated on a \
+                    real DQ381 full dump; reported per block.",
         },
         AlgoInfo {
             id: "tcu-ccitt",
@@ -438,6 +588,83 @@ mod tests {
                 "{id} should not need a reference"
             );
         }
+    }
+
+    #[test]
+    fn default_verify_report_is_consistent_not_recognised() {
+        // The default verify_report wraps verify() but must NOT claim family
+        // recognition: even a matching block is only "mathematically consistent",
+        // so a possibly-coincidental match is never surfaced as supported.
+        let algo = TwoBlock;
+        // block A valid (sum 1+2+3+4 = 10), block B bad.
+        let img = [1u8, 2, 3, 4, 10, 5, 6, 7, 8, 0];
+        let reports = report_detailed(&algo, &img, Representation::ProgrammingBlock).unwrap();
+        assert_eq!(reports.len(), 2);
+        // Representation is echoed from the caller's declaration.
+        assert!(reports
+            .iter()
+            .all(|r| r.representation == Representation::ProgrammingBlock));
+        // Default kind is embedded.
+        assert!(reports
+            .iter()
+            .all(|r| r.checksum_kind == ChecksumKind::Embedded));
+        // Block A verifies, but is only "consistent" — never "supported".
+        assert!(reports[0].status.ok);
+        assert_eq!(reports[0].recognition, Recognition::Consistent);
+        assert!(
+            !reports[0].is_supported(),
+            "a merely-consistent match must not report as supported even when ok"
+        );
+        // Block B is both wrong and unrecognised.
+        assert!(!reports[1].status.ok);
+        assert!(!reports[1].is_supported());
+    }
+
+    #[test]
+    fn recognised_vs_consistent_supported_rule() {
+        // is_supported() requires BOTH ok and Recognised.
+        let base = BlockStatus {
+            name: "b".into(),
+            region: MemoryRegion::new(0, 4),
+            stored: 1,
+            computed: 1,
+            ok: true,
+        };
+        let recognised = BlockReport::new(
+            base.clone(),
+            Representation::RawFullImage,
+            ChecksumKind::Embedded,
+            Recognition::Recognised,
+        );
+        assert!(recognised.is_supported(), "ok + recognised = supported");
+
+        let mut bad = base.clone();
+        bad.ok = false;
+        let recognised_but_bad = BlockReport::new(
+            bad,
+            Representation::RawFullImage,
+            ChecksumKind::Embedded,
+            Recognition::Recognised,
+        );
+        assert!(
+            !recognised_but_bad.is_supported(),
+            "recognised family with a bad checksum is not supported"
+        );
+
+        let consistent = BlockReport::new(
+            base,
+            Representation::ContainerSegment,
+            ChecksumKind::Transfer,
+            Recognition::Consistent,
+        );
+        assert!(
+            !consistent.is_supported(),
+            "a coincidental (consistent-only) match is never supported"
+        );
+        // Enum defaults are the conservative choices.
+        assert_eq!(Recognition::default(), Recognition::Consistent);
+        assert_eq!(Representation::default(), Representation::Unknown);
+        assert_eq!(ChecksumKind::default(), ChecksumKind::Embedded);
     }
 
     #[test]
