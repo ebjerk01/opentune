@@ -2,10 +2,12 @@
 
 **Open-source ECU reading, flashing and calibration for people who want to tune their own cars with cheap, open hardware.**
 
-> ⚠️ **Work in progress.** The offline calibration tooling works today (see below); the
-> hardware drivers are implemented but awaiting on-car testing. Reading, writing or reflashing
-> an engine or transmission control unit can permanently damage it — don't flash a real car
-> until a driver is proven on your hardware. Use at your own risk — see [Safety](#safety).
+> ⚠️ **Early alpha — not ready for use on a real car.** OpenTune is in active, early development.
+> The offline calibration tooling (on a `.bin`) works today (see below); the hardware drivers are
+> implemented but **unproven on a car** and the desktop/Android apps are **unreleased alpha builds**
+> that have not been runtime-hardened. Reading, writing or reflashing an engine or transmission
+> control unit can permanently damage it — **do not flash a real vehicle with this yet.** Expect
+> breaking changes. Use entirely at your own risk — see [Safety](#safety).
 
 ## What works today (offline, on a `.bin`)
 

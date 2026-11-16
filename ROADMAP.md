@@ -1,5 +1,9 @@
 # OpenTune Roadmap
 
+> ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the apps are
+> pre-release alpha builds and the hardware path is unproven on a car. Don't flash
+> a real vehicle yet. Expect breaking changes.
+
 Progress is tracked here. Checked = done and on `main`. This is a living document.
 
 **Legend:** `[x]` done · `[~]` in progress · `[ ]` planned
@@ -26,16 +30,21 @@ Everything you can do with a `.bin` and no car.
 - [x] **Checksum engine**: trait + verify + correct
   - [x] generic (CRC32-tail example + CRC32 helper)
   - [x] **Bosch EDC16 (MPC56x): SOLVED** — full directory-walking verify+correct, validated against real full dumps (BMW/KIA). VAG *signed* high-entropy block = separate, unsolved
-  - [x] Bosch EDC15C6 checksum module (edc15.rs)
-  - [ ] EDC17, PCR2.1 (later)
+  - [x] **Bosch EDC17 (TriCore): SOLVED** — directory-walked CRC32; the firmware-specific VAG per-block constant is bootstrapped from your own stock dump (`checksum fix --reference`)
+  - [x] **Continental Simos PCR2.1: SOLVED** — forward CRC-32 + on-image directory, validated on real 1.6 TDI dumps
+  - [~] **EDC15 / EDC15C6** — VAG variant solved clean-room from GPL sources; Mercedes CR1 constant-recovery in progress (stub refuses until validated)
 - [x] Map diff (compare stock vs modified, byte and region level)
 - [x] **Real map library** — EDC16U34 (Golf): smoke/IQ limiters validated vs real dumps (docs/MAP-LIBRARY.md)
+- [x] **Calibration-definition import/export** — TunerPro **XDF** import+export (round-trip validated) and factory **ASAM A2L** import (`opentune-a2l`; validated on real EDC15/Siemens-PPD/BMW-MSV80, thousands of maps; linear scaling recovered, non-linear flagged)
+- [x] **Map-aware compare** — diff two calibrations map-by-map in physical units (`compare`)
+- [x] **VIN / part-number decoder** (`opentune-vin`): VIN (WMI/country/year/check-digit) + VAG/Bosch part parsing
+- [x] **Mercedes + BMW catalog** entries (catalog/manual/) alongside the 998-car opendbc set
 - [~] **ECU auto-identification** (`identify` command): read UDS/KWP DIDs → match `EcuDef.identify` keys + a vehicle catalog
   - [x] `identify` field on ECU defs + `opentune identify` (defs + catalog matching)
   - [x] harvest comma.ai opendbc FW fingerprints (MIT) into a catalog — 998 entries, 14 brands
   - [ ] read the real identity DIDs in the drivers (0xF187/F189/F190/F18A…)
 - [x] ECU definition format (JSON) + 5 fleet defs + parse test
-- [~] `opentune-cli`: `info`, `read`, `diff`, `checksum verify|fix`, `flash` (mock) done
+- [x] `opentune-cli`: `identify`, `info`, `read`, `dump`, `diff`, `findmaps`, `compare`, `checksum verify|fix`, `flash` (mock) + `--resume`/`--transcript`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`, `import-a2l`, `vin`, `decode-part`, `dtc`
 - [x] Calibration **map-definition format** (docs/MAP-DEFS.md) + `maps` in ECU defs
 - [x] Prior-art survey + credits (docs/PRIOR-ART.md); flash sequences (docs/FLASHING-NOTES.md); Bosch checksum structure (docs/BOSCH-CHECKSUM.md)
 - [x] **ECU identification / autoselect**: `opentune identify` (read DIDs → match ecudefs + catalog), `EcuDef.identify`, `catalog` module, and a **998-entry vehicle catalog harvested from opendbc** (14 makes, MIT); docs/IDENTIFICATION.md
@@ -70,28 +79,28 @@ Write a calibration back, safely.
 ## M4 — Safety & recovery
 - [x] Flash orchestrator state machine (backup → write → verify)
 - [x] Voltage gate (refuse to flash below threshold)
-- [ ] Resumable / recoverable flash
-- [x] Backup vault (every read archived with ECU id + timestamp + CRC32)
-- [ ] Structured logging of every session
+- [x] **Resumable / recoverable flash** — chunked write with a SHA-256-guarded checkpoint; resume after an interruption without re-writing already-verified chunks, and never apply the wrong payload to a region
+- [x] Backup vault (every read archived with ECU id + timestamp + CRC32); `flash` auto-archives the pre-flash backup; `vault` CLI lists/verifies it
+- [x] **Structured session transcript** — timestamped `.log` + `.jsonl` written beside the vault backup
 
 ## M5 — Desktop app (Tauri)
-- [~] App shell + core binding (Tauri scaffold)
-- [ ] Connect / identify / read / backup
-- [ ] Map viewer (read-only first)
-- [ ] Flash wizard with the safety checklist
+- [x] Desktop app (Tauri): identify, checksum verify/fix, findmaps, flash (mock), vault, offline guide
+- [x] Map viewer (heat grid) **and editor** (edit/interpolate/smooth, write-back + checksum fix) + map-by-map compare
+- [x] **Portable Linux builds** — glibc baseline fixed (ubuntu-22.04 CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`)
+- [ ] Connect / read a real ECU + flash wizard (hardware)
 - [~] **Auto-update from GitHub Releases** (configured; needs signing key)
 
 ## M6 — More ECUs
-- [ ] Bosch EDC17 (checksum + OBD flash)
+- [~] Bosch EDC17 — **checksum SOLVED**; OBD flash pending hardware
 - [x] **Continental/Siemens Simos PCR2.1 checksum SOLVED** (forward CRC-32 + on-image directory; validated on real 1.6 TDI dumps; RSA signature block out of scope)
 - [ ] Bosch EDC15C6 over K-line (Mercedes CR1 family)
 - [x] DTC database + decoder (11,140 codes; `opentune dtc <code>`)
 - [ ] Growing community ECU-definition library
 
 ## M7 — Android app
-- [~] UniFFI plan documented (docs/android.md)
-- [ ] Kotlin/Compose shell: connect (USB-OTG / BLE), read, flash
-- [ ] Reuse the same safety rules and ECU defs
+- [x] **opentune-ffi** — UniFFI binding over the core (compile-verified; Kotlin bindings generated)
+- [~] Jetpack Compose app (`android/`) — offline identify/checksum/maps/flash on a `.bin`; needs Android SDK/NDK to build the APK, real adapters for USB-OTG/BLE
+- [x] Reuses the same core, ECU defs and safety rules (one engine)
 
 ## M8 — Open hardware interface
 - [~] ESP32-S3 + CAN + K-line interface spec (docs/hardware.md); KiCad next
