@@ -499,31 +499,28 @@ fn decode_axis(img: &[u8], axis: &Option<AxisDef>, count: u32) -> (Vec<f64>, Str
     }
 }
 
-/// Decode a defined `MapDef` out of the opened image into a physical-value grid,
-/// honouring the data type, endianness and linear scaling. Read-only: this is the
-/// public edition's map viewer, so it only reads — it never writes the image.
-#[tauri::command]
-fn decode_map(
-    path: String,
-    ecudef_id: String,
-    map_name: String,
-    state: tauri::State<AppData>,
-) -> Result<Value, String> {
-    let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
-    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
-    let img = std::fs::read(&path).map_err(|e| e.to_string())?;
-
+/// Decode a defined `MapDef` out of `img` into the read-only viewer/editor JSON
+/// payload (physical-value grid + axes + scaling + bounds). Shared by the
+/// definition-backed [`decode_map`] and the ad-hoc [`decode_mapdef`] paths so
+/// an imported / promoted map renders identically to a bundled one.
+///
+/// `flash_kib` is only used to enrich the "image too small" error for a
+/// definition-backed map (where we know the ECU's flash size); `None` for an
+/// ad-hoc map.
+fn decode_map_value(img: &[u8], map: &MapDef, flash_kib: Option<u32>) -> Result<Value, String> {
     let rows = map.rows.max(1) as usize;
     let cols = map.cols.max(1) as usize;
     let w = map.data_type.byte_len() as usize;
     let need = map.address as usize + rows * cols * w;
     if need > img.len() {
+        let hint = match flash_kib {
+            Some(kib) => format!(" — open a full dump for this ECU (its flash is {kib} KiB)"),
+            None => " — open a full dump this map fits in".to_string(),
+        };
         return Err(format!(
-            "map needs 0x{:08X} bytes but the opened image is only 0x{:08X} — open a full dump for this ECU (its flash is {} KiB)",
+            "map needs 0x{:08X} bytes but the opened image is only 0x{:08X}{hint}",
             need,
             img.len(),
-            def.flash_size / 1024
         ));
     }
 
@@ -535,7 +532,7 @@ fn decode_map(
         for c in 0..cols {
             let idx = r * cols + c;
             let off = map.address as usize + idx * w;
-            let phys = read_elem(&img, off, map.data_type, map.endian)
+            let phys = read_elem(img, off, map.data_type, map.endian)
                 .map(|raw| map.scaling.to_physical(raw))
                 .unwrap_or(0.0);
             lo = lo.min(phys);
@@ -544,8 +541,8 @@ fn decode_map(
         }
         cells.push(row);
     }
-    let (x_vals, x_unit) = decode_axis(&img, &map.x_axis, map.cols);
-    let (y_vals, y_unit) = decode_axis(&img, &map.y_axis, map.rows);
+    let (x_vals, x_unit) = decode_axis(img, &map.x_axis, map.cols);
+    let (y_vals, y_unit) = decode_axis(img, &map.y_axis, map.rows);
 
     Ok(json!({
         "name": map.name,
@@ -565,6 +562,37 @@ fn decode_map(
         "y_axis": { "name": map.y_axis.as_ref().map(|a| a.name.clone()), "unit": y_unit, "values": y_vals },
         "notes": map.notes,
     }))
+}
+
+/// Decode a defined `MapDef` out of the opened image into a physical-value grid,
+/// honouring the data type, endianness and linear scaling. Read-only: this is the
+/// public edition's map viewer, so it only reads — it never writes the image.
+#[tauri::command]
+fn decode_map(
+    path: String,
+    ecudef_id: String,
+    map_name: String,
+    state: tauri::State<AppData>,
+) -> Result<Value, String> {
+    let defs = load_defs(&state.ecudefs);
+    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
+    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
+    let img = std::fs::read(&path).map_err(|e| e.to_string())?;
+    decode_map_value(&img, map, Some(def.flash_size / 1024))
+}
+
+/// Decode an **ad-hoc** `MapDef` (imported from an XDF/A2L or promoted from a
+/// findmaps region) out of the opened image, without it belonging to any bundled
+/// definition. Returns the same viewer/editor payload as [`decode_map`], plus a
+/// `mapdef` field echoing the exact MapDef so the frontend can hand it back to
+/// [`mapdef_write`] for a byte-level write. This closes the import/promote → edit
+/// loop the CLI importers could not reach.
+#[tauri::command]
+fn decode_mapdef(path: String, map: MapDef) -> Result<Value, String> {
+    let img = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let mut v = decode_map_value(&img, &map, None)?;
+    v["mapdef"] = serde_json::to_value(&map).map_err(|e| e.to_string())?;
+    Ok(v)
 }
 
 // ---------------------------------------------------------------------------
@@ -646,21 +674,23 @@ fn decode_cells(img: &[u8], map: &MapDef) -> Option<Vec<Vec<f64>>> {
 /// `out_path` writes a Save-As copy instead of editing `path` in place (the
 /// read-only / permission fallback). On a write error the message names the
 /// safety backup so the original is always recoverable.
-#[tauri::command]
+/// Shared write-back core for both the definition-backed [`map_write`] and the
+/// ad-hoc [`mapdef_write`]. Carries the full safety sequence (dimension / zero-
+/// factor / bounds guards, backup-first, byte-level write, optional checksum
+/// fix). `ecu` labels the vault backup; `algo` is the checksum id to run after a
+/// successful write (or `None` to skip even when `fix_checksum` is set, which is
+/// reported honestly).
 #[allow(clippy::too_many_arguments)]
-fn map_write(
-    path: String,
-    ecudef_id: String,
-    map_name: String,
-    new_cells: Vec<Vec<f64>>,
+fn write_map_core(
+    path: &str,
+    map: &MapDef,
+    new_cells: &[Vec<f64>],
     out_path: Option<String>,
-    fix_checksum: Option<bool>,
-    state: tauri::State<AppData>,
+    fix_checksum: bool,
+    algo: Option<String>,
+    ecu: EcuId,
+    flash_kib: Option<u32>,
 ) -> Result<Value, String> {
-    let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
-    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
-
     let rows = map.rows.max(1) as usize;
     let cols = map.cols.max(1) as usize;
 
@@ -681,31 +711,28 @@ fn map_write(
         ));
     }
 
-    let mut img = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let mut img = std::fs::read(path).map_err(|e| e.to_string())?;
     let w = map.data_type.byte_len() as usize;
     let need = map.address as usize + rows * cols * w;
     // (3) Bounds guard — never write past the end of the image.
     if need > img.len() {
+        let hint = match flash_kib {
+            Some(kib) => format!(" — open a full dump (its flash is {kib} KiB)"),
+            None => " — open a full dump this map fits in".to_string(),
+        };
         return Err(format!(
-            "map needs 0x{:08X} bytes but the image is only 0x{:08X} — open a full dump (its flash is {} KiB)",
+            "map needs 0x{:08X} bytes but the image is only 0x{:08X}{hint}",
             need,
             img.len(),
-            def.flash_size / 1024
         ));
     }
 
     // (4) BACKUP FIRST: archive the whole original image into the flash vault,
     // beside the file being edited. If this fails we abort before any edit.
-    let vault_dir = Path::new(&path)
+    let vault_dir = Path::new(path)
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join("opentune-vault");
-    let ecu = EcuId {
-        ecu_name: Some(format!("{} [{}]", def.name, def.id)),
-        hw_number: def.identify.part_numbers.first().cloned(),
-        sw_number: def.identify.sw_numbers.first().cloned(),
-        ..Default::default()
-    };
     let whole = MemoryRegion::new(0, img.len() as u32);
     let backup = opentune_flash::vault::save_backup(&vault_dir, &ecu, whole, &img).map_err(|e| {
         format!(
@@ -727,7 +754,7 @@ fn map_write(
         }
     }
 
-    let target = out_path.unwrap_or_else(|| path.clone());
+    let target = out_path.unwrap_or_else(|| path.to_string());
     std::fs::write(&target, &img).map_err(|e| {
         format!(
             "{} — your original is safe: a full backup was saved to {}",
@@ -736,15 +763,15 @@ fn map_write(
         )
     })?;
 
-    // (6) Optional checksum fix, reusing the existing command with the def's algo.
+    // (6) Optional checksum fix, reusing the existing command with the map's algo.
     let mut checksum = Value::Null;
-    if fix_checksum.unwrap_or(false) {
-        checksum = match &def.checksum {
-            Some(algo) => match checksum_fix(target.clone(), algo.clone(), None) {
+    if fix_checksum {
+        checksum = match &algo {
+            Some(a) => match checksum_fix(target.clone(), a.clone(), None) {
                 Ok(v) => v,
-                Err(e) => json!({ "algo": algo, "error": e }),
+                Err(e) => json!({ "algo": a, "error": e }),
             },
-            None => json!({ "error": "this ECU definition has no checksum algorithm set" }),
+            None => json!({ "error": "no checksum algorithm is set for this map — pick one on the Checksum panel and re-run it manually" }),
         };
     }
 
@@ -754,9 +781,73 @@ fn map_write(
         "in_place": target == path,
         "cells_total": rows * cols,
         "cells_changed": cells_changed,
-        "checksum_algo": def.checksum,
+        "checksum_algo": algo,
         "checksum": checksum,
     }))
+}
+
+#[tauri::command]
+fn map_write(
+    path: String,
+    ecudef_id: String,
+    map_name: String,
+    new_cells: Vec<Vec<f64>>,
+    out_path: Option<String>,
+    fix_checksum: Option<bool>,
+    state: tauri::State<AppData>,
+) -> Result<Value, String> {
+    let defs = load_defs(&state.ecudefs);
+    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
+    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
+
+    let ecu = EcuId {
+        ecu_name: Some(format!("{} [{}]", def.name, def.id)),
+        hw_number: def.identify.part_numbers.first().cloned(),
+        sw_number: def.identify.sw_numbers.first().cloned(),
+        ..Default::default()
+    };
+    write_map_core(
+        &path,
+        map,
+        &new_cells,
+        out_path,
+        fix_checksum.unwrap_or(false),
+        def.checksum.clone(),
+        ecu,
+        Some(def.flash_size / 1024),
+    )
+}
+
+/// Write-back for an **ad-hoc** `MapDef` (imported/promoted, not in any bundled
+/// definition). Same full safety sequence as [`map_write`]; the checksum family
+/// is supplied by the caller (`checksum_algo`) since an ad-hoc map has no
+/// definition to read one from.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn mapdef_write(
+    path: String,
+    map: MapDef,
+    new_cells: Vec<Vec<f64>>,
+    out_path: Option<String>,
+    fix_checksum: Option<bool>,
+    checksum_algo: Option<String>,
+) -> Result<Value, String> {
+    let ecu = EcuId {
+        ecu_name: Some(format!("ad-hoc map '{}'", map.name)),
+        ..Default::default()
+    };
+    // Normalise an empty string to "no algorithm".
+    let algo = checksum_algo.filter(|a| !a.trim().is_empty());
+    write_map_core(
+        &path,
+        &map,
+        &new_cells,
+        out_path,
+        fix_checksum.unwrap_or(false),
+        algo,
+        ecu,
+        None,
+    )
 }
 
 /// Compare two images map-by-map through an ECU definition, mirroring the CLI
@@ -959,6 +1050,456 @@ fn guide_read(id: String, state: tauri::State<AppData>) -> Result<String, String
 }
 
 // ---------------------------------------------------------------------------
+// Feature 1 — offline "Analyze bin" (no hardware)
+// ---------------------------------------------------------------------------
+
+/// Map a detected structural family name to the checksum algorithm id that
+/// verifies its protected blocks.
+fn family_to_algo(family: &str) -> Option<&'static str> {
+    match family {
+        "EDC16" => Some("edc16"),
+        "EDC17" => Some("edc17"),
+        "PCR2.1" => Some("pcr21"),
+        "EDC15" => Some("edc15"),
+        _ => None,
+    }
+}
+
+/// Serialize a parsed part number into a readable breakdown (shared by Analyze
+/// and the part-decoder utility panel).
+fn part_breakdown(pn: &opentune_vin::PartNumber) -> Value {
+    json!({
+        "normalized": pn.normalized,
+        "kind": format!("{:?}", pn.kind),
+        "supplier": pn.supplier,
+        "vag_type_group": pn.vag_type_group,
+        "vag_main_group": pn.vag_main_group,
+        "vag_subgroup": pn.vag_subgroup,
+        "vag_version": pn.vag_version,
+        "bosch_family": pn.bosch_family,
+        "bosch_consecutive": pn.bosch_consecutive,
+        "flags": pn.flags,
+    })
+}
+
+/// Fully-offline analysis of a raw flash image: structural ECU family, identity
+/// strings, catalog/definition match, checksum blocks and any known maps —
+/// everything determinable with NO hardware. This is the honest fix for the old
+/// `identify` gap (the mock driver reports almost nothing on a raw `.bin`).
+///
+/// `ecudefs_dir` / `catalog_dir` override the bundled data directories; both
+/// fall back to the resolved app data. Confidence is graded by opentune-scan,
+/// which never assigns a car it cannot justify from a DB/VIN/part match.
+#[tauri::command]
+fn analyze_image(
+    path: String,
+    ecudefs_dir: Option<String>,
+    catalog_dir: Option<String>,
+    state: tauri::State<AppData>,
+) -> Result<Value, String> {
+    let ecudefs_dir = ecudefs_dir.map(PathBuf::from).or_else(|| state.ecudefs.clone());
+    let catalog_dir = catalog_dir.map(PathBuf::from).or_else(|| state.catalog.clone());
+    let ecudefs = load_defs(&ecudefs_dir);
+    let catalog = load_cat(&catalog_dir);
+    let ctx = opentune_scan::ScanContext {
+        catalog,
+        ecudefs: ecudefs.clone(),
+    };
+
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let p = Path::new(&path);
+    let root = p.parent().unwrap_or_else(|| Path::new("."));
+    let rec = opentune_scan::scan_file(&ctx, root, p, &bytes);
+
+    // Checksum blocks for the detected family (best effort).
+    let algo_id = family_to_algo(rec.ecu_family);
+    let checksum_blocks: Vec<Value> = match algo_id.and_then(opentune_checksum::get) {
+        Some(a) => a
+            .verify(&bytes)
+            .map(|blocks| {
+                blocks
+                    .into_iter()
+                    .map(|b| {
+                        json!({
+                            "name": b.name,
+                            "ok": b.ok,
+                            "region": format!("0x{:08X} +{}", b.region.address, b.region.length),
+                            "stored": format!("0x{:08X}", b.stored),
+                            "computed": format!("0x{:08X}", b.computed),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        None => Vec::new(),
+    };
+
+    // Known maps from a matched definition.
+    let maps: Vec<Value> = rec
+        .ecudef_match
+        .as_ref()
+        .and_then(|hit| ecudefs.iter().find(|d| d.id == hit.id))
+        .map(|def| {
+            def.maps
+                .iter()
+                .map(|m| {
+                    json!({
+                        "name": m.name,
+                        "address": format!("0x{:08X}", m.address),
+                        "rows": m.rows,
+                        "cols": m.cols,
+                        "data_type": format!("{:?}", m.data_type),
+                        "unit": m.unit,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Identity-string breakdowns.
+    let best_part = rec
+        .part_numbers
+        .first()
+        .or_else(|| rec.bosch_numbers.first())
+        .or_else(|| rec.mercedes_numbers.first());
+    let part_decoded = best_part.map(|p| part_breakdown(&opentune_vin::parse_part_number(p)));
+
+    Ok(json!({
+        "path": path,
+        "size": bytes.len(),
+        "size_class": rec.size_class,
+        "family": rec.ecu_family,
+        "family_how": rec.family_how,
+        "part_numbers": rec.part_numbers,
+        "bosch_numbers": rec.bosch_numbers,
+        "sw_numbers": rec.sw_numbers,
+        "mercedes_numbers": rec.mercedes_numbers,
+        "epk_hits": rec.epk_hits,
+        "vin": rec.vin,
+        "vin_decoded": rec.vin_decoded,
+        "part_decoded": part_decoded,
+        "catalog_match": rec.catalog_match,
+        "ecudef_match": rec.ecudef_match,
+        "assignment": rec.assigned_core,
+        "confidence": rec.confidence_core.as_str(),
+        "checksum_algo": algo_id,
+        "checksum_blocks": checksum_blocks,
+        "maps": maps,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Feature 2 — raw-bin → named maps: import XDF/A2L, promote a region
+// ---------------------------------------------------------------------------
+
+fn parse_data_type(s: &str) -> Result<DataType, String> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "u8" => Ok(DataType::U8),
+        "s8" | "i8" => Ok(DataType::S8),
+        "u16" => Ok(DataType::U16),
+        "s16" | "i16" => Ok(DataType::S16),
+        "u32" => Ok(DataType::U32),
+        "s32" | "i32" => Ok(DataType::S32),
+        "f32" | "float" => Ok(DataType::F32),
+        other => Err(format!("unknown data type '{other}' (use u8/s8/u16/s16/u32/s32/f32)")),
+    }
+}
+
+fn parse_endian(s: &str) -> Result<Endian, String> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "big" | "be" | "motorola" => Ok(Endian::Big),
+        "little" | "le" | "intel" => Ok(Endian::Little),
+        other => Err(format!("unknown endianness '{other}' (use big/little)")),
+    }
+}
+
+/// Serialize a `MapDef` plus a few derived display fields for the import list.
+fn mapdef_summary(m: &MapDef) -> Value {
+    let mut v = serde_json::to_value(m).unwrap_or(Value::Null);
+    if let Value::Object(ref mut o) = v {
+        o.insert("address_hex".into(), json!(format!("0x{:08X}", m.address)));
+        o.insert("byte_len".into(), json!(m.byte_len()));
+        o.insert(
+            "shape".into(),
+            json!(if m.rows <= 1 || m.cols <= 1 { "1D/scalar" } else { "2D" }),
+        );
+    }
+    v
+}
+
+/// Import a TunerPro **XDF** or ASAM **A2L** definition into a list of MapDefs
+/// the user can pick from and open in the editor (via [`decode_mapdef`]). Format
+/// is sniffed from the extension then the content. For A2L, `base` optionally
+/// rebases CPU addresses to file offsets (`addr -= base`), mirroring the CLI.
+#[tauri::command]
+fn import_definitions(path: String, base: Option<String>) -> Result<Value, String> {
+    let raw = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let src = String::from_utf8_lossy(&raw);
+    let ext = Path::new(&path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    let head = src.trim_start_matches(['\u{feff}', ' ', '\t', '\r', '\n']);
+    let looks_a2l = ext == "a2l"
+        || head.contains("ASAP2")
+        || head.contains("/begin PROJECT")
+        || head.contains("/begin MODULE");
+    let looks_xdf = ext == "xdf"
+        || head.starts_with("XDF")
+        || head.contains("<XDFFORMAT")
+        || head.contains("%%TABLE%%");
+
+    if looks_a2l && !looks_xdf {
+        let import = opentune_a2l::parse_a2l(&src).map_err(|e| e.to_string())?;
+        let mut maps = import.maps;
+        let base_val = match base.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(s) => Some(parse_u32(s)?),
+            None => None,
+        };
+        if let Some(b) = base_val {
+            for m in &mut maps {
+                m.address = m.address.wrapping_sub(b);
+                if let Some(ax) = m.x_axis.as_mut() {
+                    if let Some(a) = ax.address.as_mut() {
+                        *a = a.wrapping_sub(b);
+                    }
+                }
+                if let Some(ax) = m.y_axis.as_mut() {
+                    if let Some(a) = ax.address.as_mut() {
+                        *a = a.wrapping_sub(b);
+                    }
+                }
+            }
+        }
+        Ok(json!({
+            "kind": "a2l",
+            "project": import.project,
+            "module": import.module,
+            "base": base_val,
+            "count": maps.len(),
+            "maps": maps.iter().map(mapdef_summary).collect::<Vec<_>>(),
+        }))
+    } else if looks_xdf {
+        let import = opentune_xdf::parse_xdf(&src).map_err(|e| e.to_string())?;
+        Ok(json!({
+            "kind": "xdf",
+            "title": import.title,
+            "base_offset": import.base_offset,
+            "count": import.maps.len(),
+            "maps": import.maps.iter().map(mapdef_summary).collect::<Vec<_>>(),
+        }))
+    } else {
+        Err("unrecognised definition file — expected a TunerPro XDF or an ASAM A2L".into())
+    }
+}
+
+/// Turn a findmaps-discovered region (or a manual selection) into a named
+/// `MapDef` the editor can open. Validates dimensions, scaling and that the
+/// region fits inside the image, then returns the MapDef for [`decode_mapdef`].
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn promote_region(
+    path: String,
+    start: String,
+    len: Option<u64>,
+    name: String,
+    rows: u32,
+    cols: u32,
+    data_type: String,
+    endian: String,
+    factor: f64,
+    offset: f64,
+) -> Result<Value, String> {
+    let address = parse_u32(&start)?;
+    let dt = parse_data_type(&data_type)?;
+    let en = parse_endian(&endian)?;
+    let rows = rows.max(1);
+    let cols = cols.max(1);
+    if factor == 0.0 {
+        return Err("scaling factor cannot be 0 (physical→raw would divide by zero)".into());
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("give the map a name".into());
+    }
+
+    let span = (rows as u64) * (cols as u64) * (dt.byte_len() as u64);
+    let file_len = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let need = address as u64 + span;
+    if need > file_len {
+        return Err(format!(
+            "a {rows}×{cols} {data_type} map at 0x{address:08X} needs 0x{need:08X} bytes but the image is only 0x{file_len:08X}"
+        ));
+    }
+
+    let map = MapDef {
+        name: name.to_string(),
+        address,
+        data_type: dt,
+        endian: en,
+        rows,
+        cols,
+        scaling: ecudef::Scaling { factor, offset },
+        notes: match len {
+            Some(l) if l != span => format!(
+                "promoted from a {l}-byte region; the {rows}×{cols} {data_type} grid spans {span} bytes"
+            ),
+            _ => "promoted from a selected region".to_string(),
+        },
+        ..Default::default()
+    };
+    serde_json::to_value(&map).map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Feature 4 — utility panels: VIN / part decoder, DTC lookup, seed/key calc
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn vin_decode(vin: String) -> Result<Value, String> {
+    let v = opentune_vin::decode_vin(&vin).map_err(|e| format!("{e:?}"))?;
+    Ok(json!({
+        "vin": v.vin,
+        "wmi": v.wmi,
+        "vds": v.vds,
+        "vis": v.vis,
+        "manufacturer": v.wmi_info.manufacturer,
+        "country": v.wmi_info.country,
+        "check_digit": v.check_digit.to_string(),
+        "check_digit_valid": v.check_digit_valid,
+        "model_year": {
+            "code": v.model_year.code.to_string(),
+            "candidates": v.model_year.candidates,
+            "resolved": v.model_year.resolved,
+            "ambiguous": v.model_year.resolved.is_none(),
+        },
+        "plant_code": v.plant_code.to_string(),
+        "serial": v.serial,
+        "vds_descriptor": v.vds_descriptor,
+        "flags": v.flags,
+    }))
+}
+
+#[tauri::command]
+fn part_decode(part: String) -> Result<Value, String> {
+    if part.trim().is_empty() {
+        return Err("enter a part number".into());
+    }
+    Ok(part_breakdown(&opentune_vin::parse_part_number(&part)))
+}
+
+#[tauri::command]
+fn dtc_lookup(code: String) -> Result<Value, String> {
+    let d = opentune_dtc::lookup(&code)
+        .ok_or("not a recognisable DTC — it must start with P, C, B or U (e.g. P0101)")?;
+    let system = match d.system {
+        opentune_dtc::System::Powertrain => "Powertrain (engine / transmission / emissions)",
+        opentune_dtc::System::Chassis => "Chassis (ABS / steering / suspension)",
+        opentune_dtc::System::Body => "Body (airbags / lighting / HVAC / comfort)",
+        opentune_dtc::System::Network => "Network / communication (CAN bus / modules)",
+    };
+    Ok(json!({
+        "code": d.code,
+        "description": d.description,
+        "system": system,
+        "system_letter": d.system.letter().to_string(),
+    }))
+}
+
+/// Generic, fully-transparent seed→key transforms. The public edition ships NO
+/// OEM / vehicle-specific seed/key routines (those are not open), so this is a
+/// calculator the user drives: they pick a transform and supply its parameters.
+/// It never pretends to compute a real ECU's key from a bundled secret.
+#[tauri::command]
+fn seedkey_algos() -> Value {
+    json!([
+        { "id": "identity", "name": "Identity (key = seed)", "params": [],
+          "desc": "Echoes the seed. Some access levels accept the seed unchanged." },
+        { "id": "xor-mask", "name": "XOR mask", "params": ["mask"],
+          "desc": "key[i] = seed[i] XOR mask[i] (mask repeats if shorter)." },
+        { "id": "add-const", "name": "Add constant (per byte)", "params": ["add"],
+          "desc": "key[i] = seed[i] + k (mod 256)." },
+        { "id": "xor-add", "name": "XOR then add (demo shape)", "params": ["mask", "add"],
+          "desc": "key[i] = (seed[i] XOR m) + k (mod 256), m = first mask byte." },
+        { "id": "byteswap", "name": "Reverse byte order", "params": [],
+          "desc": "key = seed reversed." }
+    ])
+}
+
+/// Parse a hex blob: ignores spaces, `0x`, `-`, `:`; errors on odd length / junk.
+fn parse_hex_bytes(s: &str) -> Result<Vec<u8>, String> {
+    let cleaned: String = s
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect();
+    if cleaned.is_empty() {
+        return Err("empty seed".into());
+    }
+    if cleaned.len() % 2 != 0 {
+        return Err("hex has an odd number of digits".into());
+    }
+    (0..cleaned.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&cleaned[i..i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+/// Compute a key from a seed with a user-selected generic transform. Honest by
+/// construction: no OEM algorithm is bundled, so an unknown/empty algo id is a
+/// hard error rather than a fabricated key.
+#[tauri::command]
+fn seedkey_compute(
+    seed: String,
+    algo: String,
+    mask: Option<String>,
+    add: Option<String>,
+) -> Result<Value, String> {
+    let s = parse_hex_bytes(&seed)?;
+    let add_val: u8 = match add.as_deref().map(str::trim).filter(|x| !x.is_empty()) {
+        Some(x) => parse_u32(x)? as u8,
+        None => 0,
+    };
+    let mask_bytes = match mask.as_deref().map(str::trim).filter(|x| !x.is_empty()) {
+        Some(x) => parse_hex_bytes(x)?,
+        None => Vec::new(),
+    };
+
+    let key: Vec<u8> = match algo.as_str() {
+        "identity" => s.clone(),
+        "byteswap" => s.iter().rev().copied().collect(),
+        "add-const" => s.iter().map(|&b| b.wrapping_add(add_val)).collect(),
+        "xor-mask" => {
+            if mask_bytes.is_empty() {
+                return Err("XOR mask needs a mask value".into());
+            }
+            s.iter()
+                .enumerate()
+                .map(|(i, &b)| b ^ mask_bytes[i % mask_bytes.len()])
+                .collect()
+        }
+        "xor-add" => {
+            let m = *mask_bytes.first().ok_or("XOR-add needs a mask byte")?;
+            s.iter().map(|&b| (b ^ m).wrapping_add(add_val)).collect()
+        }
+        "" => return Err("pick a transform first".into()),
+        other => {
+            return Err(format!(
+                "no seed/key algorithm '{other}' is available — the public edition ships no OEM routines; pick a generic transform or supply one"
+            ))
+        }
+    };
+
+    let hex = key.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
+    Ok(json!({
+        "key": hex,
+        "algo": algo,
+        "note": "Generic transform — NOT an OEM algorithm. The public edition bundles no vehicle-specific seed/key routines.",
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
@@ -1015,8 +1556,18 @@ fn main() {
             list_ecudefs,
             list_maps,
             decode_map,
+            decode_mapdef,
             map_write,
+            mapdef_write,
             compare_maps,
+            analyze_image,
+            import_definitions,
+            promote_region,
+            vin_decode,
+            part_decode,
+            dtc_lookup,
+            seedkey_algos,
+            seedkey_compute,
             flash,
             vault_list,
             guide_list,
@@ -1134,5 +1685,62 @@ mod tests {
         // Image too small for a 4x4 u16 map (needs 32 bytes).
         let img = vec![0u8; 8];
         assert!(decode_cells(&img, &map).is_none());
+    }
+
+    // --- new-feature pure logic ------------------------------------------
+
+    #[test]
+    fn family_algo_mapping() {
+        assert_eq!(family_to_algo("EDC16"), Some("edc16"));
+        assert_eq!(family_to_algo("EDC17"), Some("edc17"));
+        assert_eq!(family_to_algo("PCR2.1"), Some("pcr21"));
+        assert_eq!(family_to_algo("EDC15"), Some("edc15"));
+        assert_eq!(family_to_algo("Unknown"), None);
+    }
+
+    #[test]
+    fn parse_types_and_endian() {
+        assert_eq!(parse_data_type("u16").unwrap(), DataType::U16);
+        assert_eq!(parse_data_type("S8").unwrap(), DataType::S8);
+        assert_eq!(parse_data_type("f32").unwrap(), DataType::F32);
+        assert!(parse_data_type("u24").is_err());
+        assert_eq!(parse_endian("big").unwrap(), Endian::Big);
+        assert_eq!(parse_endian("LE").unwrap(), Endian::Little);
+        assert!(parse_endian("mixed").is_err());
+    }
+
+    #[test]
+    fn hex_parsing() {
+        assert_eq!(parse_hex_bytes("AA BB CC").unwrap(), vec![0xAA, 0xBB, 0xCC]);
+        assert_eq!(parse_hex_bytes("de:ad:be:ef").unwrap(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        assert!(parse_hex_bytes("ABC").is_err()); // odd
+        assert!(parse_hex_bytes("").is_err());
+    }
+
+    #[test]
+    fn seedkey_transforms() {
+        // identity
+        let r = seedkey_compute("0102".into(), "identity".into(), None, None).unwrap();
+        assert_eq!(r["key"], "01 02");
+        // byteswap
+        let r = seedkey_compute("0102".into(), "byteswap".into(), None, None).unwrap();
+        assert_eq!(r["key"], "02 01");
+        // xor-mask (mask repeats)
+        let r = seedkey_compute("F0F0".into(), "xor-mask".into(), Some("FF".into()), None).unwrap();
+        assert_eq!(r["key"], "0F 0F");
+        // add-const mod 256 wraps
+        let r = seedkey_compute("FE".into(), "add-const".into(), None, Some("3".into())).unwrap();
+        assert_eq!(r["key"], "01");
+        // xor-add
+        let r = seedkey_compute("0A".into(), "xor-add".into(), Some("0F".into()), Some("0x01".into())).unwrap();
+        assert_eq!(r["key"], "06"); // (0x0A ^ 0x0F) + 1 = 0x05 + 1 = 0x06
+    }
+
+    #[test]
+    fn seedkey_unknown_algo_is_honest_error() {
+        assert!(seedkey_compute("00".into(), "vag-edc17".into(), None, None).is_err());
+        assert!(seedkey_compute("00".into(), "".into(), None, None).is_err());
+        // xor-mask without a mask must error, not fabricate.
+        assert!(seedkey_compute("00".into(), "xor-mask".into(), None, None).is_err());
     }
 }

@@ -654,6 +654,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-scan"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-vin",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-vin"
 version = "0.1.0"
 

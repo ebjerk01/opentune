@@ -1,0 +1,25 @@
+# opentune-scan: offline ECU-file scanner (PROTOTYPE).
+#
+# Reads a flash dump WITHOUT hardware and tries to identify the ECU family (by
+# structure), any OEM identity strings (part/software numbers, VIN), and the
+# vehicle it belongs to, by reusing opentune-core's catalog/ecudef matchers,
+# opentune-checksum's structural fingerprints, and opentune-vin's decoders.
+[package]
+name = "opentune-scan"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "Offline ECU-file scanner: structural family + identity-string extraction + catalog/VIN matching."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+opentune-checksum = { path = "../opentune-checksum" }
+opentune-vin = { path = "../opentune-vin" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }

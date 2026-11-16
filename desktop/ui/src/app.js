@@ -24,6 +24,9 @@ const state = {
   edClamped: null, // Set of "r,c" cells clamped to a def bound on last op
   cmpStock: null,
   cmpTuned: null,
+  view: "2d",
+  impFile: null,
+  impMaps: [],
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -70,6 +73,7 @@ function refreshImageHints() {
   const n = state.imagePath ? baseName(state.imagePath) : null;
   $("imageHint").textContent = n ? "open: " + n : "no image opened";
   $("idPathHint").textContent = n ? "image: " + n : "no image opened";
+  if ($("anPathHint")) $("anPathHint").textContent = n ? "uses opened: " + n : "no image opened";
   $("csPathHint").textContent = n ? "image: " + n : "no image opened";
   $("mvImgName").textContent = state.mvImage ? baseName(state.mvImage) : (n ? "uses opened: " + n : "uses opened image");
   $("flTargetName").textContent = state.flTarget ? baseName(state.flTarget) : (n ? "uses opened: " + n : "uses opened image");
@@ -198,9 +202,10 @@ $("btnFindmaps").onclick = async () => {
   try {
     const regs = await invoke("findmaps", { stock: state.fmStock, tuned: state.fmTuned, gap: +$("fmGap").value || 0, minLen: +$("fmMin").value || 1 });
     if (!regs.length) { $("fmResult").innerHTML = `<div class="banner info">No differing regions found with these settings.</div>`; return; }
-    const rows = regs.map((r) => `<tr><td>${r.index}</td><td class="mono">${esc(r.start)}</td><td class="mono">${esc(r.end)}</td><td>${r.len}</td><td class="mono">${esc(r.hint || "—")}</td></tr>`).join("");
-    $("fmResult").innerHTML = `<div class="banner ok">${regs.length} candidate region(s).</div>
-      <table class="tbl"><thead><tr><th>#</th><th>Start</th><th>End</th><th>Len</th><th>Stride hint</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = regs.map((r) => `<tr><td>${r.index}</td><td class="mono">${esc(r.start)}</td><td class="mono">${esc(r.end)}</td><td>${r.len}</td><td class="mono">${esc(r.hint || "—")}</td><td><button class="btn sm" data-mk-start="${esc(r.start)}" data-mk-len="${r.len}">Make map</button></td></tr>`).join("");
+    $("fmResult").innerHTML = `<div class="banner ok">${regs.length} candidate region(s). Use <b>Make map</b> to promote one into the editor.</div>
+      <table class="tbl"><thead><tr><th>#</th><th>Start</th><th>End</th><th>Len</th><th>Stride hint</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $("fmResult").querySelectorAll("button[data-mk-start]").forEach((b) => b.onclick = () => prefillPromote(b.dataset.mkStart, +b.dataset.mkLen));
   } catch (e) { $("fmResult").innerHTML = errBanner(e); }
 };
 
@@ -239,6 +244,32 @@ const fmtAxis = (v) => (v == null ? "" : (v % 1 ? (+v).toFixed(1) : String(+v)))
 
 const clone2d = (g) => g.map((r) => r.slice());
 
+// Build the shared editor model from a decode result. `source` is either
+// { defId, mapName } for a bundled definition, or { adhoc: <MapDef JSON> } for
+// an imported/promoted map (written back via mapdef_write).
+function buildEditorModel(path, m, source) {
+  state.ed = {
+    path,
+    defId: source.defId || null,
+    mapName: source.mapName || m.name,
+    adhoc: source.adhoc || null,
+    rows: m.rows, cols: m.cols, unit: m.unit || "",
+    dataType: m.data_type, endian: m.endian, address: m.address,
+    factor: m.scaling.factor, offset: m.scaling.offset,
+    defMin: m.def_min, defMax: m.def_max,
+    notes: m.notes || "",
+    xAxis: m.x_axis || { values: [] }, yAxis: m.y_axis || { values: [] },
+    orig: clone2d(m.cells), cells: clone2d(m.cells),
+    sel: null, anchor: null, drag: false,
+    undo: [], redo: [],
+  };
+  state.edClamped = new Set();
+  $("edToolbar").hidden = false;
+  $("viewToggle").hidden = false;
+  setView("2d");
+  edRender();
+}
+
 $("btnDecodeMap").onclick = async () => {
   const path = state.mvImage || state.imagePath;
   if (!path) return toast("Open an image or pick one", true);
@@ -246,24 +277,20 @@ $("btnDecodeMap").onclick = async () => {
   if (!id || !name) return toast("Pick a definition and a map", true);
   try {
     const m = await invoke("decode_map", { path, ecudefId: id, mapName: name });
-    // Build the editor model from the decode.
-    state.ed = {
-      path, defId: id, mapName: name,
-      rows: m.rows, cols: m.cols, unit: m.unit || "",
-      dataType: m.data_type, endian: m.endian, address: m.address,
-      factor: m.scaling.factor, offset: m.scaling.offset,
-      defMin: m.def_min, defMax: m.def_max,
-      notes: m.notes || "",
-      xAxis: m.x_axis || { values: [] }, yAxis: m.y_axis || { values: [] },
-      orig: clone2d(m.cells), cells: clone2d(m.cells),
-      sel: null, anchor: null, drag: false,
-      undo: [], redo: [],
-    };
-    state.edClamped = new Set();
-    $("edToolbar").hidden = false;
-    edRender();
-  } catch (e) { state.ed = null; $("edToolbar").hidden = true; $("mvResult").innerHTML = errBanner(e); }
+    buildEditorModel(path, m, { defId: id, mapName: name });
+  } catch (e) { state.ed = null; $("edToolbar").hidden = true; $("viewToggle").hidden = true; $("mvResult").innerHTML = errBanner(e); }
 };
+
+// Open an ad-hoc MapDef (imported or promoted) in the editor.
+async function openMapDef(path, mapdef) {
+  try {
+    const m = await invoke("decode_mapdef", { path, map: mapdef });
+    buildEditorModel(path, m, { adhoc: m.mapdef });
+    showPanel("maps");
+    $("mvResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    toast("Opened " + (mapdef.name || "map") + " in the editor");
+  } catch (e) { $("mvResult").innerHTML = errBanner(e); }
+}
 
 // ---- editor rendering ------------------------------------------------------
 function edRange() {
@@ -306,6 +333,7 @@ function edRender() {
     <div class="heatwrap"><table class="heat"><thead>${thead}</thead><tbody>${body}</tbody></table></div>
     <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(ed.unit)}</span> &nbsp; <span>X: ${esc(ed.xAxis.unit || "idx")} · Y: ${esc(ed.yAxis.unit || "idx")}</span></div>`;
   edUpdateToolbar();
+  if (state.view === "3d") drawPlot();
 }
 
 // ---- selection -------------------------------------------------------------
@@ -441,10 +469,16 @@ async function edDoWrite(outPath) {
   const dirty = ed.cells.some((row, r) => row.some((v, c) => v !== ed.orig[r][c]));
   if (!dirty && !outPath) return toast("No edits to write", true);
   try {
-    const r = await invoke("map_write", {
-      path: ed.path, ecudefId: ed.defId, mapName: ed.mapName,
-      newCells: ed.cells, outPath: outPath || null, fixChecksum: $("edFixCs").checked,
-    });
+    const r = ed.adhoc
+      ? await invoke("mapdef_write", {
+          path: ed.path, map: ed.adhoc,
+          newCells: ed.cells, outPath: outPath || null,
+          fixChecksum: $("edFixCs").checked, checksumAlgo: $("csAlgo") ? $("csAlgo").value : null,
+        })
+      : await invoke("map_write", {
+          path: ed.path, ecudefId: ed.defId, mapName: ed.mapName,
+          newCells: ed.cells, outPath: outPath || null, fixChecksum: $("edFixCs").checked,
+        });
     let cs = "";
     if (r.checksum && r.checksum.error) cs = `<div class="note">checksum: ${esc(r.checksum.error)}</div>`;
     else if (r.checksum && r.checksum.fixes) cs = r.checksum.fixes.length
@@ -659,6 +693,263 @@ async function initGuide() {
   } catch (e) { $("guideBody").innerHTML = errBanner(e); }
 }
 
+// =================== 3D SURFACE / CURVE VIEW ===================
+// Self-contained canvas renderer — no external/CDN libraries. A 2-D map draws
+// as a rotatable isometric surface coloured by the existing heat ramp; a 1-D
+// curve (rows==1 or cols==1) draws as a line graph. Read-only visualization.
+const plot = { az: -0.7, el: 0.5, drag: false, lx: 0, ly: 0 };
+
+function setView(v) {
+  state.view = v;
+  $("btn2d").classList.toggle("active", v === "2d");
+  $("btn3d").classList.toggle("active", v === "3d");
+  $("mvResult").hidden = v === "3d";
+  $("mvPlot").hidden = v !== "3d";
+  const ed = state.ed;
+  $("viewHint").textContent = ed ? (ed.rows === 1 || ed.cols === 1 ? "1-D curve" : "2-D surface · drag to orbit") : "";
+  if (v === "3d") drawPlot();
+}
+const vt = $("viewToggle");
+if (vt) { $("btn2d").onclick = () => setView("2d"); $("btn3d").onclick = () => setView("3d"); }
+
+function cssVar(name, fb) { const v = getComputedStyle(document.body).getPropertyValue(name).trim(); return v || fb; }
+
+function drawPlot() {
+  const ed = state.ed, cv = $("plot3d"); if (!ed || !cv) return;
+  const ctx = cv.getContext("2d"); const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const ink = cssVar("--ink", "#1b1f27"), soft = cssVar("--ink-soft", "#596073");
+  const { lo, hi, span } = edRange();
+  if (ed.rows === 1 || ed.cols === 1) { drawCurve(ctx, W, H, ed, lo, hi, span, ink, soft); return; }
+  drawSurface(ctx, W, H, ed, lo, hi, span, ink, soft);
+}
+
+function drawSurface(ctx, W, H, ed, lo, hi, span, ink, soft) {
+  const rows = ed.rows, cols = ed.cols;
+  const az = plot.az, el = plot.el;
+  const ca = Math.cos(az), sa = Math.sin(az), ce = Math.cos(el), se = Math.sin(el);
+  const scale = Math.min(W, H) * 0.34, cx = W / 2, cy = H * 0.58, height = 0.75;
+  const proj = (gx, gy, gz) => {
+    const x = (cols > 1 ? gx / (cols - 1) : 0.5) * 2 - 1;
+    const y = (rows > 1 ? gy / (rows - 1) : 0.5) * 2 - 1;
+    const z = ((gz - lo) / span) * 2 * height - height;
+    const x1 = x * ca - y * sa, y1 = x * sa + y * ca;
+    const y2 = y1 * ce - z * se, depth = y1 * se + z * ce;
+    return { sx: cx + x1 * scale, sy: cy - y2 * scale, depth };
+  };
+  // Vertices.
+  const V = [];
+  for (let r = 0; r < rows; r++) { V[r] = []; for (let c = 0; c < cols; c++) V[r][c] = proj(c, r, ed.cells[r][c]); }
+  // Quads with average depth for painter's sort.
+  const quads = [];
+  for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+    const p = [V[r][c], V[r][c + 1], V[r + 1][c + 1], V[r + 1][c]];
+    const avg = (ed.cells[r][c] + ed.cells[r][c + 1] + ed.cells[r + 1][c + 1] + ed.cells[r + 1][c]) / 4;
+    quads.push({ p, t: (avg - lo) / span, depth: (p[0].depth + p[1].depth + p[2].depth + p[3].depth) / 4 });
+  }
+  quads.sort((a, b) => a.depth - b.depth);
+  ctx.lineJoin = "round";
+  for (const q of quads) {
+    ctx.beginPath(); ctx.moveTo(q.p[0].sx, q.p[0].sy);
+    for (let k = 1; k < 4; k++) ctx.lineTo(q.p[k].sx, q.p[k].sy);
+    ctx.closePath();
+    ctx.fillStyle = heatColor(q.t); ctx.globalAlpha = 0.92; ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 0.5; ctx.stroke();
+  }
+  // Axis captions.
+  ctx.fillStyle = soft; ctx.font = "11px ui-monospace, monospace"; ctx.textAlign = "center";
+  ctx.fillText((ed.xAxis.name || "X") + (ed.xAxis.unit ? " (" + ed.xAxis.unit + ")" : ""), W / 2, H - 8);
+  ctx.save(); ctx.translate(14, H / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText((ed.yAxis.name || "Y") + (ed.yAxis.unit ? " (" + ed.yAxis.unit + ")" : ""), 0, 0); ctx.restore();
+  ctx.textAlign = "left"; ctx.fillStyle = ink;
+  ctx.fillText(`${ed.mapName}  ·  ${fmtCell(lo)}…${fmtCell(hi)} ${ed.unit || ""}`, 12, 18);
+}
+
+function drawCurve(ctx, W, H, ed, lo, hi, span, ink, soft) {
+  const flat = ed.rows === 1 ? ed.cells[0] : ed.cells.map((r) => r[0]);
+  const ax = ed.rows === 1 ? ed.xAxis : ed.yAxis;
+  const n = flat.length; const padL = 54, padR = 20, padT = 24, padB = 38;
+  const gw = W - padL - padR, gh = H - padT - padB;
+  const xf = (i) => padL + (n > 1 ? i / (n - 1) : 0.5) * gw;
+  const yf = (v) => padT + gh - ((v - lo) / span) * gh;
+  // Grid + axes.
+  ctx.strokeStyle = cssVar("--line", "#e2e5ea"); ctx.lineWidth = 1; ctx.fillStyle = soft; ctx.font = "10px ui-monospace, monospace";
+  for (let g = 0; g <= 4; g++) { const y = padT + (gh * g) / 4; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.textAlign = "right"; ctx.fillText(fmtCell(hi - (span * g) / 4), padL - 6, y + 3); }
+  // Area + line.
+  ctx.beginPath(); flat.forEach((v, i) => { const x = xf(i), y = yf(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.lineTo(xf(n - 1), padT + gh); ctx.lineTo(xf(0), padT + gh); ctx.closePath();
+  ctx.fillStyle = "rgba(232,113,26,0.12)"; ctx.fill();
+  ctx.beginPath(); flat.forEach((v, i) => { const x = xf(i), y = yf(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.strokeStyle = cssVar("--accent", "#e8711a"); ctx.lineWidth = 2; ctx.stroke();
+  flat.forEach((v, i) => { const x = xf(i), y = yf(v); ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7); ctx.fillStyle = heatColor((v - lo) / span); ctx.fill(); });
+  // X labels (breakpoints if present).
+  ctx.fillStyle = soft; ctx.textAlign = "center";
+  const xv = (ax && ax.values) || [];
+  const step = Math.ceil(n / 8);
+  for (let i = 0; i < n; i += step) ctx.fillText(xv[i] != null ? fmtAxis(xv[i]) : String(i), xf(i), H - 20);
+  ctx.fillStyle = ink; ctx.textAlign = "left"; ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText(`${ed.mapName} (${ax && ax.unit ? ax.unit : "idx"} → ${ed.unit || "value"})`, padL, 16);
+}
+
+(() => {
+  const cv = $("plot3d"); if (!cv) return;
+  cv.addEventListener("mousedown", (e) => { plot.drag = true; plot.lx = e.clientX; plot.ly = e.clientY; });
+  window.addEventListener("mousemove", (e) => {
+    if (!plot.drag) return;
+    plot.az += (e.clientX - plot.lx) * 0.01; plot.lx = e.clientX;
+    plot.el = Math.max(0.05, Math.min(1.45, plot.el + (e.clientY - plot.ly) * 0.008)); plot.ly = e.clientY;
+    if (state.view === "3d") drawPlot();
+  });
+  window.addEventListener("mouseup", () => { plot.drag = false; });
+})();
+
+// =================== IMPORT XDF/A2L + PROMOTE ===================
+const defFilter = [
+  { name: "Definitions (XDF / A2L)", extensions: ["xdf", "a2l"] },
+  { name: "All files", extensions: ["*"] },
+];
+$("btnImportDef").onclick = async () => { const p = await pickFile("Import XDF / A2L", defFilter); if (p) { state.impFile = p; $("impFileName").textContent = baseName(p); } };
+$("btnDoImport").onclick = async () => {
+  if (!state.impFile) return toast("Pick an XDF or A2L first", true);
+  const target = state.mvImage || state.imagePath;
+  try {
+    const r = await invoke("import_definitions", { path: state.impFile, base: $("impBase").value || null });
+    state.impMaps = r.maps || [];
+    const head = r.kind === "a2l"
+      ? `A2L · project ${esc(r.project || "?")} · module ${esc(r.module || "?")}${r.base != null ? " · base 0x" + (r.base >>> 0).toString(16).toUpperCase() : ""}`
+      : `XDF · ${esc(r.title || "(untitled)")} · base offset 0x${(r.base_offset >>> 0).toString(16).toUpperCase()}`;
+    if (!state.impMaps.length) { $("impResult").innerHTML = `<div class="banner info">${head} — no importable maps.</div>`; return; }
+    const rows = state.impMaps.map((m, i) => `<tr><td>${esc(m.name)}</td><td>${m.rows}×${m.cols} ${esc(m.data_type)}</td><td class="mono">${esc(m.address_hex)}</td><td>${esc(m.shape)}</td><td class="mono">${esc(m.unit || "")}</td><td><button class="btn sm" data-imp="${i}"${target ? "" : " disabled title='open an image first'"}>Open</button></td></tr>`).join("");
+    $("impResult").innerHTML = `<div class="banner ok">${head} — ${state.impMaps.length} map(s).</div>
+      <table class="tbl"><thead><tr><th>Map</th><th>Size</th><th>Addr</th><th>Shape</th><th>Unit</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      ${target ? "" : `<div class="note">Open a flash dump (Image panel) to decode these maps into the editor.</div>`}`;
+    $("impResult").querySelectorAll("button[data-imp]").forEach((b) => b.onclick = () => { const p = state.mvImage || state.imagePath; if (!p) return toast("Open an image first", true); openMapDef(p, state.impMaps[+b.dataset.imp]); });
+  } catch (e) { $("impResult").innerHTML = errBanner(e); }
+};
+
+function prefillPromote(start, len) {
+  $("promoteForm").hidden = false;
+  $("pmStart").value = start; $("pmLen").value = len;
+  // Guess square-ish u16 dims from the length.
+  const cells = Math.floor(len / 2);
+  let cols = 16; for (const w of [16, 12, 10, 8]) if (cells % w === 0) { cols = w; break; }
+  $("pmCols").value = cols; $("pmRows").value = Math.max(1, Math.floor(cells / cols));
+  $("promoteForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  toast("Fill in dims/scaling, then Make map");
+}
+$("btnPromote").onclick = async () => {
+  const path = state.mvImage || state.imagePath;
+  if (!path) return toast("Open an image first", true);
+  try {
+    const mapdef = await invoke("promote_region", {
+      path, start: $("pmStart").value, len: +$("pmLen").value || null,
+      name: $("pmName").value, rows: +$("pmRows").value || 1, cols: +$("pmCols").value || 1,
+      dataType: $("pmType").value, endian: $("pmEndian").value,
+      factor: parseFloat($("pmFactor").value) || 1, offset: parseFloat($("pmOffset").value) || 0,
+    });
+    await openMapDef(path, mapdef);
+  } catch (e) { $("impResult").innerHTML = errBanner(e); toast(typeof e === "string" ? e : "promote failed", true); }
+};
+
+// =================== ANALYZE BIN ===================
+function confPill(c) { const cls = c === "High" ? "ok" : c === "None" ? "bad" : "accent"; return `<span class="pill ${cls}">${esc(c)}</span>`; }
+function listOrDash(a) { return a && a.length ? a.map((x) => `<code>${esc(x)}</code>`).join(" ") : "—"; }
+async function runAnalyze(path) {
+  if (!path) return toast("Open or pick an image first", true);
+  $("anResult").innerHTML = `<div class="banner info">Analyzing…</div>`;
+  try {
+    const r = await invoke("analyze_image", { path });
+    const a = r.assignment || {};
+    const car = [a.make, a.model, a.engine].filter(Boolean).join(" · ") || "— not determinable offline —";
+    const vd = r.vin_decoded, pd = r.part_decoded;
+    const csRows = (r.checksum_blocks || []).map((b) => `<tr><td>${esc(b.name)}</td><td><span class="pill ${b.ok ? "ok" : "bad"}">${b.ok ? "OK" : "BAD"}</span></td><td class="mono">${esc(b.region)}</td><td class="mono">${esc(b.stored)}</td><td class="mono">${esc(b.computed)}</td></tr>`).join("");
+    const mapRows = (r.maps || []).map((m) => `<tr><td>${esc(m.name)}</td><td>${m.rows}×${m.cols} ${esc(m.data_type)}</td><td class="mono">${esc(m.address)}</td><td class="mono">${esc(m.unit || "")}</td></tr>`).join("");
+    $("anResult").innerHTML =
+      `<div class="banner ${r.confidence === "High" ? "ok" : "info"}">Assignment: <b>${esc(car)}</b> &nbsp; ${confPill(r.confidence)} <span class="muted small">basis: ${esc(a.basis || "—")}</span></div>
+      <div class="meta-grid">
+        <div class="k">ECU family</div><div class="v">${esc(r.family)} ${r.family === "Unknown" ? "" : "(by structure)"} · ${esc(r.size_class)} · ${(r.size / 1024).toFixed(0)} KiB</div>
+        <div class="k">family signals</div><div class="v">${(r.family_how && r.family_how.length) ? r.family_how.map(esc).join("<br>") : "—"}</div>
+        <div class="k">VAG part #</div><div class="v">${listOrDash(r.part_numbers)}</div>
+        <div class="k">Bosch #</div><div class="v">${listOrDash(r.bosch_numbers)}</div>
+        <div class="k">Software #</div><div class="v">${listOrDash(r.sw_numbers)}</div>
+        <div class="k">Mercedes #</div><div class="v">${listOrDash(r.mercedes_numbers)}</div>
+        <div class="k">VIN</div><div class="v">${esc(r.vin || "—")}${vd ? ` · ${esc(vd.make || "?")}${vd.year ? " · " + vd.year : (vd.year_ambiguous ? " · year ambiguous" : "")}` : ""}</div>
+        <div class="k">ASAM/EPK markers</div><div class="v">${r.epk_hits || 0}</div>
+      </div>` +
+      (pd ? `<h3>Part number</h3><div class="meta-grid">
+        <div class="k">kind</div><div class="v">${esc(pd.kind)}${pd.supplier ? " · " + esc(pd.supplier) : ""}</div>
+        ${pd.vag_main_group ? `<div class="k">VAG groups</div><div class="v">${esc(pd.vag_type_group || "")} / ${esc(pd.vag_main_group || "")} / ${esc(pd.vag_subgroup || "")} ${pd.vag_version ? "· " + esc(pd.vag_version) : ""}</div>` : ""}
+        ${pd.bosch_family ? `<div class="k">Bosch</div><div class="v">${esc(pd.bosch_family)} · ${esc(pd.bosch_consecutive || "")}</div>` : ""}
+        ${pd.flags && pd.flags.length ? `<div class="k">flags</div><div class="v">${pd.flags.map(esc).join("; ")}</div>` : ""}
+      </div>` : "") +
+      (r.catalog_match ? `<div class="banner ok" style="margin-top:12px">Catalog: <b>${esc(r.catalog_match.make)}</b> ${esc((r.catalog_match.models || []).slice(0, 4).join(", "))}${r.catalog_match.source ? ` <span class="muted small">(${esc(r.catalog_match.source)})</span>` : ""}</div>` : `<div class="note" style="margin-top:12px">No vehicle-catalog match — not enough identity to name a car.</div>`) +
+      (r.ecudef_match ? `<div class="meta-grid" style="margin-top:8px"><div class="k">matched def</div><div class="v">${esc(r.ecudef_match.name)} [${esc(r.ecudef_match.id)}] · ${esc(r.ecudef_match.maker)} ${esc(r.ecudef_match.family)}</div></div>` : "") +
+      (csRows ? `<h3>Checksum blocks (${esc(r.checksum_algo || "")})</h3><table class="tbl"><thead><tr><th>Block</th><th>Status</th><th>Region</th><th>Stored</th><th>Computed</th></tr></thead><tbody>${csRows}</tbody></table>` : `<div class="note">No checksum algorithm for family ${esc(r.family)} — nothing to verify.</div>`) +
+      (mapRows ? `<h3>Known maps (${(r.maps || []).length})</h3><table class="tbl"><thead><tr><th>Map</th><th>Size</th><th>Addr</th><th>Unit</th></tr></thead><tbody>${mapRows}</tbody></table>` : "");
+    refreshImageHints();
+  } catch (e) { $("anResult").innerHTML = errBanner(e); }
+}
+$("btnAnalyze").onclick = () => runAnalyze(state.imagePath);
+$("btnAnalyzePick").onclick = async () => { const p = await pickFile("Analyze flash dump", binFilter); if (p) runAnalyze(p); };
+
+// =================== UTILITIES (VIN / part / DTC / seed-key) ===================
+$("btnVin").onclick = async () => {
+  try {
+    const v = await invoke("vin_decode", { vin: $("vinInput").value });
+    const my = v.model_year;
+    $("vinResult").innerHTML = `<div class="banner ok">VIN <b>${esc(v.vin)}</b></div>
+      <div class="meta-grid">
+        <div class="k">manufacturer</div><div class="v">${esc(v.manufacturer || "unknown WMI")}</div>
+        <div class="k">country</div><div class="v">${esc(v.country || "—")}</div>
+        <div class="k">WMI / VDS / VIS</div><div class="v">${esc(v.wmi)} · ${esc(v.vds)} · ${esc(v.vis)}</div>
+        <div class="k">check digit</div><div class="v">${esc(v.check_digit)} · ${v.check_digit_valid == null ? "n/a (non-NA)" : (v.check_digit_valid ? "valid ✓" : "INVALID ✗")}</div>
+        <div class="k">model year</div><div class="v">${my.resolved != null ? my.resolved : "ambiguous"} <span class="muted small">(code ${esc(my.code)}${my.candidates && my.candidates.length ? " → " + my.candidates.join(" / ") : ""})</span></div>
+        <div class="k">plant</div><div class="v">${esc(v.plant_code)}</div>
+        <div class="k">serial</div><div class="v">${esc(v.serial)}</div>
+        ${v.flags && v.flags.length ? `<div class="k">flags</div><div class="v">${v.flags.map(esc).join("; ")}</div>` : ""}
+      </div>`;
+  } catch (e) { $("vinResult").innerHTML = errBanner(e); }
+};
+$("btnPart").onclick = async () => {
+  try {
+    const p = await invoke("part_decode", { part: $("partInput").value });
+    $("partResult").innerHTML = `<div class="banner ok"><b>${esc(p.normalized)}</b> · ${esc(p.kind)}${p.supplier ? " · " + esc(p.supplier) : ""}</div>
+      <div class="meta-grid">
+        ${p.vag_main_group ? `<div class="k">VAG type/main/sub</div><div class="v">${esc(p.vag_type_group || "")} / ${esc(p.vag_main_group || "")} / ${esc(p.vag_subgroup || "")}</div><div class="k">version</div><div class="v">${esc(p.vag_version || "—")}</div>` : ""}
+        ${p.bosch_family ? `<div class="k">Bosch family</div><div class="v">${esc(p.bosch_family)}</div><div class="k">consecutive</div><div class="v">${esc(p.bosch_consecutive || "—")}</div>` : ""}
+        ${p.flags && p.flags.length ? `<div class="k">flags</div><div class="v">${p.flags.map(esc).join("; ")}</div>` : ""}
+      </div>`;
+  } catch (e) { $("partResult").innerHTML = errBanner(e); }
+};
+$("btnDtc").onclick = async () => {
+  try {
+    const d = await invoke("dtc_lookup", { code: $("dtcInput").value });
+    $("dtcResult").innerHTML = `<div class="banner ok"><b>${esc(d.code)}</b></div>
+      <div class="meta-grid"><div class="k">description</div><div class="v" style="font-family:inherit">${esc(d.description)}</div><div class="k">system</div><div class="v" style="font-family:inherit">${esc(d.system)}</div></div>`;
+  } catch (e) { $("dtcResult").innerHTML = errBanner(e); }
+};
+async function initSeedKey() {
+  try {
+    const algos = await invoke("seedkey_algos");
+    const sel = $("skAlgo"); sel.innerHTML = "";
+    algos.forEach((a) => { const o = el("option"); o.value = a.id; o.textContent = a.name; o.dataset.params = (a.params || []).join(","); o.dataset.desc = a.desc; sel.appendChild(o); });
+    sel.onchange = skReflect; skReflect();
+  } catch (e) { $("skResult").innerHTML = errBanner(e); }
+}
+function skReflect() {
+  const o = $("skAlgo").selectedOptions[0]; if (!o) return;
+  const params = (o.dataset.params || "").split(",").filter(Boolean);
+  $("skMaskRow").hidden = !params.includes("mask");
+  $("skAddRow").hidden = !params.includes("add");
+  $("skDesc").textContent = o.dataset.desc || "";
+}
+$("btnSeedKey").onclick = async () => {
+  try {
+    const r = await invoke("seedkey_compute", { seed: $("skSeed").value, algo: $("skAlgo").value, mask: $("skMask").value || null, add: $("skAdd").value || null });
+    $("skResult").innerHTML = `<div class="banner ok">key: <b class="mono">${esc(r.key)}</b></div><div class="note">${esc(r.note)}</div>`;
+  } catch (e) { $("skResult").innerHTML = errBanner(e); }
+};
+
 // =================== BOOT ===================
 async function boot() {
   if (!TAURI.core) { document.body.innerHTML = '<p style="padding:2rem">Tauri API unavailable — run inside the OpenTune app.</p>'; return; }
@@ -668,6 +959,7 @@ async function boot() {
   } catch (e) { $("dataStatus").textContent = "data resolve failed"; }
   await initDrivers();
   await populateMapDefs();
+  await initSeedKey();
   await initGuide();
   showPanel("image");
   refreshImageHints();

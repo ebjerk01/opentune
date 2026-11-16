@@ -17,6 +17,7 @@ members = [
     "crates/opentune-a2l",
     "crates/opentune-vin",
     "crates/opentune-ffi",
+    "crates/opentune-scan",
 ]
 
 [workspace.package]

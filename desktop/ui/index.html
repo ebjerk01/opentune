@@ -21,6 +21,7 @@
         <nav id="nav">
           <div class="nav-group-label">Calibration</div>
           <button class="nav-item" data-panel="image"><span class="ni-ico">▦</span> Image</button>
+          <button class="nav-item" data-panel="analyze"><span class="ni-ico">🔎</span> Analyze bin</button>
           <button class="nav-item" data-panel="identify"><span class="ni-ico">⌖</span> Identify</button>
           <button class="nav-item" data-panel="checksum"><span class="ni-ico">✓</span> Checksum</button>
           <button class="nav-item" data-panel="maps"><span class="ni-ico">▞</span> Maps</button>
@@ -28,6 +29,10 @@
           <button class="nav-item" data-panel="flash"><span class="ni-ico">⚡</span> Flash</button>
           <button class="nav-item" data-panel="vault"><span class="ni-ico">▣</span> Vault</button>
           <button class="nav-item" data-panel="drivers"><span class="ni-ico">⇄</span> Drivers</button>
+
+          <div class="nav-divider"></div>
+          <div class="nav-group-label">Tools</div>
+          <button class="nav-item" data-panel="utils"><span class="ni-ico">🧰</span> Utilities</button>
 
           <div class="nav-divider"></div>
           <div class="nav-group-label">Help</div>
@@ -65,6 +70,23 @@
               </div>
             </div>
             <div id="hexView" class="hexview muted">—</div>
+          </div>
+        </section>
+
+        <!-- ANALYZE BIN -->
+        <section class="panel" id="panel-analyze">
+          <header class="panel-head">
+            <h1>Analyze bin</h1>
+            <p>Everything determinable from a raw dump <b>offline, with no hardware</b>: ECU family by structure, identity strings, catalog/definition match, checksum blocks and known maps. Confidence is graded honestly — a car is only assigned when a database or VIN justifies it.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <button class="btn primary" id="btnAnalyze">Analyze opened image</button>
+              <button class="btn" id="btnAnalyzePick">Analyze another…</button>
+              <span id="anPathHint" class="muted small">uses opened image</span>
+            </div>
+            <div class="muted small">early-alpha · read-only · calibration-only</div>
+            <div id="anResult" class="result"></div>
           </div>
         </section>
 
@@ -148,6 +170,45 @@
           </div>
 
           <div class="card">
+            <h2>Import definitions &amp; make maps</h2>
+            <p class="muted small">Import a TunerPro <b>XDF</b> or ASAM <b>A2L</b> and open any map in the editor, or promote a findmaps region / manual selection into a named map. This closes the import→edit loop — the editor can now edit maps that were never pre-defined.</p>
+            <div class="row">
+              <button class="btn" id="btnImportDef">Import XDF / A2L…</button>
+              <span id="impFileName" class="muted small mono">—</span>
+              <label title="A2L CPU→file rebase (addr − base). Leave blank for XDF or a file-offset A2L.">A2L base</label>
+              <input class="inp sm mono" id="impBase" placeholder="0x80000000" />
+              <button class="btn primary" id="btnDoImport">Import</button>
+            </div>
+            <div id="impResult" class="result"></div>
+
+            <div class="promote-form" id="promoteForm" hidden>
+              <h3>Make a map from a region</h3>
+              <div class="row tight">
+                <label>name</label><input class="inp" id="pmName" placeholder="e.g. injection limiter" />
+                <label>start</label><input class="inp sm mono" id="pmStart" placeholder="0x…" />
+                <label>len</label><input class="inp sm mono" id="pmLen" placeholder="bytes" />
+              </div>
+              <div class="row tight">
+                <label>rows</label><input class="inp sm" id="pmRows" value="16" />
+                <label>cols</label><input class="inp sm" id="pmCols" value="16" />
+                <label>type</label>
+                <select class="inp" id="pmType">
+                  <option value="u8">u8</option><option value="s8">s8</option>
+                  <option value="u16" selected>u16</option><option value="s16">s16</option>
+                  <option value="u32">u32</option><option value="s32">s32</option><option value="f32">f32</option>
+                </select>
+                <label>endian</label>
+                <select class="inp" id="pmEndian"><option value="big">big</option><option value="little">little</option></select>
+              </div>
+              <div class="row tight">
+                <label>factor</label><input class="inp sm mono" id="pmFactor" value="1" />
+                <label>offset</label><input class="inp sm mono" id="pmOffset" value="0" />
+                <button class="btn primary" id="btnPromote">Make map → editor</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
             <h2>Map editor</h2>
             <p class="muted small">Decode a defined calibration map out of the opened image into a blue→red heat grid with real axis breakpoints, units and scaling — then edit it. Writing back takes a full-image backup first, applies inverse scaling, and offers a checksum fix.</p>
             <div class="row">
@@ -190,7 +251,18 @@
               <p class="muted small">Double-click a cell to type a value. Click-drag or shift-click selects a rectangle. Edits are clamped to the definition's physical min/max where set; the raw value is rounded and clamped to the data type on write.</p>
             </div>
 
+            <div class="row tight view-toggle" id="viewToggle" hidden>
+              <span class="muted small">view</span>
+              <button class="btn sm active" id="btn2d" data-view="2d">2D grid</button>
+              <button class="btn sm" id="btn3d" data-view="3d">3D surface</button>
+              <span class="muted small" id="viewHint"></span>
+            </div>
+
             <div id="mvResult" class="result"></div>
+            <div id="mvPlot" class="plotwrap result" hidden>
+              <canvas id="plot3d" width="760" height="460"></canvas>
+              <div class="muted small plot-help" id="plotHelp">Drag to orbit · read-only visualization of decoded physical values</div>
+            </div>
           </div>
         </section>
 
@@ -273,6 +345,55 @@
           </header>
           <div class="card">
             <div id="driversResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- UTILITIES -->
+        <section class="panel" id="panel-utils">
+          <header class="panel-head">
+            <h1>Utilities</h1>
+            <p>Small offline decoders over the OpenTune crates. <span class="muted">early-alpha</span></p>
+          </header>
+
+          <div class="card">
+            <h2>VIN decoder</h2>
+            <div class="row">
+              <input class="inp mono wide" id="vinInput" placeholder="17-char VIN, e.g. WVWZZZ1KZAW000001" />
+              <button class="btn primary" id="btnVin">Decode</button>
+            </div>
+            <div id="vinResult" class="result"></div>
+          </div>
+
+          <div class="card">
+            <h2>Part-number decoder</h2>
+            <div class="row">
+              <input class="inp mono" id="partInput" placeholder="e.g. 03G906021LR or 0281011402" />
+              <button class="btn primary" id="btnPart">Decode</button>
+            </div>
+            <div id="partResult" class="result"></div>
+          </div>
+
+          <div class="card">
+            <h2>DTC lookup</h2>
+            <div class="row">
+              <input class="inp mono" id="dtcInput" placeholder="e.g. P0101" />
+              <button class="btn primary" id="btnDtc">Look up</button>
+            </div>
+            <div id="dtcResult" class="result"></div>
+          </div>
+
+          <div class="card">
+            <h2>Seed / key calculator</h2>
+            <p class="muted small">The public edition ships <b>no OEM / vehicle-specific</b> seed→key routines — those are not open. These are transparent generic transforms you drive and parameterise; they will not unlock a real ECU unless its algorithm happens to match.</p>
+            <div class="row">
+              <label>seed (hex)</label><input class="inp mono" id="skSeed" placeholder="e.g. 1A 2B 3C 4D" />
+              <label>transform</label><select class="inp" id="skAlgo"></select>
+              <button class="btn primary" id="btnSeedKey">Compute key</button>
+            </div>
+            <div class="row tight" id="skMaskRow" hidden><label>mask (hex)</label><input class="inp sm mono" id="skMask" placeholder="e.g. FF" /></div>
+            <div class="row tight" id="skAddRow" hidden><label>add (k)</label><input class="inp sm mono" id="skAdd" placeholder="e.g. 0x10" /></div>
+            <div class="muted small" id="skDesc"></div>
+            <div id="skResult" class="result"></div>
           </div>
         </section>
 

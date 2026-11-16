@@ -23,6 +23,13 @@ opentune-core = { path = "../../crates/opentune-core" }
 opentune-checksum = { path = "../../crates/opentune-checksum" }
 opentune-flash = { path = "../../crates/opentune-flash" }
 
+# Offline analysis + definition-import + utility crates wired into the panels.
+opentune-scan = { path = "../../crates/opentune-scan" }
+opentune-vin = { path = "../../crates/opentune-vin" }
+opentune-dtc = { path = "../../crates/opentune-dtc" }
+opentune-xdf = { path = "../../crates/opentune-xdf" }
+opentune-a2l = { path = "../../crates/opentune-a2l" }
+
 # Interface drivers, wired into the desktop registry.
 opentune-driver-mock = { path = "../../crates/drivers/mock" }
 opentune-driver-openport2 = { path = "../../crates/drivers/j2534-openport" }
