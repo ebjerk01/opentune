@@ -20,6 +20,10 @@ const state = {
   defs: [],
   guideSections: [],
   guideCur: null,
+  ed: null,       // active map-editor model
+  edClamped: null, // Set of "r,c" cells clamped to a def bound on last op
+  cmpStock: null,
+  cmpTuned: null,
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -205,8 +209,10 @@ async function populateMapDefs() {
   try {
     state.defs = await invoke("list_ecudefs");
     const withMaps = state.defs.filter((d) => d.maps > 0);
-    const sel = $("mvDef"); sel.innerHTML = "";
-    (withMaps.length ? withMaps : state.defs).forEach((d) => { const o = el("option"); o.value = d.id; o.textContent = `${d.name} (${d.maps} maps)`; sel.appendChild(o); });
+    const list = withMaps.length ? withMaps : state.defs;
+    const fill = (sel) => { sel.innerHTML = ""; list.forEach((d) => { const o = el("option"); o.value = d.id; o.textContent = `${d.name} (${d.maps} maps)`; sel.appendChild(o); }); };
+    fill($("mvDef"));
+    fill($("cmpDef"));
     await populateMaps();
   } catch (e) { toast("ecudefs: " + e, true); }
 }
@@ -231,6 +237,8 @@ function heatColor(t) { // 0..1 -> blue→green→yellow→orange→red
 const fmtCell = (v) => (Math.abs(v) >= 100 ? (+v).toFixed(1) : (+v).toFixed(2));
 const fmtAxis = (v) => (v == null ? "" : (v % 1 ? (+v).toFixed(1) : String(+v)));
 
+const clone2d = (g) => g.map((r) => r.slice());
+
 $("btnDecodeMap").onclick = async () => {
   const path = state.mvImage || state.imagePath;
   if (!path) return toast("Open an image or pick one", true);
@@ -238,33 +246,294 @@ $("btnDecodeMap").onclick = async () => {
   if (!id || !name) return toast("Pick a definition and a map", true);
   try {
     const m = await invoke("decode_map", { path, ecudefId: id, mapName: name });
-    const lo = m.min != null ? m.min : 0, hi = m.max != null ? m.max : 1, span = (hi - lo) || 1;
-    const xv = m.x_axis.values || [], yv = m.y_axis.values || [];
-    let thead = `<tr><th>${esc(m.y_axis.name || "")}\\${esc(m.x_axis.name || "")}</th>`;
-    for (let c = 0; c < m.cols; c++) thead += `<th>${xv[c] != null ? fmtAxis(xv[c]) : c}</th>`;
-    thead += "</tr>";
-    let body = "";
-    for (let r = 0; r < m.rows; r++) {
-      body += `<tr><th>${yv[r] != null ? fmtAxis(yv[r]) : r}</th>`;
-      for (let c = 0; c < m.cols; c++) {
-        const v = m.cells[r][c], t = (v - lo) / span;
-        body += `<td class="cell" style="background:${heatColor(t)}" title="[${r},${c}] ${fmtCell(v)} ${esc(m.unit || "")}">${fmtCell(v)}</td>`;
-      }
-      body += "</tr>";
-    }
-    const scl = `× ${m.scaling.factor}${m.scaling.offset ? " + " + m.scaling.offset : ""} → ${esc(m.unit || "raw")}`;
-    $("mvResult").innerHTML =
-      `<div class="meta-grid">
-        <div class="k">address</div><div class="v">${esc(m.address)}</div>
-        <div class="k">size</div><div class="v">${m.rows}×${m.cols} ${esc(m.data_type)} ${esc(m.endian)}</div>
-        <div class="k">scaling</div><div class="v">${scl}</div>
-        <div class="k">range</div><div class="v">${fmtCell(lo)} … ${fmtCell(hi)} ${esc(m.unit || "")}</div>
-      </div>
-      ${m.notes ? `<div class="note">${esc(m.notes)}</div>` : ""}
-      <div class="heatwrap"><table class="heat"><thead>${thead}</thead><tbody>${body}</tbody></table></div>
-      <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(m.unit || "")}</span> &nbsp; <span>X: ${esc(m.x_axis.unit || "idx")} · Y: ${esc(m.y_axis.unit || "idx")}</span></div>`;
-  } catch (e) { $("mvResult").innerHTML = errBanner(e); }
+    // Build the editor model from the decode.
+    state.ed = {
+      path, defId: id, mapName: name,
+      rows: m.rows, cols: m.cols, unit: m.unit || "",
+      dataType: m.data_type, endian: m.endian, address: m.address,
+      factor: m.scaling.factor, offset: m.scaling.offset,
+      defMin: m.def_min, defMax: m.def_max,
+      notes: m.notes || "",
+      xAxis: m.x_axis || { values: [] }, yAxis: m.y_axis || { values: [] },
+      orig: clone2d(m.cells), cells: clone2d(m.cells),
+      sel: null, anchor: null, drag: false,
+      undo: [], redo: [],
+    };
+    state.edClamped = new Set();
+    $("edToolbar").hidden = false;
+    edRender();
+  } catch (e) { state.ed = null; $("edToolbar").hidden = true; $("mvResult").innerHTML = errBanner(e); }
 };
+
+// ---- editor rendering ------------------------------------------------------
+function edRange() {
+  const ed = state.ed; let lo = Infinity, hi = -Infinity;
+  for (const row of ed.cells) for (const v of row) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (!isFinite(lo)) { lo = 0; hi = 1; }
+  if (lo === hi) hi = lo + 1;
+  return { lo, hi, span: hi - lo };
+}
+function edRender() {
+  const ed = state.ed; if (!ed) return;
+  const { lo, hi, span } = edRange();
+  const xv = ed.xAxis.values || [], yv = ed.yAxis.values || [];
+  let thead = `<tr><th>${esc(ed.yAxis.name || "")}\\${esc(ed.xAxis.name || "")}</th>`;
+  for (let c = 0; c < ed.cols; c++) thead += `<th>${xv[c] != null ? fmtAxis(xv[c]) : c}</th>`;
+  thead += "</tr>";
+  let body = "";
+  for (let r = 0; r < ed.rows; r++) {
+    body += `<tr><th>${yv[r] != null ? fmtAxis(yv[r]) : r}</th>`;
+    for (let c = 0; c < ed.cols; c++) {
+      const v = ed.cells[r][c], t = (v - lo) / span;
+      const dirty = v !== ed.orig[r][c] ? " dirty" : "";
+      const sel = edInSel(r, c) ? " sel" : "";
+      const clamp = state.edClamped && state.edClamped.has(r + "," + c) ? " clamped" : "";
+      body += `<td class="cell${dirty}${sel}${clamp}" data-r="${r}" data-c="${c}" style="background:${heatColor(t)}" title="[${r},${c}] was ${fmtCell(ed.orig[r][c])} → ${fmtCell(v)} ${esc(ed.unit)}">${fmtCell(v)}</td>`;
+    }
+    body += "</tr>";
+  }
+  const scl = `× ${ed.factor}${ed.offset ? " + " + ed.offset : ""} → ${esc(ed.unit || "raw")}`;
+  const bounds = (ed.defMin != null || ed.defMax != null)
+    ? `${ed.defMin != null ? fmtCell(ed.defMin) : "−∞"} … ${ed.defMax != null ? fmtCell(ed.defMax) : "+∞"} ${esc(ed.unit)}` : "none";
+  $("mvResult").innerHTML =
+    `<div class="meta-grid">
+      <div class="k">address</div><div class="v">${esc(ed.address)}</div>
+      <div class="k">size</div><div class="v">${ed.rows}×${ed.cols} ${esc(ed.dataType)} ${esc(ed.endian)}</div>
+      <div class="k">scaling</div><div class="v">${scl}</div>
+      <div class="k">def bounds</div><div class="v">${bounds}</div>
+    </div>
+    ${ed.notes ? `<div class="note">${esc(ed.notes)}</div>` : ""}
+    <div class="heatwrap"><table class="heat"><thead>${thead}</thead><tbody>${body}</tbody></table></div>
+    <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(ed.unit)}</span> &nbsp; <span>X: ${esc(ed.xAxis.unit || "idx")} · Y: ${esc(ed.yAxis.unit || "idx")}</span></div>`;
+  edUpdateToolbar();
+}
+
+// ---- selection -------------------------------------------------------------
+function edNormSel() {
+  const s = state.ed.sel; if (!s) return null;
+  return { r0: Math.min(s.r0, s.r1), r1: Math.max(s.r0, s.r1), c0: Math.min(s.c0, s.c1), c1: Math.max(s.c0, s.c1) };
+}
+function edInSel(r, c) {
+  const n = edNormSel(); if (!n) return false;
+  return r >= n.r0 && r <= n.r1 && c >= n.c0 && c <= n.c1;
+}
+function edPaintSelection() {
+  document.querySelectorAll("#mvResult td.cell").forEach((td) => {
+    const r = +td.dataset.r, c = +td.dataset.c;
+    td.classList.toggle("sel", edInSel(r, c));
+  });
+  edUpdateToolbar();
+}
+function edUpdateToolbar() {
+  const ed = state.ed; if (!ed) return;
+  const n = edNormSel();
+  $("edSel").textContent = n
+    ? `selection: [${n.r0},${n.c0}]–[${n.r1},${n.c1}] (${(n.r1 - n.r0 + 1) * (n.c1 - n.c0 + 1)} cells)`
+    : "no selection";
+  $("edUndo").disabled = ed.undo.length === 0;
+  $("edRedo").disabled = ed.redo.length === 0;
+}
+
+// Mouse selection via event delegation on the result container.
+const mvEl = $("mvResult");
+mvEl.addEventListener("mousedown", (e) => {
+  const td = e.target.closest && e.target.closest("td.cell"); if (!td || !state.ed) return;
+  if (e.target.classList.contains("cell-input")) return;
+  e.preventDefault();
+  const r = +td.dataset.r, c = +td.dataset.c;
+  if (e.shiftKey && state.ed.anchor) {
+    state.ed.sel = { r0: state.ed.anchor.r, c0: state.ed.anchor.c, r1: r, c1: c };
+  } else {
+    state.ed.anchor = { r, c };
+    state.ed.sel = { r0: r, c0: c, r1: r, c1: c };
+  }
+  state.ed.drag = true;
+  edPaintSelection();
+});
+mvEl.addEventListener("mouseover", (e) => {
+  if (!state.ed || !state.ed.drag) return;
+  const td = e.target.closest && e.target.closest("td.cell"); if (!td) return;
+  state.ed.sel = { r0: state.ed.anchor.r, c0: state.ed.anchor.c, r1: +td.dataset.r, c1: +td.dataset.c };
+  edPaintSelection();
+});
+document.addEventListener("mouseup", () => { if (state.ed) state.ed.drag = false; });
+
+// Double-click a cell to type a value.
+mvEl.addEventListener("dblclick", (e) => {
+  const td = e.target.closest && e.target.closest("td.cell"); if (!td || !state.ed) return;
+  const r = +td.dataset.r, c = +td.dataset.c;
+  const cur = state.ed.cells[r][c];
+  td.innerHTML = `<input class="cell-input" value="${fmtCell(cur)}" />`;
+  const inp = td.querySelector("input"); inp.focus(); inp.select();
+  const commit = (save) => {
+    if (save) {
+      const v = parseFloat(inp.value);
+      if (!isNaN(v)) { edPushUndo(); state.edClamped = new Set(); state.ed.cells[r][c] = edClampVal(v, r, c); }
+    }
+    edRender();
+  };
+  inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") commit(true); else if (ev.key === "Escape") commit(false); });
+  inp.addEventListener("blur", () => commit(true));
+});
+
+// ---- edit operations -------------------------------------------------------
+function edClampVal(v, r, c) {
+  const ed = state.ed; let out = v;
+  if (ed.defMin != null && out < ed.defMin) out = ed.defMin;
+  if (ed.defMax != null && out > ed.defMax) out = ed.defMax;
+  if (out !== v) state.edClamped.add(r + "," + c);
+  return out;
+}
+function edPushUndo() {
+  const ed = state.ed; ed.undo.push(clone2d(ed.cells)); if (ed.undo.length > 60) ed.undo.shift(); ed.redo = [];
+}
+function edApply(fn) {
+  const ed = state.ed; const n = edNormSel();
+  if (!n) return toast("Select cells first", true);
+  edPushUndo(); state.edClamped = new Set();
+  let clamped = 0;
+  for (let r = n.r0; r <= n.r1; r++) for (let c = n.c0; c <= n.c1; c++) {
+    const nv = edClampVal(fn(ed.cells[r][c], r, c), r, c);
+    if (state.edClamped.has(r + "," + c)) clamped++;
+    ed.cells[r][c] = nv;
+  }
+  edRender();
+  if (clamped) toast(`${clamped} cell(s) clamped to the definition's bounds`, true);
+}
+const edOperand = () => { const v = parseFloat($("edVal").value); return isNaN(v) ? 0 : v; };
+$("edSet").onclick = () => edApply(() => edOperand());
+$("edAdd").onclick = () => edApply((v) => v + edOperand());
+$("edSub").onclick = () => edApply((v) => v - edOperand());
+$("edMul").onclick = () => edApply((v) => v * (edOperand() / 100));
+$("edSmooth").onclick = () => {
+  const ed = state.ed, n = edNormSel(); if (!n) return toast("Select cells first", true);
+  const src = clone2d(ed.cells);
+  edApply((_, r, c) => {
+    let sum = 0, cnt = 0;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r + dr, cc = c + dc;
+      if (rr >= 0 && rr < ed.rows && cc >= 0 && cc < ed.cols) { sum += src[rr][cc]; cnt++; }
+    }
+    return sum / cnt;
+  });
+};
+$("edInterp").onclick = () => {
+  const ed = state.ed, n = edNormSel(); if (!n) return toast("Select a rectangle first", true);
+  if (n.r0 === n.r1 && n.c0 === n.c1) return toast("Interpolate needs more than one cell", true);
+  const c00 = ed.cells[n.r0][n.c0], c01 = ed.cells[n.r0][n.c1];
+  const c10 = ed.cells[n.r1][n.c0], c11 = ed.cells[n.r1][n.c1];
+  const rows = n.r1 - n.r0, cols = n.c1 - n.c0;
+  edApply((_, r, c) => {
+    const u = rows ? (r - n.r0) / rows : 0, w = cols ? (c - n.c0) / cols : 0;
+    const top = c00 + (c01 - c00) * w, bot = c10 + (c11 - c10) * w;
+    return top + (bot - top) * u;
+  });
+};
+$("edSelAll").onclick = () => { if (!state.ed) return; state.ed.anchor = { r: 0, c: 0 }; state.ed.sel = { r0: 0, c0: 0, r1: state.ed.rows - 1, c1: state.ed.cols - 1 }; edPaintSelection(); };
+$("edSelNone").onclick = () => { if (!state.ed) return; state.ed.sel = null; edPaintSelection(); };
+$("edUndo").onclick = () => { const ed = state.ed; if (!ed || !ed.undo.length) return; ed.redo.push(clone2d(ed.cells)); ed.cells = ed.undo.pop(); state.edClamped = new Set(); edRender(); };
+$("edRedo").onclick = () => { const ed = state.ed; if (!ed || !ed.redo.length) return; ed.undo.push(clone2d(ed.cells)); ed.cells = ed.redo.pop(); state.edClamped = new Set(); edRender(); };
+$("edReset").onclick = () => { const ed = state.ed; if (!ed) return; edPushUndo(); ed.cells = clone2d(ed.orig); state.edClamped = new Set(); edRender(); toast("Reset to decoded values"); };
+
+// ---- write-back ------------------------------------------------------------
+async function edDoWrite(outPath) {
+  const ed = state.ed; if (!ed) return;
+  const dirty = ed.cells.some((row, r) => row.some((v, c) => v !== ed.orig[r][c]));
+  if (!dirty && !outPath) return toast("No edits to write", true);
+  try {
+    const r = await invoke("map_write", {
+      path: ed.path, ecudefId: ed.defId, mapName: ed.mapName,
+      newCells: ed.cells, outPath: outPath || null, fixChecksum: $("edFixCs").checked,
+    });
+    let cs = "";
+    if (r.checksum && r.checksum.error) cs = `<div class="note">checksum: ${esc(r.checksum.error)}</div>`;
+    else if (r.checksum && r.checksum.fixes) cs = r.checksum.fixes.length
+      ? `<div class="banner ok">Checksum (${esc(r.checksum_algo || "")}): ${r.checksum.fixes.length} fix(es) applied.</div><pre class="hexview">${esc(r.checksum.fixes.join("\n"))}</pre>`
+      : `<div class="banner info">Checksum (${esc(r.checksum_algo || "")}): already correct.</div>`;
+    $("mvResult").insertAdjacentHTML("afterbegin",
+      `<div class="banner ok">Wrote ${r.cells_changed} changed cell(s) to <b>${esc(baseName(r.out_path))}</b>${r.in_place ? " (in place)" : " (copy)"}.</div>
+       <div class="meta-grid"><div class="k">safety backup</div><div class="v">${esc(r.backup)}</div><div class="k">output</div><div class="v">${esc(r.out_path)}</div></div>${cs}`);
+    // The written file is now the baseline; re-decode from it so further edits stack cleanly.
+    ed.path = r.out_path; ed.orig = clone2d(ed.cells); state.edClamped = new Set();
+    if (r.in_place && (ed.path === state.imagePath)) renderHex(state.hexOffset || 0);
+    edRender();
+    toast("Map written · backup saved");
+  } catch (e) {
+    const msg = typeof e === "string" ? e : (e && e.message) || "";
+    $("mvResult").insertAdjacentHTML("afterbegin", errBanner(e) + (/permission denied|read-only/i.test(msg)
+      ? `<div class="note">Can't write in place — use <b>Write → Save as…</b> to write a corrected copy you own. Your original is backed up.</div>` : ""));
+  }
+}
+$("edWrite").onclick = () => edDoWrite(null);
+$("edWriteAs").onclick = async () => {
+  if (!state.ed) return;
+  const def = baseName(state.ed.path).replace(/\.(\w+)$/, "") + "-edit.bin";
+  const out = await pickSave("Write edited image as", def);
+  if (out) edDoWrite(out);
+};
+
+// =================== COMPARE ===================
+$("cmpStock").onclick = async () => { const p = await pickFile("Stock image", binFilter); if (p) { state.cmpStock = p; $("cmpStockName").textContent = baseName(p); } };
+$("cmpTuned").onclick = async () => { const p = await pickFile("Tuned image", binFilter); if (p) { state.cmpTuned = p; $("cmpTunedName").textContent = baseName(p); } };
+$("btnCompare").onclick = async () => {
+  const id = $("cmpDef").value;
+  if (!id) return toast("Pick a definition", true);
+  if (!state.cmpStock || !state.cmpTuned) return toast("Pick stock + tuned images", true);
+  $("cmpGrid").innerHTML = "";
+  try {
+    const r = await invoke("compare_maps", { defId: id, stock: state.cmpStock, tuned: state.cmpTuned });
+    const rows = r.maps.map((m) => {
+      if (m.out_of_range) return `<tr><td>${esc(m.name)}</td><td>${m.rows}×${m.cols}</td><td colspan="3" class="muted">out of range — skipped</td><td></td></tr>`;
+      const unit = m.unit ? " " + esc(m.unit) : "";
+      const btn = m.changed ? `<button class="btn sm" data-cmpmap="${esc(m.name)}">grid</button>` : "";
+      return `<tr><td>${esc(m.name)}</td><td>${m.rows}×${m.cols}</td>
+        <td>${m.changed ? `<span class="pill accent">${m.changed}</span>` : '<span class="pill neutral">0</span>'}</td>
+        <td class="mono">${m.changed ? (m.d_max >= 0 ? "+" : "") + fmtCell(m.d_max) + unit : "—"}</td>
+        <td class="mono">${m.changed ? (m.d_avg >= 0 ? "+" : "") + fmtCell(m.d_avg) + unit : "—"}</td>
+        <td>${btn}</td></tr>`;
+    }).join("");
+    $("cmpResult").innerHTML =
+      `<div class="banner ${r.total_changed ? "ok" : "info"}">${r.changed_maps} of ${r.maps.length} map(s) changed · ${r.total_changed} cell(s) total · ${(r.stock_size / 1024).toFixed(0)} KiB → ${(r.tuned_size / 1024).toFixed(0)} KiB</div>
+      <table class="tbl"><thead><tr><th>Map</th><th>Size</th><th>Changed</th><th>Δmax</th><th>Δavg</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $("cmpResult").querySelectorAll("button[data-cmpmap]").forEach((b) => b.onclick = () => showCompareGrid(id, b.dataset.cmpmap));
+  } catch (e) { $("cmpResult").innerHTML = errBanner(e); $("cmpGrid").innerHTML = ""; }
+};
+async function showCompareGrid(id, name) {
+  try {
+    const r = await invoke("compare_maps", { defId: id, stock: state.cmpStock, tuned: state.cmpTuned, mapName: name });
+    const m = r.maps.find((x) => x.name === name);
+    if (!m || !m.stock) { $("cmpGrid").innerHTML = `<div class="banner info">No grid for this map.</div>`; return; }
+    // Shared colour scale across both grids.
+    let lo = Infinity, hi = -Infinity;
+    for (const g of [m.stock, m.tuned]) for (const row of g) for (const v of row) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (!isFinite(lo)) { lo = 0; hi = 1; } if (lo === hi) hi = lo + 1;
+    const span = hi - lo;
+    const xv = (m.x_axis && m.x_axis.values) || [], yv = (m.y_axis && m.y_axis.values) || [];
+    const grid = (cells, other) => {
+      let thead = `<tr><th>\\</th>`;
+      for (let c = 0; c < m.cols; c++) thead += `<th>${xv[c] != null ? fmtAxis(xv[c]) : c}</th>`;
+      thead += "</tr>";
+      let body = "";
+      for (let r = 0; r < m.rows; r++) {
+        body += `<tr><th>${yv[r] != null ? fmtAxis(yv[r]) : r}</th>`;
+        for (let c = 0; c < m.cols; c++) {
+          const v = cells[r][c], t = (v - lo) / span;
+          const ch = other && Math.abs(v - other[r][c]) > 1e-9 ? " changed" : "";
+          body += `<td class="cell${ch}" style="background:${heatColor(t)}" title="${fmtCell(v)} ${esc(m.unit || "")}">${fmtCell(v)}</td>`;
+        }
+        body += "</tr>";
+      }
+      return `<div class="heatwrap"><table class="heat cmp"><thead>${thead}</thead><tbody>${body}</tbody></table></div>`;
+    };
+    $("cmpGrid").innerHTML =
+      `<h3>${esc(name)} — before → after (changed cells outlined)</h3>
+       <div class="cmp-grids">
+         <div><h4>Stock</h4>${grid(m.stock, m.tuned)}</div>
+         <div><h4>Tuned</h4>${grid(m.tuned, m.stock)}</div>
+       </div>
+       <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(m.unit || "")}</span></div>`;
+  } catch (e) { $("cmpGrid").innerHTML = errBanner(e); }
+}
 
 // =================== FLASH ===================
 $("flTarget").onclick = async () => { const p = await pickFile("Target image", binFilter); if (p) { state.flTarget = p; refreshImageHints(); } };

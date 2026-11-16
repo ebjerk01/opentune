@@ -190,6 +190,30 @@ table.heat td.cell { color: #16181d; font-weight: 600; }
 .legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11.5px; color: var(--ink-soft); flex-wrap: wrap; }
 .legend .bar { height: 12px; width: 160px; border-radius: 3px; background: linear-gradient(90deg, #2b6cb0, #38a169, #d69e2e, #dd6b20, #c53030); }
 
+/* Map editor */
+.ed-toolbar {
+  margin-top: 14px; padding: 12px 14px; border: 1px solid var(--card-border);
+  border-radius: 10px; background: rgba(127, 127, 127, 0.04); display: flex; flex-direction: column; gap: 8px;
+}
+.ed-toolbar .row { margin-bottom: 0; }
+.ed-toolbar .sep { flex: 1; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); font-weight: 600; cursor: pointer; }
+.chk input { accent-color: var(--accent); }
+table.heat td.cell { cursor: cell; user-select: none; position: relative; }
+table.heat td.cell.sel { outline: 2px solid var(--ink); outline-offset: -2px; }
+table.heat td.cell.dirty { box-shadow: inset 0 0 0 2px var(--accent); }
+table.heat td.cell.clamped::after {
+  content: "!"; position: absolute; top: 0; right: 2px; font-size: 8px; color: var(--bad); font-weight: 800;
+}
+.cell-input {
+  width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 10.5px; text-align: center;
+  border: 1px solid var(--accent); border-radius: 3px; padding: 2px; background: var(--panel); color: var(--ink);
+}
+.heat.cmp td.cell.changed { box-shadow: inset 0 0 0 2px var(--warn); }
+.cmp-grids { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.cmp-grids h4 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); }
+@media (max-width: 760px) { .cmp-grids { grid-template-columns: 1fr; } }
+
 /* Guide */
 .guide-layout { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: start; }
 .guide-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }

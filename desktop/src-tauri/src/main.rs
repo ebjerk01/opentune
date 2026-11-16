@@ -568,6 +568,290 @@ fn decode_map(
 }
 
 // ---------------------------------------------------------------------------
+// Map editor: inverse scaling, byte-level write-back, map-by-map compare
+// ---------------------------------------------------------------------------
+
+/// Round to nearest and clamp into `[lo, hi]`. Used before narrowing a raw value
+/// to an integer data type so an out-of-range edit can never wrap around.
+fn clamp_round(raw: f64, lo: f64, hi: f64) -> f64 {
+    let r = if raw.is_finite() { raw.round() } else { 0.0 };
+    r.clamp(lo, hi)
+}
+
+/// Inverse of [`read_elem`] for one cell: physical value → raw → bytes, honouring
+/// the data type, endianness and linear scaling. For integer types the raw value
+/// is rounded to nearest and clamped to the type's representable range (never
+/// wraps); floats are stored as `f32`. The caller must guarantee a non-zero
+/// `scaling.factor`. Returns exactly `dt.byte_len()` bytes.
+fn encode_elem(phys: f64, dt: DataType, en: Endian, scaling: ecudef::Scaling) -> Vec<u8> {
+    let le = matches!(en, Endian::Little);
+    let raw = (phys - scaling.offset) / scaling.factor;
+    match dt {
+        DataType::U8 => vec![clamp_round(raw, 0.0, u8::MAX as f64) as u8],
+        DataType::S8 => vec![clamp_round(raw, i8::MIN as f64, i8::MAX as f64) as i8 as u8],
+        DataType::U16 => {
+            let v = clamp_round(raw, 0.0, u16::MAX as f64) as u16;
+            (if le { v.to_le_bytes() } else { v.to_be_bytes() }).to_vec()
+        }
+        DataType::S16 => {
+            let v = clamp_round(raw, i16::MIN as f64, i16::MAX as f64) as i16;
+            (if le { v.to_le_bytes() } else { v.to_be_bytes() }).to_vec()
+        }
+        DataType::U32 => {
+            let v = clamp_round(raw, 0.0, u32::MAX as f64) as u32;
+            (if le { v.to_le_bytes() } else { v.to_be_bytes() }).to_vec()
+        }
+        DataType::S32 => {
+            let v = clamp_round(raw, i32::MIN as f64, i32::MAX as f64) as i32;
+            (if le { v.to_le_bytes() } else { v.to_be_bytes() }).to_vec()
+        }
+        DataType::F32 => {
+            let v = raw as f32;
+            (if le { v.to_le_bytes() } else { v.to_be_bytes() }).to_vec()
+        }
+    }
+}
+
+/// Decode every cell of a `MapDef` from `img` into a physical-value grid, or
+/// `None` if the map runs past the end of the image (shared by compare).
+fn decode_cells(img: &[u8], map: &MapDef) -> Option<Vec<Vec<f64>>> {
+    let rows = map.rows.max(1) as usize;
+    let cols = map.cols.max(1) as usize;
+    let w = map.data_type.byte_len() as usize;
+    let mut out = Vec::with_capacity(rows);
+    for r in 0..rows {
+        let mut row = Vec::with_capacity(cols);
+        for c in 0..cols {
+            let off = map.address as usize + (r * cols + c) * w;
+            let raw = read_elem(img, off, map.data_type, map.endian)?;
+            row.push(map.scaling.to_physical(raw));
+        }
+        out.push(row);
+    }
+    Some(out)
+}
+
+/// Write an edited calibration map back into a flash image.
+///
+/// Safety is the whole point of this command, in order:
+/// 1. Refuse on a dimension mismatch (the grid must be exactly `rows × cols`).
+/// 2. Refuse on a zero scaling factor (physical→raw would divide by zero).
+/// 3. Refuse if the map region runs past the end of the image.
+/// 4. Take a **full-image backup into the flash vault FIRST** — if that fails,
+///    abort before touching anything, so an edit can never happen un-backed-up.
+/// 5. Apply inverse scaling (`raw = (phys − offset) / factor`), round + clamp to
+///    the data type's range, and write ONLY the map's byte region (type+endian).
+/// 6. Optionally run a checksum fix (reusing [`checksum_fix`] with the def's algo).
+///
+/// `out_path` writes a Save-As copy instead of editing `path` in place (the
+/// read-only / permission fallback). On a write error the message names the
+/// safety backup so the original is always recoverable.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn map_write(
+    path: String,
+    ecudef_id: String,
+    map_name: String,
+    new_cells: Vec<Vec<f64>>,
+    out_path: Option<String>,
+    fix_checksum: Option<bool>,
+    state: tauri::State<AppData>,
+) -> Result<Value, String> {
+    let defs = load_defs(&state.ecudefs);
+    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
+    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
+
+    let rows = map.rows.max(1) as usize;
+    let cols = map.cols.max(1) as usize;
+
+    // (1) Dimension guard — reject before reading anything.
+    if new_cells.len() != rows || new_cells.iter().any(|r| r.len() != cols) {
+        let got_cols = new_cells.first().map(|r| r.len()).unwrap_or(0);
+        return Err(format!(
+            "dimension mismatch: map '{}' is {rows}×{cols} but the edit is {}×{got_cols} — refusing to write",
+            map.name,
+            new_cells.len(),
+        ));
+    }
+    // (2) Zero scaling factor guard — cannot invert physical→raw.
+    if map.scaling.factor == 0.0 {
+        return Err(format!(
+            "map '{}' has a zero scaling factor — physical→raw is undefined, refusing to write",
+            map.name
+        ));
+    }
+
+    let mut img = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let w = map.data_type.byte_len() as usize;
+    let need = map.address as usize + rows * cols * w;
+    // (3) Bounds guard — never write past the end of the image.
+    if need > img.len() {
+        return Err(format!(
+            "map needs 0x{:08X} bytes but the image is only 0x{:08X} — open a full dump (its flash is {} KiB)",
+            need,
+            img.len(),
+            def.flash_size / 1024
+        ));
+    }
+
+    // (4) BACKUP FIRST: archive the whole original image into the flash vault,
+    // beside the file being edited. If this fails we abort before any edit.
+    let vault_dir = Path::new(&path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("opentune-vault");
+    let ecu = EcuId {
+        ecu_name: Some(format!("{} [{}]", def.name, def.id)),
+        hw_number: def.identify.part_numbers.first().cloned(),
+        sw_number: def.identify.sw_numbers.first().cloned(),
+        ..Default::default()
+    };
+    let whole = MemoryRegion::new(0, img.len() as u32);
+    let backup = opentune_flash::vault::save_backup(&vault_dir, &ecu, whole, &img).map_err(|e| {
+        format!(
+            "could not write the safety backup to {} — aborting before any edit: {e}",
+            vault_dir.display()
+        )
+    })?;
+
+    // (5) Apply the edit: inverse scaling, clamp, write only the map's bytes.
+    let mut cells_changed = 0usize;
+    for r in 0..rows {
+        for c in 0..cols {
+            let off = map.address as usize + (r * cols + c) * w;
+            let bytes = encode_elem(new_cells[r][c], map.data_type, map.endian, map.scaling);
+            if img[off..off + w] != bytes[..] {
+                cells_changed += 1;
+            }
+            img[off..off + w].copy_from_slice(&bytes);
+        }
+    }
+
+    let target = out_path.unwrap_or_else(|| path.clone());
+    std::fs::write(&target, &img).map_err(|e| {
+        format!(
+            "{} — your original is safe: a full backup was saved to {}",
+            write_error(&target, &e),
+            backup.display()
+        )
+    })?;
+
+    // (6) Optional checksum fix, reusing the existing command with the def's algo.
+    let mut checksum = Value::Null;
+    if fix_checksum.unwrap_or(false) {
+        checksum = match &def.checksum {
+            Some(algo) => match checksum_fix(target.clone(), algo.clone(), None) {
+                Ok(v) => v,
+                Err(e) => json!({ "algo": algo, "error": e }),
+            },
+            None => json!({ "error": "this ECU definition has no checksum algorithm set" }),
+        };
+    }
+
+    Ok(json!({
+        "out_path": target,
+        "backup": backup.display().to_string(),
+        "in_place": target == path,
+        "cells_total": rows * cols,
+        "cells_changed": cells_changed,
+        "checksum_algo": def.checksum,
+        "checksum": checksum,
+    }))
+}
+
+/// Compare two images map-by-map through an ECU definition, mirroring the CLI
+/// `compare` command. Returns, per `MapDef`: changed-cell count and Δmax / Δavg
+/// in physical units (or an `out_of_range` flag). When `map_name` is given, that
+/// one map also carries the full before/after physical grids + axes so the UI can
+/// draw a before→after view.
+#[tauri::command]
+fn compare_maps(
+    def_id: String,
+    stock: String,
+    tuned: String,
+    map_name: Option<String>,
+    state: tauri::State<AppData>,
+) -> Result<Value, String> {
+    let defs = load_defs(&state.ecudefs);
+    let def = defs.iter().find(|d| d.id == def_id).ok_or("ecudef not found")?;
+    if def.maps.is_empty() {
+        return Err(format!("definition '{def_id}' has no maps to compare"));
+    }
+    let a = std::fs::read(&stock).map_err(|e| e.to_string())?;
+    let b = std::fs::read(&tuned).map_err(|e| e.to_string())?;
+
+    let want_grid = map_name.as_deref();
+    let mut maps = Vec::with_capacity(def.maps.len());
+    let mut total_changed = 0usize;
+    let mut changed_maps = 0usize;
+
+    for m in &def.maps {
+        let (pa, pb) = match (decode_cells(&a, m), decode_cells(&b, m)) {
+            (Some(pa), Some(pb)) => (pa, pb),
+            _ => {
+                maps.push(json!({
+                    "name": m.name, "rows": m.rows, "cols": m.cols,
+                    "unit": m.unit, "out_of_range": true,
+                }));
+                continue;
+            }
+        };
+        let mut changed = 0usize;
+        let mut max_abs = 0f64;
+        let mut sum_delta = 0f64;
+        for (ra, rb) in pa.iter().zip(pb.iter()) {
+            for (x, y) in ra.iter().zip(rb.iter()) {
+                let d = y - x;
+                if d.abs() > 1e-9 {
+                    changed += 1;
+                    sum_delta += d;
+                    if d.abs() > max_abs {
+                        max_abs = d.abs();
+                    }
+                }
+            }
+        }
+        total_changed += changed;
+        if changed > 0 {
+            changed_maps += 1;
+        }
+        let avg = if changed > 0 { sum_delta / changed as f64 } else { 0.0 };
+        let mut entry = json!({
+            "name": m.name,
+            "rows": m.rows,
+            "cols": m.cols,
+            "unit": m.unit,
+            "data_type": format!("{:?}", m.data_type),
+            "changed": changed,
+            "d_max": max_abs,
+            "d_avg": avg,
+            "out_of_range": false,
+        });
+        if want_grid == Some(m.name.as_str()) {
+            let (x_vals, x_unit) = decode_axis(&a, &m.x_axis, m.cols);
+            let (y_vals, y_unit) = decode_axis(&a, &m.y_axis, m.rows);
+            entry["stock"] = json!(pa);
+            entry["tuned"] = json!(pb);
+            entry["x_axis"] =
+                json!({ "name": m.x_axis.as_ref().map(|ax| ax.name.clone()), "unit": x_unit, "values": x_vals });
+            entry["y_axis"] =
+                json!({ "name": m.y_axis.as_ref().map(|ax| ax.name.clone()), "unit": y_unit, "values": y_vals });
+        }
+        maps.push(entry);
+    }
+
+    Ok(json!({
+        "def": def.id,
+        "def_name": def.name,
+        "stock_size": a.len(),
+        "tuned_size": b.len(),
+        "total_changed": total_changed,
+        "changed_maps": changed_maps,
+        "maps": maps,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Flash (safety-gated, mock)
 // ---------------------------------------------------------------------------
 
@@ -731,6 +1015,8 @@ fn main() {
             list_ecudefs,
             list_maps,
             decode_map,
+            map_write,
+            compare_maps,
             flash,
             vault_list,
             guide_list,
@@ -738,4 +1024,115 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenTune");
+}
+
+// ---------------------------------------------------------------------------
+// Tests — the pure calibration-editor maths (no Tauri / no filesystem).
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ecudef::Scaling;
+
+    fn sc(factor: f64, offset: f64) -> Scaling {
+        Scaling { factor, offset }
+    }
+
+    #[test]
+    fn encode_read_round_trip_u16_be() {
+        let scaling = sc(0.01, 0.0);
+        // phys 50.0 -> raw 5000 = 0x1388, big-endian.
+        let bytes = encode_elem(50.0, DataType::U16, Endian::Big, scaling);
+        assert_eq!(bytes, vec![0x13, 0x88]);
+        let back = read_elem(&bytes, 0, DataType::U16, Endian::Big).unwrap();
+        assert!((scaling.to_physical(back) - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn encode_rounds_to_nearest() {
+        let scaling = sc(1.0, 0.0);
+        assert_eq!(encode_elem(10.4, DataType::U8, Endian::Big, scaling), vec![10]);
+        assert_eq!(encode_elem(10.6, DataType::U8, Endian::Big, scaling), vec![11]);
+    }
+
+    #[test]
+    fn encode_clamps_to_type_range() {
+        let scaling = sc(1.0, 0.0);
+        // Over max / under min must saturate, never wrap.
+        assert_eq!(encode_elem(999.0, DataType::U8, Endian::Big, scaling), vec![255]);
+        assert_eq!(encode_elem(-5.0, DataType::U8, Endian::Big, scaling), vec![0]);
+        assert_eq!(
+            encode_elem(-200.0, DataType::S8, Endian::Big, scaling),
+            vec![(-128i8) as u8]
+        );
+        assert_eq!(
+            encode_elem(5000.0, DataType::S8, Endian::Big, scaling),
+            vec![127u8]
+        );
+    }
+
+    #[test]
+    fn encode_s16_little_endian_round_trip() {
+        let scaling = sc(1.0, 0.0);
+        let bytes = encode_elem(-2.0, DataType::S16, Endian::Little, scaling);
+        assert_eq!(bytes, vec![0xFE, 0xFF]); // -2 i16 LE
+        let back = read_elem(&bytes, 0, DataType::S16, Endian::Little).unwrap();
+        assert_eq!(back, -2.0);
+    }
+
+    #[test]
+    fn encode_f32_with_offset_and_factor() {
+        let scaling = sc(2.0, 1.0);
+        // phys 5.0 -> raw (5-1)/2 = 2.0.
+        let bytes = encode_elem(5.0, DataType::F32, Endian::Big, scaling);
+        let back = read_elem(&bytes, 0, DataType::F32, Endian::Big).unwrap();
+        assert!((scaling.to_physical(back) - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn decode_cells_round_trips_through_encode() {
+        let map = MapDef {
+            name: "t".into(),
+            address: 0,
+            data_type: DataType::U16,
+            endian: Endian::Big,
+            rows: 2,
+            cols: 2,
+            scaling: sc(0.1, 0.0),
+            ..Default::default()
+        };
+        let grid = vec![vec![1.0, 2.5], vec![3.0, 4.5]];
+        let w = map.data_type.byte_len() as usize;
+        let mut img = vec![0u8; 2 * 2 * w];
+        for r in 0..2 {
+            for c in 0..2 {
+                let off = (r * 2 + c) * w;
+                let b = encode_elem(grid[r][c], map.data_type, map.endian, map.scaling);
+                img[off..off + w].copy_from_slice(&b);
+            }
+        }
+        let got = decode_cells(&img, &map).expect("in range");
+        for r in 0..2 {
+            for c in 0..2 {
+                assert!((got[r][c] - grid[r][c]).abs() < 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn decode_cells_none_when_out_of_range() {
+        let map = MapDef {
+            name: "t".into(),
+            address: 0,
+            data_type: DataType::U16,
+            endian: Endian::Big,
+            rows: 4,
+            cols: 4,
+            scaling: sc(1.0, 0.0),
+            ..Default::default()
+        };
+        // Image too small for a 4x4 u16 map (needs 32 bytes).
+        let img = vec![0u8; 8];
+        assert!(decode_cells(&img, &map).is_none());
+    }
 }

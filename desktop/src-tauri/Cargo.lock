@@ -2474,6 +2474,8 @@ name = "opentune-flash"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

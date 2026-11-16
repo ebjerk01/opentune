@@ -24,6 +24,7 @@
           <button class="nav-item" data-panel="identify"><span class="ni-ico">⌖</span> Identify</button>
           <button class="nav-item" data-panel="checksum"><span class="ni-ico">✓</span> Checksum</button>
           <button class="nav-item" data-panel="maps"><span class="ni-ico">▞</span> Maps</button>
+          <button class="nav-item" data-panel="compare"><span class="ni-ico">⇆</span> Compare</button>
           <button class="nav-item" data-panel="flash"><span class="ni-ico">⚡</span> Flash</button>
           <button class="nav-item" data-panel="vault"><span class="ni-ico">▣</span> Vault</button>
           <button class="nav-item" data-panel="drivers"><span class="ni-ico">⇄</span> Drivers</button>
@@ -147,8 +148,8 @@
           </div>
 
           <div class="card">
-            <h2>Map viewer</h2>
-            <p class="muted small">Decode a defined calibration map out of the opened image into a blue→red heat grid with real axis breakpoints, units and scaling. Read-only in this edition.</p>
+            <h2>Map editor</h2>
+            <p class="muted small">Decode a defined calibration map out of the opened image into a blue→red heat grid with real axis breakpoints, units and scaling — then edit it. Writing back takes a full-image backup first, applies inverse scaling, and offers a checksum fix.</p>
             <div class="row">
               <label>Definition</label>
               <select class="inp" id="mvDef"></select>
@@ -158,9 +159,65 @@
             <div class="row">
               <button class="btn" id="mvPick">Image…</button>
               <span id="mvImgName" class="muted small mono">uses opened image</span>
-              <button class="btn primary" id="btnDecodeMap">Decode</button>
+              <button class="btn primary" id="btnDecodeMap">Decode / open</button>
             </div>
+
+            <!-- Editor toolbar: hidden until a map is decoded -->
+            <div id="edToolbar" class="ed-toolbar" hidden>
+              <div class="row tight">
+                <span class="muted small" id="edSel">no selection</span>
+                <button class="btn sm" id="edSelAll">Select all</button>
+                <button class="btn sm" id="edSelNone">Clear</button>
+              </div>
+              <div class="row tight">
+                <input class="inp sm mono" id="edVal" value="0" title="operand for the operations" />
+                <button class="btn sm" id="edSet">Set =</button>
+                <button class="btn sm" id="edAdd">+</button>
+                <button class="btn sm" id="edSub">−</button>
+                <button class="btn sm" id="edMul">×%</button>
+                <button class="btn sm" id="edInterp" title="bilinear interpolate across the selection corners">Interpolate</button>
+                <button class="btn sm" id="edSmooth" title="3×3 neighbour average over the selection">Smooth 3×3</button>
+              </div>
+              <div class="row tight">
+                <button class="btn sm" id="edUndo" disabled>↶ Undo</button>
+                <button class="btn sm" id="edRedo" disabled>↷ Redo</button>
+                <button class="btn sm" id="edReset">Reset</button>
+                <span class="sep"></span>
+                <label class="chk"><input type="checkbox" id="edFixCs" checked /> fix checksum on write</label>
+                <button class="btn warn" id="edWrite">Write to image…</button>
+                <button class="btn sm" id="edWriteAs">Write → Save as…</button>
+              </div>
+              <p class="muted small">Double-click a cell to type a value. Click-drag or shift-click selects a rectangle. Edits are clamped to the definition's physical min/max where set; the raw value is rounded and clamped to the data type on write.</p>
+            </div>
+
             <div id="mvResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- COMPARE -->
+        <section class="panel" id="panel-compare">
+          <header class="panel-head">
+            <h1>Compare</h1>
+            <p>Decode every map of a definition through two images and see, per map, how many cells changed and by how much — in physical units.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <label>Definition</label>
+              <select class="inp wide" id="cmpDef"></select>
+            </div>
+            <div class="row">
+              <button class="btn" id="cmpStock">Stock image…</button>
+              <span id="cmpStockName" class="muted small mono">—</span>
+            </div>
+            <div class="row">
+              <button class="btn" id="cmpTuned">Tuned image…</button>
+              <span id="cmpTunedName" class="muted small mono">—</span>
+            </div>
+            <div class="row">
+              <button class="btn primary" id="btnCompare">Compare maps</button>
+            </div>
+            <div id="cmpResult" class="result"></div>
+            <div id="cmpGrid" class="result"></div>
           </div>
         </section>
 
