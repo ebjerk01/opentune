@@ -15,7 +15,8 @@
   catalog** harvested from comma.ai opendbc.
 - **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore) and
   Continental Simos PCR2.1 solved** (directory-walking verify + correct, validated against real
-  full dumps) plus an EDC15 module; `fix` corrects an uncorrected tune, `fix --reference`
+  full dumps) plus **VAG EDC15** (verify + correct, clean-room from GPL sources; Mercedes EDC15C6
+  located-only and refuses); `fix` corrects an uncorrected tune, `fix --reference`
   bootstraps EDC17's firmware-specific constant from your own stock dump, and it refuses to
   guess on anything unvalidated (anti-brick).
 - **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
@@ -78,7 +79,7 @@ OpenTune is **calibration-focused**. First targets are the well-understood Bosch
 | ECU | Example engines | Checksum | Bus |
 |---|---|---|---|
 | Bosch **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD (03G906…), BMW/KIA diesels | **solved** (verify + correct) | OBD/CAN |
-| Bosch **EDC15C6** | older CDI diesels | field located (word-wise solve kept private) | K-line |
+| Bosch **EDC15 / EDC15C6** | VAG 1.9 TDI (EDC15), Mercedes CDI (EDC15C6) | VAG EDC15 **solved** (verify + correct, clean-room from GPL-3.0 sources); Mercedes CR1 located-only and **refuses** (never guesses) | K-line/OBD |
 | Bosch **EDC17** (TriCore) | later common-rail diesels (incl. VAG) | **solved** — verify + correct; a firmware-specific VAG block constant is bootstrapped from your own stock dump (`checksum fix --reference`) | OBD (bench/boot for full read) |
 | Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | **solved** (verify + correct; self-contained on-image directory) | OBD (bench/boot) |
 

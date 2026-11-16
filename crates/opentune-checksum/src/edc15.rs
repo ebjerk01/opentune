@@ -1,72 +1,226 @@
-//! Bosch EDC15 / EDC15C6 ("CR1", Infineon C167, little-endian) flash checksum.
+//! Bosch EDC15 ("C16x" Siemens/Infineon, little-endian) flash checksum.
 //!
-//! # Status: field located, algorithm NOT yet reverse-engineered (honest)
+//! # Provenance (clean-room)
 //!
-//! One real EDC15C6 stock/tuned pair was analysed (Mercedes Sprinter 2.2 CDI,
-//! software `1037351686`, 1 MiB). Byte-diffing the two valid images isolates a
-//! single 4-byte checksum field near the top of the calibration bank, surrounded
-//! by `0xC3` fill, that changes between stock and tuned:
+//! The checksum **algorithm shape** implemented here was ported from public,
+//! open-source tooling:
 //!
-//! | fixture                    | field     | stock (LE32)  | tuned (LE32)  |
-//! |----------------------------|-----------|---------------|---------------|
-//! | `mb_sprinter_edc15c6_351686`| `0xFBFFC` | `0xB778D5F2`  | `0x9F85EEDE`  |
+//! * `edc15-tools` (`edc15_checksum.py`, GPL-3.0) — a dependency-free, faithful
+//!   port of `EDC15P_checksum.cs::tdi41_checksum_calculate` from VAGEDCSuite;
+//! * cross-checked against VAGEDCSuite's `tdi41_checksum_calculate` /
+//!   `tdi41v2_checksum_search` directly, and the published EDC15 RE notes.
 //!
-//! The field reads as two 16-bit little-endian words (`{0xD5F2, 0xB778}` stock)
-//! and is immediately preceded by the constant halfword `0xC058` at `0xFBFFA`.
+//! OpenTune is GPL-3.0-or-later, so the GPL-3.0 source is license-compatible;
+//! it is cited, not copied — this is a fresh Rust implementation. No proprietary
+//! or private tooling was used.
 //!
-//! Unlike the MPC56x EDC16 scheme (see [`crate::edc16`]), this field is **not**
-//! reproduced by any simple additive relationship that could be validated from
-//! the available data:
+//! # What is validated here
 //!
-//! * no 16-bit or 32-bit word sum (LE or BE) over a contiguous `[start, field)`
-//!   range reproduces either stored halfword across both images;
-//! * the field is not a `{sum, ~sum}` complement pair (the two halfwords are not
-//!   complements);
-//! * there is no "sum over the block including the field equals a constant"
-//!   invariant (the EDC16 trick) — neither 16- nor 32-bit, and the field delta
-//!   does not compensate the changed calibration-data delta.
+//! The **VAG TDI "v4.1(v2)" 512 KiB layout** is fully reverse-engineered and
+//! validated: every protected region of a real VW/Audi/Seat/Skoda EDC15 image is
+//! reproduced bit-exactly (verified against a real stock+tuned pair —
+//! `audi_a4_19tdi_352254`, 6/6 regions on both the untouched and the tuned
+//! dump). [`verify`](Edc15C6::verify) reports each region and
+//! [`correct`](Edc15C6::correct) recomputes and rewrites each region's stored
+//! word in place.
 //!
-//! The expected EDC15 scheme from the open references (ME7Sum / general Bosch
-//! C16x practice, `docs/BOSCH-CHECKSUM.md`) is a **16-bit additive sum over one
-//! or more `{start, end}` blocks, stored with its one's-complement**. The block
-//! map was not recoverable from a single pair (no plaintext `{start,end,cs,~cs}`
-//! descriptor table was found adjacent to the field), so the exact summed ranges
-//! — and whether C6 adds a CRC/obfuscation layer over the plain sum — remain
-//! open. Pinning it needs several same-ECU pairs or the C167 checksum routine.
+//! ## The algorithm (VAG TDI v4.1v2)
 //!
-//! Following the project rule (*never write a value we cannot compute*), this
-//! module therefore **surfaces** the located field via [`verify`](Edc15C6::verify)
-//! and **refuses** to correct it ([`correct`](Edc15C6::correct) returns
-//! [`Error::Unsupported`]). It is registered so the family is recognised and the
-//! verified facts are regression-tested, not so a guessed value is ever flashed.
+//! A seeded dual-16-bit rolling checksum walks a region four bytes per turn:
+//! `seed_a` is XORed with a word then rotated left by the low nibble of
+//! `seed_b` (feeding a carry bit into `seed_b`), `seed_b` is decremented by the
+//! next word and XORed with `seed_a`; then `seed_a` takes another word,
+//! `+= 0xDAAC`, `seed_b` XORs the next word and is rotated right by the low
+//! nibble of `seed_a`. After the range: `seed_a += 0xDAAC - 0x8631`,
+//! `seed_b ^= 0xDF9B`; the 32-bit result `(seed_b << 16) | seed_a` is stored
+//! little-endian in the region's last four bytes. The first non-empty region is
+//! seeded `(0, 0)`; every later region is seeded `(0x8631, 0xEFCD)`. Regions
+//! filled with `0xC3` are skipped, and a stored `0xC3C3C3C3` is a "leave alone"
+//! marker.
+//!
+//! # What is NOT solved: Mercedes EDC15C6 ("CR1", 1 MiB)
+//!
+//! The owner's Mercedes EDC15C6 dumps use the **same loop shape** but
+//! **non-standard seed/finalisation constants** and a different, self-describing
+//! block directory (each block ends with the halfword `0xC058`, a 4-byte stored
+//! word, then `0xC3` fill). No standard VAG seed/constant reproduces those
+//! blocks, and the C6-specific constants are not yet recovered. Following the
+//! project rule *never write a value we cannot compute*, this module therefore
+//! only **surfaces** the located EDC15C6 fields ([`verify`](Edc15C6::verify)
+//! reports them as not-confirmed) and **refuses** to correct them
+//! ([`correct`](Edc15C6::correct) returns [`Error::Unsupported`]). The same
+//! refusal applies to any image whose blocks it cannot self-validate.
 use crate::{BlockStatus, ChecksumAlgo, Fix};
 use opentune_core::{Error, MemoryRegion, Result};
 
-/// A located-but-unsolved EDC15C6 checksum field proven by diffing a valid pair.
-#[derive(Debug, Clone, Copy)]
-pub struct KnownField {
-    /// Fixture base name (`<name>_ori.bin` / `<name>_mod.bin`).
-    pub fixture: &'static str,
-    /// Image length in bytes.
-    pub image_len: usize,
-    /// Byte offset of the 4-byte checksum field.
-    pub store_offset: u32,
-    /// Stored value in the stock image (little-endian u32).
-    pub stored_stock: u32,
-    /// Stored value in the tuned image (little-endian u32).
-    pub stored_tuned: u32,
+/// VAG TDI v4.1(v2) 512 KiB region directory (region boundaries; each
+/// `[start, end)` stores its 32-bit LE checksum in `[end-4, end)`).
+const VAG_TDI_512_DIR: &[u32] = &[
+    0x1_0000, 0x1_4000, 0x5_8000, 0x5_8B80, 0x6_4000, 0x7_0000, 0x7_0B80, 0x7_C000,
+];
+/// Validated VAG image length (512 KiB).
+const VAG_IMAGE_LEN: usize = 0x8_0000;
+/// Stored "leave this region alone" marker.
+const SKIP: u32 = 0xC3C3_C3C3;
+/// Seed applied to every region after the first non-empty one.
+const SEED_A_REST: u16 = 0x8631;
+const SEED_B_REST: u16 = 0xEFCD;
+/// Loop/finalisation magic halfwords (VAG TDI v4.1v2).
+const MID_ADD: u16 = 0xDAAC;
+const FIN_SUB: u16 = 0x8631;
+const FIN_ADD: u16 = 0xDAAC;
+const FIN_XOR: u16 = 0xDF9B;
+
+#[inline]
+fn word(img: &[u8], i: usize) -> Option<u16> {
+    Some(u16::from_le_bytes([*img.get(i)?, *img.get(i + 1)?]))
 }
 
-/// The validated EDC15C6 checksum-field facts (see module docs).
-pub const KNOWN_FIELDS: &[KnownField] = &[KnownField {
-    fixture: "mb_sprinter_edc15c6_351686",
-    image_len: 0x10_0000,
-    store_offset: 0x000F_BFFC,
-    stored_stock: 0xB778_D5F2,
-    stored_tuned: 0x9F85_EEDE,
-}];
+/// VAG TDI v4.1v2 region checksum over `[start, end)` (`end` exclusive, i.e. the
+/// offset of the stored word). Returns `None` on any out-of-range / misaligned
+/// range rather than panicking, so a non-VAG image is simply not recognised.
+fn calc_vag(img: &[u8], start: usize, end: usize, mut seed_a: u16, mut seed_b: u16) -> Option<u32> {
+    if end <= start || !(end - start).is_multiple_of(4) || end + 1 >= img.len() {
+        return None;
+    }
+    let mut p = start;
+    loop {
+        let mut carry: u16 = 0;
+        seed_a ^= word(img, p)?;
+        p += 2;
+        let n = seed_b & 0xF;
+        if n > 0 {
+            seed_a = seed_a.rotate_left(n as u32);
+            carry = seed_a & 1;
+        }
+        seed_b = seed_b.wrapping_sub(word(img, p)?);
+        seed_b = seed_b.wrapping_sub(carry);
+        p += 2;
+        seed_b ^= seed_a;
+        if p == end {
+            break;
+        }
+        seed_a = seed_a.wrapping_sub(word(img, p)?);
+        p += 2;
+        seed_a = seed_a.wrapping_add(MID_ADD);
+        seed_b ^= word(img, p)?;
+        p += 2;
+        let n = seed_a & 0xF;
+        if n > 0 {
+            seed_b = seed_b.rotate_right(n as u32);
+        }
+        if p == end {
+            break;
+        }
+    }
+    seed_a = seed_a.wrapping_sub(FIN_SUB).wrapping_add(FIN_ADD);
+    seed_b ^= FIN_XOR;
+    Some(((seed_b as u32) << 16) | seed_a as u32)
+}
 
-/// Bosch EDC15C6 ("CR1") checksum scheme (field located, algorithm open).
+/// Is `[start, end-4)` entirely `0xC3` fill (an "empty" region)?
+fn region_empty(img: &[u8], start: usize, end: usize) -> bool {
+    let body_end = end.saturating_sub(4);
+    img.get(start..body_end)
+        .is_some_and(|s| s.iter().all(|&b| b == 0xC3))
+}
+
+/// One walked VAG region.
+struct VagRegion {
+    start: usize,
+    end: usize,
+    stored: u32,
+    computed: u32,
+    empty: bool,
+    skip: bool,
+}
+
+/// Walk the VAG TDI 512 KiB directory, computing each region's checksum with the
+/// correct per-region seed (first non-empty region `(0,0)`, the rest
+/// `(0x8631, 0xEFCD)`). Returns `None` if the image is not the VAG length or a
+/// region cannot be computed (misaligned/out-of-range ⇒ not a VAG image).
+fn walk_vag(img: &[u8]) -> Option<Vec<VagRegion>> {
+    if img.len() != VAG_IMAGE_LEN {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut seen_nonempty = false;
+    for pair in VAG_TDI_512_DIR.windows(2) {
+        let start = pair[0] as usize;
+        let end = pair[1] as usize;
+        let (sa, sb) = if seen_nonempty {
+            (SEED_A_REST, SEED_B_REST)
+        } else {
+            (0, 0)
+        };
+        if region_empty(img, start, end) {
+            out.push(VagRegion {
+                start,
+                end,
+                stored: 0,
+                computed: 0,
+                empty: true,
+                skip: false,
+            });
+            continue;
+        }
+        let stored = word(img, end - 4)? as u32 | ((word(img, end - 2)? as u32) << 16);
+        let computed = calc_vag(img, start, end - 4, sa, sb)?;
+        out.push(VagRegion {
+            start,
+            end,
+            stored,
+            computed,
+            empty: false,
+            skip: stored == SKIP,
+        });
+        seen_nonempty = true;
+    }
+    Some(out)
+}
+
+/// Is this a genuine VAG TDI v4.1v2 image? True only when the directory walks
+/// cleanly AND at least one non-empty, non-skip region's stored word already
+/// equals its computed checksum. A stock image matches every region; a tuned
+/// image matches every region the tune did not touch (the untouched code
+/// regions always match). A non-VAG blob has ~2^-32 chance per region of a
+/// coincidental match, so this never fires on a Mercedes/foreign image.
+fn is_vag_tdi(img: &[u8]) -> Option<Vec<VagRegion>> {
+    let regions = walk_vag(img)?;
+    let any_match = regions
+        .iter()
+        .any(|r| !r.empty && !r.skip && r.stored == r.computed);
+    if any_match {
+        Some(regions)
+    } else {
+        None
+    }
+}
+
+/// A located EDC15C6 (Mercedes, 1 MiB) checksum field: the 4 bytes after a
+/// `0xC058` halfword that are immediately followed by `0xC3` fill.
+fn edc15c6_fields(img: &[u8]) -> Vec<(usize, u32)> {
+    let mut out = Vec::new();
+    if img.len() != 0x10_0000 {
+        return out;
+    }
+    let mut i = 0usize;
+    while i + 8 <= img.len() {
+        // marker 0xC058 (LE bytes 0x58 0xC0), then 4-byte slot, then 0xC3 fill
+        if img[i] == 0x58 && img[i + 1] == 0xC0 && img[i + 6] == 0xC3 && img[i + 7] == 0xC3 {
+            let slot = i + 2;
+            let v = u32::from_le_bytes([img[slot], img[slot + 1], img[slot + 2], img[slot + 3]]);
+            out.push((slot, v));
+            i += 6;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Bosch EDC15 checksum scheme. VAG TDI v4.1v2 (512 KiB) is fully solved;
+/// Mercedes EDC15C6 (1 MiB) is located-only and refused (not yet solved).
 pub struct Edc15C6;
 
 impl ChecksumAlgo for Edc15C6 {
@@ -75,22 +229,32 @@ impl ChecksumAlgo for Edc15C6 {
     }
 
     fn verify(&self, image: &[u8]) -> Result<Vec<BlockStatus>> {
-        // Surface the located field for the one validated layout. The algorithm
-        // is unknown, so it is reported not-OK (we cannot confirm it).
-        let mut out = Vec::new();
-        for f in KNOWN_FIELDS {
-            if image.len() != f.image_len {
-                continue;
+        // Recognised VAG TDI v4.1v2 image: report every protected region.
+        if let Some(regions) = is_vag_tdi(image) {
+            let mut out = Vec::new();
+            for r in regions {
+                if r.empty {
+                    continue;
+                }
+                out.push(BlockStatus {
+                    name: format!("vag-region-{:#07x}", r.start),
+                    region: MemoryRegion::new(r.start as u32, (r.end - r.start) as u32),
+                    stored: r.stored as u64,
+                    computed: r.computed as u64,
+                    // a stored C3C3C3C3 skip marker is intentionally "valid"
+                    ok: r.skip || r.stored == r.computed,
+                });
             }
-            let off = f.store_offset as usize;
-            let Some(bytes) = image.get(off..off + 4) else {
-                continue;
-            };
-            let stored = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as u64;
+            return Ok(out);
+        }
+        // Mercedes EDC15C6 (or any unrecognised image): surface located fields
+        // but report them not-confirmed (the C6 algorithm is not solved).
+        let mut out = Vec::new();
+        for (off, stored) in edc15c6_fields(image) {
             out.push(BlockStatus {
-                name: "cal-checksum".to_string(),
-                region: MemoryRegion::new(f.store_offset, 4),
-                stored,
+                name: format!("edc15c6-field-{off:#07x}"),
+                region: MemoryRegion::new(off as u32, 4),
+                stored: stored as u64,
                 computed: 0,
                 ok: false, // algorithm not reverse-engineered: cannot confirm
             });
@@ -98,12 +262,30 @@ impl ChecksumAlgo for Edc15C6 {
         Ok(out)
     }
 
-    fn correct(&self, _image: &mut [u8]) -> Result<Vec<Fix>> {
-        Err(Error::Unsupported(
-            "EDC15C6 checksum algorithm not reverse-engineered; cannot correct \
-             (field located only — see crate::edc15 docs)"
-                .into(),
-        ))
+    fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
+        // Only correct a confidently-recognised VAG TDI v4.1v2 image.
+        let Some(regions) = is_vag_tdi(image) else {
+            return Err(Error::Unsupported(
+                "EDC15C6 (Mercedes CR1) checksum not reverse-engineered, and image is not a \
+                 recognised VAG TDI v4.1v2 layout; refusing to guess (see crate::edc15 docs)"
+                    .into(),
+            ));
+        };
+        let mut fixes = Vec::new();
+        for r in regions {
+            if r.empty || r.skip || r.stored == r.computed {
+                continue;
+            }
+            let slot = r.end - 4;
+            image[slot..slot + 4].copy_from_slice(&r.computed.to_le_bytes());
+            fixes.push(Fix {
+                name: format!("vag-region-{:#07x}", r.start),
+                offset: slot as u32,
+                old: r.stored as u64,
+                new: r.computed as u64,
+            });
+        }
+        Ok(fixes)
     }
 }
 
@@ -111,17 +293,70 @@ impl ChecksumAlgo for Edc15C6 {
 mod tests {
     use super::*;
 
+    /// Build a minimal synthetic VAG 512 KiB image: fill with `0xC3`, drop some
+    /// non-fill data into two regions, and write each region's correct checksum.
+    fn synthetic_vag() -> Vec<u8> {
+        let mut img = vec![0xC3u8; VAG_IMAGE_LEN];
+        // put distinct data into the first two regions so they are not "empty"
+        for (k, b) in img[0x1_0000..0x1_0100].iter_mut().enumerate() {
+            *b = (k as u8) ^ 0x5A;
+        }
+        for (k, b) in img[0x1_4000..0x1_4100].iter_mut().enumerate() {
+            *b = (k as u8).wrapping_mul(3);
+        }
+        // write each region's correct checksum (walk_vag applies the right
+        // per-region seed) so the image is self-consistent.
+        for r in walk_vag(&img).unwrap() {
+            if r.empty {
+                continue;
+            }
+            let slot = r.end - 4;
+            img[slot..slot + 4].copy_from_slice(&r.computed.to_le_bytes());
+        }
+        img
+    }
+
     #[test]
-    fn surfaces_field_and_refuses_to_correct() {
-        let f = &KNOWN_FIELDS[0];
-        let mut img = vec![0xC3u8; f.image_len];
-        img[f.store_offset as usize..f.store_offset as usize + 4]
-            .copy_from_slice(&f.stored_stock.to_le_bytes());
+    fn synthetic_image_verifies_then_needs_no_fix() {
+        let img = synthetic_vag();
         let algo = Edc15C6;
         let st = algo.verify(&img).unwrap();
-        assert_eq!(st.len(), 1);
-        assert_eq!(st[0].stored, f.stored_stock as u64);
-        assert!(!st[0].ok);
+        assert!(!st.is_empty(), "expected reported VAG regions");
+        assert!(st.iter().all(|s| s.ok), "freshly built image must verify");
+        // correcting a valid image changes nothing
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn corrupting_a_region_is_detected_and_corrected() {
+        let mut img = synthetic_vag();
+        // flip a data byte in the first region → its stored checksum is now stale
+        img[0x1_0040] ^= 0xFF;
+        let algo = Edc15C6;
+        let before = algo.verify(&img).unwrap();
+        assert!(
+            before.iter().any(|s| !s.ok),
+            "a corrupted region must read as bad"
+        );
+        let fixes = algo.correct(&mut img).unwrap();
+        assert!(
+            !fixes.is_empty(),
+            "correction must rewrite the stale region"
+        );
+        // after correcting, everything verifies again and is idempotent
+        let after = algo.verify(&img).unwrap();
+        assert!(after.iter().all(|s| s.ok));
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn non_vag_image_refuses_correction() {
+        // random-ish 512 KiB blob (not a VAG layout) → must refuse, never guess
+        let mut img = vec![0u8; VAG_IMAGE_LEN];
+        for (i, b) in img.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(31).wrapping_add(7);
+        }
+        let algo = Edc15C6;
         assert!(matches!(
             algo.correct(&mut img).unwrap_err(),
             Error::Unsupported(_)
@@ -129,38 +364,98 @@ mod tests {
     }
 
     #[test]
-    fn ignores_images_of_other_length() {
+    fn mercedes_edc15c6_is_located_but_refused() {
+        // synthesize a 1 MiB image with one C058-marked field surrounded by C3.
+        let mut img = vec![0xC3u8; 0x10_0000];
+        let slot = 0x0F_BFFC;
+        img[slot - 2] = 0x58; // 0xC058 marker (LE)
+        img[slot - 1] = 0xC0;
+        img[slot..slot + 4].copy_from_slice(&0xB778_D5F2u32.to_le_bytes());
+        // followed by C3 fill already (whole image is C3)
         let algo = Edc15C6;
-        assert!(algo.verify(&vec![0u8; 0x8_0000]).unwrap().is_empty());
+        let st = algo.verify(&img).unwrap();
+        assert_eq!(st.len(), 1, "one EDC15C6 field located");
+        assert_eq!(st[0].stored, 0xB778_D5F2);
+        assert!(!st[0].ok, "EDC15C6 field cannot be confirmed (unsolved)");
+        assert!(
+            matches!(algo.correct(&mut img).unwrap_err(), Error::Unsupported(_)),
+            "EDC15C6 must refuse correction, never guess"
+        );
     }
 
-    /// Fixtures regression: the located field is at the recorded offset with the
-    /// recorded stock/tuned values. Requires the private EDC15C6 pair.
+    /// Fixtures regression against the real owner dumps. Requires the EDC15
+    /// pairs under `OPENTUNE_FIXTURES/edc15/`. CI has no access, so it is
+    /// `#[ignore]`d. Run with:
+    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
-    #[ignore = "needs private EDC15 reference fixtures via OPENTUNE_FIXTURES"]
-    fn reference_field_located() {
+    #[ignore = "needs owner EDC15 fixtures via OPENTUNE_FIXTURES"]
+    fn reference_vag_audi_dump() {
         let dir = match std::env::var("OPENTUNE_FIXTURES") {
             Ok(d) => d,
             Err(_) => return,
         };
-        let mut checked = 0;
-        for f in KNOWN_FIELDS {
-            let sp = format!("{dir}/edc15/{}_ori.bin", f.fixture);
-            let tp = format!("{dir}/edc15/{}_mod.bin", f.fixture);
-            let (Ok(stock), Ok(tuned)) = (std::fs::read(&sp), std::fs::read(&tp)) else {
-                continue;
-            };
-            assert_eq!(stock.len(), f.image_len, "{} stock len", f.fixture);
-            let o = f.store_offset as usize;
-            let s = u32::from_le_bytes(stock[o..o + 4].try_into().unwrap());
-            let t = u32::from_le_bytes(tuned[o..o + 4].try_into().unwrap());
-            assert_eq!(s, f.stored_stock, "{} stock field", f.fixture);
-            assert_eq!(t, f.stored_tuned, "{} tuned field", f.fixture);
-            // Honest guard: the field is NOT a {sum, ~sum} complement pair.
-            let (w0, w1) = ((s & 0xFFFF) as u16, (s >> 16) as u16);
-            assert_ne!(w0 ^ w1, 0xFFFF, "{}: not a complement pair", f.fixture);
-            checked += 1;
-        }
-        assert!(checked >= 1, "no EDC15 fixtures under OPENTUNE_FIXTURES");
+        let algo = Edc15C6;
+
+        // The Audi A4 1.9 TDI is a real VAG TDI v4.1v2 image: every non-empty
+        // region verifies in BOTH the stock and the tuned dump (the ECU wrote
+        // both), and correcting the stock needs no change.
+        let base = format!("{dir}/edc15/audi_a4_19tdi_352254");
+        let (Ok(ori), Ok(mut modf)) = (
+            std::fs::read(format!("{base}_ori.bin")),
+            std::fs::read(format!("{base}_mod.bin")),
+        ) else {
+            panic!("audi fixture missing under OPENTUNE_FIXTURES");
+        };
+        assert_eq!(ori.len(), VAG_IMAGE_LEN);
+
+        // (1) stock: all regions OK.
+        let st = algo.verify(&ori).unwrap();
+        let nonempty = st.len();
+        assert!(
+            nonempty >= 6,
+            "expected >=6 reported regions, got {nonempty}"
+        );
+        assert!(
+            st.iter().all(|s| s.ok),
+            "every VAG region must verify in the stock Audi dump"
+        );
+        // stock needs no correction (idempotent).
+        assert!(algo.correct(&mut ori.clone()).unwrap().is_empty());
+
+        // (2) tuned: it was flashed by the ECU, so every region ALSO verifies
+        //     (the tune already carries correct checksums). This proves we
+        //     reproduce the ECU's own stored value for the tune-touched blocks.
+        let stm = algo.verify(&modf).unwrap();
+        assert!(
+            stm.iter().all(|s| s.ok),
+            "every VAG region must verify in the valid tuned Audi dump"
+        );
+
+        // (3) the strong proof: wipe the stored word of the tune-touched region
+        //     [0x58B80, 0x64000) in the tuned image (the other regions still
+        //     anchor layout detection), then correct(). Because the checksum is
+        //     computed over the cal data (unchanged) and excludes the stored
+        //     word, correct() must re-derive EXACTLY the ECU's own stored value,
+        //     so the corrected image is byte-identical to the real tuned dump.
+        let orig_mod = modf.clone();
+        let slot = 0x6_3FFC; // region [0x58B80, 0x64000) end-4
+        let real = u32::from_le_bytes(orig_mod[slot..slot + 4].try_into().unwrap());
+        modf[slot..slot + 4].copy_from_slice(&[0, 0, 0, 0]);
+        let bad = algo.verify(&modf).unwrap();
+        assert!(
+            bad.iter().any(|s| !s.ok),
+            "a wiped checksum slot must read as bad"
+        );
+        let fixes = algo.correct(&mut modf).unwrap();
+        assert_eq!(fixes.len(), 1, "correct() rewrites exactly the wiped slot");
+        assert_eq!(
+            fixes[0].new as u32, real,
+            "correct() must reproduce the ECU's exact stored checksum"
+        );
+        assert_eq!(
+            modf, orig_mod,
+            "corrected image is byte-identical to the real tuned dump"
+        );
     }
 }
