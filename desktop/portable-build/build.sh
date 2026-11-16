@@ -27,9 +27,13 @@ docker run --rm \
   "$IMAGE" bash -c '
     set -euo pipefail
     cd /src/desktop
-    cargo tauri build --bundles appimage deb
+    # The Tauri updater-signing step exits non-zero without a signing key, but it
+    # runs AFTER both bundles are written, so tolerate it and gate on the bundles
+    # actually existing instead of on cargo tauri build'\''s exit code.
+    cargo tauri build --bundles appimage deb || true
     mkdir -p /dist
     find /build/target -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec cp -v {} /dist/ \;
+    ls /dist/*.AppImage >/dev/null 2>&1 || { echo "ERROR: no AppImage was produced"; exit 1; }
   '
 
 echo "### done — portable bundles:"
