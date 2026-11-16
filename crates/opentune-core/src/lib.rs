@@ -16,5 +16,6 @@ pub mod types;
 pub use capabilities::Capabilities;
 pub use error::{Error, Result};
 pub use interface::{Interface, InterfaceInfo};
+pub use protocol::{CanFrame, DoIpTransport, IsoTpFd};
 pub use registry::{DriverEntry, Registry};
 pub use types::{ConnectConfig, DiagLayer, EcuId, MemoryRegion, Phase, Progress, Protocol};

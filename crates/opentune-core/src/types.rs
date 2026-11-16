@@ -16,6 +16,12 @@ pub enum Protocol {
     Iso9141,
     /// Raw CAN frames (no transport).
     RawCan,
+    // NOTE: CAN-FD and DoIP are implemented at the transport layer
+    // ([`crate::protocol::canfd::IsoTpFd`], [`crate::protocol::doip::DoIpTransport`]).
+    // Adding `CanFd`/`DoIp` variants here is deferred: several interface drivers
+    // match `Protocol` exhaustively, so the variants must land together with
+    // those drivers' handling (a wildcard arm or per-driver support) rather than
+    // break them from opentune-core alone.
 }
 
 /// Diagnostic service layer spoken on top of the transport.

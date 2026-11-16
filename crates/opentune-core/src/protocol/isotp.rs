@@ -8,11 +8,15 @@
 //! 29-bit CAN identifiers both work (the [`CanLink`] carries a full `u32` id and
 //! nothing here masks it), and malformed frames are rejected instead of
 //! panicking or reading out of bounds.
+use crate::protocol::canfd::CanFrame;
 use crate::protocol::diag::DiagTransport;
 use crate::{Error, Result};
 
 /// ISO-TP PCI (protocol control information) type, in the high nibble of byte 0.
-mod pci {
+///
+/// Shared with the CAN-FD transport ([`crate::protocol::canfd`]); the PCI
+/// encoding is identical for classic CAN and CAN-FD ISO-TP.
+pub(crate) mod pci {
     pub const SINGLE: u8 = 0x00;
     pub const FIRST: u8 = 0x10;
     pub const CONSECUTIVE: u8 = 0x20;
@@ -21,7 +25,7 @@ mod pci {
 }
 
 /// Flow-control status, in the low nibble of a flow-control frame.
-mod flow_status {
+pub(crate) mod flow_status {
     pub const CONTINUE: u8 = 0x0; // ClearToSend
     pub const WAIT: u8 = 0x1;
     pub const OVERFLOW: u8 = 0x2;
@@ -32,7 +36,7 @@ mod flow_status {
 /// * `0x00..=0x7F` → that many milliseconds.
 /// * `0xF1..=0xF9` → 100–900 microseconds.
 /// * anything else is reserved and, per spec, treated as the maximum (0x7F).
-fn stmin_to_micros(stmin: u8) -> u64 {
+pub(crate) fn stmin_to_micros(stmin: u8) -> u64 {
     match stmin {
         0x00..=0x7F => (stmin as u64) * 1000,
         0xF1..=0xF9 => ((stmin - 0xF0) as u64) * 100,
@@ -41,11 +45,42 @@ fn stmin_to_micros(stmin: u8) -> u64 {
 }
 
 /// A raw CAN link: send/receive single CAN frames. Provided by a driver.
+///
+/// Classic CAN drivers implement only [`send_frame`](CanLink::send_frame) and
+/// [`recv_frame`](CanLink::recv_frame). CAN-FD metadata (payloads up to 64
+/// bytes, the FD/BRS flags) travels through the defaulted
+/// [`send_can_frame`](CanLink::send_can_frame) /
+/// [`recv_can_frame`](CanLink::recv_can_frame) methods, which the CAN-FD
+/// transport ([`crate::protocol::canfd::IsoTpFd`]) uses. The defaults route
+/// through the classic byte interface and report classic frames, so existing
+/// drivers keep working unchanged; an FD-capable driver overrides
+/// [`supports_fd`](CanLink::supports_fd) and the two frame methods to carry the
+/// flags natively.
 pub trait CanLink {
     fn send_frame(&mut self, id: u32, data: &[u8]) -> Result<()>;
     /// Receive one frame `(id, data)`, waiting up to `timeout_ms`.
     /// Returns [`Error::Timeout`] on expiry.
     fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)>;
+
+    /// Whether this link can carry CAN-FD frames (data length > 8 and the
+    /// bit-rate-switch flag). Classic links return `false`.
+    fn supports_fd(&self) -> bool {
+        false
+    }
+
+    /// Send a CAN frame carrying FD metadata. The default ignores the FD/BRS
+    /// flags and sends the payload over the classic byte interface, which is
+    /// correct for classic links and classic (≤8-byte) frames.
+    fn send_can_frame(&mut self, frame: &CanFrame) -> Result<()> {
+        self.send_frame(frame.id, &frame.data)
+    }
+
+    /// Receive a CAN frame with FD metadata. The default wraps the classic
+    /// [`recv_frame`](CanLink::recv_frame) result as a non-FD frame.
+    fn recv_can_frame(&mut self, timeout_ms: u64) -> Result<CanFrame> {
+        let (id, data) = self.recv_frame(timeout_ms)?;
+        Ok(CanFrame::classic(id, data))
+    }
 }
 
 /// ISO-TP over an 11/29-bit CAN link. Owns the link so it can be used as a
