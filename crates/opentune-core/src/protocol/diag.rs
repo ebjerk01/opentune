@@ -31,6 +31,12 @@ pub fn check_response(req_sid: u8, resp: &[u8]) -> Result<()> {
 }
 
 /// Human-readable name for a KWP/UDS negative-response code.
+///
+/// The table follows ISO 14229-1 Annex A (cross-checked against
+/// `python-udsoncan`'s `ResponseCode`): the full common range (0x10–0x94)
+/// including the manufacturer-conditions band (0x81–0x94) that an ECU uses to
+/// refuse a routine or reset while the engine is running / voltage is out of
+/// range. ISO reserved / vendor-specific codes map to a descriptive bucket.
 pub fn nrc_name(code: u8) -> &'static str {
     match code {
         0x10 => "generalReject",
@@ -42,11 +48,30 @@ pub fn nrc_name(code: u8) -> &'static str {
         0x22 => "conditionsNotCorrect",
         0x24 => "requestSequenceError",
         0x25 => "noResponseFromSubnetComponent",
+        0x26 => "failurePreventsExecutionOfRequestedAction",
         0x31 => "requestOutOfRange",
         0x33 => "securityAccessDenied",
+        0x34 => "authenticationRequired",
         0x35 => "invalidKey",
         0x36 => "exceededNumberOfAttempts",
         0x37 => "requiredTimeDelayNotExpired",
+        0x38 => "secureDataTransmissionRequired",
+        0x39 => "secureDataTransmissionNotAllowed",
+        0x3A => "secureDataVerificationFailed",
+        0x50 => "certificateVerificationFailedInvalidTimePeriod",
+        0x51 => "certificateVerificationFailedInvalidSignature",
+        0x52 => "certificateVerificationFailedInvalidChainOfTrust",
+        0x53 => "certificateVerificationFailedInvalidType",
+        0x54 => "certificateVerificationFailedInvalidFormat",
+        0x55 => "certificateVerificationFailedInvalidContent",
+        0x56 => "certificateVerificationFailedInvalidScope",
+        0x57 => "certificateVerificationFailedInvalidCertificate",
+        0x58 => "ownershipVerificationFailed",
+        0x59 => "challengeCalculationFailed",
+        0x5A => "settingAccessRightsFailed",
+        0x5B => "sessionKeyCreationDerivationFailed",
+        0x5C => "configurationDataUsageFailed",
+        0x5D => "deAuthenticationFailed",
         0x70 => "uploadDownloadNotAccepted",
         0x71 => "transferDataSuspended",
         0x72 => "generalProgrammingFailure",
@@ -54,6 +79,28 @@ pub fn nrc_name(code: u8) -> &'static str {
         0x78 => "requestCorrectlyReceivedResponsePending",
         0x7E => "subFunctionNotSupportedInActiveSession",
         0x7F => "serviceNotSupportedInActiveSession",
+        0x81 => "rpmTooHigh",
+        0x82 => "rpmTooLow",
+        0x83 => "engineIsRunning",
+        0x84 => "engineIsNotRunning",
+        0x85 => "engineRunTimeTooLow",
+        0x86 => "temperatureTooHigh",
+        0x87 => "temperatureTooLow",
+        0x88 => "vehicleSpeedTooHigh",
+        0x89 => "vehicleSpeedTooLow",
+        0x8A => "throttlePedalTooHigh",
+        0x8B => "throttlePedalTooLow",
+        0x8C => "transmissionRangeNotInNeutral",
+        0x8D => "transmissionRangeNotInGear",
+        0x8F => "brakeSwitchNotClosed",
+        0x90 => "shifterLeverNotInPark",
+        0x91 => "torqueConverterClutchLocked",
+        0x92 => "voltageTooHigh",
+        0x93 => "voltageTooLow",
+        0x94 => "resourceTemporarilyNotAvailable",
+        // Codes outside the mapped points (ISO reserved 0x95–0xEF and
+        // manufacturer-specific 0xF0–0xFE) stay "unknown" so callers can tell a
+        // named ISO condition from a vendor/reserved code.
         _ => "unknown",
     }
 }
@@ -89,5 +136,21 @@ mod tests {
             check_response(0x22, &[0x50, 0x01]),
             Err(Error::Protocol(_))
         ));
+    }
+
+    #[test]
+    fn nrc_table_matches_iso14229_additions() {
+        // Codes udsoncan names that the original OpenTune table omitted.
+        assert_eq!(nrc_name(0x26), "failurePreventsExecutionOfRequestedAction");
+        assert_eq!(nrc_name(0x34), "authenticationRequired");
+        assert_eq!(nrc_name(0x83), "engineIsRunning");
+        assert_eq!(nrc_name(0x92), "voltageTooHigh");
+        assert_eq!(nrc_name(0x93), "voltageTooLow");
+        assert_eq!(nrc_name(0x94), "resourceTemporarilyNotAvailable");
+        // Still named from before.
+        assert_eq!(nrc_name(0x31), "requestOutOfRange");
+        // ISO-reserved / vendor codes remain unnamed.
+        assert_eq!(nrc_name(0x99), "unknown");
+        assert_eq!(nrc_name(0x00), "unknown");
     }
 }

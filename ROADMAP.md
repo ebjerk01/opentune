@@ -8,7 +8,9 @@
 calibration-definition import/export, diffing, and the CLI + desktop apps — works today on a
 flash image and is largely feature-complete. The **frontier now is getting it onto a real car**:
 the interface drivers are written but unproven on hardware, and the live read/flash path waits on
-an adapter. Android and open hardware are the reach goals.
+an adapter. Android and open hardware are the reach goals. **Phase 4** then broadens coverage —
+more checksum families (ME7, TCU), flash-container decode, real DoIP, and transmission/AWD control
+units — most of it buildable offline; see the **build order** at the end.
 
 **Legend:** `[x]` done · `[~]` in progress · `[ ]` planned · 🔒 needs hardware
 
@@ -133,7 +135,7 @@ defs + checksum; the flash/UDS transport is shared.
 - [ ] **Mercedes 722.6 (NAG1) TCU** — control logic + maps (shift profiles, clutch-fill adaptation, per-gear TCC pressure) from **rnd-ash/ultimate-nag52-fw** (GPL-3, C++ — mine the logic/maps); reusable **Rust** crates (`egs_can`, `diag_common`, `flasher`, KWP2000-over-CAN `bootloader`) from **ultimate-nag52-fw-rs** / **-config-app** (GPL-3 — directly liftable).
 - [ ] Generalize the controller-def schema so BMW ZF 8HP, Ford, Mitsubishi, Volvo TCUs/AWD drop in.
 
-### EDC15C6 — open-source attack path (supersedes "parked")
+### EDC15C6 — open-source attack path 🔒 (supersedes "parked")
 The checksum isn't in the application dump (proven); it runs in the tester-uploaded flash
 programming driver. Concrete route to obtain/observe it:
 - [ ] (1) **Daimler SA2 seed/key** → enter programming mode: **jglim/UnlockECU**.
@@ -141,6 +143,34 @@ programming driver. Concrete route to obtain/observe it:
 - [ ] (3) understand the **RAM flash-kernel** that computes the checksum: **fenugrec/npkern** (GPL-3) as the architectural model.
 - [ ] (4) cross-reference adjacent-family real dumps/maps/seed-key: **Jeep WJ 2.7 CRD** repo (Bosch **EDC15C2**, not C6 — a data point, not a direct solve).
 
-### Hardware
-- [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch.
-- [ ] Reference ECUFlash/RomRaider definition parsers from **FastECU** (GPL-3) for broader def import.
+### Hardware 🔒 (mostly)
+- [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch. *(porting is offline; compile/flash/on-bench is 🔒)*
+- [ ] Reference ECUFlash/RomRaider definition parsers from **FastECU** (GPL-3) for broader def import. *(offline)*
+
+---
+
+## Suggested build order
+Ranked by value, liftability and dependencies. **Offline** items need only a `.bin` and build today;
+**🔒** items wait on an interface + bench ECU.
+
+**Offline — buildable now**
+1. **ME7 checksum** — a whole new petrol family; `ME7Sum` (BSD) is directly liftable, validatable against dumps. Biggest coverage win.
+2. **FRF / ODX / SGO flash-container decode** — foundational for all VAG/DSG work (lets us open real flash containers); MIT refs.
+3. **TCU checksums** (CRC32-VW, CRC-CCITT, JAMCRC) — prerequisite for DSG/TCU; small and self-contained.
+4. **WinOLS `.ols` import + `a2l2xdf`** — definition-format breadth; feeds the map pipeline.
+5. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening/confidence of what already ships.
+6. **Validate UDS state machine vs `python-udsoncan`** — offline conformance of the protocol layer.
+7. **Real DoIP (ISO-13400) transport** — code + mock-testable now; unblocks BMW/VAG-Ethernet later.
+8. **Generalized controller-def schema** — the data model that lets TCU/AWD units drop in.
+9. **Drivetrain defs** — VAG DSG + Haldex + Mercedes 722.6 maps/defs/checksums (the *def* groundwork; flashing is 🔒).
+10. **CBFParser port → Mercedes diagnostics** — CBF → DTC/diagnostic defs (OpenVehicleDiag, GPL-3 Rust).
+11. **SA2 seed/key plugin port** — user-supplied, never auto-applied (sensitive; careful scoping).
+
+**🔒 Hardware-gated — later**
+- Live identify + full OBD read (EDC16 first) · live DTC read/clear
+- Flash path end-to-end on the bench, then in-car (EDC16 first)
+- Verify cheap/clone adapters on real hardware
+- DSG / Haldex / 722.6 **bench flashing**
+- ESP32-S3 compile/flash + KiCad board; flash the Switchleg firmware
+- EDC15C6 attack path (bootstrap / flash-driver / bench capture)
+- Android USB-OTG / BLE adapter support

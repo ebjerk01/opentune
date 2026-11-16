@@ -1,0 +1,19 @@
+[package]
+name = "opentune-cbf"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Parser for Mercedes-Benz CBF (CAESAR) diagnostic-description files, extracting ECU variants, diagnostic services and DTC definitions for OpenTune"
+publish = false
+
+[[bin]]
+name = "opentune-cbf"
+path = "src/bin/opentune-cbf.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

@@ -1,0 +1,23 @@
+# opentune-container — VAG flash-container (FRF / ODX-F / SGO) decode + repack.
+[package]
+name = "opentune-container"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Decode (and where feasible repack) VAG flash containers: FRF, ODX/ODX-F and SGO."
+publish = false
+
+[dependencies]
+# Pure-Rust AES block primitive. CBC chaining is implemented in this crate so we
+# avoid the extra `cbc` dependency. 0.8.4 (2023-06-20) is the stable RustCrypto line.
+aes = "0.8.4"
+# Small, pull-free XML DOM reader (already used elsewhere in OpenTune for XDF).
+roxmltree = "0.20.0"
+# DEFLATE for ZIP members inside FRF containers (FRF decrypts to a ZIP archive).
+flate2 = "1"
+
+[lib]
+name = "opentune_container"

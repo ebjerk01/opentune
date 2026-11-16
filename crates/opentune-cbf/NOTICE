@@ -1,0 +1,27 @@
+opentune-cbf
+============
+
+This crate parses Mercedes-Benz CBF (CAESAR diagnostic description) files.
+
+The binary layout handling (stub/CFF/CTF headers, the CTF string pool, the
+bit-flag primitive reader, the ECU block layout and the DTC / service / variant
+record formats) is adapted from the **CBFParser** component of the
+OpenVehicleDiag project:
+
+    OpenVehicleDiag — https://github.com/rnd-ash/OpenVehicleDiag
+    Copyright (C) Ashcon Mohseninia and the OpenVehicleDiag contributors
+    Licensed under the GNU General Public License v3.0
+
+OpenVehicleDiag is licensed GPL-3.0, which is compatible with OpenTune
+(GPL-3.0-or-later). The CBF format handling has been re-implemented here as a
+clean, dependency-light library with its own public API and model types; the
+binary field order and offset arithmetic follow the original CBFParser so that
+real-world Mercedes `.cbf` files decode identically.
+
+NOT INCLUDED / DELIBERATELY OMITTED
+-----------------------------------
+OpenVehicleDiag's SMR-D parser was removed from upstream under a DMCA takedown.
+No SMR-D parsing is reimplemented, ported or included in this crate. This crate
+handles the CBF format only.
+
+See LICENSE (GPL-3.0-or-later) in the repository root for the full license text.

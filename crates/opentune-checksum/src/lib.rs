@@ -10,7 +10,9 @@ pub mod edc15;
 pub mod edc16;
 pub mod edc17;
 pub mod generic;
+pub mod me7;
 pub mod pcr21;
+pub mod tcu;
 
 /// Status of one checksum-protected block.
 #[derive(Debug, Clone)]
@@ -92,6 +94,10 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "edc17" => Some(Box::new(edc17::Edc17)),
         "pcr21" => Some(Box::new(pcr21::Pcr21)),
         "edc15c6" | "edc15" => Some(Box::new(edc15::Edc15C6)),
+        "me7" | "me7x" => Some(Box::new(me7::Me7)),
+        "dq250" | "tcu-jamcrc" => Some(Box::new(tcu::Dq250Jamcrc)),
+        "dq381" | "tcu-crc32" => Some(Box::new(tcu::Dq381Crc32)),
+        "tcu-ccitt" => Some(Box::new(tcu::CcittTrailer)),
         _ => None,
     }
 }
@@ -174,6 +180,45 @@ pub fn algorithms() -> Vec<AlgoInfo> {
             notes: "Alias: edc15. VAG TDI v4.1v2 (512 KiB) fully solved and \
                     self-correcting; Mercedes EDC15C6 (1 MiB) is located-only and \
                     refused (algorithm not yet reverse-engineered — never guessed).",
+        },
+        AlgoInfo {
+            id: "me7",
+            name: "Bosch Motronic ME7.x (petrol)",
+            family: "me7",
+            needs_reference: false,
+            notes: "Alias: me7x. Main ROMSYS 16-bit word-sum (two ranges, value + \
+                    complement) and the self-describing multipoint block, both \
+                    auto-located from the image (base 0x800000). Validated on real \
+                    VAG ME7.5/ME7.1 dumps. CAL-CRC32 variants: primitive exposed, \
+                    block layout firmware-specific and never guessed.",
+        },
+        AlgoInfo {
+            id: "dq250",
+            name: "VAG DQ250-MQB DSG (JAMCRC)",
+            family: "tcu",
+            needs_reference: false,
+            notes: "Alias: tcu-jamcrc. JAMCRC (= !crc32) per-block trailer over the \
+                    DQ250-MQB CAL/ASW layout; corrects only when a block's JAMCRC \
+                    validates. Algorithm vectors + synthetic validated; real 0D9 \
+                    bench-dump validation pending.",
+        },
+        AlgoInfo {
+            id: "dq381",
+            name: "VAG DQ381 DSG (CRC32-VW)",
+            family: "tcu",
+            needs_reference: false,
+            notes: "Alias: tcu-crc32. Self-describing CAL CRC-32 (big-endian zlib, \
+                    base 0x140200, pointers @0x38/0x3C, CRC @0x44). Validated on a \
+                    real DQ381 full dump.",
+        },
+        AlgoInfo {
+            id: "tcu-ccitt",
+            name: "VAG/ZF TCU (CRC-CCITT)",
+            family: "tcu",
+            needs_reference: false,
+            notes: "Generic big-endian CRC-CCITT (0x1021, CCITT-FALSE) trailer over \
+                    the block body; layout-agnostic. CCITT vectors validated; a \
+                    specific CCITT-protected dump for end-to-end validation is pending.",
         },
     ]
 }
@@ -342,7 +387,21 @@ mod tests {
     fn algorithms_cover_every_id_get_resolves() {
         // Every id get() accepts (including the edc15 alias) maps to a listed
         // AlgoInfo, matched by the boxed algorithm's canonical id().
-        let resolvable = ["crc32-tail", "edc16", "edc17", "pcr21", "edc15c6", "edc15"];
+        let resolvable = [
+            "crc32-tail",
+            "edc16",
+            "edc17",
+            "pcr21",
+            "edc15c6",
+            "edc15",
+            "me7",
+            "me7x",
+            "dq250",
+            "tcu-jamcrc",
+            "dq381",
+            "tcu-crc32",
+            "tcu-ccitt",
+        ];
         let infos = algorithms();
         for id in resolvable {
             let algo = get(id).unwrap_or_else(|| panic!("get({id}) must resolve"));

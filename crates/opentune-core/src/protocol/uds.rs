@@ -38,23 +38,44 @@ impl<'a> UdsClient<'a> {
         Ok(resp[1..].to_vec())
     }
 
+    /// `DiagnosticSessionControl` (0x10). ISO 14229 §9.2: the positive response
+    /// echoes the requested session byte (then, for 2013+ ECUs, the P2/P2* server
+    /// timing). The echo is verified — a mismatch is a confused ECU, which
+    /// `python-udsoncan` surfaces as an `UnexpectedResponseException`.
     pub fn session(&mut self, session: u8) -> Result<Vec<u8>> {
-        self.call(&[sid::SESSION_CONTROL, session])
+        let resp = self.call(&[sid::SESSION_CONTROL, session])?;
+        check_subfunction_echo(sid::SESSION_CONTROL, session, &resp)?;
+        Ok(resp)
     }
 
+    /// `ECUReset` (0x11). ISO 14229 §9.3: the positive response echoes the reset
+    /// type (and, for `enableRapidPowerShutDown`, a powerDownTime byte). The
+    /// reset-type echo is verified.
     pub fn ecu_reset(&mut self, kind: u8) -> Result<Vec<u8>> {
-        self.call(&[sid::ECU_RESET, kind])
+        let resp = self.call(&[sid::ECU_RESET, kind])?;
+        check_subfunction_echo(sid::ECU_RESET, kind, &resp)?;
+        Ok(resp)
     }
 
     pub fn tester_present(&mut self) -> Result<()> {
         self.call(&[sid::TESTER_PRESENT, 0x00]).map(|_| ())
     }
 
+    /// `ReadDataByIdentifier` (0x22) for a single DID. ISO 14229 §10.2: the
+    /// positive response echoes the 2-byte DID before the record. The echo is
+    /// verified against the request (udsoncan raises on a DID mismatch) so a
+    /// mis-routed answer is not silently returned as the wrong parameter's data.
     pub fn read_data_by_id(&mut self, did: u16) -> Result<Vec<u8>> {
         let resp = self.call(&[sid::READ_DATA_BY_ID, (did >> 8) as u8, did as u8])?;
         // resp echoes the 2-byte DID, then the data.
         if resp.len() < 2 {
             return Err(Error::Protocol("short RDBI response".into()));
+        }
+        let echoed = u16::from_be_bytes([resp[0], resp[1]]);
+        if echoed != did {
+            return Err(Error::Protocol(format!(
+                "RDBI echoed DID 0x{echoed:04X} != requested 0x{did:04X}"
+            )));
         }
         Ok(resp[2..].to_vec())
     }
@@ -69,9 +90,11 @@ impl<'a> UdsClient<'a> {
     /// caller can back off.
     pub fn request_seed(&mut self, level: u8) -> Result<Vec<u8>> {
         let resp = self.call(&[sid::SECURITY_ACCESS, level])?;
-        if resp.is_empty() {
-            return Err(Error::Protocol("empty seed".into()));
-        }
+        // The response echoes the requested security-access level (ISO 14229
+        // §10.4); verify it so a reply to a different level is not mistaken for
+        // this level's seed. udsoncan normalises odd=RequestSeed / even=SendKey
+        // and checks this echo the same way.
+        check_subfunction_echo(sid::SECURITY_ACCESS, level, &resp)?;
         Ok(resp[1..].to_vec()) // drop the echoed level
     }
 
@@ -86,7 +109,11 @@ impl<'a> UdsClient<'a> {
         let mut req = vec![sid::SECURITY_ACCESS, level];
         req.extend_from_slice(key);
         match self.call(&req) {
-            Ok(_) => Ok(()),
+            Ok(resp) => {
+                // The positive response echoes the (even) send-key level.
+                check_subfunction_echo(sid::SECURITY_ACCESS, level, &resp)?;
+                Ok(())
+            }
             Err(Error::NegativeResponse {
                 code: 0x35 | 0x36, ..
             }) => Err(Error::SecurityDenied),
@@ -152,6 +179,22 @@ pub fn next_block_seq(seq: u8) -> u8 {
     seq.wrapping_add(1)
 }
 
+/// Verify a sub-function service's positive response echoes the requested
+/// sub-function (ISO 14229 §8.6.3). The server clears bit 7 (the
+/// suppressPositiveResponse bit) in the echo, so compare the low 7 bits. `resp`
+/// is the response body *after* the service id, whose first byte is the echo.
+fn check_subfunction_echo(service: u8, requested: u8, resp: &[u8]) -> Result<()> {
+    match resp.first() {
+        Some(&echo) if echo & 0x7F == requested & 0x7F => Ok(()),
+        Some(&echo) => Err(Error::Protocol(format!(
+            "service 0x{service:02X}: echoed sub-function 0x{echo:02X} != requested 0x{requested:02X}"
+        ))),
+        None => Err(Error::Protocol(format!(
+            "service 0x{service:02X}: response missing sub-function echo"
+        ))),
+    }
+}
+
 fn parse_max_block_len(resp: &[u8]) -> Result<usize> {
     // lengthFormatIdentifier high nibble = number of maxNumberOfBlockLength bytes.
     if resp.is_empty() {
@@ -171,6 +214,83 @@ fn parse_max_block_len(resp: &[u8]) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::diag::DiagTransport;
+    use std::collections::VecDeque;
+
+    /// A scripted request/response transport for conformance tests: returns
+    /// queued responses in order. Mirrors the one in the integration tests but
+    /// stays local so these unit tests need no external harness.
+    struct Script {
+        responses: VecDeque<Vec<u8>>,
+    }
+    impl Script {
+        fn new(r: Vec<Vec<u8>>) -> Self {
+            Self {
+                responses: VecDeque::from(r),
+            }
+        }
+    }
+    impl DiagTransport for Script {
+        fn request(&mut self, _req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+            self.responses.pop_front().ok_or(Error::Timeout(timeout_ms))
+        }
+    }
+
+    #[test]
+    fn rdbi_accepts_matching_did_echo() {
+        // 62 F1 90 'V' 'I' 'N' -> echoed DID F190 matches.
+        let mut t = Script::new(vec![vec![0x62, 0xF1, 0x90, b'V', b'I', b'N']]);
+        let mut uds = UdsClient::new(&mut t);
+        assert_eq!(uds.read_data_by_id(0xF190).unwrap(), b"VIN");
+    }
+
+    #[test]
+    fn rdbi_rejects_mismatched_did_echo() {
+        // ECU echoes DID F18C though F190 was asked: must not be returned as data.
+        let mut t = Script::new(vec![vec![0x62, 0xF1, 0x8C, 0x00]]);
+        let mut uds = UdsClient::new(&mut t);
+        assert!(matches!(
+            uds.read_data_by_id(0xF190),
+            Err(Error::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn session_verifies_subfunction_echo() {
+        // 50 03 00 32 01 F4 -> echoes extendedDiagnosticSession (03) + P2 timing.
+        let mut t = Script::new(vec![vec![0x50, 0x03, 0x00, 0x32, 0x01, 0xF4]]);
+        let mut uds = UdsClient::new(&mut t);
+        assert!(uds.session(0x03).is_ok());
+
+        // Wrong session echo (01) to a request for 03 is rejected.
+        let mut t2 = Script::new(vec![vec![0x50, 0x01]]);
+        let mut uds2 = UdsClient::new(&mut t2);
+        assert!(matches!(uds2.session(0x03), Err(Error::Protocol(_))));
+    }
+
+    #[test]
+    fn request_seed_verifies_level_echo() {
+        // 67 01 11 22 33 44 -> level 01 echoed, seed follows.
+        let mut t = Script::new(vec![vec![0x67, 0x01, 0x11, 0x22, 0x33, 0x44]]);
+        let mut uds = UdsClient::new(&mut t);
+        assert_eq!(
+            uds.request_seed(0x01).unwrap(),
+            vec![0x11, 0x22, 0x33, 0x44]
+        );
+
+        // A reply echoing a different level (03) to a request for 01 is rejected.
+        let mut t2 = Script::new(vec![vec![0x67, 0x03, 0xAA]]);
+        let mut uds2 = UdsClient::new(&mut t2);
+        assert!(matches!(uds2.request_seed(0x01), Err(Error::Protocol(_))));
+    }
+
+    #[test]
+    fn subfunction_echo_ignores_suppress_bit() {
+        // An ECU may clear only bit 7; the low 7 bits must still match.
+        assert!(check_subfunction_echo(0x10, 0x03, &[0x03]).is_ok());
+        assert!(check_subfunction_echo(0x10, 0x03, &[0x04]).is_err());
+        assert!(check_subfunction_echo(0x10, 0x03, &[]).is_err());
+    }
 
     #[test]
     fn unlocked_seed_detection() {
