@@ -2,31 +2,56 @@
 //!
 //! The write is split into fixed-size chunks. After every chunk is written and
 //! read-back verified, progress is checkpointed to a JSON sidecar next to the
-//! session (`state_path`). A later run loads that checkpoint, skips the chunks
-//! already written+verified, and continues — so an interrupted flash is
-//! recoverable instead of fatal.
+//! session (`state_path`). A later run loads that checkpoint and continues — so
+//! an interrupted flash is recoverable instead of fatal.
 //!
-//! Safety is unchanged from [`crate::flash_calibration`]: voltage gate, then a
-//! mandatory pre-flash backup of the *original*, then chunked write, each chunk
-//! verified. Two extra guarantees are specific to resume:
+//! # Recovery safety
 //!
-//! 1. The checkpoint stores a SHA-256 of the intended payload. A resume whose
-//!    data hash differs is refused — a checkpoint can never be used to apply a
+//! Resuming onto an ECU is where a toolkit bricks a controller, so recovery here
+//! is evidence-based, not bookkeeping-based:
+//!
+//! 1. **Wrong image.** The checkpoint stores a SHA-256 of the intended payload. A
+//!    resume whose data hash differs is refused — a checkpoint can never apply a
 //!    *different* image to the region it was created for.
-//! 2. The original backup is persisted to a sidecar on the first run and reused
-//!    on resume; it is never re-read from a region that is already partially
-//!    written, so the true original is never lost.
+//! 2. **Wrong controller.** The checkpoint binds the ECU definition id, the
+//!    *connected ECU's identity fingerprint* (part/software/VIN) and the
+//!    programming procedure observed on the first run. On resume under a policy
+//!    that requires identity, the connected ECU must match that binding, or the
+//!    resume is refused. If identity cannot be read after an interruption, the
+//!    resume is refused and a fresh verified read is required — a checkpoint is
+//!    never applied to an unidentified controller.
+//! 3. **Erase / reset blanking.** Recorded progress is never trusted by index
+//!    alone. On a resumed run *every* chunk — including ones a prior run marked
+//!    verified — is read back from the device first and only skipped if the
+//!    device currently holds the intended bytes. If an erase or ECU reset blanked
+//!    already-written data, the read-back no longer matches and the chunk is
+//!    rewritten. This is what makes resume correct on an ECU that erases: generic
+//!    "skip the first N chunks" resumption is *not* proof of recovery, and is not
+//!    done here. See [`ProgrammingProcedure`].
+//! 4. **Lost original.** The original backup is persisted to a sidecar on the
+//!    first run and reused on resume; it is never re-read from a region that is
+//!    already partially written, so the true original is never lost.
+//!
+//! Safety is otherwise the same as [`crate::flash_calibration`]: the configured
+//! voltage gate, a mandatory pre-flash backup of the *original*, chunked write,
+//! each chunk verified. The policy-checked entry point
+//! [`flash_calibration_resumable_checked`] adds the production fail-closed gates
+//! (identity, writable region, checksum, fail-closed voltage) from
+//! [`crate::policy`].
 use crate::hash::{crc32, sha256_hex};
+use crate::policy::{
+    FlashSafetyPolicy, FlashTarget, PolicyViolation, ProgrammingProcedure, TargetIdentity,
+};
 use crate::transcript::{FlashEvent, Transcript};
 use crate::{backup, FlashReport, SafetyConfig};
-use opentune_core::{Error, Interface, MemoryRegion, Phase, Progress, Result};
+use opentune_core::{EcuId, Error, Interface, MemoryRegion, Phase, Progress, Result};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const CKPT_VERSION: u32 = 1;
-/// Chunk size used when [`SafetyConfig::chunk_size`] is 0.
+const CKPT_VERSION: u32 = 2;
+/// Chunk size used when the policy chunk size is 0.
 pub const DEFAULT_CHUNK_SIZE: usize = 4096;
 
 /// Per-chunk checkpoint record.
@@ -45,12 +70,22 @@ struct Checkpoint {
     address: u32,
     total: u32,
     chunk_size: u32,
-    /// SHA-256 (hex) of the intended payload — the resume-safety anchor.
+    /// SHA-256 (hex) of the intended payload — the wrong-image anchor.
     data_sha256: String,
     require_backup: bool,
     backup_file: Option<String>,
     backup_crc32: Option<u32>,
     backup_len: Option<u32>,
+    /// ECU definition id this flash targets (v2).
+    #[serde(default)]
+    ecu_def_id: Option<String>,
+    /// Fingerprint of the *connected* ECU observed on the first run (v2). The
+    /// wrong-controller anchor: a resume must see the same fingerprint.
+    #[serde(default)]
+    ecu_identity: Option<String>,
+    /// Programming procedure in force on the first run (v2).
+    #[serde(default)]
+    procedure: Option<ProgrammingProcedure>,
     updated_unix: u64,
     chunks: Vec<ChunkState>,
 }
@@ -70,14 +105,14 @@ fn sibling(path: &Path, suffix: &str) -> PathBuf {
 }
 
 /// Effective chunk size: clamp to `[1, total]`, and treat 0 as the default.
-fn effective_chunk_size(safety: &SafetyConfig, total: u32) -> u32 {
+fn effective_chunk_size(requested: usize, total: u32) -> u32 {
     if total == 0 {
         return 1;
     }
-    let cs = if safety.chunk_size == 0 {
+    let cs = if requested == 0 {
         DEFAULT_CHUNK_SIZE
     } else {
-        safety.chunk_size
+        requested
     };
     (cs as u64).clamp(1, total as u64) as u32
 }
@@ -119,6 +154,8 @@ fn load_checkpoint(path: &Path) -> Result<Option<Checkpoint>> {
 }
 
 /// Write the checkpoint atomically (temp file + rename on the same directory).
+/// A failure here aborts the flash: progress that cannot be persisted must never
+/// be relied on, so the caller sees the error rather than a silent write.
 fn save_checkpoint(path: &Path, ck: &Checkpoint) -> Result<()> {
     let json = serde_json::to_vec_pretty(ck)
         .map_err(|e| Error::Config(format!("serialize checkpoint: {e}")))?;
@@ -128,17 +165,20 @@ fn save_checkpoint(path: &Path, ck: &Checkpoint) -> Result<()> {
     Ok(())
 }
 
-/// Verify a stored checkpoint describes *this* job. Returns a refusal for any
-/// mismatch, most importantly a payload-hash mismatch (wrong image).
+/// Structural check that a stored checkpoint describes *this* job: version,
+/// region, chunking, payload hash and (when both are known) the ECU definition.
+/// Refuses on any mismatch. Identity/procedure binding is checked separately
+/// against the live device in [`verify_resume_identity`].
 fn validate_checkpoint(
     ck: &Checkpoint,
     region: MemoryRegion,
     chunk_size: u32,
     want_sha: &str,
+    target: Option<&FlashTarget>,
 ) -> Result<()> {
     if ck.version != CKPT_VERSION {
         return Err(Error::Safety(format!(
-            "checkpoint version {} != {CKPT_VERSION}",
+            "checkpoint version {} != {CKPT_VERSION} — refusing to resume an incompatible checkpoint",
             ck.version
         )));
     }
@@ -166,12 +206,62 @@ fn validate_checkpoint(
                 .into(),
         ));
     }
+    if let (Some(cid), Some(t)) = (&ck.ecu_def_id, target) {
+        if cid != &t.ecu_def_id {
+            return Err(Error::Safety(format!(
+                "checkpoint ECU definition '{cid}' != target '{}' — refusing to resume",
+                t.ecu_def_id
+            )));
+        }
+    }
     Ok(())
 }
 
-/// Resumable flash that records a [`Transcript`]. See [`crate::flash_calibration_resumable`].
-///
-/// The caller owns `transcript` and persists it (e.g. [`Transcript::write_next_to`]).
+/// Verify a resume is the SAME controller the checkpoint was created for, under a
+/// policy that requires identity. Flexible/legacy flows (no identity requirement)
+/// skip this. Defines the behaviour when identity cannot be recovered: refuse.
+fn verify_resume_identity(
+    ck: &Checkpoint,
+    connected: Option<&EcuId>,
+    policy: &FlashSafetyPolicy,
+    target: Option<&FlashTarget>,
+) -> Result<()> {
+    if !policy.require_identity_match {
+        return Ok(());
+    }
+    // A production resume needs a checkpoint that actually bound an identity.
+    let Some(bound) = &ck.ecu_identity else {
+        return Err(PolicyViolation::CheckpointIdentityMissing.into());
+    };
+    // Identity must be recoverable after the interruption, or we refuse.
+    let Some(id) = connected else {
+        return Err(PolicyViolation::ResumeIdentityUnrecoverable.into());
+    };
+    let now_fp = TargetIdentity::fingerprint_of(id);
+    if &now_fp != bound {
+        return Err(PolicyViolation::CheckpointIdentityMismatch {
+            bound: bound.clone(),
+            connected: now_fp,
+        }
+        .into());
+    }
+    // The programming procedure must not have changed under the resume.
+    if let (Some(bp), Some(t)) = (&ck.procedure, target) {
+        if bp != &t.procedure {
+            return Err(PolicyViolation::CheckpointProcedureMismatch {
+                bound: bp.name.clone(),
+                current: t.procedure.name.clone(),
+            }
+            .into());
+        }
+    }
+    Ok(())
+}
+
+/// Legacy, flexible resumable flash with a [`Transcript`]. See
+/// [`crate::flash_calibration_resumable`]. Uses the historical [`SafetyConfig`]
+/// behaviour (no target-level checks). For a real write use
+/// [`flash_calibration_resumable_checked`].
 pub fn flash_calibration_resumable_logged(
     iface: &mut dyn Interface,
     region: MemoryRegion,
@@ -181,8 +271,55 @@ pub fn flash_calibration_resumable_logged(
     transcript: &mut Transcript,
     progress: &mut dyn FnMut(Progress),
 ) -> Result<FlashReport> {
+    let policy = FlashSafetyPolicy::from_legacy(safety);
+    run_logged(
+        iface, region, data, &policy, None, state_path, transcript, progress,
+    )
+}
+
+/// Production, policy-checked resumable flash with a [`Transcript`].
+///
+/// Enforces the full [`FlashSafetyPolicy`] (fail-closed voltage, writable region,
+/// identity, checksum) on every run and binds the recovery checkpoint to the
+/// connected ECU identity and programming procedure, so a resume cannot be
+/// applied to the wrong controller or variant.
+#[allow(clippy::too_many_arguments)]
+pub fn flash_calibration_resumable_checked(
+    iface: &mut dyn Interface,
+    region: MemoryRegion,
+    data: &[u8],
+    target: &FlashTarget,
+    policy: &FlashSafetyPolicy,
+    state_path: &Path,
+    transcript: &mut Transcript,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<FlashReport> {
+    run_logged(
+        iface,
+        region,
+        data,
+        policy,
+        Some(target),
+        state_path,
+        transcript,
+        progress,
+    )
+}
+
+/// Shared transcript-recording wrapper around [`run`].
+#[allow(clippy::too_many_arguments)]
+fn run_logged(
+    iface: &mut dyn Interface,
+    region: MemoryRegion,
+    data: &[u8],
+    policy: &FlashSafetyPolicy,
+    target: Option<&FlashTarget>,
+    state_path: &Path,
+    transcript: &mut Transcript,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<FlashReport> {
     let result = run(
-        iface, region, data, safety, state_path, transcript, progress,
+        iface, region, data, policy, target, state_path, transcript, progress,
     );
     if let Err(e) = &result {
         transcript.record(FlashEvent::Error {
@@ -199,46 +336,68 @@ pub fn flash_calibration_resumable_logged(
 }
 
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn run(
     iface: &mut dyn Interface,
     region: MemoryRegion,
     data: &[u8],
-    safety: &SafetyConfig,
+    policy: &FlashSafetyPolicy,
+    target: Option<&FlashTarget>,
     state_path: &Path,
     transcript: &mut Transcript,
     progress: &mut dyn FnMut(Progress),
 ) -> Result<FlashReport> {
+    // 0. Structural gates (no device access).
+    policy.check_target(target)?;
     if data.len() != region.length as usize {
-        return Err(Error::Safety(format!(
-            "data length {} != region length {}",
-            data.len(),
-            region.length
-        )));
+        return Err(PolicyViolation::PayloadLengthMismatch {
+            got: data.len(),
+            want: region.length,
+        }
+        .into());
     }
+    policy.check_region_writable(region, target)?;
+    policy.check_checksum(data, target)?;
 
     let total = region.length;
-    let chunk_size = effective_chunk_size(safety, total);
+    let chunk_size = effective_chunk_size(policy.chunk_size, total);
     let want_sha = sha256_hex(data);
 
-    // Load + validate any existing checkpoint (refuses a wrong payload).
+    // Load + validate any existing checkpoint (refuses a wrong payload/region).
     let existing = load_checkpoint(state_path)?;
     if let Some(ck) = &existing {
-        validate_checkpoint(ck, region, chunk_size, &want_sha)?;
+        validate_checkpoint(ck, region, chunk_size, &want_sha, target)?;
     }
     let resumed = existing.is_some();
 
-    // Chunk plan: reuse the checkpoint's verified flags when resuming.
+    // Chunk plan: reuse the checkpoint's recorded flags when resuming. On a
+    // resumed run these flags are NOT trusted to skip writes — every chunk is
+    // still read back below — but they drive the reuse accounting.
     let mut chunks = match &existing {
         Some(ck) => ck.chunks.clone(),
         None => plan_chunks(total, chunk_size),
     };
     let any_written = chunks.iter().any(|c| c.verified);
 
+    // Read the connected identity once: used for the identity gate, the recovery
+    // binding and the transcript label.
+    let connected = iface.read_ecu_id().ok();
+
+    // Identity gate against the intended target (fail-closed when required).
+    policy.check_identity(connected.as_ref(), target)?;
+    // Recovery identity binding: a resume must be the SAME controller.
+    if let Some(ck) = &existing {
+        verify_resume_identity(ck, connected.as_ref(), policy, target)?;
+    }
+
     // Session start.
-    let ecu_name = iface
-        .read_ecu_id()
-        .ok()
-        .and_then(|id| id.ecu_name.or(id.sw_number).or(id.hw_number).or(id.vin));
+    let ecu_name = connected.as_ref().and_then(|id| {
+        id.ecu_name
+            .clone()
+            .or_else(|| id.sw_number.clone())
+            .or_else(|| id.hw_number.clone())
+            .or_else(|| id.vin.clone())
+    });
     transcript.record(FlashEvent::SessionStart {
         ecu: ecu_name,
         address: region.address,
@@ -249,24 +408,11 @@ fn run(
     // 1. Voltage gate (every run).
     let mv = iface.battery_millivolts()?;
     transcript.record(FlashEvent::Voltage { millivolts: mv });
-    if safety.min_millivolts > 0 {
-        match mv {
-            Some(v) if v < safety.min_millivolts => {
-                return Err(Error::Safety(format!(
-                    "battery {v} mV below minimum {} mV",
-                    safety.min_millivolts
-                )));
-            }
-            None if iface.capabilities().battery_voltage => {
-                return Err(Error::Safety("battery voltage unreadable".into()));
-            }
-            _ => {}
-        }
-    }
+    policy.check_voltage(mv, iface.capabilities().battery_voltage)?;
 
     // 2. Mandatory pre-flash backup of the ORIGINAL.
     let backup_path = sibling(state_path, ".backup");
-    let (backup_buf, backup_meta) = if safety.require_backup {
+    let (backup_buf, backup_meta) = if policy.require_verified_backup {
         match reuse_backup(&backup_path, existing.as_ref()) {
             Some(buf) => (buf, Some(backup_path.clone())),
             None => {
@@ -281,7 +427,11 @@ fn run(
                 }
                 let b = backup(iface, region, progress)?;
                 if b.len() != total as usize {
-                    return Err(Error::Safety("backup read short — aborting".into()));
+                    return Err(PolicyViolation::BackupShort {
+                        got: b.len(),
+                        want: total,
+                    }
+                    .into());
                 }
                 std::fs::write(&backup_path, &b)?;
                 (b, Some(backup_path.clone()))
@@ -298,35 +448,36 @@ fn run(
         });
     }
 
-    // Persist a baseline checkpoint (records backup metadata) before writing.
+    // Persist a baseline checkpoint (records backup + identity + procedure)
+    // before writing. A persistence failure here aborts before any write.
     let mut ckpt = Checkpoint {
         version: CKPT_VERSION,
         address: region.address,
         total,
         chunk_size,
         data_sha256: want_sha,
-        require_backup: safety.require_backup,
+        require_backup: policy.require_verified_backup,
         backup_file: backup_meta.as_ref().map(|p| p.display().to_string()),
         backup_crc32: backup_meta.as_ref().map(|_| crc32(&backup_buf)),
         backup_len: backup_meta.as_ref().map(|_| backup_buf.len() as u32),
+        ecu_def_id: target.map(|t| t.ecu_def_id.clone()),
+        ecu_identity: connected.as_ref().map(TargetIdentity::fingerprint_of),
+        procedure: target.map(|t| t.procedure.clone()),
         updated_unix: now_unix(),
         chunks: chunks.clone(),
     };
     save_checkpoint(state_path, &ckpt)?;
 
-    // 3. Write + verify each remaining chunk, checkpointing after each.
+    // 3. Write + verify each chunk, checkpointing after each. Every chunk is
+    //    read back FIRST (even ones a prior run marked verified): a chunk is
+    //    reused only if the device currently holds the intended bytes, so an
+    //    erase/reset that blanked earlier progress forces a rewrite instead of a
+    //    silent skip.
     let chunks_total = chunks.len();
     let mut writes = 0usize;
-    let mut done: u64 = chunks
-        .iter()
-        .filter(|c| c.verified)
-        .map(|c| c.len as u64)
-        .sum();
+    let mut done: u64 = 0;
 
     for i in 0..chunks.len() {
-        if chunks[i].verified {
-            continue; // already written+verified in a prior run → skip.
-        }
         let off = chunks[i].offset;
         let len = chunks[i].len;
         let addr = region
@@ -336,8 +487,7 @@ fn run(
         let cr = MemoryRegion::new(addr, len);
         let want = &data[off as usize..(off + len) as usize];
 
-        // Read-back first: robust to a chunk written but not yet checkpointed
-        // (re-verify, don't blindly re-write).
+        // Read-back first: reuse only if the device already holds these bytes.
         let current = iface.read_memory(cr, progress)?;
         let reused = current == want;
         if !reused {
@@ -375,8 +525,8 @@ fn run(
         });
     }
 
-    // 4. Optional final whole-region verify (defense in depth).
-    if safety.verify_after_write {
+    // 4. Final whole-region verify (defense in depth).
+    if policy.require_readback_verify {
         let readback = iface.read_memory(region, progress)?;
         let ok = readback == data;
         transcript.record(FlashEvent::FinalVerify { ok });

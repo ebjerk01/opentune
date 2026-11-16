@@ -1,17 +1,38 @@
 //! The flash orchestrator: the safety-enforcing sequence around any write.
 //!
-//! No driver writes to an ECU directly from the app. Writes go through
-//! [`flash_calibration`], which enforces: voltage gate → verified backup →
-//! write → read-back verify. These rules live here so no driver can skip them.
+//! No driver writes to an ECU directly from the app. Writes go through this
+//! crate, which enforces the safety sequence centrally so no driver can skip it.
+//!
+//! There are two entry layers:
+//!
+//! - [`flash_calibration`] / [`flash_calibration_resumable_logged`] take the
+//!   legacy, flexible [`SafetyConfig`]. They are preserved for the offline mock
+//!   pipeline and existing callers. Their voltage gate only fails closed for
+//!   voltage-capable interfaces and they do no target-level checks.
+//! - [`flash_calibration_checked`] / [`flash_calibration_resumable_checked`] take
+//!   an explicit [`FlashSafetyPolicy`] and a [`FlashTarget`]. With
+//!   [`FlashSafetyPolicy::production`] they **fail closed**: a real write is
+//!   refused unless voltage is confirmed, a verified backup exists, the region is
+//!   declared writable, the connected ECU identity matches the payload's intended
+//!   target, the payload carries a checksum attestation bound to its bytes, and
+//!   the post-write read-back matches. See [`policy`] for the full contract and
+//!   its documented limitations.
 pub mod hash;
+pub mod policy;
 pub mod resume;
 pub mod transcript;
 pub mod vault;
 
-pub use resume::{flash_calibration_resumable_logged, DEFAULT_CHUNK_SIZE};
+pub use policy::{
+    ChecksumAttestation, FlashSafetyPolicy, FlashTarget, PolicyViolation, ProgrammingProcedure,
+    TargetIdentity, VoltagePolicy, WriteMode,
+};
+pub use resume::{
+    flash_calibration_resumable_checked, flash_calibration_resumable_logged, DEFAULT_CHUNK_SIZE,
+};
 pub use transcript::{FlashEvent, Transcript, TranscriptEntry};
 
-use opentune_core::{Error, Interface, MemoryRegion, Phase, Progress, Result};
+use opentune_core::{EcuId, Error, Interface, MemoryRegion, Phase, Progress, Result};
 use std::path::Path;
 
 /// Safety thresholds and switches for a flash operation.
@@ -58,7 +79,14 @@ pub fn backup(
     iface.read_memory(region, progress)
 }
 
-/// Write `new_data` to `region` with full safety enforcement.
+/// Write `new_data` to `region` with the legacy [`SafetyConfig`] enforcement.
+///
+/// This is the historical, deliberately flexible path: its voltage gate only
+/// fails closed for interfaces that advertise [`battery_voltage`], and it does no
+/// target-level checks (identity, writable region, checksum). It is preserved for
+/// the mock pipeline and existing callers. **For a real write to a controller use
+/// [`flash_calibration_checked`] with a [`FlashSafetyPolicy::production`] and a
+/// [`FlashTarget`].**
 pub fn flash_calibration(
     iface: &mut dyn Interface,
     region: MemoryRegion,
@@ -66,50 +94,98 @@ pub fn flash_calibration(
     safety: &SafetyConfig,
     progress: &mut dyn FnMut(Progress),
 ) -> Result<FlashReport> {
-    if new_data.len() != region.length as usize {
-        return Err(Error::Safety(format!(
-            "data length {} != region length {}",
-            new_data.len(),
-            region.length
-        )));
-    }
+    let policy = FlashSafetyPolicy::from_legacy(safety);
+    flash_once(iface, region, new_data, &policy, None, progress)
+}
 
-    // 1. Voltage gate.
-    let mv = iface.battery_millivolts()?;
-    if safety.min_millivolts > 0 {
-        match mv {
-            Some(v) if v < safety.min_millivolts => {
-                return Err(Error::Safety(format!(
-                    "battery {v} mV below minimum {} mV",
-                    safety.min_millivolts
-                )));
-            }
-            None if iface.capabilities().battery_voltage => {
-                return Err(Error::Safety("battery voltage unreadable".into()));
-            }
-            _ => {}
+/// Write `data` to `region` under an explicit [`FlashSafetyPolicy`], validating
+/// against the intended [`FlashTarget`].
+///
+/// With [`FlashSafetyPolicy::production`] this enforces, in order, before any
+/// device write: payload length, region ⊆ a declared writable region, a payload
+/// checksum attestation, the connected ECU identity, and a confirmed voltage
+/// (fail-closed if unreadable); then a verified backup, the write, and a
+/// post-write read-back verify. Any unmet criterion is a typed
+/// [`PolicyViolation`] (surfaced as [`Error::Safety`]).
+pub fn flash_calibration_checked(
+    iface: &mut dyn Interface,
+    region: MemoryRegion,
+    data: &[u8],
+    target: &FlashTarget,
+    policy: &FlashSafetyPolicy,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<FlashReport> {
+    flash_once(iface, region, data, policy, Some(target), progress)
+}
+
+/// Read the connected ECU identity when the policy needs it. Returns `None` if
+/// the policy does not require identity (so we do not touch the device
+/// needlessly) or if the read failed (the caller's identity check turns a failed
+/// read into a fail-closed refusal).
+pub(crate) fn read_identity_if_needed(
+    iface: &mut dyn Interface,
+    policy: &FlashSafetyPolicy,
+) -> Option<EcuId> {
+    if policy.require_identity_match {
+        iface.read_ecu_id().ok()
+    } else {
+        None
+    }
+}
+
+/// The single safety-enforcing write sequence shared by the legacy and the
+/// policy-checked entry points. Every gate runs before any byte is written.
+fn flash_once(
+    iface: &mut dyn Interface,
+    region: MemoryRegion,
+    data: &[u8],
+    policy: &FlashSafetyPolicy,
+    target: Option<&FlashTarget>,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<FlashReport> {
+    // 0. Structural gates (no device access).
+    policy.check_target(target)?;
+    if data.len() != region.length as usize {
+        return Err(PolicyViolation::PayloadLengthMismatch {
+            got: data.len(),
+            want: region.length,
         }
+        .into());
     }
+    policy.check_region_writable(region, target)?;
+    policy.check_checksum(data, target)?;
 
-    // 2. Verified backup.
-    let backup_buf = if safety.require_backup {
+    // 1. Identity: the payload must be going to the controller it was built for.
+    let connected = read_identity_if_needed(iface, policy);
+    policy.check_identity(connected.as_ref(), target)?;
+
+    // 2. Voltage gate (fail-closed under a production policy).
+    let mv = iface.battery_millivolts()?;
+    policy.check_voltage(mv, iface.capabilities().battery_voltage)?;
+
+    // 3. Verified backup of the original.
+    let backup_buf = if policy.require_verified_backup {
         let b = backup(iface, region, progress)?;
         if b.len() != region.length as usize {
-            return Err(Error::Safety("backup read short — aborting".into()));
+            return Err(PolicyViolation::BackupShort {
+                got: b.len(),
+                want: region.length,
+            }
+            .into());
         }
         b
     } else {
         Vec::new()
     };
 
-    // 3. Write.
-    iface.write_memory(region, new_data, progress)?;
+    // 4. Write.
+    iface.write_memory(region, data, progress)?;
 
-    // 4. Read-back verify.
+    // 5. Read-back verify.
     let mut verified = false;
-    if safety.verify_after_write {
+    if policy.require_readback_verify {
         let readback = iface.read_memory(region, progress)?;
-        if readback != new_data {
+        if readback != data {
             return Err(Error::Verify(
                 "read-back does not match written data".into(),
             ));
@@ -126,7 +202,7 @@ pub fn flash_calibration(
         region,
         battery_millivolts: mv,
         backup: backup_buf,
-        bytes_written: new_data.len(),
+        bytes_written: data.len(),
         verified,
     })
 }
