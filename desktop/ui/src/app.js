@@ -27,6 +27,8 @@ const state = {
   view: "2d",
   impFile: null,
   impMaps: [],
+  // Tuning project (.otproj): base image + per-map edits, not a copy of the bin.
+  project: { path: null, name: "", notes: "", baseImagePath: "", created: null, imageStatus: null, edits: [] },
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -262,6 +264,7 @@ function buildEditorModel(path, m, source) {
     orig: clone2d(m.cells), cells: clone2d(m.cells),
     sel: null, anchor: null, drag: false,
     undo: [], redo: [],
+    diff: false, // diff-overlay toggle: highlight cells changed vs `orig`
   };
   state.edClamped = new Set();
   $("edToolbar").hidden = false;
@@ -308,17 +311,26 @@ function edRender() {
   for (let c = 0; c < ed.cols; c++) thead += `<th>${xv[c] != null ? fmtAxis(xv[c]) : c}</th>`;
   thead += "</tr>";
   let body = "";
+  let diffUp = 0, diffDown = 0;
   for (let r = 0; r < ed.rows; r++) {
     body += `<tr><th>${yv[r] != null ? fmtAxis(yv[r]) : r}</th>`;
     for (let c = 0; c < ed.cols; c++) {
       const v = ed.cells[r][c], t = (v - lo) / span;
-      const dirty = v !== ed.orig[r][c] ? " dirty" : "";
+      const d = v - ed.orig[r][c];
+      const changed = Math.abs(d) > 1e-9;
+      if (changed) { if (d > 0) diffUp++; else diffDown++; }
+      // In diff-overlay mode a changed cell is tinted by direction (+/−);
+      // otherwise the existing accent "dirty" ring marks any edit.
+      const mark = changed ? (ed.diff ? (d > 0 ? " diff-up" : " diff-down") : " dirty") : "";
       const sel = edInSel(r, c) ? " sel" : "";
       const clamp = state.edClamped && state.edClamped.has(r + "," + c) ? " clamped" : "";
-      body += `<td class="cell${dirty}${sel}${clamp}" data-r="${r}" data-c="${c}" style="background:${heatColor(t)}" title="[${r},${c}] was ${fmtCell(ed.orig[r][c])} → ${fmtCell(v)} ${esc(ed.unit)}">${fmtCell(v)}</td>`;
+      const dtip = changed ? `[${r},${c}] was ${fmtCell(ed.orig[r][c])} → ${fmtCell(v)} (${d > 0 ? "+" : ""}${fmtCell(d)}) ${esc(ed.unit)}`
+                           : `[${r},${c}] ${fmtCell(v)} ${esc(ed.unit)} (unchanged)`;
+      body += `<td class="cell${mark}${sel}${clamp}" data-r="${r}" data-c="${c}" style="background:${heatColor(t)}" title="${dtip}">${fmtCell(v)}</td>`;
     }
     body += "</tr>";
   }
+  ed._diffUp = diffUp; ed._diffDown = diffDown;
   const scl = `× ${ed.factor}${ed.offset ? " + " + ed.offset : ""} → ${esc(ed.unit || "raw")}`;
   const bounds = (ed.defMin != null || ed.defMax != null)
     ? `${ed.defMin != null ? fmtCell(ed.defMin) : "−∞"} … ${ed.defMax != null ? fmtCell(ed.defMax) : "+∞"} ${esc(ed.unit)}` : "none";
@@ -331,7 +343,10 @@ function edRender() {
     </div>
     ${ed.notes ? `<div class="note">${esc(ed.notes)}</div>` : ""}
     <div class="heatwrap"><table class="heat"><thead>${thead}</thead><tbody>${body}</tbody></table></div>
-    <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(ed.unit)}</span> &nbsp; <span>X: ${esc(ed.xAxis.unit || "idx")} · Y: ${esc(ed.yAxis.unit || "idx")}</span></div>`;
+    <div class="legend"><span>${fmtCell(lo)}</span><span class="bar"></span><span>${fmtCell(hi)} ${esc(ed.unit)}</span> &nbsp; <span>X: ${esc(ed.xAxis.unit || "idx")} · Y: ${esc(ed.yAxis.unit || "idx")}</span></div>` +
+    (ed.diff
+      ? `<div class="legend difflegend"><span class="dsw up"></span> increased ${diffUp} <span class="dsw down"></span> decreased ${diffDown} &nbsp; <span class="muted">${diffUp + diffDown} of ${ed.rows * ed.cols} cell(s) changed vs the decoded baseline</span></div>`
+      : "");
   edUpdateToolbar();
   if (state.view === "3d") drawPlot();
 }
@@ -360,6 +375,12 @@ function edUpdateToolbar() {
     : "no selection";
   $("edUndo").disabled = ed.undo.length === 0;
   $("edRedo").disabled = ed.redo.length === 0;
+  const db = $("edDiff"); if (db) db.classList.toggle("active", !!ed.diff);
+  const dc = $("edDiffCount");
+  if (dc) {
+    const changed = (ed._diffUp || 0) + (ed._diffDown || 0);
+    dc.textContent = ed.diff ? `${changed} changed (▲${ed._diffUp || 0} / ▼${ed._diffDown || 0})` : (changed ? `${changed} edited cell(s)` : "");
+  }
 }
 
 // Mouse selection via event delegation on the result container.
@@ -462,6 +483,8 @@ $("edSelNone").onclick = () => { if (!state.ed) return; state.ed.sel = null; edP
 $("edUndo").onclick = () => { const ed = state.ed; if (!ed || !ed.undo.length) return; ed.redo.push(clone2d(ed.cells)); ed.cells = ed.undo.pop(); state.edClamped = new Set(); edRender(); };
 $("edRedo").onclick = () => { const ed = state.ed; if (!ed || !ed.redo.length) return; ed.undo.push(clone2d(ed.cells)); ed.cells = ed.redo.pop(); state.edClamped = new Set(); edRender(); };
 $("edReset").onclick = () => { const ed = state.ed; if (!ed) return; edPushUndo(); ed.cells = clone2d(ed.orig); state.edClamped = new Set(); edRender(); toast("Reset to decoded values"); };
+$("edDiff").onclick = () => { const ed = state.ed; if (!ed) return; ed.diff = !ed.diff; edRender(); };
+$("edAddProject").onclick = () => { if (captureCurrentEdit(false)) { showPanel("project"); } };
 
 // ---- write-back ------------------------------------------------------------
 async function edDoWrite(outPath) {
@@ -950,6 +973,263 @@ $("btnSeedKey").onclick = async () => {
   } catch (e) { $("skResult").innerHTML = errBanner(e); }
 };
 
+// =================== PROJECT (.otproj) ===================
+// A tuning project records *what you changed* against a base image — the base
+// image path + fingerprint, the selected definition/checksum, and one edit per
+// map (edited grid + decoded baseline). It never copies the whole .bin.
+
+const projFilter = [
+  { name: "OpenTune project", extensions: ["otproj"] },
+  { name: "All files", extensions: ["*"] },
+];
+async function pickSaveProject(title, defaultPath) {
+  return await dialog().save({ title, defaultPath, filters: [{ name: "OpenTune project", extensions: ["otproj"] }] });
+}
+
+// --- recent list (per-viewer convenience; safe to be empty) -----------------
+const RECENT_KEY = "opentune.recentProjects";
+function getRecent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } }
+function pushRecent(path) {
+  try {
+    let l = getRecent().filter((p) => p !== path);
+    l.unshift(path); l = l.slice(0, 8);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(l));
+  } catch { /* private window / blocked storage — recents just won't persist */ }
+  renderRecent();
+}
+function renderRecent() {
+  const host = $("prjRecent"); if (!host) return;
+  const l = getRecent();
+  if (!l.length) { host.innerHTML = `<p class="muted small">No recent projects.</p>`; return; }
+  host.innerHTML = l.map((p) => `<button class="recent-item" data-recent="${esc(p)}"><span>🗂</span> <span class="rp">${esc(p)}</span></button>`).join("");
+  host.querySelectorAll("button[data-recent]").forEach((b) => (b.onclick = () => doOpenProject(b.dataset.recent)));
+}
+
+// --- edit identity + capture ------------------------------------------------
+function editKey(e) {
+  return e.kind === "adhoc"
+    ? `adhoc:${e.mapName}:${e.mapdef ? e.mapdef.address : ""}`
+    : `def:${e.defId}:${e.mapName}`;
+}
+function cellsChanged(cells, baseline) {
+  if (!cells || !baseline) return 0;
+  let n = 0;
+  for (let r = 0; r < cells.length; r++)
+    for (let c = 0; c < (cells[r] || []).length; c++)
+      if (Math.abs(cells[r][c] - ((baseline[r] || [])[c] ?? cells[r][c])) > 1e-9) n++;
+  return n;
+}
+// Capture the map currently open in the editor into the project. Returns true
+// when something was stored. `silent` suppresses the "nothing to capture" toast.
+function captureCurrentEdit(silent) {
+  const ed = state.ed;
+  if (!ed) { if (!silent) toast("No map open in the editor", true); return false; }
+  const changed = ed.cells.some((row, r) => row.some((v, c) => Math.abs(v - ed.orig[r][c]) > 1e-9));
+  if (!changed) { if (!silent) toast("This map has no edits to capture", true); return false; }
+  const rec = {
+    kind: ed.adhoc ? "adhoc" : "def",
+    defId: ed.defId || null,
+    mapName: ed.mapName,
+    mapdef: ed.adhoc || null,
+    cells: clone2d(ed.cells),
+    baseline: clone2d(ed.orig),
+    notes: "",
+    rows: ed.rows, cols: ed.cols,
+    dataType: ed.dataType, unit: ed.unit || "",
+  };
+  rec.key = editKey(rec);
+  const i = state.project.edits.findIndex((e) => e.key === rec.key);
+  if (i >= 0) { rec.notes = state.project.edits[i].notes || ""; state.project.edits[i] = rec; }
+  else state.project.edits.push(rec);
+  // Adopt the editor's image as the project base image if none chosen yet.
+  if (!state.project.baseImagePath) state.project.baseImagePath = ed.path;
+  renderProject();
+  if (!silent) toast(`Captured "${rec.mapName}" (${cellsChanged(rec.cells, rec.baseline)} changed cell(s))`);
+  return true;
+}
+
+// --- build / save -----------------------------------------------------------
+function buildProjectPayload() {
+  return {
+    format: "opentune-project",
+    version: 1,
+    name: state.project.name || "",
+    notes: state.project.notes || "",
+    ecudef_id: ($("mvDef") && $("mvDef").value) || null,
+    checksum_algo: ($("csAlgo") && $("csAlgo").value) || null,
+    base_image: { path: state.project.baseImagePath || "", size: 0, hash: "" },
+    edits: state.project.edits.map((e) => ({
+      kind: e.kind,
+      def_id: e.defId || null,
+      map_name: e.mapName || "",
+      mapdef: e.mapdef || null,
+      cells: e.cells,
+      baseline: e.baseline,
+      notes: e.notes || "",
+    })),
+    created: state.project.created || new Date().toISOString(),
+    saved: new Date().toISOString(),
+  };
+}
+async function saveProject(saveAs) {
+  captureCurrentEdit(true); // fold in the editor's current map, if any
+  if (!state.project.edits.length) return toast("Nothing to save yet — edit a map and capture it", true);
+  let path = state.project.path;
+  if (saveAs || !path) {
+    const base = (state.project.name || "tune").trim().replace(/[^\w.-]+/g, "_") || "tune";
+    path = await pickSaveProject("Save tuning project as", base + ".otproj");
+    if (!path) return;
+  }
+  try {
+    const r = await invoke("project_save", { path, project: buildProjectPayload() });
+    state.project.path = r.path;
+    state.project.imageStatus = "match"; // just fingerprinted the current image
+    pushRecent(r.path);
+    renderProject();
+    toast("Project saved: " + baseName(r.path));
+  } catch (e) {
+    const msg = typeof e === "string" ? e : (e && e.message) || "";
+    $("prjMeta").innerHTML = errBanner(e) + (/permission denied|read-only/i.test(msg)
+      ? `<div class="note">Can't write there — use <b>Save as…</b> to pick a folder you own.</div>` : "");
+    toast("Save failed", true);
+  }
+}
+
+// --- open -------------------------------------------------------------------
+async function doOpenProject(path) {
+  if (!path) return;
+  try {
+    const r = await invoke("project_open", { path });
+    const p = r.project || {};
+    state.project = {
+      path: r.path,
+      name: p.name || "",
+      notes: p.notes || "",
+      baseImagePath: (p.base_image && p.base_image.path) || "",
+      created: p.created || null,
+      imageStatus: r.image_status,
+      edits: (p.edits || []).map((e) => {
+        const rec = {
+          kind: e.kind || (e.mapdef ? "adhoc" : "def"),
+          defId: e.def_id || null,
+          mapName: e.map_name || "",
+          mapdef: e.mapdef || null,
+          cells: e.cells || [],
+          baseline: e.baseline || [],
+          notes: e.notes || "",
+          rows: (e.cells && e.cells.length) || 0,
+          cols: (e.cells && e.cells[0] && e.cells[0].length) || 0,
+          dataType: (e.mapdef && e.mapdef.data_type) || "",
+          unit: (e.mapdef && e.mapdef.unit) || "",
+        };
+        rec.key = editKey(rec);
+        return rec;
+      }),
+    };
+    // Restore the selected definition + checksum so the editor lines up.
+    if (p.ecudef_id && $("mvDef")) { $("mvDef").value = p.ecudef_id; if ($("cmpDef")) $("cmpDef").value = p.ecudef_id; await populateMaps(); }
+    if (p.checksum_algo && $("csAlgo")) $("csAlgo").value = p.checksum_algo;
+    pushRecent(r.path);
+    renderProject();
+    showPanel("project");
+    const warn = r.image_status === "mismatch" ? "base image CHANGED since save" : r.image_status === "missing" ? "base image not found" : "";
+    toast("Opened " + baseName(r.path) + (warn ? " — " + warn : ""), !!warn);
+  } catch (e) {
+    $("prjMeta").innerHTML = errBanner(e);
+    toast(typeof e === "string" ? e : "open failed", true);
+  }
+}
+
+// Restore one stored edit into the editor: re-decode the map from the base image
+// (fresh baseline), then lay the saved values on top.
+async function openProjectEdit(rec) {
+  const path = state.project.baseImagePath || state.mvImage || state.imagePath;
+  if (!path) return toast("Set the project's base image first", true);
+  try {
+    let m;
+    if (rec.kind === "adhoc" && rec.mapdef) {
+      m = await invoke("decode_mapdef", { path, map: rec.mapdef });
+      buildEditorModel(path, m, { adhoc: m.mapdef });
+    } else {
+      m = await invoke("decode_map", { path, ecudefId: rec.defId, mapName: rec.mapName });
+      buildEditorModel(path, m, { defId: rec.defId, mapName: rec.mapName });
+    }
+    const ed = state.ed;
+    if (rec.cells.length === ed.rows && rec.cells.every((row) => row.length === ed.cols)) {
+      ed.cells = clone2d(rec.cells);
+      ed.diff = true; // show what the project changed, straight away
+      edRender();
+      toast(`Restored "${rec.mapName}" (${cellsChanged(rec.cells, ed.orig)} changed cell(s))`);
+    } else {
+      toast("Stored edit dimensions don't match the decoded map — showing decoded values only", true);
+    }
+    showPanel("maps");
+    $("mvResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (e) { toast(typeof e === "string" ? e : "could not open edit", true); showPanel("project"); }
+}
+
+// --- render -----------------------------------------------------------------
+function imgBadge(status) {
+  switch (status) {
+    case "match": return `<span class="img-badge match">image matches ✓</span>`;
+    case "mismatch": return `<span class="img-badge mismatch">image CHANGED ✗</span>`;
+    case "missing": return `<span class="img-badge missing">image not found</span>`;
+    case "no_image": return `<span class="img-badge none">no base image</span>`;
+    default: return `<span class="img-badge none">not verified</span>`;
+  }
+}
+function renderProject() {
+  const P = state.project;
+  if ($("prjName").value !== P.name) $("prjName").value = P.name || "";
+  if ($("prjNotes").value !== P.notes) $("prjNotes").value = P.notes || "";
+  $("prjPathHint").textContent = P.path ? baseName(P.path) : "unsaved";
+  $("prjBaseHint").textContent = P.baseImagePath ? P.baseImagePath : "no base image";
+  $("prjImgStatus").innerHTML = imgBadge(P.imageStatus || (P.baseImagePath ? null : "no_image"));
+
+  const meta = [];
+  if (P.path) meta.push(`<div class="k">file</div><div class="v">${esc(P.path)}</div>`);
+  meta.push(`<div class="k">edits</div><div class="v">${P.edits.length} map(s)</div>`);
+  if (P.created) meta.push(`<div class="k">created</div><div class="v">${esc(P.created)}</div>`);
+  $("prjMeta").innerHTML = `<div class="meta-grid">${meta.join("")}</div>` +
+    (P.imageStatus === "mismatch" ? `<div class="banner bad" style="margin-top:10px">The base image has changed since this project was saved. Restoring an edit will lay your saved values onto a <b>different</b> stock — review each map before writing.</div>` : "") +
+    (P.imageStatus === "missing" ? `<div class="banner bad" style="margin-top:10px">The referenced base image could not be found. Point <b>Base image…</b> at the dump before restoring edits.</div>` : "");
+
+  const host = $("prjEdits");
+  if (!P.edits.length) { host.innerHTML = `<p class="muted small">No edits captured. Open a map in the editor, change it, then <b>Add to project</b> (or <b>Capture current map</b>).</p>`; return; }
+  const rows = P.edits.map((e, i) => {
+    const n = cellsChanged(e.cells, e.baseline);
+    const kind = e.kind === "adhoc" ? "ad-hoc" : esc(e.defId || "def");
+    return `<tr>
+      <td>${esc(e.mapName)}</td>
+      <td>${e.rows}×${e.cols} ${esc(e.dataType || "")}</td>
+      <td class="mono">${kind}</td>
+      <td>${n ? `<span class="pill accent">${n}</span>` : `<span class="pill neutral">0</span>`}</td>
+      <td><input class="prj-note-inp" data-note="${i}" value="${esc(e.notes || "")}" placeholder="notes" /></td>
+      <td><button class="btn sm" data-open="${i}">Open</button> <button class="btn sm" data-del="${i}">✕</button></td>
+    </tr>`;
+  }).join("");
+  host.innerHTML = `<table class="tbl"><thead><tr><th>Map</th><th>Size</th><th>From</th><th>Changed</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  host.querySelectorAll("button[data-open]").forEach((b) => (b.onclick = () => openProjectEdit(P.edits[+b.dataset.open])));
+  host.querySelectorAll("button[data-del]").forEach((b) => (b.onclick = () => { P.edits.splice(+b.dataset.del, 1); renderProject(); }));
+  host.querySelectorAll("input[data-note]").forEach((inp) => (inp.onchange = () => { const e = P.edits[+inp.dataset.note]; if (e) e.notes = inp.value; }));
+}
+
+function newProject() {
+  state.project = { path: null, name: "", notes: "", baseImagePath: state.imagePath || "", created: new Date().toISOString(), imageStatus: state.imagePath ? null : "no_image", edits: [] };
+  renderProject();
+  toast("New project");
+}
+
+// --- bindings ---------------------------------------------------------------
+$("prjNew").onclick = newProject;
+$("prjOpen").onclick = async () => { const p = await pickFile("Open tuning project", projFilter); if (p) doOpenProject(p); };
+$("prjSave").onclick = () => saveProject(false);
+$("prjSaveAs").onclick = () => saveProject(true);
+$("prjCapture").onclick = () => captureCurrentEdit(false);
+$("prjBaseImg").onclick = async () => { const p = await pickFile("Base image for project", binFilter); if (p) { state.project.baseImagePath = p; state.project.imageStatus = null; renderProject(); } };
+$("prjName").oninput = () => { state.project.name = $("prjName").value; };
+$("prjNotes").oninput = () => { state.project.notes = $("prjNotes").value; };
+
 // =================== BOOT ===================
 async function boot() {
   if (!TAURI.core) { document.body.innerHTML = '<p style="padding:2rem">Tauri API unavailable — run inside the OpenTune app.</p>'; return; }
@@ -961,6 +1241,8 @@ async function boot() {
   await populateMapDefs();
   await initSeedKey();
   await initGuide();
+  renderRecent();
+  renderProject();
   showPanel("image");
   refreshImageHints();
 }

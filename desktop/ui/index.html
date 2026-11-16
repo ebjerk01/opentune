@@ -31,6 +31,10 @@
           <button class="nav-item" data-panel="drivers"><span class="ni-ico">⇄</span> Drivers</button>
 
           <div class="nav-divider"></div>
+          <div class="nav-group-label">Project</div>
+          <button class="nav-item" data-panel="project"><span class="ni-ico">🗂</span> Project</button>
+
+          <div class="nav-divider"></div>
           <div class="nav-group-label">Tools</div>
           <button class="nav-item" data-panel="utils"><span class="ni-ico">🧰</span> Utilities</button>
 
@@ -240,6 +244,12 @@
                 <button class="btn sm" id="edSmooth" title="3×3 neighbour average over the selection">Smooth 3×3</button>
               </div>
               <div class="row tight">
+                <button class="btn sm toggle" id="edDiff" title="highlight the cells that differ from the originally-decoded values">◩ Diff overlay</button>
+                <span class="muted small" id="edDiffCount"></span>
+                <span class="sep"></span>
+                <button class="btn sm" id="edAddProject" title="store this map's edits in the current tuning project">＋ Add to project</button>
+              </div>
+              <div class="row tight">
                 <button class="btn sm" id="edUndo" disabled>↶ Undo</button>
                 <button class="btn sm" id="edRedo" disabled>↷ Redo</button>
                 <button class="btn sm" id="edReset">Reset</button>
@@ -334,6 +344,49 @@
               <button class="btn sm" id="btnVaultRefresh">Refresh</button>
             </div>
             <div id="vaultResult" class="result"></div>
+          </div>
+        </section>
+
+        <!-- PROJECT -->
+        <section class="panel" id="panel-project">
+          <header class="panel-head">
+            <h1>Project</h1>
+            <p>Save a tuning session as a small <code>.otproj</code> file: the base image it was built against (plus a fingerprint to catch a changed image), the selected definition and checksum, and the map edits you made — <b>what you changed, not a copy of the dump</b>. Opening a project re-decodes each map from the referenced image and restores your values on top.</p>
+          </header>
+          <div class="card">
+            <div class="row">
+              <button class="btn" id="prjNew">New</button>
+              <button class="btn" id="prjOpen">Open…</button>
+              <button class="btn primary" id="prjSave">Save</button>
+              <button class="btn" id="prjSaveAs">Save as…</button>
+              <span id="prjPathHint" class="muted small mono">unsaved</span>
+            </div>
+            <div class="row">
+              <label>Name</label><input class="inp wide" id="prjName" placeholder="e.g. Passat 2.0 TDI stage 1" />
+            </div>
+            <div class="row">
+              <label>Notes</label><input class="inp wide" id="prjNotes" placeholder="free-text notes about this tune" />
+            </div>
+            <div class="row">
+              <button class="btn" id="prjBaseImg">Base image…</button>
+              <span id="prjBaseHint" class="muted small mono">no base image</span>
+              <span id="prjImgStatus"></span>
+            </div>
+            <div id="prjMeta" class="result"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title-row">
+              <h2>Edits in this project</h2>
+              <button class="btn sm" id="prjCapture" title="store the map currently open in the editor">Capture current map</button>
+            </div>
+            <p class="muted small">Each row is one map you changed. An edit stores the edited values and the originally-decoded baseline — never the whole image. <b>Open</b> re-decodes the map from the base image and lays your values back on top; if the base image's fingerprint no longer matches, that is flagged above.</p>
+            <div id="prjEdits" class="result"></div>
+          </div>
+
+          <div class="card">
+            <h2>Recent projects</h2>
+            <div id="prjRecent" class="result"></div>
           </div>
         </section>
 
