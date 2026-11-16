@@ -121,8 +121,8 @@ pub fn parse(rel_path: &str) -> FilenameParse {
     // engine: a displacement token (e.g. "1.9", "2.0", "1900") adjacent to an
     // engine tag, or a bare engine tag. Capture "<disp> <tag>".
     let upper: Vec<String> = toks.iter().map(|t| t.to_ascii_uppercase()).collect();
-    for i in 0..toks.len() {
-        if ENGINE_TAGS.contains(&upper[i].as_str()) {
+    for (i, up) in upper.iter().enumerate() {
+        if ENGINE_TAGS.contains(&up.as_str()) {
             // look back for a displacement number in the previous 1-2 tokens
             let disp = (1..=2)
                 .filter_map(|back| i.checked_sub(back))
@@ -130,8 +130,8 @@ pub fn parse(rel_path: &str) -> FilenameParse {
                 .find(|t| looks_like_displacement(t))
                 .cloned();
             out.engine = Some(match disp {
-                Some(d) => format!("{} {}", d, upper[i]),
-                None => upper[i].clone(),
+                Some(d) => format!("{} {}", d, up),
+                None => up.clone(),
             });
             break;
         }

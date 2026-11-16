@@ -402,11 +402,7 @@ fn grade_core(
     // nothing above make, since the VIN WMI does not encode model/engine).
     if let Some(v) = vin {
         if let Some(make) = &v.make {
-            let conf = if part.is_some() {
-                Confidence::Medium
-            } else {
-                Confidence::Medium
-            };
+            let conf = Confidence::Medium;
             return (
                 Assignment {
                     make: Some(make.clone()),
@@ -494,8 +490,9 @@ fn build_bootstrap_index(records: &[ScanRecord]) -> BootstrapIndex {
             idx.entry(key)
                 .and_modify(|e| {
                     // prefer the richer identity (more Some fields)
-                    let score =
-                        |t: &(String, Option<String>, Option<String>)| t.1.is_some() as u8 + t.2.is_some() as u8;
+                    let score = |t: &(String, Option<String>, Option<String>)| {
+                        t.1.is_some() as u8 + t.2.is_some() as u8
+                    };
                     if score(&cand) > score(e) {
                         *e = cand.clone();
                     }
@@ -626,7 +623,9 @@ impl Summary {
             if r.ecu_family != "Unknown" {
                 s.family_by_structure += 1;
             }
-            *s.family_breakdown.entry(r.ecu_family.to_string()).or_default() += 1;
+            *s.family_breakdown
+                .entry(r.ecu_family.to_string())
+                .or_default() += 1;
             if r.had_identity_string {
                 s.had_part_or_sw_or_vin += 1;
             }
@@ -663,7 +662,10 @@ impl Summary {
                 .entry(r.assigned_boot.basis.to_string())
                 .or_default() += 1;
 
-            let f = s.by_source_folder.entry(r.source_folder.clone()).or_default();
+            let f = s
+                .by_source_folder
+                .entry(r.source_folder.clone())
+                .or_default();
             f.total += 1;
             if r.ecu_family != "Unknown" {
                 f.family_known += 1;

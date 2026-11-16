@@ -122,7 +122,10 @@ pub fn extract(image: &[u8]) -> Extracted {
 }
 
 fn has_ascii_at(image: &[u8], i: usize, pat: &[u8]) -> bool {
-    image.get(i..i + pat.len()).map(|s| s == pat).unwrap_or(false)
+    image
+        .get(i..i + pat.len())
+        .map(|s| s == pat)
+        .unwrap_or(false)
 }
 
 /// `dd G dddddd [A-Z]{0,2}` starting at `i`. Returns (token, consumed-len).
@@ -192,7 +195,11 @@ fn match_vag_generic(image: &[u8], i: usize) -> Option<(String, usize)> {
             _ => break,
         }
     }
-    if image.get(i + consumed).map(|&b| is_alnum(b)).unwrap_or(false) {
+    if image
+        .get(i + consumed)
+        .map(|&b| is_alnum(b))
+        .unwrap_or(false)
+    {
         return None;
     }
     Some((tok, consumed))
@@ -257,8 +264,7 @@ fn match_vin(image: &[u8], i: usize) -> Option<(String, usize)> {
         return None;
     }
     let decoded = opentune_vin::decode_vin(&tok).ok()?;
-    let known = decoded.wmi_info.manufacturer.is_some()
-        || decoded.check_digit_valid == Some(true);
+    let known = decoded.wmi_info.manufacturer.is_some() || decoded.check_digit_valid == Some(true);
     if known {
         Some((tok, 17))
     } else {
