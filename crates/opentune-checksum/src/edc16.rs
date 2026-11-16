@@ -419,14 +419,34 @@ fn addr_to_offset(addr: u32, len: usize) -> Option<u32> {
     Some(addr & (len as u32 - 1))
 }
 
+/// The marker pair's fixed position inside its protected region: a genuine EDC16
+/// descriptor `{start, end, MARK_CS, MARK_CP}` lives at `region_start + 0x34`, so
+/// `MARK_CS` sits at `region_start + 0x3C`.
+const MARKER_OFFSET_IN_REGION: usize = 0x3C;
+
+/// Region start/end alignment of a genuine EDC16 block (`0x100`).
+const REGION_ALIGN: u32 = 0x100;
+
 /// Parse the on-image checksum directory.
 ///
 /// Scans for the `0xFADECAFE`/`0xCAFEAFFE` marker pair; the two big-endian u32
 /// words immediately before it are the record's `{start, end}` (inclusive CPU
-/// addresses). Records are mapped to file offsets, kept only when dword-aligned
-/// (`start % 4 == 0 && (end + 1) % 4 == 0`, which rejects the off-by-one
-/// duplicate records some directories carry), and de-duplicated. Returned sorted
-/// by `end` ascending so [`correct_directory`] fixes inner blocks first.
+/// addresses). A record is kept only when it has the structure of a *genuine*
+/// descriptor, which rejects the `FADECAFE`/`CAFEAFFE` byte sequences that occur
+/// inside ordinary calibration/code data (phantom "ghost" regions). The guards,
+/// mirroring ZedSuite's `findEdc16Regions`, are:
+///
+/// * **marker position** — `MARK_CS` sits exactly [`MARKER_OFFSET_IN_REGION`]
+///   (`0x3C`) into the region (`i == start + 0x3C`); an embedded marker whose
+///   preceding words happen to look like a `{start, end}` almost never lands at
+///   that offset relative to the address it encodes;
+/// * **`0x100` alignment** — `start % 0x100 == 0 && (end + 1) % 0x100 == 0`
+///   (every real Bosch block is page-aligned; this subsumes the previous
+///   dword-alignment guard against off-by-one duplicate records);
+/// * `start < end`, `end` in range, and length `>= 4`.
+///
+/// Survivors are de-duplicated and returned sorted by `end` ascending so
+/// [`correct_directory`] fixes inner blocks before the blocks that enclose them.
 pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
     let len = image.len();
     let mut out: Vec<DirBlock> = Vec::new();
@@ -443,10 +463,14 @@ pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
                     if let (Some(start), Some(end)) =
                         (addr_to_offset(sa, len), addr_to_offset(ea, len))
                     {
-                        let aligned = start % 4 == 0 && (end.wrapping_add(1)) % 4 == 0;
+                        // Anti-ghost guards (see fn docs): marker at start+0x3C,
+                        // page-aligned bounds, sane range.
+                        let marker_placed = i == start as usize + MARKER_OFFSET_IN_REGION;
+                        let aligned =
+                            start % REGION_ALIGN == 0 && end.wrapping_add(1) % REGION_ALIGN == 0;
                         let valid = start < end && (end as usize) < len && (end - start) >= 4;
                         let blk = DirBlock { start, end };
-                        if aligned && valid && !out.contains(&blk) {
+                        if marker_placed && aligned && valid && !out.contains(&blk) {
                             out.push(blk);
                         }
                     }
@@ -721,31 +745,37 @@ mod tests {
 
     // ---- MPC56x directory engine: synthetic coverage (no fixtures) -------
 
-    /// Build a tiny power-of-two image carrying one directory record for the
-    /// block `[start, end]` (file offsets) at `rec_off`, with the block's bytes
-    /// filled so its last dword is the compensation word.
-    fn mpc_image(len: usize, start: u32, end: u32, rec_off: usize) -> Vec<u8> {
+    /// Build a tiny power-of-two image carrying one genuine directory record for
+    /// the block `[start, end]` (file offsets). As on a real EDC16, the record
+    /// `{start, end, MARK_CS, MARK_CP}` lives **inside** the region at
+    /// `start + 0x34`, so `MARK_CS` sits at `start + 0x3C`. `start`/`end` must be
+    /// page-aligned (`start % 0x100 == 0 && (end + 1) % 0x100 == 0`).
+    fn mpc_image(len: usize, start: u32, end: u32) -> Vec<u8> {
         let mut img = vec![0u8; len];
-        // directory record: start, end (big-endian CPU addr == offset here), magics
-        img[rec_off..rec_off + 4].copy_from_slice(&start.to_be_bytes());
-        img[rec_off + 4..rec_off + 8].copy_from_slice(&end.to_be_bytes());
-        img[rec_off + 8..rec_off + 12].copy_from_slice(&MARK_CS);
-        img[rec_off + 12..rec_off + 16].copy_from_slice(&MARK_CP);
-        // some arbitrary block data
-        for (k, b) in img[start as usize..(end as usize - 3)]
-            .iter_mut()
-            .enumerate()
-        {
+        // arbitrary block data across the whole region
+        for (k, b) in img[start as usize..=(end as usize)].iter_mut().enumerate() {
             *b = (k as u8).wrapping_mul(7).wrapping_add(1);
         }
+        stamp_record(&mut img, start, end);
         img
+    }
+
+    /// Stamp a genuine descriptor for `[start, end]` at `start + 0x34` (marker at
+    /// `start + 0x3C`). The record bytes become part of the summed region, as on
+    /// a real EDC16.
+    fn stamp_record(img: &mut [u8], start: u32, end: u32) {
+        let rec = start as usize + 0x34;
+        img[rec..rec + 4].copy_from_slice(&start.to_be_bytes());
+        img[rec + 4..rec + 8].copy_from_slice(&end.to_be_bytes());
+        img[rec + 8..rec + 12].copy_from_slice(&MARK_CS);
+        img[rec + 12..rec + 16].copy_from_slice(&MARK_CP);
     }
 
     #[test]
     fn mpc_parse_correct_verify_roundtrip() {
-        // 64 KiB image; block [0x100, 0x1FF], record safely in a header gap.
+        // 64 KiB image; page-aligned block [0x100, 0x1FF], record at 0x134.
         let (len, start, end) = (0x1_0000usize, 0x100u32, 0x1FFu32);
-        let mut img = mpc_image(len, start, end, 0x40);
+        let mut img = mpc_image(len, start, end);
         let blocks = parse_directory(&img);
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0], DirBlock { start, end });
@@ -768,26 +798,20 @@ mod tests {
 
     #[test]
     fn mpc_nested_blocks_fixed_inner_first() {
-        // Outer [0x100,0x2FF] and inner [0x140,0x1BF]; two records. Correcting
-        // must leave BOTH summing to the constant (inner fixed before outer).
+        // Page-aligned outer [0x100,0x3FF] and inner [0x200,0x2FF]; two genuine
+        // records (each at its region_start + 0x34). Correcting must leave BOTH
+        // summing to the constant (inner fixed before outer).
         let len = 0x1_0000usize;
         let mut img = vec![0u8; len];
-        for b in img[0x100..0x300].iter_mut() {
+        for b in img[0x100..0x400].iter_mut() {
             *b = 0x5A;
         }
-        // outer record @0x20, inner record @0x40
-        img[0x20..0x24].copy_from_slice(&0x100u32.to_be_bytes());
-        img[0x24..0x28].copy_from_slice(&0x2FFu32.to_be_bytes());
-        img[0x28..0x2C].copy_from_slice(&MARK_CS);
-        img[0x2C..0x30].copy_from_slice(&MARK_CP);
-        img[0x40..0x44].copy_from_slice(&0x140u32.to_be_bytes());
-        img[0x44..0x48].copy_from_slice(&0x1BFu32.to_be_bytes());
-        img[0x48..0x4C].copy_from_slice(&MARK_CS);
-        img[0x4C..0x50].copy_from_slice(&MARK_CP);
+        stamp_record(&mut img, 0x100, 0x3FF); // outer, marker @0x13C
+        stamp_record(&mut img, 0x200, 0x2FF); // inner, marker @0x23C
 
         let blocks = parse_directory(&img);
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].end, 0x1BF); // inner first (sorted by end)
+        assert_eq!(blocks[0].end, 0x2FF); // inner first (sorted by end)
         correct_directory(&mut img).unwrap();
         for st in verify_directory(&img).unwrap() {
             assert!(st.ok, "{} not corrected", st.name);
@@ -796,11 +820,12 @@ mod tests {
 
     #[test]
     fn mpc_rejects_misaligned_duplicate_records() {
-        // A valid record plus an off-by-one duplicate (end+1): only the aligned
-        // one is kept.
+        // A genuine record plus an off-by-one duplicate (end+1 not page-aligned,
+        // marker not at start+0x3C): only the genuine one is kept.
         let len = 0x1_0000usize;
-        let mut img = mpc_image(len, 0x100, 0x1FF, 0x40);
-        // duplicate with end = 0x200 ((end+1)=0x201 not dword-aligned)
+        let mut img = mpc_image(len, 0x100, 0x1FF);
+        // duplicate with end = 0x200 ((end+1)=0x201: fails page-align AND the
+        // marker-at-start+0x3C guard), placed outside the region.
         img[0x80..0x84].copy_from_slice(&0x100u32.to_be_bytes());
         img[0x84..0x88].copy_from_slice(&0x200u32.to_be_bytes());
         img[0x88..0x8C].copy_from_slice(&MARK_CS);
@@ -808,6 +833,34 @@ mod tests {
         let blocks = parse_directory(&img);
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].end, 0x1FF);
+    }
+
+    #[test]
+    fn mpc_rejects_ghost_embedded_magic() {
+        // Regression for the brick-risk bug: an embedded FADECAFE/CAFEAFFE byte
+        // sequence in ordinary data, preceded by words that look like a valid
+        // {start,end}, must NOT be treated as a region. Here the embedded marker
+        // is NOT at start+0x3C (and the bounds are not page-aligned), exactly like
+        // the ghosts in the real UAZ EDC16 dump.
+        let len = 0x1_0000usize;
+        let mut img = mpc_image(len, 0x100, 0x1FF); // one genuine region
+                                                    // Embed a ghost at 0x800: preceding words encode {0x900, 0x9FF} (which
+                                                    // would be a plausible region) but the marker sits at 0x808, far from
+                                                    // 0x900 + 0x3C.
+        img[0x800..0x804].copy_from_slice(&0x900u32.to_be_bytes());
+        img[0x804..0x808].copy_from_slice(&0x9FFu32.to_be_bytes());
+        img[0x808..0x80C].copy_from_slice(&MARK_CS);
+        img[0x80C..0x810].copy_from_slice(&MARK_CP);
+
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 1, "the ghost region must be rejected");
+        assert_eq!(
+            blocks[0],
+            DirBlock {
+                start: 0x100,
+                end: 0x1FF
+            }
+        );
     }
 
     #[test]
@@ -1072,6 +1125,58 @@ mod tests {
             checked >= 1,
             "no EDC16 full-dump fixtures under OPENTUNE_FIXTURES"
         );
+    }
+
+    /// Fixture regression on a real dump that contains embedded FADECAFE/CAFEAFFE
+    /// byte sequences (ghost markers). `uaz_edc16c39_398273_ori.bin` has 17 magic
+    /// occurrences but only 2 genuine regions. Before the anti-ghost guards,
+    /// `parse_directory` returned 9 regions and `correct()` rewrote 4 bytes of
+    /// this stock file; it must now return exactly the 2 genuine regions and make
+    /// no changes. CI has no access, so `#[ignore]`d:
+    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///     cargo test -p opentune-checksum -- --ignored --nocapture
+    #[test]
+    #[ignore = "needs owner EDC16 fixtures via OPENTUNE_FIXTURES"]
+    fn reference_ghost_markers_rejected() {
+        let dir = match std::env::var("OPENTUNE_FIXTURES") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let Ok(stock) = std::fs::read(format!("{dir}/edc16/uaz_edc16c39_398273_ori.bin")) else {
+            return;
+        };
+        // Exactly the two genuine regions, both page-aligned with marker @start+0x3C.
+        let blocks = parse_directory(&stock);
+        assert_eq!(
+            blocks.len(),
+            2,
+            "ghost markers must be rejected (got {:?})",
+            blocks
+        );
+        assert_eq!(
+            blocks[0],
+            DirBlock {
+                start: 0x04_0000,
+                end: 0x11_FFFF
+            }
+        );
+        assert_eq!(
+            blocks[1],
+            DirBlock {
+                start: 0x1E_0000,
+                end: 0x1F_FFFF
+            }
+        );
+        // A stock dump must verify and need no correction (no ghost rewrite).
+        let algo = Edc16;
+        assert!(algo.verify(&stock).unwrap().iter().all(|s| s.ok));
+        let before = stock.clone();
+        let mut m = stock.clone();
+        assert!(
+            algo.correct(&mut m).unwrap().is_empty(),
+            "a valid stock dump must not be modified"
+        );
+        assert_eq!(m, before, "stock dump left byte-for-byte unchanged");
     }
 
     #[test]

@@ -179,13 +179,49 @@ fn walk_vag(img: &[u8]) -> Option<Vec<VagRegion>> {
     Some(out)
 }
 
-/// Is this a genuine VAG TDI v4.1v2 image? True only when the directory walks
-/// cleanly AND at least one non-empty, non-skip region's stored word already
-/// equals its computed checksum. A stock image matches every region; a tuned
-/// image matches every region the tune did not touch (the untouched code
-/// regions always match). A non-VAG blob has ~2^-32 chance per region of a
-/// coincidental match, so this never fires on a Mercedes/foreign image.
+/// Bosch EDC15P/VM **V4.1 code-block signature** (`0x67` then six `0xFF`, then
+/// the ASCII `"V4.1"` without the `.`-prefix byte). It is stamped one byte after
+/// the start of each signed code block.
+const V41_SIGNATURE: [u8; 11] = [
+    0x67, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x56, 0x34, 0x2E, 0x31,
+];
+
+/// File offsets at which the V4.1 signature sits **only** on the *compact*
+/// `tdi41v2` layout (the `0xC000`-block PD engines whose checksum table is the
+/// [`VAG_TDI_512_DIR`] one). On the classic 12-point `tdi41` / `tdi41_2002`
+/// layouts the signatures sit at `0x50001` / `0x60001` / `0x70001` instead, so
+/// those positions distinguish the layouts.
+const V2_SIGNATURE_POS: [usize; 2] = [0x5_8001, 0x6_4001];
+
+/// Does this image carry the V4.1 signature at a **tdi41v2** code-block position
+/// (`0x58001` or `0x64001`)? This mirrors ZedSuite's `detectChecksumVariant`:
+/// the compact v2 checksum table ([`VAG_TDI_512_DIR`]) applies **only** to files
+/// whose signed code blocks live at those offsets. A classic `tdi41` /
+/// `tdi41_2002` file (signatures at `0x50001`/`0x60001`/`0x70001`) uses a
+/// different table, so recognising it as v2 and rewriting the v2 slots would
+/// corrupt a perfectly valid file — hence this gate.
+fn is_tdi41v2_layout(img: &[u8]) -> bool {
+    V2_SIGNATURE_POS
+        .iter()
+        .any(|&p| img.get(p..p + V41_SIGNATURE.len()) == Some(&V41_SIGNATURE[..]))
+}
+
+/// Is this a genuine VAG TDI **v4.1v2** image? True only when
+///
+/// 1. the image carries a V4.1 signature at a v2 code-block offset
+///    ([`is_tdi41v2_layout`]) — so a classic `tdi41`/`tdi41_2002` file is never
+///    mistaken for v2 and silently corrupted; **and**
+/// 2. the v2 directory walks cleanly; **and**
+/// 3. at least one non-empty, non-skip region's stored word already equals its
+///    computed checksum (a stock image matches every region; a tuned image
+///    matches every region the tune did not touch).
+///
+/// Requirement 1 is the layout gate (mirrors ZedSuite); requirements 2–3 are the
+/// original sanity checks. A non-VAG/classic/foreign image fails gate 1.
 fn is_vag_tdi(img: &[u8]) -> Option<Vec<VagRegion>> {
+    if !is_tdi41v2_layout(img) {
+        return None;
+    }
     let regions = walk_vag(img)?;
     let any_match = regions
         .iter()
@@ -304,6 +340,9 @@ mod tests {
         for (k, b) in img[0x1_4000..0x1_4100].iter_mut().enumerate() {
             *b = (k as u8).wrapping_mul(3);
         }
+        // Stamp the V4.1 signature at the tdi41v2 code-block offset so the image
+        // is recognised as the compact v2 layout (the recognition gate).
+        img[0x5_8001..0x5_8001 + V41_SIGNATURE.len()].copy_from_slice(&V41_SIGNATURE);
         // write each region's correct checksum (walk_vag applies the right
         // per-region seed) so the image is self-consistent.
         for r in walk_vag(&img).unwrap() {
@@ -361,6 +400,40 @@ mod tests {
             algo.correct(&mut img).unwrap_err(),
             Error::Unsupported(_)
         ));
+    }
+
+    #[test]
+    fn classic_tdi41_layout_is_refused_not_corrupted() {
+        // Regression for the brick-risk bug: a file whose V4.1 signatures sit at
+        // the CLASSIC positions (0x50001/0x60001/0x70001) is NOT the compact v2
+        // layout, even though some v2 windows can coincidentally validate.
+        // Applying the v2 corrector to it would overwrite valid code/cal data.
+        // The layout gate must refuse such a file outright.
+        let mut img = synthetic_vag(); // valid v2 image (sig @0x58001)
+                                       // Remove the v2 signature and stamp the signature at the classic 0x50001
+                                       // position instead. At least one v2 region still matches (e.g. the first
+                                       // code region), so the OLD any_match-only gate would have accepted it.
+        img[0x5_8001..0x5_8001 + V41_SIGNATURE.len()].fill(0xC3);
+        img[0x5_0001..0x5_0001 + V41_SIGNATURE.len()].copy_from_slice(&V41_SIGNATURE);
+
+        assert!(
+            !is_tdi41v2_layout(&img),
+            "classic-position sig must not read as v2"
+        );
+        let algo = Edc15C6;
+        // Sanity: at least one v2 region still validates (so the refusal is due
+        // to the layout gate, not an empty/no-match image).
+        assert!(
+            walk_vag(&img)
+                .unwrap()
+                .iter()
+                .any(|r| !r.empty && !r.skip && r.stored == r.computed),
+            "a v2 region should still coincidentally match"
+        );
+        assert!(
+            matches!(algo.correct(&mut img).unwrap_err(), Error::Unsupported(_)),
+            "a classic-layout file must be refused, never v2-corrected"
+        );
     }
 
     #[test]
@@ -457,5 +530,37 @@ mod tests {
             modf, orig_mod,
             "corrected image is byte-identical to the real tuned dump"
         );
+    }
+
+    /// Fixture regression on a real **classic** `tdi41` dump (brick-risk guard).
+    /// `vw_golf_classic_tdi41_ori.bin` is a stock VW 1.9 TDI EDC15 whose V4.1
+    /// signatures sit at the classic positions (0x50001/0x60001/0x70001). Before
+    /// the layout gate, `correct()` rewrote 16 bytes of this valid file; it must
+    /// now be refused. CI has no access, so `#[ignore]`d:
+    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///     cargo test -p opentune-checksum -- --ignored --nocapture
+    #[test]
+    #[ignore = "needs owner EDC15 fixtures via OPENTUNE_FIXTURES"]
+    fn reference_classic_tdi41_refused() {
+        let dir = match std::env::var("OPENTUNE_FIXTURES") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let Ok(mut img) = std::fs::read(format!("{dir}/edc15/vw_golf_classic_tdi41_ori.bin"))
+        else {
+            return;
+        };
+        assert_eq!(img.len(), VAG_IMAGE_LEN);
+        assert!(
+            !is_tdi41v2_layout(&img),
+            "the classic dump must not read as tdi41v2"
+        );
+        let algo = Edc15C6;
+        let before = img.clone();
+        assert!(
+            matches!(algo.correct(&mut img).unwrap_err(), Error::Unsupported(_)),
+            "a real classic tdi41 file must be refused, not corrupted"
+        );
+        assert_eq!(img, before, "the file must be left byte-for-byte unchanged");
     }
 }
