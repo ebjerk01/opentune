@@ -65,8 +65,15 @@ Everything here operates on a flash `.bin`.
 | **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | — | OBD (bench/boot) |
 | **EDC15** (VAG TDI) | VAG 1.9 TDI | ✅ solved (clean-room) | — | — | K-line/OBD |
 | **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ❌ not in app flash (needs flash driver) | def | — | K-line |
+| **ME7** (Motronic) | VAG/Porsche petrol | ✅ real-image | def | — | OBD/CAN |
+| **DQ381 TCU** (Bosch) | VAG 7-sp wet DSG | ✅ CAL, real-image | def | — | OBD/CAN |
+| **DQ250 TCU** (MQB) | VAG 6-sp DSG | 🔄 JAMCRC, synthetic-only | — | — | OBD/CAN |
+| **ZF-8HP TCU** | BMW/VAG 8-sp auto | ⚠️ CRC-CCITT primitive only | — | — | OBD/CAN |
 
-The VAG *signed* high-entropy EDC16 block is a separate, unsolved scheme. Checksum work derived
+**Validation states** (distinct — a primitive existing ≠ a family supported): *implemented* → *synthetic-tested* →
+*real-image-tested* (verify==stored + correct round-trip on a genuine dump) → 🔒 *bench-tested* → 🔒 *vehicle-tested*.
+Nothing here is past *real-image*. "✅ real-image" means the checksum is validated on a real dump; it does **not**
+authorise flashing. The VAG *signed* high-entropy EDC16 block is a separate, unsolved scheme. Checksum work derived
 from proprietary tools is re-derived and validated independently before it ships.
 
 ---
@@ -108,10 +115,22 @@ notes in `docs/IDEAS.md`). Licenses were checked for GPL-3.0 reuse — repos mar
 permissive (liftable with attribution); **GPL-3.0** combine fine; non-OSS repos are reference-only.
 All `[ ]` = planned.
 
-### New checksum families
-- [ ] **ME7** (Bosch Motronic petrol; VAG/Porsche) — ROMSYS 16-bit word-sums + CAL **CRC32** +
-  multipoint block descriptors, auto-located via the part-number block. Ref: **nyetlabs/ME7Sum** (BSD, C — lift directly).
-- [ ] **TCU checksums** — CRC32-VW / CRC-CCITT (DSG), **JAMCRC** (DQ250). Refs: **dspl1236/vag-tcu-tools** (MIT), **TheFlashBold/DQ250-MQB-Bench-Flash** (GPL-3).
+### New checksum families — shipped (see validation states above)
+- [x] **ME7** (Bosch Motronic petrol; VAG/Porsche) — verify+correct **real-image-validated** (33/33 blocks
+  on a real Passat ME7.5): ROMSYS 16-bit word-sums + multipoint block descriptors, located by data-independent
+  signature. The CAL-CRC32 block is firmware-specific — exposed as an extension point, **not** auto-located (documented limit). Ref: nyetlabs/ME7Sum (BSD).
+- [~] **TCU checksums** — **DQ381 CRC32-VW real-image-validated** (CAL block on a real dump). Remaining:
+  expose **BOOT/ASW/CAL separately** (all three independently confirmed via cross-check) + extracted-block support.
+  **DQ250 JAMCRC: synthetic-only** (no MQB bench dump found). **CRC-CCITT: generic primitive, NOT** established ZF-8HP
+  family support. Refs: dspl1236/vag-tcu-tools (MIT), TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3).
+- [ ] **Representation-aware checksum reports** — distinguish raw full image / extracted programming block /
+  container segment, and embedded-vs-transfer checksums, and *recognised* vs *merely mathematically consistent* input.
+- [ ] **Importer fidelity (XDF)** before more TCU maps: checked rebasing (refuse below-base underflow, not wrap),
+  preserve categorical shift/mode axis labels (or report loss), import omitted scalar constants, explicit
+  unsupported-layout reports, and verify swap-XY (0x04) semantics before changing storage order.
+- [ ] **Further family leads** (research-only until independent fixtures + provenance): Haldex Gen5 (descriptor-driven,
+  validate layout before correction), Subaru M32R/SH7055/MH8104 (avoid the reproduced old-source carry/order bugs),
+  Volvo/Aisin TF80-P2 (CRC-16/XMODEM) / AW55 (open) — keep each at its actual evidence level, no guessed correctors.
 - [ ] Cross-validate our EDC15/EDC16 correctors against a native-Rust implementation. Ref: **LeZed97/ZedSuite** (GPL-3, Rust — directly liftable).
 - [ ] Concrete VAG algos to compare/absorb: CRC32-VW, ECM3 64-bit summation, Simos counter-XOR. Ref: **dspl1236/simos-suite** (MIT; verify vs known-good dumps — AI-assisted).
 
