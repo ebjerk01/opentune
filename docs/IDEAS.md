@@ -36,7 +36,11 @@ emissions defeat, odometer fraud, or theft.
 ## Identification & data
 - `[S]` **Richer ECU definitions** — part/SW number ranges, memory maps, seed/key ids.
 - `[M]` **DTC database + decoder** — map DTC codes to descriptions (generic OBD + manufacturer),
-  used by diagnostics and the standalone fault review.
+  used by diagnostics and the standalone fault review *(done: `opentune-dtc`, 11,140 codes)*.
+- `[S]` **Live DTC read/clear** — pull stored/pending fault codes over OBD-II (mode 0x03/0x07) or
+  UDS (0x19 readDTCInformation), decode them with the built-in database, and show/clear them in
+  the CLI + desktop/Android app. A nice, low-risk first on-car feature — read-only diagnostics, no
+  flashing — once a read-capable interface is on the bench. The decoder already exists.
 - `[M]` **Grow the vehicle catalog** beyond opendbc; add Mercedes/BMW (not in opendbc) from
   public part-number data.
 - `[S]` **VIN / part-number decoder** in the app.

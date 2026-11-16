@@ -66,6 +66,7 @@ Identify and read a real ECU.
 - [ ] ECU identify (part/SW number, VIN)
 - [ ] Full OBD read — Bosch EDC16 first
 - [x] Battery-voltage read, exposed as a safety gate
+- [~] **OBD-II / UDS DTC reader** — read & clear fault codes (OBD-II mode 0x03/0x07, UDS 0x19) and decode them with the built-in 11,140-code database (`opentune-dtc`), shown in the CLI + app. The decoder is done; this is the live read/clear over an interface.
 
 ## M3 — Flash path
 Write a calibration back, safely.
