@@ -18,8 +18,16 @@ pub struct XdfImport {
     pub title: Option<String>,   // definition title from the XDF header
     pub base_offset: u32,        // header base offset (already applied to addresses)
     pub maps: Vec<opentune_core::ecudef::MapDef>,
+    pub constants: Vec<XdfConstant>, // scalar <XDFCONSTANT> values (XML only)
+    pub warnings: Vec<String>,   // structured import-loss / fidelity warnings
 }
 ```
+
+`warnings` carries file-level fidelity losses that do not belong to a single
+map's `notes` — a table/constant skipped because its address rebasing
+underflowed, categorical axis labels the numeric axis model can't store, or a
+swap-XY storage flag OpenTune does not model. Surface them: a non-empty `maps`
+list does **not** mean the import was lossless.
 
 `parse_xdf` auto-detects the encoding and dispatches. The `xml` and `legacy`
 sub-modules are also public if you want to force one.
@@ -75,6 +83,7 @@ it is never approximated.
 |---|---|
 | `0x01` | signed (two's complement) |
 | `0x02` | LSB first (little-endian / Intel); clear ⇒ big-endian (Motorola) |
+| `0x04` | swap-XY (storage transposed). **Detected and flagged, never applied** — see below |
 | `0x10000` | IEEE-754 float (with a 32-bit element) |
 
 These are the community-documented readings. Endianness in XDF is historically
@@ -96,13 +105,40 @@ import.
   shaped by `rows`×`cols`; the reversed layout itself is not modeled.
 - **Non-standard element widths** (e.g. 24-bit) are approximated to the next
   standard type and flagged.
+- **Categorical axis labels.** Real TCU/BMW XDFs carry non-numeric axis labels
+  (gear/mode names such as `1->2`, `2->3`). OpenTune's `AxisDef` stores only
+  numeric breakpoints, so these text labels cannot be kept as values. The axis
+  dimension (`count`) and the table data are still imported; the dropped labels
+  are listed in the map `notes` **and** in `XdfImport.warnings` rather than
+  silently discarded. (If the core axis model gains a categorical/label field,
+  switch to preserving the text directly.)
+- **Swap-XY (`mmedtypeflags 0x04`).** Some tables (e.g. BMW 6HP shift maps)
+  declare that their data is stored transposed relative to the row-major
+  (column-fastest) order OpenTune reads with. RomRaider's XDF converter honours
+  this by setting `swapxy=true`; its `Table3D` population swaps the inner/outer
+  loop, i.e. it is a genuine **storage-order** transform, not mere presentation.
+  OpenTune has no per-map storage-orientation field and no round-trippable way
+  to record the flag (`export_xdf` would drop it and silently re-corrupt), and a
+  blind transpose of an asymmetric map is itself dangerous — so this crate
+  **does not transpose**. It detects the bit, leaves `rows`/`cols` as declared,
+  and marks the orientation unverified in `notes` + `warnings` so a human can
+  confirm it against a known image before trusting cell positions.
+- **Address rebasing is checked.** A `BASEOFFSET subtract` that would take an
+  address below the base (which previously wrapped to a giant offset like
+  `0xFFFFFF10`), or an add that overflows `u32`, is refused: the table/constant
+  is skipped and a reason recorded in `warnings`, never emitted as a wrapped
+  address. A rebasing that lands at exactly `0` is valid and kept.
 - **Character encoding.** XDF payload text (titles, units) may be
   Windows-1251/Latin-1; pass the bytes in as a string (lossy UTF-8 is fine for
   structure). Non-ASCII units may come through as mojibake — that is a source
   encoding issue, not a parse error.
+- **Scalar constants.** Modern-XML `<XDFCONSTANT>` entries are imported as
+  [`XdfConstant`] scalars into `XdfImport.constants` (a distinct list, not folded
+  into `maps`). Only plain numeric scalars are imported — a bitfield/switch is
+  **not** promoted to an unrestricted scalar write.
 - **Not imported:** `%%FLAG%%` (bit flags), `%%CONSTANT%%`/`%%CHECKSUM%%`
-  blocks, `<XDFCONSTANT>`/`<XDFFLAG>`, DAC/DALINK data-link scaling, and the
-  checksum region descriptors. Only tables (maps) are converted.
+  blocks, `<XDFFLAG>`, DAC/DALINK data-link scaling, and the checksum region
+  descriptors. Legacy `%%TABLE%%` files expose only tables (no constants list).
 
 ## Wiring in (maintainer)
 

@@ -92,6 +92,9 @@ pub fn parse(src: &str) -> Result<XdfImport> {
         title,
         base_offset,
         maps,
+        // The legacy text format has no <XDFCONSTANT> block and no rebasing that
+        // can underflow, so there is nothing to report in these lists.
+        ..Default::default()
     })
 }
 

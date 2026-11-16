@@ -26,7 +26,7 @@
 //! — never guessed. Uncertain or defaulted fields (missing element size,
 //! defaulted endianness, exotic strides) are likewise flagged in `notes`.
 
-use opentune_core::ecudef::{DataType, Endian, MapDef};
+use opentune_core::ecudef::{DataType, Endian, MapDef, Scaling};
 use std::fmt;
 
 pub mod export;
@@ -48,6 +48,45 @@ pub struct XdfImport {
     pub base_offset: u32,
     /// The imported maps, one per `<XDFTABLE>` / `%%TABLE%%`.
     pub maps: Vec<MapDef>,
+    /// Scalar constants imported from `<XDFCONSTANT>` entries (modern XML only).
+    /// These are single values, not tables, so they are kept in their own list
+    /// rather than shoehorned into [`maps`](Self::maps). Empty for legacy files.
+    pub constants: Vec<XdfConstant>,
+    /// Structured, file-level import-loss / fidelity warnings that do not belong
+    /// to any single map's `notes` — e.g. a table skipped because its address
+    /// rebasing underflowed, categorical axis labels that the numeric axis model
+    /// cannot store, or a swap-XY storage flag OpenTune does not yet model. A
+    /// caller should surface these so a seemingly complete import does not hide a
+    /// silent loss. Empty means nothing lossy was detected.
+    pub warnings: Vec<String>,
+}
+
+/// A scalar constant imported from an `<XDFCONSTANT>`.
+///
+/// Unlike a [`MapDef`], a constant is a single stored value (`rows == cols == 1`
+/// conceptually): one address, one element, an optional linear scaling and unit.
+/// Switches/bitfields are *not* imported as constants — only plain numeric
+/// scalars — so this never silently turns a bitfield into an unrestricted write.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct XdfConstant {
+    /// Constant name from `<title>` (falls back to `const_<uniqueid>`).
+    pub name: String,
+    /// Description + any uncertainty/limitation flags, same convention as a map.
+    pub notes: String,
+    /// Address of the value in the flash image, resolved through the base offset.
+    pub address: u32,
+    /// Stored element type.
+    pub data_type: DataType,
+    /// Byte order of the stored element.
+    pub endian: Endian,
+    /// Linear raw→physical scaling recovered from the `<MATH>` equation.
+    pub scaling: Scaling,
+    /// Physical unit, if any.
+    pub unit: String,
+    /// Optional lower physical bound (`<min>` / `<rangelow>`).
+    pub min: Option<f64>,
+    /// Optional upper physical bound (`<max>` / `<rangehigh>`).
+    pub max: Option<f64>,
 }
 
 /// Errors from importing an XDF.
@@ -133,6 +172,14 @@ pub mod typeflags {
     pub const LSB_FIRST: u32 = 0x02;
     /// Stored value is an IEEE-754 float (used with a 32-bit element size).
     pub const FLOAT: u32 = 0x10000;
+    /// Swap-XY: the table's data is stored transposed relative to the row-major
+    /// (row = y, col = x, column-fastest) convention OpenTune reads with — i.e.
+    /// the rows and columns are swapped in storage order. RomRaider's XDF
+    /// converter honours this bit by setting `swapxy=true` on the table. OpenTune
+    /// does not yet model a per-map storage orientation, so this crate *detects*
+    /// and *flags* the bit (orientation unverified) but never silently
+    /// transposes a map. See the README and the swap-flag test.
+    pub const SWAP_XY: u32 = 0x04;
 }
 
 /// Derive a [`DataType`] from an element size in bits plus the type flags.
