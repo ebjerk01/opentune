@@ -11,12 +11,14 @@
 
 ## What works today (offline, on a `.bin`)
 
-- **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **998-vehicle
-  catalog** harvested from comma.ai opendbc.
+- **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **1034-entry
+  catalog** (998 from comma.ai opendbc + 36 hand-curated European entries across
+  VAG/Mercedes/BMW/Ford/PSA/Opel/Fiat/Volvo/Renault, with VAG part-number match keys).
 - **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore) and
   Continental Simos PCR2.1 solved** (directory-walking verify + correct, validated against real
   full dumps) plus **VAG EDC15** (verify + correct, clean-room from GPL sources; Mercedes EDC15C6
-  located-only and refuses); `fix` corrects an uncorrected tune, `fix --reference`
+  proven *not* derivable from the application dump — its checksum runs in the tester-uploaded flash
+  programming driver, not the flash itself — so the module **refuses** it); `fix` corrects an uncorrected tune, `fix --reference`
   bootstraps EDC17's firmware-specific constant from your own stock dump, and it refuses to
   guess on anything unvalidated (anti-brick).
 - **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
@@ -32,7 +34,7 @@
   from RAT_FUNC and non-linear conversions flagged, never guessed.
 - A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
   `compare`, `checksum verify|fix`, `flash`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`,
-  `import-a2l`, `dtc`.
+  `import-a2l`, `export-a2l`, `vin`, `decode-part`, `scan`, `dtc`.
 
 OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
 already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
@@ -91,6 +93,21 @@ match — so a wrong file can never silently corrupt the image.
 
 The OBD-only interfaces move data in and out; obtaining a complete original from a
 readout-protected ECU may require a bench/boot tool, which OpenTune does not provide.
+
+## Where it's heading
+
+OpenTune is expanding beyond engine ECUs. Planned, reference-driven directions (see
+[ROADMAP.md](ROADMAP.md) *Phase 4* and [`docs/IDEAS.md`](docs/IDEAS.md)):
+
+- **Drivetrain control units** — transmission (TCU) and AWD/4WD controllers as first-class targets:
+  VAG DSG (DQ250/DQ381/DL382) + Haldex, Mercedes 722.6 (NAG1), then a generalized controller-def
+  schema so BMW/Ford/Mitsubishi/Volvo units drop in.
+- **More checksum families** — Bosch **ME7** (petrol) and the VAG TCU schemes (CRC32-VW, JAMCRC, …).
+- **Security access** — an optional, *user-enabled* seed/key (SA2) plugin set (never auto-applied).
+- **Real transports** — **DoIP** (ISO-13400) beyond today's mock, and **FRF / ODX / SGO** flash-container decode.
+
+These build on a survey of 43 open-source projects. OpenTune reuses only license-compatible code,
+re-derives anything that came from proprietary tools, and ships no manufacturer firmware or keys.
 
 ## Scope — what OpenTune will *not* do
 

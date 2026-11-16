@@ -27,7 +27,7 @@ Everything here operates on a flash `.bin`.
 ### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
 - [x] `ChecksumAlgo` engine (verify + correct) + generic CRC32 helper
 - [x] **EDC16 (MPC56x), EDC17 (TriCore, + `--reference` bootstrap), Simos PCR2.1, VAG EDC15** — all solved and validated against real dumps
-- [~] **Mercedes EDC15C6 (CR1)** — clean-room constant recovery in progress; the module refuses until validated (never a guess)
+- [ ] **Mercedes EDC15C6 (CR1)** — *not derivable from the application dump (proven); module refuses.* Full clean-room C166/C167 Ghidra RE completed (keyhana module, 540 functions seeded from genuine call targets). The **block format is fully characterized** — each checksummed block = 16-bit magic (`0x5555` cal-dir / `0xA5A5` code-patch / `0xAAAA` program-main) + data + halfword `0xC058` + 32-bit LE checksum (`0xC3` fill); 15 slots, full oracle captured (e.g. `[0x94000,0xe3ffc)→60A63BFD`). But **no resident checksum compute loop exists in the flash**: every C166 far-flash-read mechanism was searched (only 2 EXTS/EXTP+accumulate loops, both engine-control; the one SHA-1-like hash is the seed/key over RAM, off-limits). This matches Bosch EDC15 architecture — the block checksum is verified by the **tester-uploaded flash programming driver** during reflash, which is **not present in the application flash**. All standard algorithms (sum16/32, xor, CRC16/32 + poly scan, Adler-32, Fletcher-32, rotate-accumulate, and the VAG EDC15 loop) were **empirically ruled out across ≥3 independent blocks**. **To solve:** obtain the Bosch EDC15 flash programming driver / flashdaten for ECU `1037351686`, or dynamically capture the verify on a bench ECU during a reflash. Module **refuses** Mercedes (never guesses). Findings: `/opt/nvme-fw/edc15-cleanroom/work/edc15_RE_FINDINGS.txt` (217 lines).
 
 ### Maps & calibration
 - [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
@@ -62,7 +62,7 @@ Everything here operates on a flash `.bin`.
 | **EDC17** (TriCore) | later CR diesels incl. VAG | ✅ solved (+`--reference`) | def | — | OBD (bench/boot for full read) |
 | **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | — | OBD (bench/boot) |
 | **EDC15** (VAG TDI) | VAG 1.9 TDI | ✅ solved (clean-room) | — | — | K-line/OBD |
-| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | 🔄 in progress | def | — | K-line |
+| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ❌ not in app flash (needs flash driver) | def | — | K-line |
 
 The VAG *signed* high-entropy EDC16 block is a separate, unsolved scheme. Checksum work derived
 from proprietary tools is re-derived and validated independently before it ships.
@@ -97,3 +97,50 @@ bench ECU are available.
 - [~] **ECU-library scanner** (`opentune-scan` crate + `opentune scan` CLI + the desktop Analyze-bin) — structural ECU-family detection + string/part-number/VIN extraction as metadata enrichment; **not** reliable auto-sort-by-car (needs better vehicle DBs — measured ~11% confident full-car on a messy library; the growing Euro catalog helps)
 - [~] **Signed, reproducible releases** — Linux portable build + macOS/Windows bundle targets done; **Tauri updater signing key generated + wired** (needs the private key as a CI secret); Gradle wrapper committed; a synthetic demo `.bin` ships in `samples/`. App/installer code-signing (Apple/Windows certs) still pending.
 - [x] Protocol-layer CI coverage — 20 ISO-TP / TP2.0 / KWP edge-case tests; `docs/CONTRIBUTING-ECUDEFS.md` for community defs
+
+---
+
+## Phase 4 — Coverage & scope expansion (reference-driven)
+Concrete tasks drawn from a survey of 43 open-source ECU/tuning projects (2026-11-16; full ranked
+notes in `docs/IDEAS.md`). Licenses were checked for GPL-3.0 reuse — repos marked **MIT/BSD** are
+permissive (liftable with attribution); **GPL-3.0** combine fine; non-OSS repos are reference-only.
+All `[ ]` = planned.
+
+### New checksum families
+- [ ] **ME7** (Bosch Motronic petrol; VAG/Porsche) — ROMSYS 16-bit word-sums + CAL **CRC32** +
+  multipoint block descriptors, auto-located via the part-number block. Ref: **nyetlabs/ME7Sum** (BSD, C — lift directly).
+- [ ] **TCU checksums** — CRC32-VW / CRC-CCITT (DSG), **JAMCRC** (DQ250). Refs: **dspl1236/vag-tcu-tools** (MIT), **TheFlashBold/DQ250-MQB-Bench-Flash** (GPL-3).
+- [ ] Cross-validate our EDC15/EDC16 correctors against a native-Rust implementation. Ref: **LeZed97/ZedSuite** (GPL-3, Rust — directly liftable).
+- [ ] Concrete VAG algos to compare/absorb: CRC32-VW, ECM3 64-bit summation, Simos counter-XOR. Ref: **dspl1236/simos-suite** (MIT; verify vs known-good dumps — AI-assisted).
+
+### Seed/key (security access) — new plugin layer
+- [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 attack path below.
+
+### Flash-container decode — new
+- [ ] **FRF / ODX-F / SGO** unpack+repack: LZSS10 + AES + SGO parsing (DQ200→AL1000, Simos). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD). ⚠️ never bundle recovered keys (`frf.key` legal caution).
+- [ ] **a2l2xdf** converter path (A2L→XDF). Ref: VW_Flash.
+- [ ] **WinOLS `.ols`** import. Refs: ZedSuite, **TheFlashBold/tune-editor** (GPL-3).
+
+### DoIP — upgrade mock → real
+- [ ] Real **DoIP (ISO-13400)** transport: TCP core + routing activation + vehicle discovery (we currently have a mock round-trip only). Refs: **zeloscloud/zelos-extension-uds** (MIT), **life-challenge/DiagTools** (MIT).
+- [ ] Validate our UDS state machine against **pylessard/python-udsoncan** (MIT) service-by-service.
+
+### Drivetrain control units — TCU + AWD/4WD (new target class)
+See `docs/IDEAS.md` "Drivetrain control units" for the per-brand target list. Each needs its own
+defs + checksum; the flash/UDS transport is shared.
+- [ ] **VAG DSG/TCU** (Temic DQ250/DQ200/DQ381/DL382) defs + checksum + bench flash. Refs: VW_Flash, DQ250-MQB-Bench-Flash, vag-tcu-tools.
+- [ ] **Haldex AWD** controller defs + checksum (Gen4/5 BorgWarner).
+- [ ] **Mercedes 722.6 (NAG1) TCU** — control logic + maps (shift profiles, clutch-fill adaptation, per-gear TCC pressure) from **rnd-ash/ultimate-nag52-fw** (GPL-3, C++ — mine the logic/maps); reusable **Rust** crates (`egs_can`, `diag_common`, `flasher`, KWP2000-over-CAN `bootloader`) from **ultimate-nag52-fw-rs** / **-config-app** (GPL-3 — directly liftable).
+- [ ] Generalize the controller-def schema so BMW ZF 8HP, Ford, Mitsubishi, Volvo TCUs/AWD drop in.
+
+### EDC15C6 — open-source attack path (supersedes "parked")
+The checksum isn't in the application dump (proven); it runs in the tester-uploaded flash
+programming driver. Concrete route to obtain/observe it:
+- [ ] (1) **Daimler SA2 seed/key** → enter programming mode: **jglim/UnlockECU**.
+- [ ] (2) **C167/ST10 bootstrap-mode** read of internal ROM/flash (has EDC15VM/P+ chip-select presets): **EcuProg7/C167BootTool** (GPL-3) + **NefMoto** C167/C166 loaders (GPL-3).
+- [ ] (3) understand the **RAM flash-kernel** that computes the checksum: **fenugrec/npkern** (GPL-3) as the architectural model.
+- [ ] (4) cross-reference adjacent-family real dumps/maps/seed-key: **Jeep WJ 2.7 CRD** repo (Bosch **EDC15C2**, not C6 — a data point, not a direct solve).
+
+### Hardware
+- [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch.
+- [ ] Reference ECUFlash/RomRaider definition parsers from **FastECU** (GPL-3) for broader def import.

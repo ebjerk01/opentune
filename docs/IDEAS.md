@@ -76,3 +76,37 @@ emissions defeat, odometer fraud, or theft.
 - `[S]` Test fixtures + CI coverage for the protocol layer (ISO-TP / TP2.0 / KWP edge cases).
 - `[S]` Docs site + screenshots.
 - `[M]` Community ECU-definition & map library (contribution format + review).
+
+## Drivetrain control units — TCUs + AWD/4WD (scope expansion; user, 2026-11-16)
+OpenTune's identify / checksum / maps / flash pipeline is **not engine-specific**. Make
+**transmission (TCU) and all-wheel/4WD controllers first-class targets alongside engine ECUs**,
+across every vehicle family this project has worked on. Each target just needs its own definitions +
+checksum scheme; the flash/UDS transport is shared, and clutch-based-AWD maps are largely reusable
+across brands. `[L]` for all of these.
+
+Targets by family (what we've actually touched):
+- **VAG** — DSG/TCU (Temic **DQ250/DQ200/DQ381/DL382**, Simos-based); **Haldex** AWD coupling
+  (Gen1–5; Gen4/5 BorgWarner = the "Haldex performance" targets). Refs: bri3d/VW_Flash,
+  TheFlashBold/DQ250-MQB-Bench-Flash, dspl1236/simos-suite.
+- **Mercedes** — 722.9 (7G-Tronic) TCU; 4MATIC transfer-case / traction control (STAR-PC/XENTRY context).
+- **BMW** — ZF 6HP/8HP TCU (EGS); xDrive transfer case (ATC).
+- **Ford** — PowerShift / 6F35 TCU; Haldex-style AWD coupling.
+- **Mitsubishi** — Pajero Super-Select 4WD + auto TCU.
+- **Volvo** — Aisin TCU; Haldex AWD.
+Per target the work is: controller defs (maps = clutch pressure/limits, torque limiters, shift
+points, launch, AWD engagement/pre-load & lock curves), the checksum family, and the on-car flash
+address. Build the VAG DSG + Haldex pair first (best open refs), then generalize the controller-def
+schema so other brands drop in.
+
+## External reference projects (surveyed 2026-11-16; licenses checked for GPL-3.0 reuse)
+- **Flash kernels (also the EDC15C6 lead):** `fenugrec/npkern` (GPL-3.0 — RAM-resident reflash-kernel
+  model: upload→execute→flash-ops→reset) + `nisprog`; `NefMoto/NefMotoOpenSource` (GPL-3.0 — EDC15
+  bootmode + **C167/C166 bootstrap loaders**, directly relevant to EDC15C6's C167 class).
+- **VAG flashing / flash-container decode:** `bri3d/VW_Flash` (BSD-2 — checksums, LZSS+AES, FRF/ODX
+  decrypt, `a2l2xdf`); `dspl1236/simos-suite` (MIT — named algos: CRC32-VW, ECM3 64-bit, counter-XOR).
+- **UDS reference:** `pylessard/python-udsoncan` (MIT — gold ISO-14229 behavior to validate our Rust UDS).
+- **Hardware:** `Switchleg1/esp32-isotp-ble-bridge` (MIT — our ESP32-S3 / ISO-TP / BLE path as shippable fw).
+- **Checksum breadth we lack:** OpenRemap detection schemes (ME7/NefMoto/IronFelix/MS43…), `nyetlabs/ME7Sum`.
+- **Mercedes diagnostics:** `rnd-ash/OpenVehicleDiag` CBFParser (GPL-3.0 Rust — CBF→JSON; SMR-D parser was DMCA'd).
+- **Map/def import:** `miikasyvanen/FastECU` ECUFlash + RomRaider definition parsers.
+- Note: `tehfalcon-vw/Nexum-Studio` and `MichShav/NissECU` are NON-OSS (no code reuse); `bisera/openport-j2534` is dead (use `james-portman/j2534`).
