@@ -10,9 +10,10 @@ emissions defeat, odometer fraud, or theft.
 - `[M]` **Simos PCR2.1** — VAG 1.6 TDI CR *(done: self-contained on-image directory)*.
 - `[S]` **EDC16-CR in-situ** confirmation (constants validated, needs a live word-wise dump).
 - `[M]` **Checksum plugin system** — load ECU checksum algorithms as data/plugins so new
-  families drop in without a rebuild; a shared `correct_with_reference` boundary model.
-- `[S]` **Multi-block report** in the CLI/app with per-block region, stored vs computed, and a
-  one-click "fix only the blocks that are BAD".
+  families drop in without a rebuild *(groundwork done: `AlgoInfo`/`algorithms()` descriptor
+  registry + `correct_bad_blocks` hook; full dynamic/data-driven loading still TODO)*.
+- `[S]` **Multi-block report** — per-block region, stored vs computed, and a one-click
+  "fix only the BAD blocks" *(done: `checksum verify`/`report` + `fix --only-bad` + `checksum algos`)*.
 
 ## Maps & calibration
 - `[L]` **Map editor** (not just the viewer) — edit cells in the heat grid, interpolate,

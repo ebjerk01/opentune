@@ -233,7 +233,13 @@ enum ChecksumAction {
         /// algorithms (edc16/pcr21/edc15c).
         #[arg(long)]
         reference: Option<PathBuf>,
+        /// Fix only the blocks whose checksum is currently BAD, leaving valid
+        /// blocks byte-for-byte untouched. (Ignored alongside --reference.)
+        #[arg(long)]
+        only_bad: bool,
     },
+    /// List the available checksum algorithms.
+    Algos,
 }
 
 #[derive(clap::Args)]
@@ -383,6 +389,7 @@ fn main() -> Result<()> {
                 algo,
                 file,
                 reference,
+                only_bad,
             } => {
                 let algo = opentune_checksum::get(&algo)
                     .ok_or_else(|| anyhow!("unknown checksum algo '{algo}'"))?;
@@ -393,6 +400,7 @@ fn main() -> Result<()> {
                             .with_context(|| format!("read reference {}", r.display()))?;
                         algo.correct_with_reference(&mut img, &refimg)?
                     }
+                    None if only_bad => opentune_checksum::correct_bad_only(&*algo, &mut img)?,
                     None => algo.correct(&mut img)?,
                 };
                 if fixes.is_empty() {
@@ -404,6 +412,20 @@ fn main() -> Result<()> {
                             "fixed {:<16} @0x{:08X} 0x{:08X} -> 0x{:08X}",
                             f.name, f.offset, f.old, f.new
                         );
+                    }
+                }
+            }
+            ChecksumAction::Algos => {
+                for a in opentune_checksum::algorithms() {
+                    println!(
+                        "{:<12} {:<12} {:<4} {}",
+                        a.id,
+                        a.family,
+                        if a.needs_reference { "ref" } else { "-" },
+                        a.name
+                    );
+                    if !a.notes.is_empty() {
+                        println!("               {}", a.notes);
                     }
                 }
             }

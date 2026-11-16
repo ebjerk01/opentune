@@ -537,6 +537,17 @@ impl ChecksumAlgo for Edc16 {
         }
         correct_blocks(image, self.blocks())
     }
+
+    /// EDC16 already corrects per block: both the on-image directory walker
+    /// ([`correct_directory`]) and the fallback block table ([`correct_blocks`])
+    /// recompute every block but rewrite — and emit a [`Fix`] for — only the
+    /// blocks whose stored word is wrong, leaving valid blocks untouched. So
+    /// "fix only the bad blocks" is exactly the standard [`correct`](Edc16::correct)
+    /// path; the whole-image refusal for a calibration dump that contains an
+    /// uncracked block is preserved (anti-brick: never a partial, invalid set).
+    fn correct_bad_blocks(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
+        self.correct(image)
+    }
 }
 
 #[cfg(test)]

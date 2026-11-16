@@ -445,6 +445,16 @@ impl ChecksumAlgo for Edc17 {
         }
         Ok(fixes)
     }
+
+    /// EDC17's [`correct`](Edc17::correct) is already a per-block, bad-only pass:
+    /// it forges the compensation word only for blocks with a *validated* target
+    /// constant, skips unknown blocks (never guessing them), and rewrites a block
+    /// only when its stored word differs. So correcting "only the bad blocks" is
+    /// the standard path; the guard that refuses an image with no validated block
+    /// at all is preserved (anti-brick).
+    fn correct_bad_blocks(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
+        self.correct(image)
+    }
 }
 
 #[cfg(test)]

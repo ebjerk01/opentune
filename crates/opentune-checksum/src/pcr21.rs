@@ -277,6 +277,13 @@ impl ChecksumAlgo for Pcr21 {
         }
         Ok(fixes)
     }
+
+    /// PCR2.1 protects a single calibration block; [`correct`](Pcr21::correct)
+    /// rewrites its stored CRC only when it differs, so "fix only the bad block"
+    /// is already the standard path (nothing is written when the block is valid).
+    fn correct_bad_blocks(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
+        self.correct(image)
+    }
 }
 
 /// A validated PCR2.1 stock reference: fixture name, image length, directory
