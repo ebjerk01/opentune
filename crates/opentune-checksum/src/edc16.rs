@@ -402,13 +402,20 @@ fn sum32be_range(image: &[u8], start: u32, end: u32) -> u32 {
     acc
 }
 
-/// Map a directory CPU address to a file offset.
+/// Map a directory CPU address to a file offset within the detected base window.
 ///
-/// EDC16 images are power-of-two sized (512 KiB / 1 MiB / 2 MiB); the ROM base
-/// is a high power-of-two, so masking with `len-1` recovers the offset
-/// (base 0 for the 2 MiB images, `0x0080_0000` for the 1 MiB BMW 320d).
-fn addr_to_offset(addr: u32, len: usize) -> Option<u32> {
-    if len == 0 || (len & (len - 1)) != 0 {
+/// EDC16 images are power-of-two sized (512 KiB / 1 MiB / 2 MiB) and mapped at a
+/// power-of-two-aligned ROM `base` (0 for most 2 MiB images, `0x0018_0000` for
+/// 512 KiB, `0x0080_0000` for the 1 MiB BMW 320d). A genuine record encodes an
+/// address inside `[base, base + len)`, so the file offset is `addr - base`.
+///
+/// Addresses OUTSIDE that window are rejected, not wrapped. The previous
+/// `addr & (len - 1)` wrap turned out-of-window coincidental `{start,end}` words
+/// into phantom in-range regions — e.g. two large (16–18 KiB) ghost blocks on
+/// stock Audi EDC16 dumps whose records encode `0x0040_0000` / `0x0041_0100`; a
+/// subsequent `correct()` would then rewrite real data there and brick the file.
+fn addr_to_offset(addr: u32, len: usize, base: u32, pow2: bool) -> Option<u32> {
+    if !pow2 {
         // Non-power-of-two: only accept addresses that already are offsets.
         return if (addr as usize) < len {
             Some(addr)
@@ -416,16 +423,50 @@ fn addr_to_offset(addr: u32, len: usize) -> Option<u32> {
             None
         };
     }
-    Some(addr & (len as u32 - 1))
+    let off = addr.checked_sub(base)?;
+    if (off as usize) < len {
+        Some(off)
+    } else {
+        None
+    }
 }
 
-/// The marker pair's fixed position inside its protected region: a genuine EDC16
-/// descriptor `{start, end, MARK_CS, MARK_CP}` lives at `region_start + 0x34`, so
-/// `MARK_CS` sits at `region_start + 0x3C`.
-const MARKER_OFFSET_IN_REGION: usize = 0x3C;
+/// Minimum size (bytes) of a genuine EDC16 checksum block. The smallest real
+/// block across 60 reference dumps is `0x40` bytes; the only sub-`0x40` "regions"
+/// are coincidental 8-byte marker pairs sitting in the padding between genuine
+/// blocks (e.g. `[0x1D_FFF8, 0x1D_FFFF]` on the UAZ EDC16C39 dump). `0x10` is a
+/// conservative floor that keeps every real block and drops those tiny ghosts.
+const MIN_BLOCK_LEN: u32 = 0x10;
 
-/// Region start/end alignment of a genuine EDC16 block (`0x100`).
-const REGION_ALIGN: u32 = 0x100;
+/// Detect the image's power-of-two ROM base from its directory records: the most
+/// common `addr & !(len - 1)` over every `FADECAFE`/`CAFEAFFE` record's encoded
+/// start address. Genuine records (the overwhelming majority) agree on the real
+/// base; a rare out-of-window ghost record is outvoted. Ties break toward the
+/// smaller base for determinism — real images never tie, since every genuine
+/// record shares one base.
+fn detect_base(image: &[u8], len: usize) -> u32 {
+    let mask = !((len as u32).wrapping_sub(1));
+    let mut counts: std::collections::BTreeMap<u32, usize> = std::collections::BTreeMap::new();
+    let mut i = 0usize;
+    while i + 8 <= len {
+        if image[i..i + 4] == MARK_CS && image[i + 4..i + 8] == MARK_CP && i >= 8 {
+            if let Some(sa) = read_u32_be(image, i - 8) {
+                *counts.entry(sa & mask).or_default() += 1;
+            }
+        }
+        i += 4;
+    }
+    // BTreeMap iterates bases ascending; replace the best only on a strictly
+    // greater count, so the smallest base with the maximum count wins.
+    let mut best: Option<(u32, usize)> = None;
+    for (b, c) in counts {
+        match best {
+            Some((_, bc)) if c <= bc => {}
+            _ => best = Some((b, c)),
+        }
+    }
+    best.map(|(b, _)| b).unwrap_or(0)
+}
 
 /// Parse the on-image checksum directory.
 ///
@@ -434,25 +475,38 @@ const REGION_ALIGN: u32 = 0x100;
 /// addresses). A record is kept only when it has the structure of a *genuine*
 /// descriptor, which rejects the `FADECAFE`/`CAFEAFFE` byte sequences that occur
 /// inside ordinary calibration/code data (phantom "ghost" regions). The guards,
-/// mirroring ZedSuite's `findEdc16Regions`, are:
+/// validated to leave zero ghost regions across 60 reference dumps (BMW / Kia /
+/// Mercedes / Audi / VW / UAZ, 512 KiB–2 MiB), are:
 ///
-/// * **marker position** — `MARK_CS` sits exactly [`MARKER_OFFSET_IN_REGION`]
-///   (`0x3C`) into the region (`i == start + 0x3C`); an embedded marker whose
-///   preceding words happen to look like a `{start, end}` almost never lands at
-///   that offset relative to the address it encodes;
-/// * **`0x100` alignment** — `start % 0x100 == 0 && (end + 1) % 0x100 == 0`
-///   (every real Bosch block is page-aligned; this subsumes the previous
-///   dword-alignment guard against off-by-one duplicate records);
-/// * `start < end`, `end` in range, and length `>= 4`.
+/// * **base window** — both `start` and `end` map inside the detected ROM base
+///   window `[base, base + len)` (see [`detect_base`] / [`addr_to_offset`]);
+///   out-of-window records — whose high address the old code *wrapped* into
+///   range — are rejected, which is what eliminated the large Audi EDC16 ghosts;
+/// * **word alignment** — `start % 4 == 0 && (end + 1) % 4 == 0`, rejecting the
+///   off-by-one duplicate records some directories carry and a word-unaligned
+///   ghost tail seen on the UAZ dump. Bounds are deliberately NOT required to be
+///   page-aligned: real blocks start past a header and end mid-page (e.g.
+///   `0x17FFFB`), so a page-aligned guard wrongly drops genuine blocks;
+/// * **minimum size** — the region spans at least [`MIN_BLOCK_LEN`] bytes, which
+///   drops the tiny 8-byte padding-gap ghosts;
+/// * `start < end` and `end` in range.
 ///
 /// Survivors are de-duplicated and returned sorted by `end` ascending so
 /// [`correct_directory`] fixes inner blocks before the blocks that enclose them.
+///
+/// NOTE: these are *structural* guards against coincidental markers in real
+/// dumps, not a cryptographic guarantee. A genuine block always sums to
+/// [`EDC16_MPC_SUM_CONST`] on a stock image, so [`verify_directory`] is the
+/// authoritative check, and the safest fix workflow diffs against a known-stock
+/// reference (see ROADMAP).
 pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
     let len = image.len();
     let mut out: Vec<DirBlock> = Vec::new();
     if len < 16 {
         return out;
     }
+    let pow2 = (len & (len - 1)) == 0;
+    let base = if pow2 { detect_base(image, len) } else { 0 };
     let mut i = 0usize;
     while i + 8 <= len {
         if image[i..i + 4] == MARK_CS && image[i + 4..i + 8] == MARK_CP {
@@ -460,17 +514,19 @@ pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
             if i >= 8 {
                 if let (Some(sa), Some(ea)) = (read_u32_be(image, i - 8), read_u32_be(image, i - 4))
                 {
-                    if let (Some(start), Some(end)) =
-                        (addr_to_offset(sa, len), addr_to_offset(ea, len))
-                    {
-                        // Anti-ghost guards (see fn docs): marker at start+0x3C,
-                        // page-aligned bounds, sane range.
-                        let marker_placed = i == start as usize + MARKER_OFFSET_IN_REGION;
-                        let aligned =
-                            start % REGION_ALIGN == 0 && end.wrapping_add(1) % REGION_ALIGN == 0;
-                        let valid = start < end && (end as usize) < len && (end - start) >= 4;
+                    if let (Some(start), Some(end)) = (
+                        addr_to_offset(sa, len, base, pow2),
+                        addr_to_offset(ea, len, base, pow2),
+                    ) {
+                        // Anti-ghost guards (see fn docs): both bounds inside the
+                        // base window (handled by addr_to_offset), word-aligned,
+                        // at least MIN_BLOCK_LEN bytes, sane range.
+                        let aligned = start % 4 == 0 && end.wrapping_add(1) % 4 == 0;
+                        let valid = start < end
+                            && (end as usize) < len
+                            && (end - start + 1) >= MIN_BLOCK_LEN;
                         let blk = DirBlock { start, end };
-                        if marker_placed && aligned && valid && !out.contains(&blk) {
+                        if aligned && valid && !out.contains(&blk) {
                             out.push(blk);
                         }
                     }
@@ -746,10 +802,10 @@ mod tests {
     // ---- MPC56x directory engine: synthetic coverage (no fixtures) -------
 
     /// Build a tiny power-of-two image carrying one genuine directory record for
-    /// the block `[start, end]` (file offsets). As on a real EDC16, the record
-    /// `{start, end, MARK_CS, MARK_CP}` lives **inside** the region at
-    /// `start + 0x34`, so `MARK_CS` sits at `start + 0x3C`. `start`/`end` must be
-    /// page-aligned (`start % 0x100 == 0 && (end + 1) % 0x100 == 0`).
+    /// the block `[start, end]` (file offsets, base 0). As on a real EDC16, the
+    /// record `{start, end, MARK_CS, MARK_CP}` lives **inside** the region at
+    /// `start + 0x34`. Bounds should be word-aligned (`start % 4 == 0 &&
+    /// (end + 1) % 4 == 0`) and at least `MIN_BLOCK_LEN` bytes.
     fn mpc_image(len: usize, start: u32, end: u32) -> Vec<u8> {
         let mut img = vec![0u8; len];
         // arbitrary block data across the whole region
@@ -820,12 +876,12 @@ mod tests {
 
     #[test]
     fn mpc_rejects_misaligned_duplicate_records() {
-        // A genuine record plus an off-by-one duplicate (end+1 not page-aligned,
-        // marker not at start+0x3C): only the genuine one is kept.
+        // A genuine record plus an off-by-one duplicate (end+1 word-unaligned):
+        // only the genuine one is kept.
         let len = 0x1_0000usize;
         let mut img = mpc_image(len, 0x100, 0x1FF);
-        // duplicate with end = 0x200 ((end+1)=0x201: fails page-align AND the
-        // marker-at-start+0x3C guard), placed outside the region.
+        // duplicate with end = 0x200 ((end+1)=0x201: fails the word-alignment
+        // guard), placed outside the region.
         img[0x80..0x84].copy_from_slice(&0x100u32.to_be_bytes());
         img[0x84..0x88].copy_from_slice(&0x200u32.to_be_bytes());
         img[0x88..0x8C].copy_from_slice(&MARK_CS);
@@ -836,31 +892,46 @@ mod tests {
     }
 
     #[test]
-    fn mpc_rejects_ghost_embedded_magic() {
-        // Regression for the brick-risk bug: an embedded FADECAFE/CAFEAFFE byte
-        // sequence in ordinary data, preceded by words that look like a valid
-        // {start,end}, must NOT be treated as a region. Here the embedded marker
-        // is NOT at start+0x3C (and the bounds are not page-aligned), exactly like
-        // the ghosts in the real UAZ EDC16 dump.
-        let len = 0x1_0000usize;
-        let mut img = mpc_image(len, 0x100, 0x1FF); // one genuine region
-                                                    // Embed a ghost at 0x800: preceding words encode {0x900, 0x9FF} (which
-                                                    // would be a plausible region) but the marker sits at 0x808, far from
-                                                    // 0x900 + 0x3C.
-        img[0x800..0x804].copy_from_slice(&0x900u32.to_be_bytes());
-        img[0x804..0x808].copy_from_slice(&0x9FFu32.to_be_bytes());
+    fn mpc_rejects_ghost_out_of_base_window() {
+        // Regression for the Audi EDC16 brick-risk bug: an embedded
+        // FADECAFE/CAFEAFFE whose preceding {start,end} encode an address OUTSIDE
+        // the image's base window. The old `addr & (len-1)` wrap folded it into a
+        // phantom in-range region that correct() then bricked; it must be rejected.
+        let len = 0x1_0000usize; // base-0 window [0, 0x10000)
+                                 // Two genuine base-0 records so base detection resolves to 0.
+        let mut img = vec![0u8; len];
+        for b in img[0x100..0x400].iter_mut() {
+            *b = 0x5A;
+        }
+        stamp_record(&mut img, 0x100, 0x3FF);
+        stamp_record(&mut img, 0x200, 0x2FF);
+        // Ghost: encode {0x1_0900, 0x1_09FF} — 0x10000 above the window.
+        img[0x800..0x804].copy_from_slice(&0x1_0900u32.to_be_bytes());
+        img[0x804..0x808].copy_from_slice(&0x1_09FFu32.to_be_bytes());
         img[0x808..0x80C].copy_from_slice(&MARK_CS);
         img[0x80C..0x810].copy_from_slice(&MARK_CP);
 
         let blocks = parse_directory(&img);
-        assert_eq!(blocks.len(), 1, "the ghost region must be rejected");
-        assert_eq!(
-            blocks[0],
-            DirBlock {
-                start: 0x100,
-                end: 0x1FF
-            }
-        );
+        assert_eq!(blocks.len(), 2, "out-of-window ghost must be rejected");
+        assert!(blocks.iter().all(|b| b.start < 0x1_0000));
+    }
+
+    #[test]
+    fn mpc_rejects_tiny_ghost() {
+        // Regression for the UAZ EDC16 tiny-ghost bug: an 8-byte marker pair in
+        // the padding between genuine blocks encodes a tiny in-window, word-aligned
+        // region. It is below MIN_BLOCK_LEN and must not be treated as a block.
+        let len = 0x1_0000usize;
+        let mut img = mpc_image(len, 0x100, 0x1FF); // one genuine region
+                                                    // Ghost: {0x900, 0x907} — 8 bytes, in-window, word-aligned.
+        img[0x800..0x804].copy_from_slice(&0x900u32.to_be_bytes());
+        img[0x804..0x808].copy_from_slice(&0x907u32.to_be_bytes());
+        img[0x808..0x80C].copy_from_slice(&MARK_CS);
+        img[0x80C..0x810].copy_from_slice(&MARK_CP);
+
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 1, "sub-MIN_BLOCK_LEN ghost must be rejected");
+        assert_eq!(blocks[0].end, 0x1FF);
     }
 
     #[test]
@@ -1129,10 +1200,12 @@ mod tests {
 
     /// Fixture regression on a real dump that contains embedded FADECAFE/CAFEAFFE
     /// byte sequences (ghost markers). `uaz_edc16c39_398273_ori.bin` has 17 magic
-    /// occurrences but only 2 genuine regions. Before the anti-ghost guards,
-    /// `parse_directory` returned 9 regions and `correct()` rewrote 4 bytes of
-    /// this stock file; it must now return exactly the 2 genuine regions and make
-    /// no changes. CI has no access, so `#[ignore]`d:
+    /// occurrences. Before the base-window / min-size guards, `parse_directory`
+    /// admitted a tiny 8-byte ghost at `[0x1D_FFF8, 0x1D_FFFF]` (the padding gap
+    /// between two genuine blocks) whose sum ≠ constant, so `correct()` rewrote 4
+    /// bytes of this stock file — a brick. It must now keep only genuine blocks
+    /// (each summing to the constant) and leave the stock dump byte-for-byte
+    /// unchanged. CI has no access, so `#[ignore]`d:
     ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
@@ -1145,31 +1218,29 @@ mod tests {
         let Ok(stock) = std::fs::read(format!("{dir}/edc16/uaz_edc16c39_398273_ori.bin")) else {
             return;
         };
-        // Exactly the two genuine regions, both page-aligned with marker @start+0x3C.
         let blocks = parse_directory(&stock);
+        // All 8 genuine regions are kept; the tiny padding-gap ghost is gone.
         assert_eq!(
             blocks.len(),
-            2,
-            "ghost markers must be rejected (got {:?})",
+            8,
+            "genuine blocks kept, ghosts rejected (got {:?})",
             blocks
         );
-        assert_eq!(
-            blocks[0],
-            DirBlock {
-                start: 0x04_0000,
-                end: 0x11_FFFF
-            }
+        let ghost = DirBlock {
+            start: 0x1D_FFF8,
+            end: 0x1D_FFFF,
+        };
+        assert!(
+            !blocks.contains(&ghost),
+            "the 8-byte padding-gap ghost must be rejected"
         );
-        assert_eq!(
-            blocks[1],
-            DirBlock {
-                start: 0x1E_0000,
-                end: 0x1F_FFFF
-            }
-        );
-        // A stock dump must verify and need no correction (no ghost rewrite).
+        // Every surviving block must be a genuine checksum block: on a stock dump
+        // each sums to the constant, so verify is all-ok and correct() is a no-op.
         let algo = Edc16;
-        assert!(algo.verify(&stock).unwrap().iter().all(|s| s.ok));
+        assert!(
+            algo.verify(&stock).unwrap().iter().all(|s| s.ok),
+            "every kept block must sum to the constant on a stock dump"
+        );
         let before = stock.clone();
         let mut m = stock.clone();
         assert!(
