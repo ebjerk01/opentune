@@ -7,8 +7,8 @@
   "protocol": "iso_tp",
   "diag_layer": "uds",
   "bitrate": 500000,
-  "tx_id": 2016,
-  "rx_id": 2024,
+  "tx_id": 2017,
+  "rx_id": 2025,
   "flash_size": 1605632,
   "regions": [
     {
@@ -23,7 +23,7 @@
       "name": "calibration",
       "region": {
         "address": 1311232,
-        "length": 262144
+        "length": 261632
       },
       "writable": true
     }
