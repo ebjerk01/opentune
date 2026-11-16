@@ -86,7 +86,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         error = null
     }
 
-    /** Copy every bundled `assets/ecudefs/*.json` into [ecudefsDir] once. */
+    /** Copy every bundled ECU-definition JSON asset into [ecudefsDir] once. */
     private fun copyAssetDefs() = viewModelScope.launch(Dispatchers.IO) {
         try {
             val am = getApplication<Application>().assets
@@ -165,7 +165,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun withImage(block: suspend (String) -> Unit) {
         val path = imagePath
         if (path == null) {
-            setError("Open a flash image first.")
+            error = "Open a flash image first."
             return
         }
         run("Working") { block(path) }

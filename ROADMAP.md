@@ -50,7 +50,7 @@ Everything here operates on a flash `.bin`.
 - [x] **Portable Linux builds** — glibc baseline fixed (`ubuntu-22.04` CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`); alpha AppImage + `.deb`
 - [x] **Android `opentune-ffi`** — UniFFI binding over the core (compile-verified; Kotlin bindings generated) + a Jetpack Compose app (`android/`)
 - [~] Desktop auto-update from GitHub Releases (configured; needs a signing key)
-- [ ] Build the Android APK (needs Android SDK/NDK) — the FFI + app source are ready
+- [x] **Android APK built + verified on real hardware** (SM-P600): installs, launches to the UI, the UniFFI native lib loads & round-trips into the Rust core — no crash. Debug/alpha build.
 
 ---
 
@@ -85,9 +85,9 @@ bench ECU are available.
 ---
 
 ## Phase 3 — Reach & ecosystem
-- [ ] **Android app on a phone** — build the APK + USB-OTG / BLE adapter support
-- [~] **Open hardware interface** — ESP32-S3 + CAN + K-line spec (`docs/hardware.md`); **Arduino K-line bridge firmware** written (`hardware/firmware/kline-bridge`) → device firmware (ISO-TP/TP2.0/K-line/boot UART) + USB-CDC/WiFi/BLE bridge + its OpenTune driver
-- [ ] **CAN-FD + DoIP** for newer ECUs
+- [~] **Android app on a phone** — APK built + verified running on a real device (above); USB-OTG / BLE adapter support still needs hardware
+- [~] **Open hardware interface** — ESP32-S3 **firmware written** (`hardware/firmware/esp32-s3`: TWAI/CAN + ISO-TP + K-line + framed USB-CDC protocol; not yet compiled/flashed) **and its Rust host driver** (`crates/drivers/esp32-opentune`, 22 tests); Arduino K-line bridge firmware also written. Remaining: compile/flash + a KiCad board + on-bench test.
+- [x] **CAN-FD** (+ ISO-TP-FD) **and DoIP** transport (`opentune-core`; ISO 15765-2:2016 FD + ISO 13400) — offline/mock-tested (incl. a localhost TCP DoIP round-trip); untested on real CAN-FD/DoIP silicon
 - [ ] **More ECU families** + a growing **community ECU-definition & map library** (contribution format + review)
 
 ---
