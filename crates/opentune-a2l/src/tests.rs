@@ -289,6 +289,135 @@ fn val_blk_matrix_dim() {
 }
 
 #[test]
+fn std_axis_address_computed_from_record_layout() {
+    // A CURVE whose record layout stores the X breakpoints inline, BEFORE the
+    // function values: AXIS_PTS_X (position 1) then FNC_VALUES (position 2). The
+    // X axis begins at the characteristic address; the table data follows it.
+    let src = r#"
+/begin PROJECT P ""
+  /begin MODULE M ""
+    /begin MOD_COMMON "" BYTE_ORDER MSB_FIRST /end MOD_COMMON
+    /begin RECORD_LAYOUT RL_STD
+      AXIS_PTS_X 1 UWORD INDEX_INCR DIRECT
+      FNC_VALUES 2 UBYTE COLUMN_DIR DIRECT
+    /end RECORD_LAYOUT
+    /begin COMPU_METHOD C "" IDENTITY "%.0" "" /end COMPU_METHOD
+    /begin CHARACTERISTIC crv "c" CURVE 0x1000 RL_STD 0 C 0 100
+      /begin AXIS_DESCR
+        STD_AXIS rpm_in C 8 0.0 7000.0
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+  /end MODULE
+/end PROJECT"#;
+    let imp = parse_a2l(src).expect("parse");
+    let m = &imp.maps[0];
+    assert_eq!(m.cols, 8);
+    // 8 UWORD axis points = 16 bytes precede the function values.
+    assert_eq!(
+        m.address,
+        0x1000 + 16,
+        "table data address shifted past axis"
+    );
+    let x = m.x_axis.as_ref().expect("x axis");
+    assert_eq!(x.address, Some(0x1000), "inline axis at char base");
+    assert_eq!(x.data_type, DataType::U16);
+    assert_eq!(x.count, 8);
+    assert!(m.notes.contains("address computed"), "notes: {}", m.notes);
+}
+
+#[test]
+fn std_axis_address_declined_when_layout_unmodeled() {
+    // Same inline axis, but the record layout has an ALIGNMENT entry whose
+    // padding this crate does not model: the address must NOT be guessed.
+    let src = r#"
+/begin PROJECT P ""
+  /begin MODULE M ""
+    /begin MOD_COMMON "" BYTE_ORDER MSB_FIRST /end MOD_COMMON
+    /begin RECORD_LAYOUT RL_STD
+      AXIS_PTS_X 1 UWORD INDEX_INCR DIRECT
+      ALIGNMENT_WORD 2
+      FNC_VALUES 2 UBYTE COLUMN_DIR DIRECT
+    /end RECORD_LAYOUT
+    /begin COMPU_METHOD C "" IDENTITY "%.0" "" /end COMPU_METHOD
+    /begin CHARACTERISTIC crv "c" CURVE 0x1000 RL_STD 0 C 0 100
+      /begin AXIS_DESCR
+        STD_AXIS rpm_in C 8 0.0 7000.0
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+  /end MODULE
+/end PROJECT"#;
+    let imp = parse_a2l(src).expect("parse");
+    let m = &imp.maps[0];
+    assert_eq!(m.address, 0x1000, "address left at char base (no guess)");
+    let x = m.x_axis.as_ref().expect("x axis");
+    assert!(x.address.is_none(), "inline axis address not guessed");
+    assert!(
+        m.notes.contains("address not computed"),
+        "notes: {}",
+        m.notes
+    );
+}
+
+#[test]
+fn cuboid_sliced_into_separate_maps() {
+    // A 3-D CUBOID (X=4, Y=3, Z=2) becomes two 2-D X*Y faces, each a MapDef.
+    let src = r#"
+/begin PROJECT P ""
+  /begin MODULE M ""
+    /begin MOD_COMMON "" BYTE_ORDER MSB_FIRST /end MOD_COMMON
+    /begin RECORD_LAYOUT R FNC_VALUES 1 UWORD COLUMN_DIR DIRECT /end RECORD_LAYOUT
+    /begin COMPU_METHOD C "" IDENTITY "%.0" "deg" /end COMPU_METHOD
+    /begin CHARACTERISTIC cube "3d table" CUBOID 0x5000 R 0 C 0 100
+      /begin AXIS_DESCR STD_AXIS x_in C 4 0 100 /end AXIS_DESCR
+      /begin AXIS_DESCR STD_AXIS y_in C 3 0 100 /end AXIS_DESCR
+      /begin AXIS_DESCR STD_AXIS z_in C 2 0 100 /end AXIS_DESCR
+    /end CHARACTERISTIC
+  /end MODULE
+/end PROJECT"#;
+    let imp = parse_a2l(src).expect("parse");
+    assert_eq!(imp.maps.len(), 2, "two Z slices");
+    let (s0, s1) = (&imp.maps[0], &imp.maps[1]);
+    // Each face is 4x3 UWORD = 24 bytes.
+    assert_eq!(s0.cols, 4);
+    assert_eq!(s0.rows, 3);
+    assert_eq!(s0.address, 0x5000);
+    assert_eq!(s1.address, 0x5000 + 24, "second face one plane along");
+    assert!(s0.name.contains("z_in=0"), "name: {}", s0.name);
+    assert!(s1.name.contains("z_in=1"), "name: {}", s1.name);
+    assert!(s0.notes.contains("flattened"), "notes: {}", s0.notes);
+    assert_eq!(s0.unit, "deg");
+}
+
+#[test]
+fn cuboid_slice_cap_flags_overflow() {
+    // A CUBOID whose Z axis exceeds the slice cap: the surplus is flagged, not
+    // silently dropped.
+    let big_z = super::CUBOID_SLICE_CAP + 5;
+    let src = format!(
+        r#"
+/begin PROJECT P ""
+  /begin MODULE M ""
+    /begin MOD_COMMON "" BYTE_ORDER MSB_FIRST /end MOD_COMMON
+    /begin RECORD_LAYOUT R FNC_VALUES 1 UBYTE COLUMN_DIR DIRECT /end RECORD_LAYOUT
+    /begin COMPU_METHOD C "" IDENTITY "%.0" "" /end COMPU_METHOD
+    /begin CHARACTERISTIC cube "big" CUBOID 0x6000 R 0 C 0 100
+      /begin AXIS_DESCR STD_AXIS x_in C 2 0 100 /end AXIS_DESCR
+      /begin AXIS_DESCR STD_AXIS y_in C 2 0 100 /end AXIS_DESCR
+      /begin AXIS_DESCR STD_AXIS z_in C {big_z} 0 100 /end AXIS_DESCR
+    /end CHARACTERISTIC
+  /end MODULE
+/end PROJECT"#
+    );
+    let imp = parse_a2l(&src).expect("parse");
+    assert_eq!(imp.maps.len(), super::CUBOID_SLICE_CAP as usize);
+    assert!(
+        imp.maps[0].notes.contains("omitted"),
+        "notes: {}",
+        imp.maps[0].notes
+    );
+}
+
+#[test]
 fn unresolved_com_axis_is_flagged() {
     let src = r#"
 /begin PROJECT P ""

@@ -188,6 +188,18 @@ enum Command {
         #[arg(short = 'o', long)]
         out: Option<PathBuf>,
     },
+    /// Export an ECU definition's maps as an ASAM A2L (MCD-2 MC).
+    ExportA2l {
+        /// Directory of ECU definitions.
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+        /// Definition id whose maps to export.
+        #[arg(long)]
+        def: String,
+        /// Output .a2l path (defaults to stdout).
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -248,6 +260,15 @@ fn registry() -> Registry {
     });
     r.register("slcan", "slcan USB-CAN (CANable/CANtact)", || {
         Box::new(opentune_driver_slcan::SlcanDriver::new())
+    });
+    r.register("j2534", "J2534 PassThru (generic, Windows)", || {
+        Box::new(opentune_driver_j2534::J2534Driver::new())
+    });
+    r.register("gsusb", "gs_usb / candleLight USB-CAN", || {
+        Box::new(opentune_driver_gsusb::GsUsbDriver::new())
+    });
+    r.register("elm327net", "ELM327 over WiFi / Bluetooth", || {
+        Box::new(opentune_driver_elm327net::Elm327NetDriver::new())
     });
     r
 }
@@ -866,6 +887,25 @@ fn main() -> Result<()> {
                     println!("Wrote {} map(s) to {}", d.maps.len(), p.display());
                 }
                 None => print!("{xml}"),
+            }
+        }
+        Command::ExportA2l { ecudefs, def, out } => {
+            let defs = opentune_core::ecudef::load_dir(&ecudefs)
+                .map_err(|e| anyhow!("load {}: {e}", ecudefs.display()))?;
+            let d = defs
+                .iter()
+                .find(|d| d.id == def)
+                .ok_or_else(|| anyhow!("no definition '{def}' in {}", ecudefs.display()))?;
+            if d.maps.is_empty() {
+                return Err(anyhow!("definition '{def}' has no maps to export"));
+            }
+            let a2l = opentune_a2l::export_a2l(&d.maps, Some(&d.id), Some(&d.name));
+            match out {
+                Some(p) => {
+                    std::fs::write(&p, &a2l).map_err(|e| anyhow!("write {}: {e}", p.display()))?;
+                    println!("Wrote {} map(s) to {}", d.maps.len(), p.display());
+                }
+                None => print!("{a2l}"),
             }
         }
     }

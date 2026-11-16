@@ -35,8 +35,11 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod compu;
+pub mod export;
 pub mod lex;
 pub mod num;
+
+pub use export::export_a2l;
 
 use compu::{parse_compu_method, CompuMethod};
 use lex::Block;
@@ -121,9 +124,7 @@ pub fn parse_a2l(src: &str) -> Result<A2lImport> {
 
     let mut maps = Vec::new();
     for ch in collect(module, "CHARACTERISTIC") {
-        if let Some(m) = map_characteristic(ch, &ctx) {
-            maps.push(m);
-        }
+        maps.extend(map_characteristic(ch, &ctx));
     }
 
     if maps.is_empty() {
@@ -159,19 +160,204 @@ struct RecordLayout {
     axis_y: Option<(DataType, bool)>,
     /// A record-layout-level `BYTE_ORDER`, if any (overrides the module default).
     byte_order: Option<Endian>,
+    /// Layout *position* of `FNC_VALUES` (the number after the keyword). Positions
+    /// order the components in memory and are what the inline-offset computation
+    /// in [`compute_embedded`] walks.
+    fnc_pos: Option<u32>,
+    /// Layout position of `AXIS_PTS_X`.
+    axis_x_pos: Option<u32>,
+    /// Layout position of `AXIS_PTS_Y`.
+    axis_y_pos: Option<u32>,
+    /// `NO_AXIS_PTS_X` `(position, stored count element type)` — a stored
+    /// axis-point-count field that occupies bytes ahead of the data.
+    no_axis_x: Option<(u32, DataType)>,
+    /// `NO_AXIS_PTS_Y` `(position, stored count element type)`.
+    no_axis_y: Option<(u32, DataType)>,
+    /// True when the layout contains a positioned component whose byte size this
+    /// crate does not model (alignment padding, rescale tables, src/rip address
+    /// words, a Z/4/5 axis …). The inline-offset computation then refuses to
+    /// guess rather than return a wrong address.
+    has_unmodeled: bool,
 }
 
+/// Positioned `RECORD_LAYOUT` components whose byte footprint this crate does
+/// **not** model. Their presence makes an inline (STD_AXIS / embedded FNC_VALUES)
+/// offset uncertain, so [`compute_embedded`] declines to compute one — honesty
+/// over a plausible-but-wrong address.
+const UNMODELED_LAYOUT: &[&str] = &[
+    "ALIGNMENT_BYTE",
+    "ALIGNMENT_WORD",
+    "ALIGNMENT_LONG",
+    "ALIGNMENT_INT64",
+    "ALIGNMENT_FLOAT16_IEEE",
+    "ALIGNMENT_FLOAT32_IEEE",
+    "ALIGNMENT_FLOAT64_IEEE",
+    "AXIS_PTS_Z",
+    "AXIS_PTS_4",
+    "AXIS_PTS_5",
+    "AXIS_RESCALE_X",
+    "AXIS_RESCALE_Y",
+    "AXIS_RESCALE_Z",
+    "AXIS_RESCALE_4",
+    "AXIS_RESCALE_5",
+    "DIST_OP_X",
+    "DIST_OP_Y",
+    "DIST_OP_Z",
+    "DIST_OP_4",
+    "DIST_OP_5",
+    "IDENTIFICATION",
+    "NO_AXIS_PTS_Z",
+    "NO_AXIS_PTS_4",
+    "NO_AXIS_PTS_5",
+    "NO_RESCALE_X",
+    "NO_RESCALE_Y",
+    "NO_RESCALE_Z",
+    "NO_RESCALE_4",
+    "NO_RESCALE_5",
+    "OFFSET_X",
+    "OFFSET_Y",
+    "OFFSET_Z",
+    "OFFSET_4",
+    "OFFSET_5",
+    "RESERVED",
+    "RIP_ADDR_W",
+    "RIP_ADDR_X",
+    "RIP_ADDR_Y",
+    "RIP_ADDR_Z",
+    "RIP_ADDR_4",
+    "RIP_ADDR_5",
+    "SHIFT_OP_X",
+    "SHIFT_OP_Y",
+    "SHIFT_OP_Z",
+    "SHIFT_OP_4",
+    "SHIFT_OP_5",
+    "SRC_ADDR_X",
+    "SRC_ADDR_Y",
+    "SRC_ADDR_Z",
+    "SRC_ADDR_4",
+    "SRC_ADDR_5",
+];
+
 /// Parse a `RECORD_LAYOUT` block. The relevant entries are `FNC_VALUES`,
-/// `AXIS_PTS_X`/`AXIS_PTS_Y` (each `<keyword> <position> <datatype> …`) and an
-/// optional `BYTE_ORDER`.
+/// `AXIS_PTS_X`/`AXIS_PTS_Y` (each `<keyword> <position> <datatype> …`), the
+/// `NO_AXIS_PTS_X`/`_Y` count fields and an optional `BYTE_ORDER`.
 fn parse_record_layout(block: &Block) -> RecordLayout {
     let dt_after = |kw: &str| block.after_keyword(kw, 2).and_then(datatype_of);
+    let pos_after = |kw: &str| block.after_keyword(kw, 1).and_then(parse_u32);
+    let no_axis = |kw: &str| -> Option<(u32, DataType)> {
+        let pos = block.after_keyword(kw, 1).and_then(parse_u32)?;
+        // `NO_AXIS_PTS_X <position> <datatype>`: a single stored count element.
+        let dt = block
+            .after_keyword(kw, 2)
+            .and_then(datatype_of)
+            .map(|(d, _)| d)
+            .unwrap_or(DataType::U8);
+        Some((pos, dt))
+    };
     RecordLayout {
         fnc: dt_after("FNC_VALUES"),
         axis_x: dt_after("AXIS_PTS_X"),
         axis_y: dt_after("AXIS_PTS_Y"),
         byte_order: byte_order_of(block),
+        fnc_pos: pos_after("FNC_VALUES"),
+        axis_x_pos: pos_after("AXIS_PTS_X"),
+        axis_y_pos: pos_after("AXIS_PTS_Y"),
+        no_axis_x: no_axis("NO_AXIS_PTS_X"),
+        no_axis_y: no_axis("NO_AXIS_PTS_Y"),
+        has_unmodeled: block
+            .words
+            .iter()
+            .any(|t| t.text().is_some_and(|w| UNMODELED_LAYOUT.contains(&w))),
     }
+}
+
+/// Byte offsets, from a characteristic's base (`ECU_ADDRESS`), of the inline
+/// components of its record layout — computed **only** when every component that
+/// precedes the target can be sized exactly. A `None` field means "absent or not
+/// computable"; the caller must never substitute a guess.
+#[derive(Debug, Clone, Copy, Default)]
+struct Embedded {
+    /// Offset of the `FNC_VALUES` (table data) block.
+    fnc: Option<u32>,
+    /// Offset of inline `AXIS_PTS_X` breakpoints (a STD_AXIS X axis).
+    axis_x: Option<u32>,
+    /// Offset of inline `AXIS_PTS_Y` breakpoints (a STD_AXIS Y axis).
+    axis_y: Option<u32>,
+}
+
+/// A characteristic's base address paired with its computed inline offsets, so a
+/// STD_AXIS can resolve its embedded breakpoint address.
+#[derive(Debug, Clone, Copy)]
+struct Layout {
+    base: u32,
+    emb: Embedded,
+}
+
+/// Walk a record layout's positioned, sizeable components in position order and
+/// return the byte offset at which each of `FNC_VALUES`, `AXIS_PTS_X` and
+/// `AXIS_PTS_Y` begins. `rows`/`cols` give the element counts (Y/X). Returns all
+/// `None` when the layout has an unmodeled component (see [`UNMODELED_LAYOUT`]).
+fn compute_embedded(rl: &RecordLayout, rows: u32, cols: u32) -> Embedded {
+    if rl.has_unmodeled {
+        return Embedded::default();
+    }
+    /// Which component a layout entry is (for recording its start offset).
+    #[derive(Clone, Copy)]
+    enum Comp {
+        Fnc,
+        AxX,
+        AxY,
+        /// A sized component that occupies bytes but is not a target (a count field).
+        Filler,
+    }
+    let mut entries: Vec<(u32, u32, Comp)> = Vec::new();
+    if let (Some(pos), Some((dt, _))) = (rl.fnc_pos, rl.fnc) {
+        entries.push((
+            pos,
+            rows.saturating_mul(cols).saturating_mul(dt.byte_len()),
+            Comp::Fnc,
+        ));
+    }
+    if let (Some(pos), Some((dt, _))) = (rl.axis_x_pos, rl.axis_x) {
+        entries.push((pos, cols.saturating_mul(dt.byte_len()), Comp::AxX));
+    }
+    if let (Some(pos), Some((dt, _))) = (rl.axis_y_pos, rl.axis_y) {
+        entries.push((pos, rows.saturating_mul(dt.byte_len()), Comp::AxY));
+    }
+    if let Some((pos, dt)) = rl.no_axis_x {
+        entries.push((pos, dt.byte_len(), Comp::Filler));
+    }
+    if let Some((pos, dt)) = rl.no_axis_y {
+        entries.push((pos, dt.byte_len(), Comp::Filler));
+    }
+    entries.sort_by_key(|e| e.0);
+    let mut off = 0u32;
+    let mut out = Embedded::default();
+    for (_pos, size, comp) in entries {
+        match comp {
+            Comp::Fnc => out.fnc = Some(off),
+            Comp::AxX => out.axis_x = Some(off),
+            Comp::AxY => out.axis_y = Some(off),
+            Comp::Filler => {}
+        }
+        off = off.saturating_add(size);
+    }
+    out
+}
+
+/// Apply the inline `FNC_VALUES` offset to a characteristic's base address so the
+/// returned address points at the table data even when axis points are stored
+/// ahead of it in the record. A zero or uncomputable offset leaves it unchanged.
+fn adjust_fnc_address(base: u32, embedded: Option<&Embedded>, notes: &mut Vec<String>) -> u32 {
+    if let Some(off) = embedded.and_then(|e| e.fnc) {
+        if off > 0 {
+            notes.push(format!(
+                "table data at ECU_ADDRESS + 0x{off:X} (axis points stored ahead of FNC_VALUES)"
+            ));
+            return base.wrapping_add(off);
+        }
+    }
+    base
 }
 
 /// An `AXIS_PTS` block: a shared (`COM_AXIS`) breakpoint table.
@@ -236,22 +422,29 @@ struct Ctx<'a> {
     default_endian: Option<Endian>,
 }
 
-/// Convert one `CHARACTERISTIC` into a [`MapDef`], or `None` for a kind this
-/// importer does not represent (`ASCII`).
-fn map_characteristic(ch: &Block, ctx: &Ctx) -> Option<MapDef> {
+/// Convert one `CHARACTERISTIC` into one or more [`MapDef`]s. A normal
+/// scalar/curve/map yields a single `MapDef`; a `CUBOID`/`CUBE_4`/`CUBE_5` yields
+/// one `MapDef` per X×Y slice (see below). An `ASCII` string yields none.
+fn map_characteristic(ch: &Block, ctx: &Ctx) -> Vec<MapDef> {
     let mut notes: Vec<String> = Vec::new();
 
-    let name = ch.word(0).filter(|s| !s.is_empty())?.to_string();
+    let name = match ch.word(0).filter(|s| !s.is_empty()) {
+        Some(n) => n.to_string(),
+        None => return Vec::new(),
+    };
     let long_id = ch.word(1).unwrap_or_default();
     let kind = ch.word(2).unwrap_or_default().to_string();
-    let address = ch.word(3).and_then(parse_u32)?;
+    let char_addr = match ch.word(3).and_then(parse_u32) {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
     let rl_ref = ch.word(4).unwrap_or_default();
     let cm_ref = ch.word(6).unwrap_or_default();
     let lower = ch.word(7).and_then(parse_f64);
     let upper = ch.word(8).and_then(parse_f64);
 
     if kind == "ASCII" {
-        return None; // A string, not a numeric calibration table.
+        return Vec::new(); // A string, not a numeric calibration table.
     }
 
     if !long_id.is_empty() {
@@ -265,21 +458,55 @@ fn map_characteristic(ch: &Block, ctx: &Ctx) -> Option<MapDef> {
     // Scaling + unit from the referenced COMPU_METHOD.
     let (scaling, unit) = resolve_conversion(cm_ref, ctx, &mut notes);
 
-    // Axis descriptions (ordered: first = X, second = Y, …).
+    // Axis descriptions (ordered: first = X, second = Y, then higher dims).
     let axis_descrs: Vec<&Block> = ch.children_tagged("AXIS_DESCR").collect();
 
-    // Dimensions from the kind + axes.
+    // The X×Y face dimensions are always the first two axes.
+    let cols = axis_count(axis_descrs.first(), ctx).max(1);
+    let rows = axis_count(axis_descrs.get(1), ctx).max(1);
+
+    // A cuboid: slice the higher dimensions into separate 2-D maps.
+    let is_cuboid = matches!(kind.as_str(), "CUBOID" | "CUBE_4" | "CUBE_5");
+    if is_cuboid && axis_descrs.len() > 2 {
+        return cuboid_slices(CuboidArgs {
+            name: &name,
+            kind: &kind,
+            char_addr,
+            rl,
+            axes: &axis_descrs,
+            rows,
+            cols,
+            data_type,
+            endian,
+            scaling,
+            unit: &unit,
+            lower,
+            upper,
+            notes,
+            ctx,
+        });
+    }
+
+    // Dimensions from the kind + axes (handles VALUE/VAL_BLK/CURVE/MAP and a
+    // cuboid that degenerates to a 2-D face).
     let (rows, cols) = dimensions(&kind, ch, &axis_descrs, ctx, &mut notes);
+
+    let embedded = rl.map(|r| compute_embedded(r, rows, cols));
+    let address = adjust_fnc_address(char_addr, embedded.as_ref(), &mut notes);
+    let layout = embedded.map(|emb| Layout {
+        base: char_addr,
+        emb,
+    });
 
     // Build axis definitions where we can.
     let x_axis = axis_descrs
         .first()
-        .and_then(|a| build_axis(a, rl, true, ctx, &mut notes));
+        .and_then(|a| build_axis(a, rl, true, layout.as_ref(), ctx, &mut notes));
     let y_axis = axis_descrs
         .get(1)
-        .and_then(|a| build_axis(a, rl, false, ctx, &mut notes));
+        .and_then(|a| build_axis(a, rl, false, layout.as_ref(), ctx, &mut notes));
 
-    Some(MapDef {
+    vec![MapDef {
         name,
         notes: notes.join("; "),
         address,
@@ -293,7 +520,139 @@ fn map_characteristic(ch: &Block, ctx: &Ctx) -> Option<MapDef> {
         y_axis,
         min: lower,
         max: upper,
-    })
+    }]
+}
+
+/// Inputs to [`cuboid_slices`], grouped to keep the signature readable.
+struct CuboidArgs<'a> {
+    name: &'a str,
+    kind: &'a str,
+    char_addr: u32,
+    rl: Option<&'a RecordLayout>,
+    axes: &'a [&'a Block],
+    rows: u32,
+    cols: u32,
+    data_type: DataType,
+    endian: Endian,
+    scaling: Scaling,
+    unit: &'a str,
+    lower: Option<f64>,
+    upper: Option<f64>,
+    notes: Vec<String>,
+    ctx: &'a Ctx<'a>,
+}
+
+/// Maximum number of cuboid slices imported, to keep a large table from
+/// exploding into thousands of maps. Any beyond this are flagged, not dropped
+/// silently.
+const CUBOID_SLICE_CAP: u32 = 64;
+
+/// Flatten a >2-D `CUBOID`/`CUBE_4`/`CUBE_5` into one 2-D `MapDef` per X×Y face.
+///
+/// The ASAM storage order is X innermost (fastest), then Y, then the higher
+/// axes, so face *f* lives at `base + f · (rows·cols·elementsize)` and the higher
+/// axes advance with the lower one varying fastest. This contiguous-storage
+/// assumption is stated in every slice's `notes`; the scaling stays strictly
+/// linear and is never guessed.
+fn cuboid_slices(a: CuboidArgs) -> Vec<MapDef> {
+    let mut notes = a.notes;
+
+    // Higher (sliced) dimensions beyond X and Y, with a human label each.
+    let outer: Vec<(u32, String)> = a
+        .axes
+        .iter()
+        .skip(2)
+        .enumerate()
+        .map(|(k, ax)| {
+            let count = axis_count(Some(ax), a.ctx).max(1);
+            let label = ax
+                .word(1)
+                .filter(|s| !s.is_empty() && *s != "NO_INPUT_QUANTITY" && *s != "dummy")
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("d{}", k + 3));
+            (count, label)
+        })
+        .collect();
+
+    let embedded = a.rl.map(|r| compute_embedded(r, a.rows, a.cols));
+    let data_address = adjust_fnc_address(a.char_addr, embedded.as_ref(), &mut notes);
+    let layout = embedded.map(|emb| Layout {
+        base: a.char_addr,
+        emb,
+    });
+
+    let face_bytes = a
+        .rows
+        .saturating_mul(a.cols)
+        .saturating_mul(a.data_type.byte_len());
+    let total_faces: u64 = outer.iter().map(|(c, _)| *c as u64).product();
+    let total_faces = total_faces.max(1);
+
+    let dims_desc = {
+        let mut d = vec![a.cols.to_string(), a.rows.to_string()];
+        d.extend(outer.iter().map(|(c, l)| format!("{c}({l})")));
+        d.join("x")
+    };
+    notes.push(format!(
+        "{kind} {ndim}-D table [{dims_desc}] flattened to {total_faces} X*Y face(s); \
+         each imported as a separate 2-D map at base + slice*{face_bytes}B \
+         (assumes contiguous storage, X fastest)",
+        kind = a.kind,
+        ndim = 2 + outer.len(),
+    ));
+
+    let emit = total_faces.min(CUBOID_SLICE_CAP as u64) as u32;
+    if total_faces > emit as u64 {
+        notes.push(format!(
+            "only first {emit} of {total_faces} slices imported ({} omitted)",
+            total_faces - emit as u64
+        ));
+    }
+
+    // The X and Y face axes (shared by every slice).
+    let x_axis = a
+        .axes
+        .first()
+        .and_then(|ax| build_axis(ax, a.rl, true, layout.as_ref(), a.ctx, &mut notes));
+    let y_axis = a
+        .axes
+        .get(1)
+        .and_then(|ax| build_axis(ax, a.rl, false, layout.as_ref(), a.ctx, &mut notes));
+
+    let base_notes = notes.join("; ");
+    (0..emit)
+        .map(|f| {
+            let suffix = slice_label(f, &outer);
+            MapDef {
+                name: format!("{} [{suffix}]", a.name),
+                notes: base_notes.clone(),
+                address: data_address.wrapping_add(f.saturating_mul(face_bytes)),
+                data_type: a.data_type,
+                endian: a.endian,
+                rows: a.rows,
+                cols: a.cols,
+                scaling: a.scaling,
+                unit: a.unit.to_string(),
+                x_axis: x_axis.clone(),
+                y_axis: y_axis.clone(),
+                min: a.lower,
+                max: a.upper,
+            }
+        })
+        .collect()
+}
+
+/// Human label for slice `f` of the outer (higher) dimensions, lowest dimension
+/// varying fastest: e.g. `"z=0, w=1"`.
+fn slice_label(f: u32, outer: &[(u32, String)]) -> String {
+    let mut rem = f;
+    let mut parts = Vec::with_capacity(outer.len());
+    for (count, label) in outer {
+        let c = (*count).max(1);
+        parts.push(format!("{label}={}", rem % c));
+        rem /= c;
+    }
+    parts.join(", ")
 }
 
 /// Resolve the stored value element type and byte order for a CHARACTERISTIC.
@@ -448,6 +807,7 @@ fn build_axis(
     ax: &Block,
     char_rl: Option<&RecordLayout>,
     is_x: bool,
+    layout: Option<&Layout>,
     ctx: &Ctx,
     notes: &mut Vec<String>,
 ) -> Option<AxisDef> {
@@ -513,22 +873,45 @@ fn build_axis(
             }
         }
         "STD_AXIS" => {
-            // Stored inline in the characteristic's own record layout; its exact
-            // address is embedded in the map block and is not computed here.
+            // Stored inline in the characteristic's own record layout. If that
+            // layout actually declares an AXIS_PTS_X/_Y entry and every preceding
+            // component is sizeable, the breakpoint address is computed from the
+            // record layout; otherwise it is left unresolved (never guessed).
             let (dt, endian) = axis_stored_type(char_rl, false, ctx, is_x);
-            notes.push(format!(
-                "{}-axis STD_AXIS stored inline in the map block (address not computed)",
-                if is_x { "x" } else { "y" }
-            ));
-            Some(AxisDef {
-                name,
-                unit,
-                count,
-                data_type: dt,
-                endian,
-                scaling,
-                ..Default::default()
-            })
+            let axis = if is_x { "x" } else { "y" };
+            let off = layout.and_then(|l| if is_x { l.emb.axis_x } else { l.emb.axis_y });
+            match (off, layout) {
+                (Some(o), Some(l)) => {
+                    let addr = l.base.wrapping_add(o);
+                    notes.push(format!(
+                        "{axis}-axis STD_AXIS stored inline; address computed from record layout as ECU_ADDRESS + 0x{o:X}"
+                    ));
+                    Some(AxisDef {
+                        name,
+                        unit,
+                        count,
+                        address: Some(addr),
+                        data_type: dt,
+                        endian,
+                        scaling,
+                        ..Default::default()
+                    })
+                }
+                _ => {
+                    notes.push(format!(
+                        "{axis}-axis STD_AXIS stored inline in the map block (address not computed)"
+                    ));
+                    Some(AxisDef {
+                        name,
+                        unit,
+                        count,
+                        data_type: dt,
+                        endian,
+                        scaling,
+                        ..Default::default()
+                    })
+                }
+            }
         }
         "FIX_AXIS" => {
             let values = fix_axis_values(ax, count);

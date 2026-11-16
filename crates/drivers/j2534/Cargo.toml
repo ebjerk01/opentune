@@ -1,0 +1,37 @@
+# Vendor-neutral J2534 (SAE J2534-1 "PassThru") driver for OpenTune.
+#
+# Works with any J2534 PassThru interface — Mongoose, VNCI, SVCI, Scanmatik,
+# and the many clones — by loading the vendor's PassThru DLL. That DLL binding
+# is a Windows-only FFI, so it is gated behind the `passthru-ffi` feature and a
+# `cfg(windows)` guard. The protocol/codec (J2534 constants + PASSTHRU_MSG
+# ISO15765 encode/decode) and a mock PassThru backend are always built, so the
+# crate compiles, tests and clippy-cleans on Linux with no J2534 present.
+#
+# NOTE: this is a STANDALONE workspace crate for now — the empty `[workspace]`
+# table at the bottom detaches it from the repo root so it builds on its own
+# while the root Cargo.toml is being edited elsewhere. To wire it into the main
+# workspace, ADD "crates/drivers/j2534" to the root `members` list and DELETE
+# the `[workspace]` table at the bottom of this file. (Same pattern
+# opentune-xdf / esp32-opentune used while being brought up.)
+[package]
+name = "opentune-driver-j2534"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "Vendor-neutral J2534 PassThru driver for OpenTune (protocol/codec + mock; real DLL binding is Windows-only)."
+
+[features]
+# Enables the real PassThru DLL binding. Windows-only; see src/ffi.rs.
+passthru-ffi = ["dep:libloading"]
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+
+# The PassThru DLL is a Windows library; the FFI binding is loaded with
+# libloading only on Windows, and only when the `passthru-ffi` feature is on.
+[target.'cfg(windows)'.dependencies]
+libloading = { version = "0.8", optional = true }

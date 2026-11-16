@@ -540,10 +540,9 @@ impl Interface for KklDriver {
         if data.len() != region.length as usize {
             return Err(Error::Config("data length != region length".into()));
         }
-        // TODO: security access via SeedKey plugin — unlock the ECU (service
-        // 0x27) before requestDownload. `security_access` runs the installed
-        // handler (or errors when the ECU requires one and none is set); it is a
-        // no-op on an open ECU with no handler configured.
+        // Unlock the ECU (service 0x27) before requestDownload. `security_access`
+        // runs the installed handler (or errors when the ECU requires one and
+        // none is set); it is a no-op on an open ECU with no handler configured.
         self.security_access()?;
         let layer = self.diag_layer;
         let t = self.transport()?;

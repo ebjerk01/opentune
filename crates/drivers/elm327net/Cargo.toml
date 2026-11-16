@@ -1,0 +1,27 @@
+# ELM327-over-network driver: the ELM327 AT-command protocol run over a WiFi
+# (TCP) socket or a Bluetooth RFCOMM serial device, instead of a local USB
+# serial port. Shares the AT dialect and reply parser with the USB `elm327`
+# driver but swaps the byte transport.
+#
+# NOTE: this is a STANDALONE workspace crate for now — the empty `[workspace]`
+# table at the bottom detaches it from the repo root so it builds on its own
+# while the root Cargo.toml is being edited elsewhere. To wire it into the main
+# workspace, ADD "crates/drivers/elm327net" to the root `members` list and
+# DELETE the `[workspace]` table at the bottom of this file. (Same pattern
+# opentune-xdf / esp32-opentune used while being brought up.)
+[package]
+name = "opentune-driver-elm327net"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "ELM327 driver over WiFi (TCP) and Bluetooth RFCOMM for OpenTune."
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+# Used only for the Bluetooth RFCOMM / generic serial path; the WiFi path is
+# std::net only.
+serialport = "4"
