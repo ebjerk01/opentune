@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "deb"],
+    "targets": ["appimage", "deb", "app", "dmg", "nsis"],
     "category": "DeveloperTool",
     "shortDescription": "Open ECU identify / checksum / calibration",
     "longDescription": "OpenTune — the open-source, calibration-only ECU toolkit. Offline identify, checksum verify/fix, map diff + heat-view, and a safety-gated (mock) flash on flash-image files. Hardware drivers (OpenPort 2.0, SocketCAN, SLCAN, K-line) ship for live reads/flashes.",
@@ -48,7 +48,7 @@
       "endpoints": [
         "https://github.com/ebjerk01/opentune/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyNzNFRTkzNkVEQTJDNzYKUldSMkxOcHVrKzV6d3RRV1pZeFJiVnFOZWp0YlZhQk1SMmJ6cHJQUGZ2Zk9DTm0waU9BRkJOa1kK"
     }
   }
 }

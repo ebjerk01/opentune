@@ -20,6 +20,8 @@ vendor/
 
 # ECU firmware images / dumps — keep out of the repo
 *.bin
+# …except the committed synthetic demo fixtures (not real dumps — see samples/).
+!/samples/*.bin
 *.ori
 *.mod
 *.org

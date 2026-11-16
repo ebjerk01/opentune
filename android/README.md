@@ -45,19 +45,23 @@ rustup target add aarch64-linux-android armv7-linux-androideabi \
 
 ```sh
 cd android
-# One-time: materialise the Gradle wrapper jar (not checked in) with a local
-# Gradle 8.9+, or open the project in Android Studio which does this for you:
-#   gradle wrapper --gradle-version 8.9
 ./build-rust.sh          # native .so + bindings (needs NDK + cargo-ndk)
 ./gradlew assembleDebug  # the APK
 ```
+
+The Gradle wrapper (`gradlew`, `gradlew.bat` and
+`gradle/wrapper/gradle-wrapper.jar`, pinned to Gradle 8.9) is **checked in**, so
+a fresh clone builds the APK without a separate wrapper-bootstrap step. The
+wrapper jar was materialised with `gradle wrapper --gradle-version 8.9`; to move
+to a newer Gradle, re-run that with the new version and commit the result.
 
 ## Build status (honest)
 
 - `crates/opentune-ffi` **compiles, tests and generates Kotlin bindings** on a
   plain Rust toolchain — that is verified.
 - The Android/Gradle/Compose side here is **written but unbuilt**: the machine
-  it was authored on has the Rust toolchain but **no Android SDK/NDK, no
-  `cargo-ndk`, and no Gradle wrapper jar**. To produce an APK you need those
-  installed (see above). The `.so` files and `gradle/wrapper/gradle-wrapper.jar`
-  are intentionally absent until then.
+  it was authored on has the Rust toolchain but **no Android SDK/NDK and no
+  `cargo-ndk`**. To produce an APK you need those installed (see above). The
+  Gradle wrapper jar is now committed, so only the native `.so` files
+  (`app/src/main/jniLibs/<abi>/libopentune_ffi.so`, produced by `build-rust.sh`)
+  remain to be built locally.

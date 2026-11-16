@@ -1,0 +1,84 @@
+{
+  "id": "opentune-demo-edc16",
+  "name": "OpenTune Demo (synthetic EDC16)",
+  "maker": "OpenTune",
+  "family": "EDC16",
+  "notes": "SYNTHETIC DEMO ONLY - NOT a real ECU. Pairs with samples/opentune-demo-edc16.bin, a 64 KiB fabricated image carrying one valid EDC16 MPC56x checksum directory block ([0x0100..0x7FFF], sum == 0xD01FE500) plus one calibration map and fake identity strings. Use it to exercise Analyze / Identify / Checksum verify+fix / Map-decode offline. Every address and value here is made up; do not flash anything from it.",
+  "protocol": "iso_tp",
+  "diag_layer": "kwp2000",
+  "bitrate": 500000,
+  "tx_id": 2016,
+  "rx_id": 2024,
+  "flash_size": 65536,
+  "regions": [
+    {
+      "name": "full",
+      "region": {
+        "address": 0,
+        "length": 65536
+      },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": {
+        "address": 256,
+        "length": 32256
+      },
+      "writable": true
+    }
+  ],
+  "checksum": "edc16",
+  "seedkey": null,
+  "full_read": "obd",
+  "maps": [
+    {
+      "name": "injection quantity limiter (demo)",
+      "notes": "SYNTHETIC. 8x16-bit cells at 0x2000, rising monotonically with air mass (X) and engine speed (Y). Decodes to ~14..53 mg/stroke. Axes are stored in-image; see the .bin generator in the repo history.",
+      "address": 8192,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 8,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "air mass",
+        "unit": "mg/stroke",
+        "count": 8,
+        "address": 7936,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 8,
+        "address": 7968,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 80.0
+    }
+  ],
+  "identify": {
+    "part_numbers": [
+      "03G906"
+    ],
+    "sw_numbers": [
+      "1037"
+    ]
+  }
+}
