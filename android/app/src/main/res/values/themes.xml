@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme; the Compose Material3 theme drives the real colours. A
+         Material3 parent keeps the status bar / splash consistent. -->
+    <style name="Theme.OpenTune" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

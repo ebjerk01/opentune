@@ -1,0 +1,115 @@
+[
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 3 Series (E46)",
+      "BMW 5 Series (E39)",
+      "BMW X3 (E83)"
+    ],
+    "years": "1998-2005",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC15C (DDE4)",
+    "ecudef_id": null,
+    "source": "public: BMW M47 2.0d (early) uses Bosch EDC15C under BMW's 'DDE4' designation; DDE4=EDC15 is a documented BMW mapping",
+    "confidence": "medium",
+    "notes": "Engine family M47 (M47D20, early). BMW names it DDE4; the underlying Bosch generation is EDC15C. No part_numbers shipped: BMW part numbers do not encode the engine code and we do not ship speculative prefixes (honesty bar). K-line era, addresses omitted. This entry documents the engine->ECU-family mapping; it will not auto-match on a reported part number."
+  },
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 1 Series (E87)",
+      "BMW 3 Series (E46/E90)",
+      "BMW 5 Series (E60)",
+      "BMW X3 (E83)"
+    ],
+    "years": "2004-2010",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C31/EDC16C35 (DDE5)",
+    "ecudef_id": null,
+    "source": "public: BMW M47TU/M47N 2.0d uses Bosch EDC16 (EDC16C31/C35) under BMW 'DDE5'; DDE5=EDC16 is documented",
+    "confidence": "medium",
+    "notes": "Engine family M47TU/M47N (2.0d). BMW DDE5 = Bosch EDC16 (C31/C35 variants). Exact sub-variant not pinned per model/year. 0x7E0 assumes CAN UDS (EDC16 era). No part_numbers shipped (see provenance README)."
+  },
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 3 Series (E46)",
+      "BMW 5 Series (E39)",
+      "BMW 7 Series (E38)",
+      "BMW X5 (E53)"
+    ],
+    "years": "1998-2005",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC15C/EDC16 (DDE4/DDE5)",
+    "ecudef_id": null,
+    "source": "public: BMW M57 3.0d (early) spans Bosch EDC15C (DDE4) then EDC16 (DDE5) across its production; both generations documented for M57",
+    "confidence": "medium",
+    "notes": "Engine family M57/M57D30 (early). TWO ECU generations: EDC15C (DDE4) on the earliest cars, EDC16 (DDE5) later — family lists both as a candidate set; the year split is NOT resolved here. addresses omitted because early cars are K-line. No part_numbers shipped."
+  },
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 3 Series (E90)",
+      "BMW 5 Series (E60)",
+      "BMW 7 Series (E65)",
+      "BMW X5 (E70)"
+    ],
+    "years": "2004-2010",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C31/EDC16C35 then EDC17CP (DDE6/DDE7)",
+    "ecudef_id": null,
+    "source": "public: BMW M57TU/M57N 3.0d uses Bosch EDC16 (DDE6) then EDC17CP (DDE7) in later cars; documented BMW/Bosch mapping",
+    "confidence": "medium",
+    "notes": "Engine family M57TU/M57N (3.0d). Candidate ECU set EDC16 -> EDC17CP across the run; split not resolved. 0x7E0 assumes CAN. No part_numbers shipped."
+  },
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 1 Series (E81/E87/F20)",
+      "BMW 3 Series (E90/F30)",
+      "BMW 5 Series (F10)",
+      "BMW X1 (E84)"
+    ],
+    "years": "2007-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC17C41/EDC17C50",
+    "ecudef_id": null,
+    "source": "public: BMW N47 2.0d uses Bosch EDC17 (EDC17C41 early, EDC17C50 later); EDC17 on N47 is widely documented in tuning/ECU databases",
+    "confidence": "medium",
+    "notes": "Engine family N47 (2.0d). EDC17 family is confident; the C41 vs C50 split tracks model/year and is not pinned here. CAN UDS (0x7E0). No part_numbers shipped: BMW numbers do not encode the engine and we avoid speculative prefixes."
+  },
+  {
+    "make": "BMW",
+    "models": [
+      "BMW 3 Series (E90/F30)",
+      "BMW 5 Series (E60/F10)",
+      "BMW 7 Series (F01)",
+      "BMW X5 (E70/F15)"
+    ],
+    "years": "2008-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC17CP09/EDC17CP45",
+    "ecudef_id": null,
+    "source": "public: BMW N57 3.0d uses Bosch EDC17CP (EDC17CP09 early, EDC17CP45 later); documented in ECU/tuning databases",
+    "confidence": "medium",
+    "notes": "Engine family N57 (3.0d). EDC17CP family confident; CP09 vs CP45 split by model/year not resolved. CAN UDS (0x7E0). No part_numbers shipped."
+  }
+]

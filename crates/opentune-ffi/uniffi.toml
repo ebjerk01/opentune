@@ -1,0 +1,10 @@
+# UniFFI binding configuration.
+#
+# Kotlin bindings are emitted into the `org.opentune.ffi` package so the
+# Android app (package `org.opentune.app`) imports them as
+# `import org.opentune.ffi.*`. The generated file is `org/opentune/ffi/opentune.kt`.
+[bindings.kotlin]
+package_name = "org.opentune.ffi"
+# The cdylib base name (lib<name>.so) that the generated code will load via JNA.
+# Must match the [lib] name in Cargo.toml so System.loadLibrary finds it.
+cdylib_name = "opentune_ffi"

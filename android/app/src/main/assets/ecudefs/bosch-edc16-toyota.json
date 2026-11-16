@@ -1,0 +1,115 @@
+{
+  "id": "bosch-edc16-toyota",
+  "name": "Bosch EDC16 (Toyota)",
+  "maker": "Bosch",
+  "family": "EDC16",
+  "notes": "Toyota 1.4 D-4D, EDC16 family over CAN (ISO 15765-4, UDS). CAN identifiers, memory map and flash_size are family placeholders and must be confirmed per software variant before any read or write.",
+  "protocol": "iso_tp",
+  "diag_layer": "uds",
+  "bitrate": 500000,
+  "tx_id": 2016,
+  "rx_id": 2024,
+  "flash_size": 524288,
+  "regions": [
+    {
+      "name": "full",
+      "region": {
+        "address": 0,
+        "length": 524288
+      },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": {
+        "address": 393216,
+        "length": 131072
+      },
+      "writable": true
+    }
+  ],
+  "checksum": "edc16",
+  "seedkey": null,
+  "full_read": "obd",
+  "maps": [
+    {
+      "name": "smoke limiter (injection quantity vs rpm/boost)",
+      "notes": "EXAMPLE ONLY. Address and axes are family-level placeholders inside the calibration region and MUST be confirmed per software variant before any read or write.",
+      "address": 458752,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 16,
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 458240,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "charge air pressure",
+        "unit": "hPa",
+        "count": 16,
+        "address": 458496,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 80.0
+    },
+    {
+      "name": "torque limiter (max indicated torque vs rpm)",
+      "notes": "EXAMPLE ONLY. Placeholder address/axis; confirm per software variant before use.",
+      "address": 462848,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 1,
+      "cols": 16,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 458240,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 400.0
+    }
+  ],
+  "identify": {
+    "part_numbers": [
+      "0281011",
+      "0281013",
+      "896631",
+      "8966152"
+    ],
+    "sw_numbers": [
+      "1037"
+    ]
+  }
+}

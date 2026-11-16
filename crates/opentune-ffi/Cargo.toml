@@ -1,0 +1,51 @@
+# OpenTune UniFFI binding: a thin, safe wrapper over the public OpenTune core
+# that re-exports the offline calibration workflow to Kotlin (Android) and
+# any other UniFFI target, driven entirely by the mock/file driver.
+#
+# This mirrors the operations the CLI (`crates/opentune-cli`) and the desktop
+# Tauri backend (`desktop/src-tauri`) expose: open → identify → checksum
+# verify/fix → find maps → decode a map into a heat grid → mock flash.
+[package]
+name = "opentune-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "UniFFI binding exposing OpenTune's offline calibration workflow to Kotlin/Android."
+
+[lib]
+# cdylib: the .so loaded by the Kotlin bindings (via JNA) on Android / desktop.
+# lib (rlib): lets `cargo test` link the crate as a normal Rust library.
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+# The UniFFI binding generator, run in library mode against the built cdylib:
+#   cargo run --bin uniffi-bindgen -- generate --library <libopentune_ffi.so> \
+#       --language kotlin --config uniffi.toml --out-dir <out>
+# See android/build-rust.sh and the crate README for the exact invocation.
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+# Pinned to an exact, well-aged release (0.28.3, published 2024-11) rather than
+# a floating minor, so the generated bindings and the runtime library always
+# agree. The `cli` feature provides `uniffi::uniffi_bindgen_main()` used by the
+# uniffi-bindgen bin above.
+uniffi = { version = "0.28.3", features = ["cli"] }
+thiserror = "1"
+
+opentune-core = { path = "../opentune-core" }
+opentune-checksum = { path = "../opentune-checksum" }
+opentune-flash = { path = "../opentune-flash" }
+opentune-driver-mock = { path = "../drivers/mock" }
+
+[dev-dependencies]
+# Used by the crate's own tests to synthesise a throw-away flash image.
+tempfile = "3"
+
+# ---------------------------------------------------------------------------
+# STANDALONE WORKSPACE — REMOVE WHEN WIRING INTO THE ROOT WORKSPACE.
+#

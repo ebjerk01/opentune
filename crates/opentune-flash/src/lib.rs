@@ -3,9 +3,16 @@
 //! No driver writes to an ECU directly from the app. Writes go through
 //! [`flash_calibration`], which enforces: voltage gate → verified backup →
 //! write → read-back verify. These rules live here so no driver can skip them.
+pub mod hash;
+pub mod resume;
+pub mod transcript;
 pub mod vault;
 
+pub use resume::{flash_calibration_resumable_logged, DEFAULT_CHUNK_SIZE};
+pub use transcript::{FlashEvent, Transcript, TranscriptEntry};
+
 use opentune_core::{Error, Interface, MemoryRegion, Phase, Progress, Result};
+use std::path::Path;
 
 /// Safety thresholds and switches for a flash operation.
 #[derive(Debug, Clone)]
@@ -16,6 +23,9 @@ pub struct SafetyConfig {
     pub require_backup: bool,
     /// Read back and compare after writing.
     pub verify_after_write: bool,
+    /// Chunk size (bytes) for the resumable flash path. 0 means
+    /// [`DEFAULT_CHUNK_SIZE`]. Ignored by [`flash_calibration`].
+    pub chunk_size: usize,
 }
 
 impl Default for SafetyConfig {
@@ -24,6 +34,7 @@ impl Default for SafetyConfig {
             min_millivolts: 12_000,
             require_backup: true,
             verify_after_write: true,
+            chunk_size: DEFAULT_CHUNK_SIZE,
         }
     }
 }
@@ -118,4 +129,36 @@ pub fn flash_calibration(
         bytes_written: new_data.len(),
         verified,
     })
+}
+
+/// Resumable, checkpointed flash of `data` to `region`.
+///
+/// Identical safety to [`flash_calibration`] (voltage gate → mandatory original
+/// backup → write → verify), but the write is chunked and progress is
+/// checkpointed to `state_path` after every verified chunk. If `state_path`
+/// already holds a valid checkpoint *for this exact payload*, already
+/// written+verified chunks are skipped and the flash continues; a checkpoint
+/// for a different payload is refused. The checkpoint is removed on full
+/// success. See [`SafetyConfig::chunk_size`].
+///
+/// This is the drop-in form without a transcript. For a session transcript, use
+/// [`flash_calibration_resumable_logged`], which takes a [`Transcript`].
+pub fn flash_calibration_resumable(
+    iface: &mut dyn Interface,
+    region: MemoryRegion,
+    data: &[u8],
+    safety: &SafetyConfig,
+    state_path: &Path,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<FlashReport> {
+    let mut transcript = Transcript::new();
+    flash_calibration_resumable_logged(
+        iface,
+        region,
+        data,
+        safety,
+        state_path,
+        &mut transcript,
+        progress,
+    )
 }

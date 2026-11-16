@@ -1,0 +1,112 @@
+[
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz C-Class (W202/W203)",
+      "Mercedes-Benz E-Class (W210)",
+      "Mercedes-Benz Sprinter (T1N)",
+      "Mercedes-Benz Vito (W638)"
+    ],
+    "years": "1997-2003",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": ["A6111"],
+    "family": "EDC15C6",
+    "ecudef_id": null,
+    "source": "public: Bosch EDC diesel family + Mercedes OM611 service documentation; OM611 2.2 CDI uses Bosch EDC15C6 (widely documented in community ECU databases, e.g. digital-kaos / nefariousmotorsports EDC15 listings)",
+    "confidence": "high",
+    "notes": "Engine family OM611 2.2 CDI. ECU family EDC15C6 is well established for OM611. part_numbers key 'A6111' is the Mercedes engine-611 prefix (engine-family scope, NOT ECU-unique) and will also match non-ECU OM611 parts. addresses omitted: EDC15 is K-line (ISO 9141 / KWP2000), not CAN 0x7E0. Fields 'confidence' and 'notes' are informational only and are ignored by the current CatalogEntry loader."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz E-Class (W210/W211)",
+      "Mercedes-Benz ML (W163)",
+      "Mercedes-Benz Sprinter (T1N)"
+    ],
+    "years": "1999-2003",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": ["A6121"],
+    "family": "EDC15C6",
+    "ecudef_id": null,
+    "source": "public: Bosch EDC15C6 is the documented engine ECU for the OM612 2.7 CDI (five-cylinder); same EDC15C6 generation as OM611",
+    "confidence": "high",
+    "notes": "Engine family OM612 2.7 CDI. part_numbers key 'A6121' = Mercedes engine-612 prefix (engine-family scope). K-line diagnostics (no 0x7E0)."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz E-Class (W210/W211)",
+      "Mercedes-Benz S-Class (W220)",
+      "Mercedes-Benz ML (W163)"
+    ],
+    "years": "1999-2005",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": ["A6131"],
+    "family": "EDC15C6",
+    "ecudef_id": null,
+    "source": "public: OM613 3.2 CDI (six-cylinder) EDC15C6, same Bosch generation as OM611/OM612 in the same period",
+    "confidence": "medium",
+    "notes": "Engine family OM613 3.2 CDI. EDC15C6 is consistent with the OM611/612 generation but exact ECU-hardware variant per model/year is unconfirmed here. part_numbers key 'A6131' = engine-613 prefix (engine-family scope). K-line."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz C-Class (W203/W204)",
+      "Mercedes-Benz E-Class (W211)",
+      "Mercedes-Benz Sprinter (NCV3)",
+      "Mercedes-Benz Vito/Viano (W639)"
+    ],
+    "years": "2002-2010",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["A6461"],
+    "family": "EDC16C2/EDC16C32",
+    "ecudef_id": null,
+    "source": "public: OM646 2.2 CDI uses Bosch EDC16 (EDC16C2 early, EDC16C32/EDC16CP31 later); EDC16 generation on OM646 is widely documented",
+    "confidence": "medium",
+    "notes": "Engine family OM646 2.2 CDI. ECU family EDC16 confirmed; the exact sub-variant (EDC16C2 vs EDC16C32 vs EDC16CP31) splits by model/year and is NOT pinned down here. addresses 0x7E0 assumes CAN UDS/OBD (EDC16 era moved to CAN) — confirm per vehicle. part_numbers key 'A6461' = engine-646 prefix (engine-family scope)."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz E-Class (W211)",
+      "Mercedes-Benz S-Class (W220/W221)"
+    ],
+    "years": "2002-2006",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["A6481"],
+    "family": "EDC16C32",
+    "ecudef_id": null,
+    "source": "public: OM648 3.2 CDI (six-cylinder) runs Bosch EDC16 (EDC16C32 generation) in the W211/W220 period",
+    "confidence": "medium",
+    "notes": "Engine family OM648 3.2 CDI. EDC16 family confident; exact EDC16C32 vs CP variant not confirmed per model/year. part_numbers key 'A6481' = engine-648 prefix (engine-family scope). 0x7E0 assumes CAN."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz E-Class (W211/W212)",
+      "Mercedes-Benz ML/GL (W164/X164)",
+      "Mercedes-Benz Sprinter (NCV3)",
+      "Mercedes-Benz S-Class (W221)"
+    ],
+    "years": "2005-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["A6421"],
+    "family": "EDC16CP31/EDC17CP",
+    "ecudef_id": null,
+    "source": "public: OM642 3.0 V6 CDI — early cars Bosch EDC16CP31, later cars move to EDC17CP; both generations documented for OM642",
+    "confidence": "medium",
+    "notes": "Engine family OM642 3.0 V6 CDI. TWO ECU generations span this engine's life: EDC16CP31 (earlier) then EDC17CP (later) — the family field lists both and the split by year/market is NOT resolved here. part_numbers key 'A6421' = engine-642 prefix (engine-family scope). Treat family as a candidate set, not a single value."
+  }
+]

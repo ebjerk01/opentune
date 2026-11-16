@@ -75,6 +75,12 @@ pub fn load_catalog(dir: &Path) -> crate::Result<Vec<CatalogEntry>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
+        if path.is_dir() {
+            // Recurse into subdirectories (e.g. catalog/manual/ for the
+            // hand-curated Mercedes/BMW entries alongside catalog/opendbc-*.json).
+            out.extend(load_catalog(&path)?);
+            continue;
+        }
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }

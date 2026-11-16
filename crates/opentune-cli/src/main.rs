@@ -62,6 +62,18 @@ enum Command {
         /// Directory to archive the pre-flash backup into (the safety net).
         #[arg(long, default_value = "vault")]
         vault: PathBuf,
+        /// Resumable flash: a checkpoint/state file. Its presence enables the
+        /// chunked, resume-after-interruption path and writes a session
+        /// transcript. Safe to re-run with the same file after an interruption.
+        #[arg(long)]
+        resume: Option<PathBuf>,
+        /// Directory for the session transcript (.log + .jsonl); defaults to the
+        /// vault directory. Only used with --resume.
+        #[arg(long)]
+        transcript: Option<PathBuf>,
+        /// Write chunk size in bytes for the resumable path (0 = default).
+        #[arg(long, default_value_t = 0)]
+        chunk_size: usize,
     },
     /// Full read via a driver, archived to the backup vault with ECU id.
     Dump {
@@ -111,6 +123,10 @@ enum Command {
     },
     /// Look up a diagnostic trouble code (e.g. P0101).
     Dtc { code: String },
+    /// Decode a 17-character VIN (WMI, country, year, check digit).
+    Vin { vin: String },
+    /// Structurally parse an ECU part number (VAG or Bosch).
+    DecodePart { part: String },
     /// Compare two calibrations map-by-map through an ECU definition.
     Compare {
         /// Directory of ECU definitions.
@@ -366,6 +382,9 @@ fn main() -> Result<()> {
             data,
             min_mv,
             vault,
+            resume,
+            transcript,
+            chunk_size,
         } => {
             let mut drv = open_driver(&reg, &conn)?;
             let bytes = std::fs::read(&data).with_context(|| format!("read {}", data.display()))?;
@@ -374,26 +393,64 @@ fn main() -> Result<()> {
             let id = drv.read_ecu_id().unwrap_or_default();
             let safety = opentune_flash::SafetyConfig {
                 min_millivolts: min_mv,
+                chunk_size,
                 ..Default::default()
             };
-            let report = opentune_flash::flash_calibration(
-                drv.as_mut(),
-                region,
-                &bytes,
-                &safety,
-                &mut noprogress,
-            )
-            .map_err(|e| anyhow!("flash: {e}"))?;
-            // Persist the pre-flash backup — the safety net if the write is bad.
-            if !report.backup.is_empty() {
-                match opentune_flash::vault::save_backup(&vault, &id, region, &report.backup) {
-                    Ok(p) => println!("Pre-flash backup archived: {}", p.display()),
-                    Err(e) => eprintln!(
-                        "WARNING: could not archive backup to {}: {e}",
-                        vault.display()
-                    ),
+            let report = if let Some(state) = resume.as_ref() {
+                // Resumable, chunked, checkpointed flash with a session transcript.
+                let mut tr = opentune_flash::Transcript::new();
+                let rep = opentune_flash::flash_calibration_resumable_logged(
+                    drv.as_mut(),
+                    region,
+                    &bytes,
+                    &safety,
+                    state,
+                    &mut tr,
+                    &mut noprogress,
+                )
+                .map_err(|e| anyhow!("flash: {e}"))?;
+                let backup_path = if !rep.backup.is_empty() {
+                    opentune_flash::vault::save_backup(&vault, &id, region, &rep.backup).ok()
+                } else {
+                    None
+                };
+                let written = match (&transcript, &backup_path) {
+                    (Some(dir), _) => tr.write(dir, "flash").ok(),
+                    (None, Some(bp)) => tr.write_next_to(bp).ok(),
+                    (None, None) => tr.write(&vault, "flash").ok(),
+                };
+                if let Some(bp) = &backup_path {
+                    println!("Pre-flash backup archived: {}", bp.display());
                 }
-            }
+                if let Some((log, jsonl)) = written {
+                    println!(
+                        "Session transcript: {} / {}",
+                        log.display(),
+                        jsonl.display()
+                    );
+                }
+                rep
+            } else {
+                let rep = opentune_flash::flash_calibration(
+                    drv.as_mut(),
+                    region,
+                    &bytes,
+                    &safety,
+                    &mut noprogress,
+                )
+                .map_err(|e| anyhow!("flash: {e}"))?;
+                // Persist the pre-flash backup — the safety net if the write is bad.
+                if !rep.backup.is_empty() {
+                    match opentune_flash::vault::save_backup(&vault, &id, region, &rep.backup) {
+                        Ok(p) => println!("Pre-flash backup archived: {}", p.display()),
+                        Err(e) => eprintln!(
+                            "WARNING: could not archive backup to {}: {e}",
+                            vault.display()
+                        ),
+                    }
+                }
+                rep
+            };
             println!(
                 "Flashed {} bytes @0x{:08X} — backup {} bytes, verified={}",
                 report.bytes_written,
@@ -532,6 +589,64 @@ fn main() -> Result<()> {
             Some(d) => println!("{}  [{:?}]  {}", d.code, d.system, d.description),
             None => println!("{code}: malformed code"),
         },
+        Command::Vin { vin } => match opentune_vin::decode_vin(&vin) {
+            Ok(v) => {
+                println!("VIN {}", v.vin);
+                println!(
+                    "  WMI        : {} ({}, {})",
+                    v.wmi,
+                    v.wmi_info.manufacturer.unwrap_or("unknown make"),
+                    v.wmi_info.country.unwrap_or("unknown country")
+                );
+                match v.model_year.resolved {
+                    Some(y) => println!("  Model year : {} -> {}", v.model_year.code, y),
+                    None => println!(
+                        "  Model year : {} -> {:?} (ambiguous)",
+                        v.model_year.code, v.model_year.candidates
+                    ),
+                }
+                println!(
+                    "  Check digit: {} ({})",
+                    v.check_digit,
+                    match v.check_digit_valid {
+                        Some(true) => "valid",
+                        Some(false) => "INVALID",
+                        None => "not verifiable (EU filler)",
+                    }
+                );
+                println!("  Plant      : {}   Serial: {}", v.plant_code, v.serial);
+                if !v.flags.is_empty() {
+                    println!("  Notes      : {}", v.flags.join("; "));
+                }
+            }
+            Err(e) => println!("invalid VIN: {e:?}"),
+        },
+        Command::DecodePart { part } => {
+            let p = opentune_vin::parse_part_number(&part);
+            println!("Part {}  [{:?}]", p.normalized, p.kind);
+            if let Some(s) = p.supplier {
+                println!("  Supplier: {s}");
+            }
+            if let Some(g) = &p.vag_type_group {
+                println!(
+                    "  VAG: type={} main={} sub={} ver={}",
+                    g,
+                    p.vag_main_group.as_deref().unwrap_or("-"),
+                    p.vag_subgroup.as_deref().unwrap_or("-"),
+                    p.vag_version.as_deref().unwrap_or("-")
+                );
+            }
+            if let Some(f) = &p.bosch_family {
+                println!(
+                    "  Bosch: family={} consecutive={}",
+                    f,
+                    p.bosch_consecutive.as_deref().unwrap_or("-")
+                );
+            }
+            if !p.flags.is_empty() {
+                println!("  Notes: {}", p.flags.join("; "));
+            }
+        }
         Command::Compare {
             ecudefs,
             def,

@@ -1,0 +1,28 @@
+{
+  "id": "bosch-edc15c6",
+  "name": "Bosch EDC15C6",
+  "maker": "Bosch",
+  "family": "EDC15",
+  "notes": "Older common-rail/CDI diesels. Diagnostics over K-line (ISO 14230-4 KWP2000) with a 5-baud or fast init handled by the driver. tx_id holds the K-line ECU address. Addresses and flash_size are family placeholders and must be confirmed per software variant before any read or write.",
+  "protocol": "iso14230_kline",
+  "diag_layer": "kwp2000",
+  "bitrate": 10400,
+  "tx_id": 1,
+  "rx_id": 0,
+  "flash_size": 524288,
+  "regions": [
+    {
+      "name": "full",
+      "region": { "address": 0, "length": 524288 },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": { "address": 131072, "length": 65536 },
+      "writable": true
+    }
+  ],
+  "checksum": null,
+  "seedkey": null,
+  "full_read": "obd"
+}

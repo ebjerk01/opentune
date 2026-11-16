@@ -1,0 +1,16 @@
+# VIN + part-number identification helpers for OpenTune.
+#
+# Zero external dependencies on purpose: this crate does string/structural
+# parsing only and must stay trivially auditable.
+[package]
+name = "opentune-vin"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "ISO 3779 VIN decoding and Bosch/VAG part-number structural parsing."
+
+[dependencies]
