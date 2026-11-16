@@ -31,7 +31,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Build the Linux CLI on the OLDEST supported runner (glibc 2.35) so
+          # the binary runs on Debian 12+/Ubuntu 22.04+ and newer. glibc is
+          # forward-incompatible, so the build host sets the minimum a user needs.
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -111,7 +114,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # ubuntu-22.04 (glibc 2.35) is the OLDEST supported Linux runner: an
+        # AppImage bundles its libs but not glibc, and glibc is
+        # forward-incompatible, so building here makes the bundle run on
+        # Debian 12+/Ubuntu 22.04+ and newer. Building on ubuntu-latest would
+        # raise the floor to that runner's glibc and break older systems.
+        # See desktop/portable-build/ for a Docker (bookworm) alternative.
+        os: [ubuntu-22.04, macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
