@@ -21,7 +21,7 @@ Everything here operates on a flash `.bin`.
 
 ### Core, CLI & project
 - [x] Rust workspace; `opentune-core` (Interface driver trait, protocol layer, ECU identity, flash orchestrator, safety rules); driver registry; `mock`/file driver
-- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · vin · decode-part · dtc`
+- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · vin · decode-part · scan · dtc`
 - [x] GPL-3.0, README, CI (fmt + clippy + test + build), core unit tests
 
 ### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
@@ -32,10 +32,10 @@ Everything here operates on a flash `.bin`.
 ### Maps & calibration
 - [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
 - [x] **Map-aware compare** (map-by-map, physical units) · byte/region diff · auto map-finder (`findmaps`)
-- [x] **TunerPro XDF import + export** (round-trip validated) and factory **ASAM A2L import** (`opentune-a2l`; validated at scale on real EDC15 / Siemens-PPD / BMW-MSV80, thousands of maps)
+- [x] **TunerPro XDF and ASAM A2L import + export** — both round-trip validated; A2L validated at scale on real EDC15 / Siemens-PPD / BMW-MSV80 (thousands of maps), with STD_AXIS address computation and cuboid slicing
 
 ### Identification
-- [x] `opentune identify` + ECU-def `identify` keys + **998-car opendbc catalog** + hand-curated **Mercedes/BMW** entries
+- [x] `opentune identify` + ECU-def `identify` keys + a **1034-entry catalog** (998 opendbc + 36 hand-curated European entries: VAG/Mercedes/BMW/Ford/PSA/Opel/Fiat/Volvo/Renault, with VAG part-number match keys)
 - [x] **VIN / VAG+Bosch part-number decoder** (`opentune-vin`)
 - [ ] 🔒 read the real identity DIDs live from an ECU
 
@@ -74,12 +74,12 @@ The code is written; **nothing here is proven on hardware yet.** Unblocks when a
 bench ECU are available.
 
 - [x] Protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
-- [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge
-- [ ] **Generic J2534** driver (Mongoose/VNCI/SVCI clones) + verify cheap/clone adapters (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
+- [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge, ESP32-S3, **generic J2534 PassThru** (Mongoose/VNCI/SVCI; Windows FFI gated), **gs_usb/candleLight USB-CAN**, **ELM327-over-WiFi/Bluetooth**
+- [ ] Verify cheap/clone adapters on real hardware (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
 - [ ] **Live identify + full OBD read** (EDC16 first)
 - [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder done, needs the live transport
 - [x] Battery-voltage read exposed as a safety gate
-- [x] Security access: `SeedKey` trait + the 0x27 handshake wired into the drivers (user supplies the algorithm)
+- [x] Security access: `SeedKey` trait + the 0x27 handshake wired into **every driver's read/write path** — refuses to write unlocked when security is required but no algorithm is set (user supplies the algorithm)
 - [ ] **Flash path**: `requestDownload`/`transferData`/`transferExit` → calibration-region write → read-back verify → **EDC16 end-to-end on the bench, then in-car**
 
 ---
@@ -94,6 +94,6 @@ bench ECU are available.
 
 ## Cross-cutting / tooling
 - [x] Documentation — architecture, driver authoring, ECU defs, checksums, hardware, Android, ideas backlog (`docs/`)
-- [~] **ECU-library scanner** (`opentune-scan`, prototyped) — structural ECU-family detection + string/part-number/VIN extraction as metadata enrichment; **not** reliable auto-sort-by-car (that needs better vehicle DBs — measured ~11% confident full-car on a messy library)
-- [ ] **Signed, reproducible releases** for Linux / Windows / macOS (Linux portable build done; Windows + macOS + updater signing pending)
-- [ ] More test fixtures + protocol-layer CI coverage (ISO-TP / TP2.0 / KWP edge cases)
+- [~] **ECU-library scanner** (`opentune-scan` crate + `opentune scan` CLI + the desktop Analyze-bin) — structural ECU-family detection + string/part-number/VIN extraction as metadata enrichment; **not** reliable auto-sort-by-car (needs better vehicle DBs — measured ~11% confident full-car on a messy library; the growing Euro catalog helps)
+- [~] **Signed, reproducible releases** — Linux portable build + macOS/Windows bundle targets done; **Tauri updater signing key generated + wired** (needs the private key as a CI secret); Gradle wrapper committed; a synthetic demo `.bin` ships in `samples/`. App/installer code-signing (Apple/Windows certs) still pending.
+- [x] Protocol-layer CI coverage — 20 ISO-TP / TP2.0 / KWP edge-case tests; `docs/CONTRIBUTING-ECUDEFS.md` for community defs

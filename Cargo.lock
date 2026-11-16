@@ -570,6 +570,7 @@ dependencies = [
  "opentune-driver-socketcan",
  "opentune-dtc",
  "opentune-flash",
+ "opentune-scan",
  "opentune-vin",
  "opentune-xdf",
  "serde_json",

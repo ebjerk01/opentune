@@ -200,6 +200,17 @@ enum Command {
         #[arg(short = 'o', long)]
         out: Option<PathBuf>,
     },
+    /// Scan a directory of ECU dumps offline and emit identification JSON.
+    Scan {
+        /// Directory of dumps (scanned recursively).
+        dir: PathBuf,
+        /// Catalog directory.
+        #[arg(long, default_value = "catalog")]
+        catalog: PathBuf,
+        /// ECU-definition directory.
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -907,6 +918,15 @@ fn main() -> Result<()> {
                 }
                 None => print!("{a2l}"),
             }
+        }
+        Command::Scan {
+            dir,
+            catalog,
+            ecudefs,
+        } => {
+            let ctx = opentune_scan::ScanContext::load(&catalog, &ecudefs)?;
+            let report = opentune_scan::scan_dir(&ctx, &dir)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
         }
     }
     Ok(())
