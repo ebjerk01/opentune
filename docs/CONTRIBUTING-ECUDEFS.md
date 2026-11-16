@@ -67,8 +67,9 @@ See [`ECU-DEFS.md`](ECU-DEFS.md) for every field and enum; the skeleton is:
 Rules that trip people up:
 
 - **Numbers are decimal.** JSON carries no hex; write `524288`, not `0x80000`.
-- **`checksum`** must be an id `opentune-checksum` knows: `crc32-tail`, `edc16`,
-  `edc17`, `pcr21`, `edc15c6`. Unknown-checksum ECUs use `null`.
+- **`checksum`** must be an id `opentune-checksum` knows: `crc32-tail`, `edc15c6`,
+  `edc16`, `edc17`, `pcr21`, `me7`, `dq250`, `dq381`, `tcu-ccitt` (run
+  `opentune checksum algos` for the current list). Unknown-checksum ECUs use `null`.
 - **Addresses are byte offsets into the image the apps load** (the full read),
   not CPU addresses. If your family is normally read as a 2 MiB image, your map
   and region offsets are offsets into that 2 MiB.
@@ -179,6 +180,13 @@ OpenTune's credibility is that its numbers are real. An entry must clear all of:
 Run the same checks CI runs:
 
 ```sh
+# Validate your file against the format, honesty and scope rules (the machine
+# half of this guide). Exits non-zero on any error; add --warnings to see
+# advisories, and --image <stock.bin> to decode the maps against a real dump.
+# A directory validates every ecudefs/*.json (this is the CI gate).
+opentune ecudefs validate ecudefs/<your-id>.json
+opentune ecudefs validate ecudefs/<your-id>.json --image stock.bin --warnings
+
 # The ecudef parse/consistency test loads every ecudefs/*.json and fails the
 # build if one does not parse or a region runs past the flash image.
 cargo test -p opentune-core --test ecudef_parse

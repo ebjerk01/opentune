@@ -41,7 +41,7 @@ opentune checksum fix    --algo edc16 /tmp/demo.bin   # rewrites the comp word
 opentune checksum verify --algo edc16 /tmp/demo.bin   # OK
 
 # Load the definition and decode the demo map through it:
-opentune ecudefs samples
+opentune ecudefs list samples
 opentune compare --ecudefs samples --def opentune-demo-edc16 \
     samples/opentune-demo-edc16.bin samples/opentune-demo-edc16.bin --map injection
 ```

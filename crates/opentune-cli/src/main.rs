@@ -105,10 +105,10 @@ enum Command {
         #[arg(long)]
         emit: Option<PathBuf>,
     },
-    /// List ECU definitions in a directory.
+    /// Work with ECU-definition files (list, validate).
     Ecudefs {
-        /// Directory of *.json ECU definitions.
-        dir: PathBuf,
+        #[command(subcommand)]
+        action: EcudefsAction,
     },
     /// Read the connected ECU's identity and match it to a definition/catalog.
     Identify {
@@ -210,6 +210,31 @@ enum Command {
         /// ECU-definition directory.
         #[arg(long, default_value = "ecudefs")]
         ecudefs: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum EcudefsAction {
+    /// List the ECU definitions in a directory.
+    List {
+        /// Directory of *.json ECU definitions.
+        #[arg(default_value = "ecudefs")]
+        dir: PathBuf,
+    },
+    /// Validate one definition file or every *.json in a directory against the
+    /// format, honesty and scope rules (see docs/CONTRIBUTING-ECUDEFS.md).
+    /// Exits non-zero if any file has a validation error.
+    Validate {
+        /// A single ECU-definition *.json file, or a directory of them.
+        #[arg(default_value = "ecudefs")]
+        path: PathBuf,
+        /// Optionally decode each definition's maps against this real dump and
+        /// check that addresses/axes land inside the image.
+        #[arg(long)]
+        image: Option<PathBuf>,
+        /// Also print warnings (off by default; only errors show otherwise).
+        #[arg(long)]
+        warnings: bool,
     },
 }
 
@@ -575,19 +600,107 @@ fn main() -> Result<()> {
                 println!("wrote {} candidate(s) -> {}", regions.len(), path.display());
             }
         }
-        Command::Ecudefs { dir } => {
-            let defs = opentune_core::ecudef::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
-            println!("{} ECU definition(s):", defs.len());
-            for d in &defs {
-                println!(
-                    "  {:<22} {:<16} {:>5} KiB  {:?}",
-                    d.id,
-                    d.name,
-                    d.flash_size / 1024,
-                    d.protocol
-                );
+        Command::Ecudefs { action } => match action {
+            EcudefsAction::List { dir } => {
+                let defs = opentune_core::ecudef::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
+                println!("{} ECU definition(s):", defs.len());
+                for d in &defs {
+                    println!(
+                        "  {:<22} {:<16} {:>5} KiB  {:?}",
+                        d.id,
+                        d.name,
+                        d.flash_size / 1024,
+                        d.protocol
+                    );
+                }
             }
-        }
+            EcudefsAction::Validate {
+                path,
+                image,
+                warnings,
+            } => {
+                let img = match &image {
+                    Some(p) => {
+                        Some(std::fs::read(p).with_context(|| format!("read {}", p.display()))?)
+                    }
+                    None => None,
+                };
+                let files = collect_ecudef_files(&path)?;
+                if files.is_empty() {
+                    return Err(anyhow!(
+                        "no *.json ECU definitions found at {}",
+                        path.display()
+                    ));
+                }
+                let mut total_errors = 0usize;
+                let mut total_warns = 0usize;
+                let mut bad_files = 0usize;
+                for file in &files {
+                    let name = file
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .to_string();
+                    let text = std::fs::read_to_string(file)
+                        .with_context(|| format!("read {}", file.display()))?;
+                    let def = match opentune_core::ecudef::EcuDef::from_json(&text) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            total_errors += 1;
+                            bad_files += 1;
+                            println!("{name}: 1 error, 0 warnings");
+                            println!("  ERROR  parse                    {e}");
+                            continue;
+                        }
+                    };
+                    let mut issues = def.validate();
+                    issues.extend(def.validate_filename(&name));
+                    if let Some(img) = &img {
+                        issues.extend(def.validate_against_image(img));
+                    }
+                    let errs = opentune_core::validate::error_count(&issues);
+                    let warns = opentune_core::validate::warn_count(&issues);
+                    total_errors += errs;
+                    total_warns += warns;
+                    if errs > 0 {
+                        bad_files += 1;
+                    }
+                    let shown: Vec<_> = issues
+                        .iter()
+                        .filter(|i| warnings || i.severity == opentune_core::Severity::Error)
+                        .collect();
+                    if errs == 0 && (warns == 0 || !warnings) {
+                        println!("{name}: OK ({warns} warning(s))");
+                    } else {
+                        println!("{name}: {errs} error(s), {warns} warning(s)");
+                    }
+                    for i in shown {
+                        let loc = if i.location.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" [{}]", i.location)
+                        };
+                        println!(
+                            "  {:<6} {:<28}{} {}",
+                            i.severity.tag(),
+                            i.code,
+                            loc,
+                            i.message
+                        );
+                    }
+                }
+                println!(
+                    "\n{} file(s): {} error(s), {} warning(s); {} file(s) failed.",
+                    files.len(),
+                    total_errors,
+                    total_warns,
+                    bad_files
+                );
+                if total_errors > 0 {
+                    std::process::exit(2);
+                }
+            }
+        },
         Command::Identify {
             conn,
             ecudefs,
@@ -1190,6 +1303,31 @@ fn print_grid(m: &opentune_core::ecudef::MapDef, pa: &[f64], pb: &[f64]) {
         }
         println!("{}", line.trim_end());
     }
+}
+
+/// Resolve an ecudef path to the list of *.json files to validate: a single
+/// file is returned as-is; a directory yields every *.json inside it (sorted).
+fn collect_ecudef_files(path: &std::path::Path) -> Result<Vec<PathBuf>> {
+    if path.is_file() {
+        return Ok(vec![path.to_path_buf()]);
+    }
+    if path.is_dir() {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(path)
+            .with_context(|| format!("read dir {}", path.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("json"))
+            .filter(|p| {
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                !opentune_core::ecudef::is_scaffolding_file(name)
+            })
+            .collect();
+        files.sort();
+        return Ok(files);
+    }
+    Err(anyhow!(
+        "{} is neither a file nor a directory",
+        path.display()
+    ))
 }
 
 fn human_len(n: usize) -> String {

@@ -3,6 +3,7 @@
 //! This guards the JSON files against drifting out of sync with the `EcuDef`
 //! schema: a malformed or renamed field fails the build, not a car.
 use opentune_core::ecudef::{self, FullRead};
+use opentune_core::validate;
 use std::path::PathBuf;
 
 /// Locate the repo-root `ecudefs/` directory from this crate.
@@ -63,4 +64,40 @@ fn all_ecudefs_parse() {
             }
         }
     }
+}
+
+/// Every shipped definition in `ecudefs/` must pass the validator with zero
+/// errors (warnings are allowed). This is the same gate CI runs via
+/// `opentune ecudefs validate ecudefs`, pinned here so `cargo test` catches a
+/// regression without the CLI. Scaffolding files (TEMPLATE.json, `_*`) are
+/// skipped, exactly as a directory scan skips them.
+#[test]
+fn all_ecudefs_pass_validation() {
+    let dir = ecudefs_dir();
+    let mut checked = 0usize;
+    for entry in std::fs::read_dir(&dir).expect("read ecudefs dir") {
+        let path = entry.expect("dir entry").path();
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        if ecudef::is_scaffolding_file(&name) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("read def");
+        let def = ecudef::EcuDef::from_json(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let mut issues = def.validate();
+        issues.extend(def.validate_filename(&name));
+        let errs: Vec<_> = issues
+            .iter()
+            .filter(|i| i.severity == validate::Severity::Error)
+            .collect();
+        assert!(errs.is_empty(), "{name} has validation errors: {errs:#?}");
+        checked += 1;
+    }
+    assert!(checked > 0, "no ecudefs validated in {}", dir.display());
 }

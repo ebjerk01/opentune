@@ -1,0 +1,71 @@
+{
+  "_README": "Copy this file to ecudefs/<maker>-<family>[-<variant>].json, set every field, and set id to the same name (minus .json). Directory scans skip TEMPLATE.json, so it never ships as a real ECU. JSON has no comments - every field starting with _ is a hint and MUST be deleted from your real definition. Validate with: opentune ecudefs validate ecudefs/<your-file>.json  (add --image <your-stock-dump> to check map addresses). See docs/CONTRIBUTING-ECUDEFS.md, docs/ECU-DEFS.md, docs/MAP-DEFS.md and docs/ecudef.schema.json.",
+  "id": "example-family",
+  "name": "Example ECU (template - rename me)",
+  "maker": "ExampleMaker",
+  "family": "ExampleFamily",
+  "notes": "Describe the ECU with PUBLIC family-level facts only. State clearly that addresses/flash_size are placeholders to be confirmed per software variant, and cite how you validated the checksum (e.g. 'opentune checksum verify --algo <id> reports all blocks OK on my own stock read'). Never ship proprietary firmware, A2L/DAMOS, seed/key secrets, real VINs or plates.",
+  "_notes_protocol": "protocol: iso_tp | vwtp20 | iso14230_kline | iso9141 | raw_can. diag_layer: uds | kwp2000. full_read: obd | bench_boot.",
+  "protocol": "iso_tp",
+  "diag_layer": "uds",
+  "bitrate": 500000,
+  "tx_id": 2016,
+  "rx_id": 2024,
+  "_notes_numbers": "All numbers are DECIMAL byte values/offsets - convert hex yourself (0x80000 -> 524288). flash_size is the size of the image the maps index (the full read).",
+  "flash_size": 524288,
+  "regions": [
+    {
+      "name": "full",
+      "region": { "address": 0, "length": 524288 },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": { "address": 393216, "length": 131072 },
+      "writable": true
+    }
+  ],
+  "_notes_checksum": "checksum must be an id opentune-checksum knows (opentune checksum algos) or null: crc32-tail, edc15c6, edc16, edc17, pcr21, me7, dq250, dq381, tcu-ccitt. seedkey: usually null.",
+  "checksum": null,
+  "seedkey": null,
+  "full_read": "obd",
+  "_notes_identify": "Shortest part/software prefixes that are still specific to this family. Matched case/space-insensitively by prefix or substring against the ECU's reported HW/SW numbers.",
+  "identify": {
+    "part_numbers": ["0000000"],
+    "sw_numbers": ["0000"]
+  },
+  "_notes_maps": "Optional. A definition with no maps is valid (identify + checksum still work); add diff-confirmed maps in follow-up PRs. EVERY map's notes MUST carry a confidence label: 'CONFIDENCE: HIGH|MEDIUM|LOW' (with source) or 'EXAMPLE ONLY'. rows=Y, cols=X; axis count must equal the map's size on that dimension; stored axes must be monotonic; give every map a unit.",
+  "maps": [
+    {
+      "name": "example 2-D map (rename / replace)",
+      "notes": "EXAMPLE ONLY. Placeholder address/axes; confirm per software variant before any read or write. Replace this map or delete the maps array entirely.",
+      "address": 458752,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 16,
+      "scaling": { "factor": 0.01, "offset": 0.0 },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 458240,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": { "factor": 1.0, "offset": 0.0 }
+      },
+      "y_axis": {
+        "name": "charge air pressure",
+        "unit": "hPa",
+        "count": 16,
+        "address": 458496,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": { "factor": 1.0, "offset": 0.0 }
+      },
+      "min": 0.0,
+      "max": 80.0
+    }
+  ]
+}

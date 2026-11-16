@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ebjerk01/opentune/blob/main/docs/ecudef.schema.json",
+  "title": "OpenTune ECU definition",
+  "description": "Schema for an ecudefs/*.json ECU definition (opentune_core::ecudef::EcuDef). Structural shape only; honesty-label and scope rules are enforced by `opentune ecudefs validate` (see docs/CONTRIBUTING-ECUDEFS.md). Numbers are decimal byte values/offsets.",
+  "type": "object",
+  "required": ["id", "name", "maker", "family", "protocol", "diag_layer", "bitrate"],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^_": {
+      "description": "Reserved for human hints in templates/examples; ignored by the loader."
+    }
+  },
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)+$",
+      "description": "Stable id, lowercase, matching the filename stem: <maker>-<family>[-<variant>]."
+    },
+    "name": { "type": "string", "minLength": 1, "description": "Human-readable name." },
+    "maker": { "type": "string", "minLength": 1, "description": "ECU manufacturer, e.g. Bosch, Continental." },
+    "family": { "type": "string", "minLength": 1, "description": "ECU family, e.g. EDC16, Simos PCR2.1, ME7, DQ381." },
+    "notes": { "type": "string", "description": "Free text; flag placeholder addresses and cite checksum validation." },
+    "protocol": {
+      "enum": ["iso_tp", "vwtp20", "iso14230_kline", "iso9141", "raw_can"],
+      "description": "Transport the ECU speaks."
+    },
+    "diag_layer": {
+      "enum": ["uds", "kwp2000"],
+      "description": "Diagnostic service layer."
+    },
+    "bitrate": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "CAN bit/s or K-line baud." },
+    "tx_id": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Diagnostic request CAN id (or K-line ECU address)." },
+    "rx_id": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Diagnostic response CAN id." },
+    "flash_size": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Size in bytes of the image the maps index (the full read)." },
+    "regions": {
+      "type": "array",
+      "description": "Named memory regions.",
+      "items": {
+        "type": "object",
+        "required": ["name", "region"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "region": {
+            "type": "object",
+            "required": ["address", "length"],
+            "additionalProperties": false,
+            "properties": {
+              "address": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+              "length": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+            }
+          },
+          "writable": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "checksum": {
+      "type": ["string", "null"],
+      "description": "Checksum algorithm id known to opentune-checksum (crc32-tail, edc15c6, edc16, edc17, pcr21, me7, dq250, dq381, tcu-ccitt) or null.",
+      "minLength": 1
+    },
+    "seedkey": { "type": ["string", "null"], "minLength": 1, "description": "Seed/key algorithm id or null." },
+    "full_read": { "enum": ["obd", "bench_boot"], "default": "obd", "description": "How a complete original is obtained." },
+    "identify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Part/software numbers (or prefixes) that match this definition to a reported ECU identity.",
+      "properties": {
+        "part_numbers": { "type": "array", "items": { "type": "string" } },
+        "sw_numbers": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "maps": {
+      "type": "array",
+      "description": "Calibration maps. Optional; see docs/MAP-DEFS.md.",
+      "items": { "$ref": "#/definitions/map" }
+    }
+  },
+  "definitions": {
+    "dataType": {
+      "enum": ["u8", "s8", "u16", "s16", "u32", "s32", "f32"],
+      "description": "Stored element type."
+    },
+    "endian": { "enum": ["big", "little"], "description": "Byte order of multi-byte elements." },
+    "scaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Linear raw->physical transform: physical = raw*factor + offset.",
+      "properties": {
+        "factor": { "type": "number", "default": 1.0 },
+        "offset": { "type": "number", "default": 0.0 }
+      }
+    },
+    "axis": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Breakpoints along one dimension. Describe exactly one way: inline (values), stored (address) or shared (axis_ref).",
+      "properties": {
+        "name": { "type": "string" },
+        "unit": { "type": "string" },
+        "count": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Must equal the map's rows/cols on this dimension." },
+        "values": { "type": "array", "items": { "type": "number" }, "description": "Inline breakpoints (A2L FIX_AXIS)." },
+        "address": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295, "description": "Stored-axis address (A2L STD_AXIS)." },
+        "data_type": { "$ref": "#/definitions/dataType" },
+        "endian": { "$ref": "#/definitions/endian" },
+        "scaling": { "$ref": "#/definitions/scaling" },
+        "axis_ref": { "type": ["string", "null"], "description": "Name of another axis to reuse (A2L COM_AXIS)." }
+      }
+    },
+    "map": {
+      "type": "object",
+      "required": ["name", "address"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "notes": {
+          "type": "string",
+          "description": "MUST carry a confidence label: 'CONFIDENCE: HIGH|MEDIUM|LOW' (with source) or 'EXAMPLE ONLY'."
+        },
+        "address": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Byte offset of the first cell in the image." },
+        "data_type": { "$ref": "#/definitions/dataType" },
+        "endian": { "$ref": "#/definitions/endian" },
+        "rows": { "type": "integer", "minimum": 1, "maximum": 4294967295, "description": "Y dimension (1 for scalar/curve)." },
+        "cols": { "type": "integer", "minimum": 1, "maximum": 4294967295, "description": "X dimension (1 for scalar)." },
+        "scaling": { "$ref": "#/definitions/scaling" },
+        "unit": { "type": "string", "description": "Physical unit of the cells, e.g. mg/stroke, Nm, deg." },
+        "x_axis": { "anyOf": [{ "$ref": "#/definitions/axis" }, { "type": "null" }] },
+        "y_axis": { "anyOf": [{ "$ref": "#/definitions/axis" }, { "type": "null" }] },
+        "min": { "type": ["number", "null"], "description": "Lower physical safety bound (UI hint/clamp)." },
+        "max": { "type": ["number", "null"], "description": "Upper physical safety bound." }
+      }
+    }
+  }
+}

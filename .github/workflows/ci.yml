@@ -47,3 +47,26 @@ jobs:
 
       - name: Build
         run: cargo build --workspace
+
+  # Gate every PR on the ECU-definition library: parse + the format / honesty /
+  # scope rules in docs/CONTRIBUTING-ECUDEFS.md. Fails the build on any
+  # validation error (warnings are advisory and do not fail). See
+  # `opentune ecudefs validate` and crates/opentune-core/src/validate.rs.
+  ecudefs:
+    name: validate ecudefs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (libudev for the serialport crate)
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Validate ECU definitions
+        run: cargo run -p opentune-cli --quiet -- ecudefs validate ecudefs

@@ -298,11 +298,23 @@ impl EcuDef {
     }
 }
 
-/// Load every `*.json` ECU definition in a directory.
+/// Is this a scaffolding/non-definition JSON file that a directory scan should
+/// skip? The contribution `TEMPLATE.json`, and any `_`/`.`-prefixed helper file,
+/// are not shippable definitions and must not be loaded as ECUs.
+pub fn is_scaffolding_file(file_name: &str) -> bool {
+    file_name == "TEMPLATE.json" || file_name.starts_with('_') || file_name.starts_with('.')
+}
+
+/// Load every `*.json` ECU definition in a directory (skipping scaffolding files
+/// such as `TEMPLATE.json`; see [`is_scaffolding_file`]).
 pub fn load_dir(dir: &Path) -> crate::Result<Vec<EcuDef>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if is_scaffolding_file(name) {
+            continue;
+        }
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
             out.push(EcuDef::from_json(&std::fs::read_to_string(&path)?)?);
         }
