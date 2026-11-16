@@ -15,7 +15,8 @@ use crate::model::{
 };
 use crate::raf::Raf;
 use crate::reader::{
-    read_bitflag_dump, read_bitflag_string, read_primitive, CaesarPrimitive, PoolTuple,
+    clamp_off, read_bitflag_dump, read_bitflag_string, read_primitive, CaesarPrimitive, PoolTuple,
+    MAX_PREALLOC,
 };
 
 /// Parse a CBF file from an in-memory byte buffer.
@@ -28,21 +29,29 @@ pub fn parse_bytes(data: &[u8]) -> Result<CbfFile> {
     let cbf_version = check_stub_header(&header)?;
 
     // The CFF header is preceded by its own size word.
-    let cff_header_size = reader.read_i32()? as usize;
+    let cff_header_size = clamp_off(reader.read_i32()?);
     let _cff_header_bytes = reader.read_bytes(cff_header_size)?;
 
     let cff = CffHeader::new(&mut reader)?;
-    let ctf_offset = cff.base_addr + cff.ctf_offset as usize;
-    let ctf = CtfHeader::new(&mut reader, ctf_offset, cff.cff_header_size as usize)?;
+    let ctf_offset = cff.base_addr.saturating_add(clamp_off(cff.ctf_offset));
+    let ctf = CtfHeader::new(&mut reader, ctf_offset, clamp_off(cff.cff_header_size))?;
     let lang = ctf.language(0)?.clone();
 
-    // ECU table: `ecu_count` 32-bit offsets, each relative to the table.
-    let ecu_table_offset = cff.ecu_offset as usize + cff.base_addr;
-    let mut ecus = Vec::with_capacity(cff.ecu_count.max(0) as usize);
-    for i in 0..cff.ecu_count.max(0) as usize {
-        reader.seek(ecu_table_offset + (i * 4));
-        let ecu_offset = reader.read_i32()? as usize;
-        let ecu = parse_ecu(&mut reader, &lang, &cff, ecu_table_offset + ecu_offset)?;
+    // ECU table: `ecu_count` 32-bit offsets, each relative to the table. Real CBF
+    // files describe one ECU family; clamp the count so a hostile value cannot
+    // drive an unbounded (potentially quadratic) re-parse of the shared pools.
+    let ecu_table_offset = clamp_off(cff.ecu_offset).saturating_add(cff.base_addr);
+    let ecu_count = clamp_off(cff.ecu_count).min(MAX_PREALLOC);
+    let mut ecus = Vec::with_capacity(ecu_count);
+    for i in 0..ecu_count {
+        reader.seek(ecu_table_offset.saturating_add(i.saturating_mul(4)));
+        let ecu_offset = clamp_off(reader.read_i32()?);
+        let ecu = parse_ecu(
+            &mut reader,
+            &lang,
+            &cff,
+            ecu_table_offset.saturating_add(ecu_offset),
+        )?;
         ecus.push(ecu);
     }
 
@@ -64,7 +73,9 @@ struct Block {
 
 impl Block {
     fn new(reader: &mut Raf, bitflags: &mut u32, relative_offset: usize) -> Result<Self> {
-        let block_offset = read_primitive(bitflags, reader, 0i32)?.to_usize() + relative_offset;
+        let block_offset = read_primitive(bitflags, reader, 0i32)?
+            .to_usize()
+            .saturating_add(relative_offset);
         let entry_count = read_primitive(bitflags, reader, 0i32)?.to_usize();
         let entry_size = read_primitive(bitflags, reader, 0i32)?.to_usize();
         let _block_size = read_primitive(bitflags, reader, 0i32)?.to_usize();
@@ -78,7 +89,10 @@ impl Block {
     /// Read this block's raw pool bytes.
     fn read_pool(&self, reader: &mut Raf) -> Result<Vec<u8>> {
         reader.seek(self.block_offset);
-        reader.read_bytes(self.entry_count * self.entry_size)
+        // `entry_count * entry_size` can be astronomically large on a hostile
+        // descriptor; saturate so it becomes a clean end-of-data error in
+        // `read_bytes` rather than overflowing.
+        reader.read_bytes(self.entry_count.saturating_mul(self.entry_size))
     }
 }
 
@@ -107,8 +121,10 @@ fn parse_ecu(
 
     // Pools are stored after the string pool; their offsets are relative to this
     // anchor.
-    let data_buffer_offset_relative =
-        cff.string_pool_size as usize + STUB_HEADER_SIZE + cff.cff_header_size as usize + 4;
+    let data_buffer_offset_relative = clamp_off(cff.string_pool_size)
+        .saturating_add(STUB_HEADER_SIZE)
+        .saturating_add(clamp_off(cff.cff_header_size))
+        .saturating_add(4);
 
     let _ignition_required = read_primitive(&mut bitflags, reader, 0i16)? > 0;
     let _unk2 = read_primitive(&mut bitflags, reader, 0i16)?;
@@ -142,12 +158,12 @@ fn parse_ecu(
 fn create_dtcs(reader: &mut Raf, lang: &CtfLanguage, blk: &Block) -> Result<Vec<Dtc>> {
     let pool = blk.read_pool(reader)?;
     let mut pool_reader = Raf::from_bytes(&pool);
-    let mut res = Vec::with_capacity(blk.entry_count);
+    let mut res = Vec::with_capacity(blk.entry_count.min(MAX_PREALLOC));
     for i in 0..blk.entry_count {
-        let offset = pool_reader.read_i32()? as usize;
+        let offset = clamp_off(pool_reader.read_i32()?);
         let _size = pool_reader.read_i32()?;
         let _crc = pool_reader.read_i32()?;
-        let dtc_base = offset + blk.block_offset;
+        let dtc_base = offset.saturating_add(blk.block_offset);
         res.push(parse_dtc(reader, lang, dtc_base, i)?);
     }
     Ok(res)
@@ -175,13 +191,13 @@ fn parse_dtc(
 fn create_services(reader: &mut Raf, lang: &CtfLanguage, blk: &Block) -> Result<Vec<DiagService>> {
     let pool = blk.read_pool(reader)?;
     let mut pool_reader = Raf::from_bytes(&pool);
-    let mut res = Vec::with_capacity(blk.entry_count);
+    let mut res = Vec::with_capacity(blk.entry_count.min(MAX_PREALLOC));
     for i in 0..blk.entry_count {
-        let offset = pool_reader.read_i32()? as usize;
+        let offset = clamp_off(pool_reader.read_i32()?);
         let _size = pool_reader.read_i32()?;
         let _crc = pool_reader.read_i32()?;
         let _config = pool_reader.read_u16()?;
-        let service_base = offset + blk.block_offset;
+        let service_base = offset.saturating_add(blk.block_offset);
         res.push(parse_service(reader, lang, service_base, i)?);
     }
     Ok(res)
@@ -222,12 +238,12 @@ fn create_variants(
 ) -> Result<Vec<EcuVariant>> {
     let pool = blk.read_pool(reader)?;
     let mut pool_reader = Raf::from_bytes(&pool);
-    let mut res = Vec::with_capacity(blk.entry_count);
+    let mut res = Vec::with_capacity(blk.entry_count.min(MAX_PREALLOC));
     for _ in 0..blk.entry_count {
-        let offset = pool_reader.read_i32()? as usize;
-        let size = pool_reader.read_i32()? as usize;
+        let offset = clamp_off(pool_reader.read_i32()?);
+        let size = clamp_off(pool_reader.read_i32()?);
         let _config = pool_reader.read_u16()?;
-        let variant_base = offset + blk.block_offset;
+        let variant_base = offset.saturating_add(blk.block_offset);
         res.push(parse_variant(
             reader,
             lang,
@@ -282,7 +298,7 @@ fn parse_variant(
 
     // Which global services this variant exposes.
     tmp.seek(diag_services.offset);
-    let mut service_idxs = Vec::with_capacity(diag_services.count);
+    let mut service_idxs = Vec::with_capacity(diag_services.count.min(MAX_PREALLOC));
     for _ in 0..diag_services.count {
         service_idxs.push(tmp.read_i32()?);
     }
@@ -298,7 +314,7 @@ fn parse_variant(
 
     // Which global DTCs this variant exposes.
     tmp.seek(dtc.offset);
-    let mut dtc_bounds = Vec::with_capacity(dtc.count);
+    let mut dtc_bounds = Vec::with_capacity(dtc.count.min(MAX_PREALLOC));
     for _ in 0..dtc.count {
         let actual_index = tmp.read_i32()?;
         let _xref_start = tmp.read_i32()?;
@@ -333,12 +349,15 @@ fn create_variant_patterns(
     variant_base: usize,
     matching_parent: &PoolTuple,
 ) -> Result<Vec<VariantPattern>> {
-    let table_offset = variant_base + matching_parent.offset;
-    let mut res = Vec::with_capacity(matching_parent.count);
+    let table_offset = variant_base.saturating_add(matching_parent.offset);
+    let mut res = Vec::with_capacity(matching_parent.count.min(MAX_PREALLOC));
     for i in 0..matching_parent.count {
-        reader.seek(table_offset + (i * 4));
-        let ptn_offset = reader.read_i32()? as usize;
-        res.push(parse_variant_pattern(reader, ptn_offset + table_offset)?);
+        reader.seek(table_offset.saturating_add(i.saturating_mul(4)));
+        let ptn_offset = clamp_off(reader.read_i32()?);
+        res.push(parse_variant_pattern(
+            reader,
+            ptn_offset.saturating_add(table_offset),
+        )?);
     }
     Ok(res)
 }

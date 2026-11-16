@@ -16,10 +16,17 @@
 /// variable `X` (case-insensitive). Returns `None` on any token it does not
 /// understand (an unknown identifier, a function call, `^`, bad syntax), which
 /// is exactly what we want: such equations are treated as non-linear.
+/// Maximum parenthesis / unary-operator nesting the evaluator will descend. The
+/// evaluator is recursive, so an equation such as `((((…X…))))` with very deep
+/// nesting would otherwise overflow the stack. Real scaling equations nest only
+/// a few levels; anything past this is treated as unparsable (non-linear).
+const MAX_EVAL_DEPTH: usize = 256;
+
 struct Eval<'a> {
     bytes: &'a [u8],
     pos: usize,
     x: f64,
+    depth: usize,
 }
 
 impl<'a> Eval<'a> {
@@ -28,6 +35,7 @@ impl<'a> Eval<'a> {
             bytes: src.as_bytes(),
             pos: 0,
             x,
+            depth: 0,
         }
     }
 
@@ -77,6 +85,20 @@ impl<'a> Eval<'a> {
     }
 
     fn factor(&mut self) -> Option<f64> {
+        // Bound recursion depth; `factor` is the only recursive entry point
+        // (unary +/- and parenthesised sub-expressions), so guarding it here caps
+        // the whole descent.
+        self.depth += 1;
+        if self.depth > MAX_EVAL_DEPTH {
+            self.depth -= 1;
+            return None;
+        }
+        let result = self.factor_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn factor_inner(&mut self) -> Option<f64> {
         match self.peek()? {
             b'-' => {
                 self.pos += 1;
@@ -263,5 +285,31 @@ mod tests {
         assert_eq!(linear_from_equation("sqrt(X)"), LinearFit::Unparsable);
         assert_eq!(linear_from_equation("X^2"), LinearFit::Unparsable);
         assert_eq!(linear_from_equation("X + THROTTLE"), LinearFit::Unparsable);
+    }
+
+    #[test]
+    fn deeply_nested_parens_do_not_overflow() {
+        // A pathological equation with far more nesting than the depth cap must
+        // be rejected as unparsable, never overflow the stack.
+        let deep = format!("{}X{}", "(".repeat(100_000), ")".repeat(100_000));
+        assert_eq!(linear_from_equation(&deep), LinearFit::Unparsable);
+        // Deeply nested unary minus too.
+        let minus = format!("{}X", "-".repeat(100_000));
+        assert_eq!(linear_from_equation(&minus), LinearFit::Unparsable);
+    }
+
+    #[test]
+    fn unbalanced_and_garbage_equations_are_clean() {
+        // These must each classify cleanly without panicking.
+        for eq in ["(((", ")))", "X*/", "/X", "((X)", "1e", "0x", "*", ""] {
+            let _ = linear_from_equation(eq);
+        }
+    }
+
+    #[test]
+    fn modestly_nested_is_still_linear() {
+        // A realistic level of nesting still works.
+        let (f, o) = lin("((((X*2))))+1");
+        assert!((f - 2.0).abs() < 1e-9 && (o - 1.0).abs() < 1e-9);
     }
 }

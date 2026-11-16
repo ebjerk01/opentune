@@ -10,6 +10,12 @@
 
 use crate::error::{Error, Result};
 
+/// Upper bound on a decompressed block / declared output size. Flash segments are
+/// a few megabytes at most; this caps the *pre-allocation hint* derived from an
+/// attacker-controlled declared size so a tiny input cannot ask the allocator for
+/// gigabytes. The decoders are still correct for any real `out_size` below it.
+const MAX_DECOMPRESSED: usize = 512 * 1024 * 1024;
+
 /// The compression scheme applied to a flash block, as named by the container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
@@ -73,7 +79,7 @@ impl Compression {
 /// 16-bit reference word (top 6 bits = count, low 10 bits = displacement), a 0
 /// bit copies a literal byte.
 pub fn decompress_lzss10(data: &[u8], out_size: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(out_size);
+    let mut out = Vec::with_capacity(out_size.min(MAX_DECOMPRESSED));
     let mut i = 0usize;
     'outer: while i < data.len() {
         let flags = data[i];
@@ -140,7 +146,7 @@ pub fn compress_lzss10(data: &[u8]) -> Vec<u8> {
 /// Note the inverted flag polarity relative to [`decompress_lzss10`]: here a 1
 /// bit is a literal and a 0 bit a reference, and the count carries a `+3` bias.
 pub fn decompress_lzss_dq(data: &[u8], out_size: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(out_size);
+    let mut out = Vec::with_capacity(out_size.min(MAX_DECOMPRESSED));
     let mut i = 0usize;
     'outer: while i < data.len() {
         let flags = data[i];
@@ -181,7 +187,7 @@ pub fn decompress_lzss_dq(data: &[u8], out_size: usize) -> Vec<u8> {
 
 /// ZF-8HP "LZZ" decompressor, 2047-byte window (port of `vag-tcu-tools` `decompress_lzz`).
 pub fn decompress_lzz(data: &[u8], out_size: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(out_size);
+    let mut out = Vec::with_capacity(out_size.min(MAX_DECOMPRESSED));
     let mut i = 0usize;
     'outer: while i < data.len() {
         if out_size != 0 && out.len() >= out_size {
@@ -253,8 +259,24 @@ pub fn decompress_legacy_simos(data: &[u8]) -> Result<Vec<u8>> {
     }
     let signifier = data[0];
     let offset_size = data[1] as u32;
+    // The signifier word packs `offset_size` offset bits and the rest as length
+    // bits, so a valid `offset_size` leaves room for both: 1..=15. Anything else
+    // (notably 0 or >=16) would make `16 - offset_size` underflow and the shift
+    // panic, so reject it as unsupported rather than crash.
+    if !(1..=15).contains(&offset_size) {
+        return Err(Error::Unsupported(format!(
+            "legacy-simos offset size {offset_size} out of range (expected 1..=15)"
+        )));
+    }
+    let shift = 16 - offset_size; // in 1..=15, so `ol >> shift` is always valid
     let dict_size = fill_bits(data[2] as u32) as usize;
     let block_size = u32::from_be_bytes([data[3], data[4], data[5], data[6]]) as usize;
+    // Bound the declared output size before allocating it.
+    if block_size > MAX_DECOMPRESSED {
+        return Err(Error::Unsupported(format!(
+            "legacy-simos declared block size {block_size:#x} exceeds the {MAX_DECOMPRESSED:#x}-byte limit"
+        )));
+    }
     let mut out = vec![0u8; block_size];
     let mut oc = 0usize;
     let mut cursor = 11usize;
@@ -266,15 +288,28 @@ pub fn decompress_legacy_simos(data: &[u8]) -> Result<Vec<u8>> {
             }
             let ol = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
             cursor += 2;
-            let off = ol >> (16 - offset_size);
+            let off = ol >> shift;
             let length = ol & dict_size;
             let block_offset = oc;
+            // A back-reference must point inside already-produced output; a bad
+            // `off` (greater than the current position) is malformed, so stop the
+            // run instead of underflowing the index.
+            let Some(src0) = block_offset.checked_sub(off) else {
+                break;
+            };
             for k in 0..length {
                 if oc >= block_size {
                     break;
                 }
-                out[oc] = out[block_offset - off + k];
-                oc += 1;
+                // Read from the produced buffer by bounds-checked index; a source
+                // past the buffer end ends the run rather than panicking.
+                match src0.checked_add(k).and_then(|idx| out.get(idx).copied()) {
+                    Some(b) => {
+                        out[oc] = b;
+                        oc += 1;
+                    }
+                    None => break,
+                }
             }
             if cursor < data.len() && oc < block_size {
                 out[oc] = data[cursor];
@@ -401,5 +436,68 @@ mod tests {
         let packed = [0x00u8, b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h'];
         let out = decompress_lzss10(&packed, 8);
         assert_eq!(&out, b"abcdefgh");
+    }
+
+    #[test]
+    fn huge_declared_out_size_does_not_preallocate_gigabytes() {
+        // A tiny compressed input declaring an absurd uncompressed size must not
+        // try to reserve that much memory; it just produces what the data allows.
+        let data = [0x00u8, 1, 2, 3];
+        let big = usize::MAX / 2;
+        let _ = decompress_lzss10(&data, big);
+        let _ = decompress_lzss_dq(&data, big);
+        let _ = decompress_lzz(&data, big);
+    }
+
+    #[test]
+    fn lzss10_back_reference_before_start_is_safe() {
+        // Control byte 0x80: first slot is a back-reference word. A displacement
+        // with nothing produced yet must not panic.
+        let packed = [0x80u8, 0xFF, 0xFF];
+        let _ = decompress_lzss10(&packed, 64);
+    }
+
+    #[test]
+    fn legacy_simos_rejects_truncated_header() {
+        assert!(decompress_legacy_simos(&[0u8; 5]).is_err());
+    }
+
+    #[test]
+    fn legacy_simos_rejects_bad_offset_size() {
+        // offset_size (byte 1) = 0 and = 0xFF would both make the shift underflow.
+        let mut hdr = vec![0xAAu8; 16];
+        hdr[1] = 0; // offset_size 0
+        assert!(decompress_legacy_simos(&hdr).is_err());
+        hdr[1] = 0xFF; // offset_size 255
+        assert!(decompress_legacy_simos(&hdr).is_err());
+    }
+
+    #[test]
+    fn legacy_simos_rejects_absurd_block_size() {
+        // A valid-looking header declaring a ~4 GiB output must be rejected, not
+        // allocated.
+        let mut hdr = vec![0u8; 16];
+        hdr[0] = 0x00; // signifier
+        hdr[1] = 11; // offset_size in range
+        hdr[2] = 0x0F; // dict size bits
+        hdr[3..7].copy_from_slice(&0xFFFF_FFFFu32.to_be_bytes()); // block size
+        assert!(decompress_legacy_simos(&hdr).is_err());
+    }
+
+    #[test]
+    fn legacy_simos_back_reference_underflow_is_safe() {
+        // A signifier run at the very start references output that does not exist
+        // yet; it must terminate cleanly rather than underflow the index.
+        let mut d = vec![0u8; 11];
+        d[0] = 0x5A; // signifier
+        d[1] = 11; // offset_size
+        d[2] = 0x1F; // dict/length mask bits
+        d[3..7].copy_from_slice(&64u32.to_be_bytes()); // block size 64
+                                                       // A signifier byte immediately, then a word with a large offset.
+        d.push(0x5A);
+        d.push(0xFF);
+        d.push(0xFF);
+        let out = decompress_legacy_simos(&d).expect("clean decode");
+        assert_eq!(out.len(), 64);
     }
 }

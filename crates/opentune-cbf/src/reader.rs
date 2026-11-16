@@ -15,6 +15,23 @@
 use crate::error::Result;
 use crate::raf::Raf;
 
+/// Ceiling on any `Vec::with_capacity` hint derived from a count read out of the
+/// file. Counts in a CBF are 32-bit and attacker-controlled, so a hostile value
+/// (up to ~2 billion) must never be handed straight to the allocator. The vector
+/// still grows to fit a genuinely large real file; this only bounds the eager
+/// reservation so a tiny malformed file cannot trigger a multi-gigabyte request.
+pub(crate) const MAX_PREALLOC: usize = 1 << 16;
+
+/// Clamp a signed on-disk offset/count to a non-negative `usize`.
+///
+/// CBF stores offsets and counts as `i32`. A negative value is malformed; left
+/// as `x as usize` it would wrap to a near-`usize::MAX` value and then overflow
+/// (panicking in debug builds) when added to a base address. Clamping it to `0`
+/// turns the following base-relative read into a clean end-of-data error.
+pub(crate) fn clamp_off(v: i32) -> usize {
+    v.max(0) as usize
+}
+
 /// Test the lowest bit of the flag word and shift it right by one.
 ///
 /// Returns whether the field guarded by that bit is present.
@@ -66,9 +83,9 @@ pub fn read_bitflag_string(
     base_addr: usize,
 ) -> Result<String> {
     if check_and_advance(bit_flag) {
-        let string_offset = reader.read_i32()? as usize;
+        let string_offset = clamp_off(reader.read_i32()?);
         let saved = reader.pos;
-        reader.seek(string_offset + base_addr);
+        reader.seek(string_offset.saturating_add(base_addr));
         let bytes = reader.read_cstr_bytes().unwrap_or_default();
         reader.seek(saved);
         Ok(decode_string(&bytes))
@@ -87,9 +104,9 @@ pub fn read_bitflag_dump(
     base_addr: usize,
 ) -> Result<Vec<u8>> {
     if check_and_advance(bit_flag) {
-        let dump_offset = reader.read_i32()? as usize;
+        let dump_offset = clamp_off(reader.read_i32()?);
         let saved = reader.pos;
-        reader.seek(dump_offset + base_addr);
+        reader.seek(dump_offset.saturating_add(base_addr));
         let res = reader.read_bytes(dump_size).unwrap_or_default();
         reader.seek(saved);
         Ok(res)

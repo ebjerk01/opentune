@@ -976,6 +976,13 @@ fn axis_stored_type(
     (dt, endian)
 }
 
+/// Upper bound on the number of inline axis breakpoints generated from a
+/// `FIX_AXIS_PAR`/`FIX_AXIS_PAR_DIST` count. The stored point count is an
+/// attacker-controlled `u32`; without a cap a value near `u32::MAX` would make
+/// the generator try to allocate tens of gigabytes. Real calibration axes have
+/// at most a few hundred points.
+const MAX_AXIS_POINTS: u32 = 1 << 16;
+
 /// Inline breakpoint values from a FIX_AXIS parameter form.
 ///
 /// Supports `FIX_AXIS_PAR_LIST v0 v1 …`, `FIX_AXIS_PAR offset shift n`
@@ -998,7 +1005,11 @@ fn fix_axis_values(ax: &Block, count: u32) -> Vec<f64> {
     if let Some(p) = ax.keyword_pos("FIX_AXIS_PAR_DIST") {
         let offset = ax.word(p + 1).and_then(parse_f64);
         let dist = ax.word(p + 2).and_then(parse_f64);
-        let n = ax.word(p + 3).and_then(parse_u32).unwrap_or(count);
+        let n = ax
+            .word(p + 3)
+            .and_then(parse_u32)
+            .unwrap_or(count)
+            .min(MAX_AXIS_POINTS);
         if let (Some(o), Some(d)) = (offset, dist) {
             return (0..n).map(|i| o + i as f64 * d).collect();
         }
@@ -1006,7 +1017,11 @@ fn fix_axis_values(ax: &Block, count: u32) -> Vec<f64> {
     if let Some(p) = ax.keyword_pos("FIX_AXIS_PAR") {
         let offset = ax.word(p + 1).and_then(parse_f64);
         let shift = ax.word(p + 2).and_then(parse_f64);
-        let n = ax.word(p + 3).and_then(parse_u32).unwrap_or(count);
+        let n = ax
+            .word(p + 3)
+            .and_then(parse_u32)
+            .unwrap_or(count)
+            .min(MAX_AXIS_POINTS);
         if let (Some(o), Some(s)) = (offset, shift) {
             let step = 2f64.powf(s);
             return (0..n).map(|i| o + i as f64 * step).collect();

@@ -208,6 +208,14 @@ impl Block {
     }
 }
 
+/// Maximum `/begin` nesting depth the tree builder will materialise. Real A2L
+/// files nest only a handful of levels; this cap keeps a pathological file (e.g.
+/// a million `/begin X`) from building an arbitrarily deep [`Block`] tree, which
+/// would overflow the stack when later walked recursively — or even just dropped.
+/// Content nested beyond the cap is flattened into the deepest allowed block
+/// rather than rejected, so a valid file (depth far below the cap) is unaffected.
+pub const MAX_BLOCK_DEPTH: usize = 512;
+
 /// Fold a flat token stream into a single synthetic root [`Block`] whose
 /// children are the top-level blocks of the file. Tokens outside any block
 /// (e.g. `ASAP2_VERSION 1 21`) are kept as the root's leaf words.
@@ -216,14 +224,27 @@ pub fn build_tree(tokens: Vec<Token>) -> Block {
         tag: "<root>".to_string(),
         ..Default::default()
     }];
+    // Count of `/begin`s that were suppressed because they exceeded the depth
+    // cap; their matching `/end`s must be swallowed so the stack stays balanced.
+    let mut suppressed: usize = 0;
     for tok in tokens {
         match tok {
-            Token::Begin(tag) => stack.push(Block {
-                tag,
-                ..Default::default()
-            }),
+            Token::Begin(tag) => {
+                if stack.len() >= MAX_BLOCK_DEPTH {
+                    // Too deep: do not materialise another level. Its leaf words
+                    // fold into the current (deepest allowed) block instead.
+                    suppressed += 1;
+                } else {
+                    stack.push(Block {
+                        tag,
+                        ..Default::default()
+                    });
+                }
+            }
             Token::End(_tag) => {
-                if stack.len() > 1 {
+                if suppressed > 0 {
+                    suppressed -= 1;
+                } else if stack.len() > 1 {
                     let done = stack.pop().unwrap();
                     stack.last_mut().unwrap().children.push(done);
                 }
@@ -304,5 +325,35 @@ mod tests {
         let src = "/begin A \"Drehzahl µ ° text\" /end A";
         let root = parse_tree(src);
         assert_eq!(root.child("A").unwrap().word(0), Some("Drehzahl µ ° text"));
+    }
+
+    #[test]
+    fn deeply_nested_begins_do_not_overflow() {
+        // A hostile file with far more `/begin` than the depth cap must build,
+        // walk and drop without a stack overflow.
+        let mut src = String::new();
+        for _ in 0..200_000 {
+            src.push_str("/begin X ");
+        }
+        src.push_str("leaf");
+        let root = parse_tree(&src);
+        // The tree is capped, so a recursive descendant search terminates.
+        let mut found = Vec::new();
+        root.descendants_tagged("X", &mut found);
+        assert!(found.len() <= MAX_BLOCK_DEPTH);
+        // And dropping the capped tree here must not overflow either.
+    }
+
+    #[test]
+    fn unterminated_string_at_eof_is_handled() {
+        let root = parse_tree("/begin A \"unterminated");
+        assert!(root.find_descendant("A").is_some());
+    }
+
+    #[test]
+    fn stray_ends_are_tolerated() {
+        // More /end than /begin must not underflow the stack.
+        let root = parse_tree("/end A /end B foo /end C");
+        assert_eq!(root.word(0), Some("foo"));
     }
 }

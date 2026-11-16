@@ -418,6 +418,79 @@ fn cuboid_slice_cap_flags_overflow() {
 }
 
 #[test]
+fn empty_and_garbage_inputs_are_clean_errors() {
+    assert!(parse_a2l("").is_err());
+    assert!(parse_a2l("\0\0\0\0").is_err());
+    assert!(parse_a2l("not an a2l file at all").is_err());
+    // A truncated /begin with no /end must not panic.
+    assert!(parse_a2l("/begin MODULE M").is_err());
+}
+
+#[test]
+fn fix_axis_par_huge_count_is_capped() {
+    // A FIX_AXIS_PAR_DIST declaring billions of points must not try to allocate
+    // them; the generated axis is capped instead of exhausting memory.
+    let src = r#"
+/begin PROJECT P ""
+  /begin MODULE M ""
+    /begin MOD_COMMON "" BYTE_ORDER MSB_FIRST /end MOD_COMMON
+    /begin RECORD_LAYOUT R FNC_VALUES 1 UBYTE COLUMN_DIR DIRECT /end RECORD_LAYOUT
+    /begin COMPU_METHOD C "" IDENTITY "%.0" "" /end COMPU_METHOD
+    /begin CHARACTERISTIC crv "c" CURVE 0x1000 R 0 C 0 100
+      /begin AXIS_DESCR
+        FIX_AXIS in C 8 0 100
+        FIX_AXIS_PAR_DIST 0 10 4000000000
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+  /end MODULE
+/end PROJECT"#;
+    let imp = parse_a2l(src).expect("parse");
+    let x = imp.maps[0].x_axis.as_ref().expect("x axis");
+    assert!(
+        x.values.len() <= super::MAX_AXIS_POINTS as usize,
+        "axis points must be capped, got {}",
+        x.values.len()
+    );
+}
+
+#[test]
+fn fuzz_random_inputs_never_panic() {
+    // Deterministic pseudo-random fuzz: mutate the known-good sample and feed
+    // pure garbage. The only requirement is that the parser returns (Ok or Err)
+    // and never panics, overflows or hangs. Kept small so CI stays cheap.
+    let mut state: u64 = 0x2026_1116_a210_cbf0;
+    let mut rng = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let seed = SAMPLE.as_bytes();
+    for _ in 0..512 {
+        let mut buf: Vec<u8> = seed.to_vec();
+        let edits = (rng() % 40) as usize;
+        for _ in 0..edits {
+            if buf.is_empty() {
+                break;
+            }
+            let idx = (rng() as usize) % buf.len();
+            buf[idx] = (rng() & 0xff) as u8;
+        }
+        // Also append some random bytes (including structural tokens).
+        for _ in 0..(rng() % 32) {
+            buf.push((rng() & 0xff) as u8);
+        }
+        let s = String::from_utf8_lossy(&buf);
+        let _ = parse_a2l(&s); // must not panic
+    }
+    // A handful of all-structural-token streams (unbalanced begins/ends).
+    for n in [1usize, 10, 100] {
+        let s = "/begin A ".repeat(n) + &"/end A ".repeat(n / 2);
+        let _ = parse_a2l(&s);
+    }
+}
+
+#[test]
 fn unresolved_com_axis_is_flagged() {
     let src = r#"
 /begin PROJECT P ""

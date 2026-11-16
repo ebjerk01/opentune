@@ -109,6 +109,66 @@ mod tests {
         assert!(matches!(err, CbfError::UnexpectedEof));
     }
 
+    /// Build the minimal fixed stub header that `check_stub_header` accepts, so a
+    /// test can then append a (possibly hostile) CFF body and exercise the body
+    /// parser. STUB_HEADER_SIZE is 0x410.
+    fn valid_stub(tail: &[u8]) -> Vec<u8> {
+        let mut v = vec![0u8; 0x410];
+        let magic = b"CBF-TRANSLATOR-VERSION:04.00";
+        v[..magic.len()].copy_from_slice(magic);
+        v[0x401] = 3; // required magic id
+        v.extend_from_slice(tail);
+        v
+    }
+
+    #[test]
+    fn valid_stub_then_garbage_is_clean_error() {
+        // A valid stub followed by random/hostile CFF bytes must error cleanly,
+        // never panic or allocate wildly.
+        for tail in [
+            vec![],
+            vec![0xff; 4],                // negative cff_header_size
+            vec![0x00, 0x00, 0x00, 0x00], // zero header size, then EOF
+            vec![0xff; 64],
+            0x7fff_ffffi32.to_le_bytes().to_vec(), // huge header size
+        ] {
+            let buf = valid_stub(&tail);
+            let _ = parse_bytes(&buf); // must not panic
+        }
+    }
+
+    #[test]
+    fn fuzz_cbf_bodies_never_panic() {
+        // Deterministic fuzz over the CBF body parser with a valid stub header.
+        // Hostile counts/offsets must be clamped/saturated, not panic, OOM or
+        // hang. Iteration count kept modest for CI.
+        let mut state: u64 = 0x4342_4600_2026_1116;
+        let mut rng = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..256 {
+            let len = (rng() % 512) as usize;
+            let mut tail = Vec::with_capacity(len);
+            for _ in 0..len {
+                tail.push((rng() & 0xff) as u8);
+            }
+            let buf = valid_stub(&tail);
+            let _ = parse_bytes(&buf);
+        }
+        // Also fuzz completely random buffers (most fail the stub check).
+        for _ in 0..256 {
+            let len = (rng() % 2048) as usize;
+            let mut buf = Vec::with_capacity(len);
+            for _ in 0..len {
+                buf.push((rng() & 0xff) as u8);
+            }
+            let _ = parse_bytes(&buf);
+        }
+    }
+
     #[test]
     fn dtc_entries_flattens_pool() {
         let cbf = CbfFile {

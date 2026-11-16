@@ -28,6 +28,12 @@ use crate::{Segment, SegmentSource};
 
 const MAGIC: &[u8] = b"SGML Object File\x00";
 
+/// Upper bound on the number of block descriptors in an SGO container. Real
+/// Simos/DQ SGO objects carry a handful (one per flash segment); this cap stops a
+/// crafted block-index count from driving a quadratic blow-up where many block
+/// descriptors each clone the same large payload.
+const MAX_SGO_BLOCKS: usize = 4096;
+
 /// The format-1 family cipher convention. Both take a caller-supplied table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SgoCipher {
@@ -137,7 +143,17 @@ pub fn parse(data: &[u8]) -> Result<SgoFile> {
 
     require(data, i_blocks, 4, "SGO block index count")?;
     let nb = u32le(data, i_blocks) as usize;
-    require(data, i_blocks + 4, nb * 4, "SGO block index")?;
+    if nb > MAX_SGO_BLOCKS {
+        return Err(Error::Unsupported(format!(
+            "SGO declares {nb} blocks (limit {MAX_SGO_BLOCKS})"
+        )));
+    }
+    // `nb <= MAX_SGO_BLOCKS`, so `nb * 4` cannot overflow; the require still
+    // guarantees the whole index table is present before we read it.
+    let index_bytes = nb
+        .checked_mul(4)
+        .ok_or(Error::Unsupported("SGO block index size overflow".into()))?;
+    require(data, i_blocks + 4, index_bytes, "SGO block index")?;
     let mut blocks = Vec::with_capacity(nb);
     for k in 0..nb {
         let bo = u32le(data, i_blocks + 4 + k * 4) as usize;
@@ -324,5 +340,47 @@ mod tests {
     #[test]
     fn rejects_bad_magic() {
         assert!(parse(b"not an sgo file at all................").is_err());
+    }
+
+    #[test]
+    fn rejects_truncated_header() {
+        // Just the magic, nothing else.
+        assert!(parse(MAGIC).is_err());
+        // Magic plus a few bytes, short of the 0x31 header.
+        let mut d = MAGIC.to_vec();
+        d.extend_from_slice(&[0u8; 8]);
+        assert!(parse(&d).is_err());
+    }
+
+    #[test]
+    fn rejects_offsets_past_eof() {
+        // Valid magic + header with indices pointing far past the end of input.
+        let mut d = MAGIC.to_vec();
+        // header fields from 0x11: compat=2, then offsets = 0xFFFF_FFFF.
+        d.extend_from_slice(&2u32.to_le_bytes()); // compat
+        for _ in 0..7 {
+            d.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        }
+        // Pad to the 0x31 header length if short.
+        d.resize(0x31, 0);
+        assert!(parse(&d).is_err());
+    }
+
+    #[test]
+    fn rejects_absurd_block_count() {
+        // Build a header whose block index count is enormous; must be rejected
+        // before any allocation, not OOM.
+        let mut d = MAGIC.to_vec();
+        let i_ident = 0x31u32;
+        let i_sa2 = i_ident + 269;
+        let i_blocks = i_sa2 + 4;
+        for v in [2u32, 0, i_ident, 0, 0, 0, i_sa2, i_blocks] {
+            d.extend_from_slice(&v.to_le_bytes());
+        }
+        d.resize(i_ident as usize, 0);
+        d.resize(i_sa2 as usize, 0); // IDENT region
+        d.extend_from_slice(&0u32.to_le_bytes()); // SA2 count = 0
+        d.extend_from_slice(&0xFFFF_FFFEu32.to_le_bytes()); // block count ~4 billion
+        assert!(parse(&d).is_err());
     }
 }

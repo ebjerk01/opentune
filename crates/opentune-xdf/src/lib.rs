@@ -205,4 +205,52 @@ mod tests {
     fn unknown_format_rejected() {
         assert_eq!(parse_xdf("hello world"), Err(Error::UnknownFormat));
     }
+
+    #[test]
+    fn malformed_inputs_are_clean_errors() {
+        // Truncated/garbage XML and legacy markers must return Err, not panic.
+        for s in [
+            "",
+            "<",
+            "<?xml",
+            "<XDFFORMAT>",
+            "<XDFFORMAT><XDFTABLE></XDFTABLE></XDFFORMAT>",
+            "%%TABLE%%",
+            "%%TABLE%%\n\t040100 Address =0x\n%%END%%",
+            "XDF\n1.11\n%%TABLE%%",
+        ] {
+            let _ = parse_xdf(s); // must not panic
+        }
+    }
+
+    #[test]
+    fn fuzz_random_xdf_never_panics() {
+        // Deterministic fuzz over both parser paths. Each input only needs to not
+        // panic/overflow/hang; a few hundred iterations keep CI cheap.
+        let mut state: u64 = 0x5844_4600_2026_1116;
+        let mut rng = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let seeds: [&str; 2] = [
+            r#"<XDFFORMAT version="1.60"><XDFTABLE uniqueid="0x1"><title>t</title><XDFAXIS id="z"><EMBEDDEDDATA mmedaddress="0x10" mmedelementsizebits="16" mmedrowcount="4" mmedcolcount="4"/><MATH equation="X*2+1"/></XDFAXIS></XDFTABLE></XDFFORMAT>"#,
+            "XDF\n1.11\n%%TABLE%%\n\t040100 Address =0x288\n\t040300 Rows =0x10\n\t040200 ZEq =(45*x)/127,TH\n%%END%%\n",
+        ];
+        for _ in 0..512 {
+            let seed = seeds[(rng() as usize) % seeds.len()];
+            let mut buf = seed.as_bytes().to_vec();
+            let edits = (rng() % 48) as usize;
+            for _ in 0..edits {
+                if buf.is_empty() {
+                    break;
+                }
+                let idx = (rng() as usize) % buf.len();
+                buf[idx] = (rng() & 0xff) as u8;
+            }
+            let s = String::from_utf8_lossy(&buf);
+            let _ = parse_xdf(&s);
+        }
+    }
 }

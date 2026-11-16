@@ -8,7 +8,7 @@
 
 use crate::error::{CbfError, Result};
 use crate::raf::Raf;
-use crate::reader::{read_bitflag_string, read_primitive};
+use crate::reader::{clamp_off, read_bitflag_string, read_primitive, MAX_PREALLOC};
 
 /// Size of the fixed stub header at the very start of the file.
 pub const STUB_HEADER_SIZE: usize = 0x410;
@@ -109,11 +109,15 @@ impl CtfHeader {
         let language_table_offset = read_primitive(&mut bit_flag, reader, 0i32)?;
         let _unk7 = read_bitflag_string(&mut bit_flag, reader, base_addr)?;
 
-        let lang_table_offset_relative = language_table_offset as usize + base_addr;
-        let mut languages = Vec::new();
-        for i in 0..language_count as usize {
-            reader.seek(lang_table_offset_relative + (i * 4));
-            let entry_addr = reader.read_i32()? as usize + lang_table_offset_relative;
+        let lang_table_offset_relative = clamp_off(language_table_offset).saturating_add(base_addr);
+        // Real CBF files declare a small handful of languages. Clamp the count so
+        // a hostile value cannot drive an unbounded loop / allocation.
+        let lang_count = clamp_off(language_count).min(MAX_PREALLOC);
+        let mut languages = Vec::with_capacity(lang_count);
+        for i in 0..lang_count {
+            reader.seek(lang_table_offset_relative.saturating_add(i.saturating_mul(4)));
+            let entry_addr =
+                clamp_off(reader.read_i32()?).saturating_add(lang_table_offset_relative);
             languages.push(CtfLanguage::new(reader, entry_addr, header_size)?);
         }
         Ok(CtfHeader { languages })
@@ -143,10 +147,12 @@ impl CtfLanguage {
         let _language_index = read_primitive(&mut flags, reader, 0i16)?;
         let _string_pool_size = read_primitive(&mut flags, reader, 0i32)?;
         let _offset_string_pool_base = read_primitive(&mut flags, reader, 0i32)?;
-        let string_count = read_primitive(&mut flags, reader, 0i32)? as usize;
+        let string_count = clamp_off(read_primitive(&mut flags, reader, 0i32)?);
 
         let mut res = CtfLanguage {
-            strings: Vec::with_capacity(string_count),
+            // Bound the eager reservation; the loop in `load_strings` stops at the
+            // first out-of-range read, so a false count cannot over-allocate.
+            strings: Vec::with_capacity(string_count.min(MAX_PREALLOC)),
         };
         res.load_strings(reader, string_count, header_size)?;
         Ok(res)
@@ -158,12 +164,14 @@ impl CtfLanguage {
         string_count: usize,
         header_size: usize,
     ) -> Result<()> {
-        let table_offset = header_size + STUB_HEADER_SIZE + 4;
+        let table_offset = header_size
+            .saturating_add(STUB_HEADER_SIZE)
+            .saturating_add(4);
         self.strings.clear();
         for i in 0..string_count {
-            reader.seek(table_offset + (i * 4));
-            let string_offset = reader.read_i32()? as usize;
-            reader.seek(table_offset + string_offset);
+            reader.seek(table_offset.saturating_add(i.saturating_mul(4)));
+            let string_offset = clamp_off(reader.read_i32()?);
+            reader.seek(table_offset.saturating_add(string_offset));
             let bytes = reader.read_cstr_bytes()?;
             self.strings.push(crate::reader::decode_string(&bytes));
         }

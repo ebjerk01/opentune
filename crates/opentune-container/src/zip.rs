@@ -23,6 +23,12 @@ const EOCD_SIG: u32 = 0x0605_4b50;
 const CDH_SIG: u32 = 0x0201_4b50;
 const LFH_SIG: u32 = 0x0403_4b50;
 
+/// Upper bound on the decompressed size of a single ZIP member. FRF/ODX flash
+/// members are at most a few megabytes; this cap stops a crafted DEFLATE "zip
+/// bomb" from expanding a tiny stored member into gigabytes of memory. A member
+/// that inflates past this is rejected rather than allocated.
+const MAX_MEMBER_SIZE: u64 = 512 * 1024 * 1024;
+
 fn u16le(b: &[u8], o: usize) -> u16 {
     u16::from_le_bytes([b[o], b[o + 1]])
 }
@@ -48,10 +54,17 @@ pub fn read_all(buf: &[u8]) -> Result<Vec<ZipEntry>> {
     let total_entries = u16le(buf, eocd + 10) as usize;
     let cd_offset = u32le(buf, eocd + 16) as usize;
 
+    // `total_entries` is a u16 (<= 65535) so this hint cannot be abused.
     let mut entries = Vec::with_capacity(total_entries);
     let mut p = cd_offset;
+    // Bounds-checked slice helper: every index into `buf` below goes through an
+    // explicit `end <= buf.len()` test using checked arithmetic, so a truncated
+    // or hostile header can never index past the slice (which would panic).
     for _ in 0..total_entries {
-        if p + 46 > buf.len() || u32le(buf, p) != CDH_SIG {
+        let hdr_end = p
+            .checked_add(46)
+            .ok_or_else(|| Error::Zip("central directory header offset overflow".into()))?;
+        if hdr_end > buf.len() || u32le(buf, p) != CDH_SIG {
             return Err(Error::Zip("malformed central directory header".into()));
         }
         let method = u16le(buf, p + 10);
@@ -60,30 +73,48 @@ pub fn read_all(buf: &[u8]) -> Result<Vec<ZipEntry>> {
         let extra_len = u16le(buf, p + 30) as usize;
         let comment_len = u16le(buf, p + 32) as usize;
         let lfh_off = u32le(buf, p + 42) as usize;
-        let name = String::from_utf8_lossy(&buf[p + 46..p + 46 + name_len]).into_owned();
+        // The file name follows the 46-byte fixed header; reject if it would run
+        // past the end of the buffer before slicing it.
+        let name_end = hdr_end
+            .checked_add(name_len)
+            .filter(|&e| e <= buf.len())
+            .ok_or_else(|| Error::Zip("central directory name runs past end of archive".into()))?;
+        let name = String::from_utf8_lossy(&buf[hdr_end..name_end]).into_owned();
 
         // Locate the member data via the local file header (its name/extra lengths
         // can differ from the central directory's extra length).
-        if lfh_off + 30 > buf.len() || u32le(buf, lfh_off) != LFH_SIG {
+        let lfh_end = lfh_off
+            .checked_add(30)
+            .ok_or_else(|| Error::Zip(format!("local header offset overflow for {name}")))?;
+        if lfh_end > buf.len() || u32le(buf, lfh_off) != LFH_SIG {
             return Err(Error::Zip(format!("bad local header for {name}")));
         }
         let l_name_len = u16le(buf, lfh_off + 26) as usize;
         let l_extra_len = u16le(buf, lfh_off + 28) as usize;
-        let data_start = lfh_off + 30 + l_name_len + l_extra_len;
-        if data_start + comp_size > buf.len() {
-            return Err(Error::Zip(format!(
-                "member {name} runs past end of archive"
-            )));
-        }
-        let raw = &buf[data_start..data_start + comp_size];
+        let data_start = lfh_end
+            .checked_add(l_name_len)
+            .and_then(|x| x.checked_add(l_extra_len))
+            .ok_or_else(|| Error::Zip(format!("member {name} data offset overflow")))?;
+        let data_end = data_start
+            .checked_add(comp_size)
+            .filter(|&e| e <= buf.len())
+            .ok_or_else(|| Error::Zip(format!("member {name} runs past end of archive")))?;
+        let raw = &buf[data_start..data_end];
 
         let data = match method {
             0 => raw.to_vec(),
             8 => {
                 let mut out = Vec::new();
+                // Cap the inflated size so a crafted member cannot exhaust memory.
                 DeflateDecoder::new(raw)
+                    .take(MAX_MEMBER_SIZE + 1)
                     .read_to_end(&mut out)
                     .map_err(|e| Error::Zip(format!("inflate failed for {name}: {e}")))?;
+                if out.len() as u64 > MAX_MEMBER_SIZE {
+                    return Err(Error::Zip(format!(
+                        "member {name} inflates past the {MAX_MEMBER_SIZE}-byte limit"
+                    )));
+                }
                 out
             }
             other => {
@@ -94,7 +125,13 @@ pub fn read_all(buf: &[u8]) -> Result<Vec<ZipEntry>> {
         };
 
         entries.push(ZipEntry { name, data });
-        p += 46 + name_len + extra_len + comment_len;
+        // Advance to the next central-directory header with checked arithmetic.
+        p = p
+            .checked_add(46)
+            .and_then(|x| x.checked_add(name_len))
+            .and_then(|x| x.checked_add(extra_len))
+            .and_then(|x| x.checked_add(comment_len))
+            .ok_or_else(|| Error::Zip("central directory cursor overflow".into()))?;
     }
     Ok(entries)
 }
@@ -201,5 +238,61 @@ mod tests {
     #[test]
     fn crc32_known_answer() {
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+    }
+
+    #[test]
+    fn rejects_too_small_for_eocd() {
+        assert!(read_all(&[0u8; 10]).is_err());
+        assert!(read_all(&[]).is_err());
+    }
+
+    #[test]
+    fn rejects_garbage_without_eocd() {
+        let buf = vec![0x55u8; 1024];
+        assert!(read_all(&buf).is_err());
+    }
+
+    #[test]
+    fn truncated_central_directory_name_does_not_panic() {
+        // Build a valid archive, then corrupt the central-directory name length
+        // so the stored name claims to extend past the end of the buffer.
+        let mut archive = write_stored(&[("a.odx".to_string(), b"<ODX/>".to_vec())]);
+        // Find the central directory header (CDH_SIG) and inflate its name length.
+        let sig = CDH_SIG.to_le_bytes();
+        let cdh = archive
+            .windows(4)
+            .position(|w| w == sig)
+            .expect("central header");
+        // name length lives at CDH + 28 (u16 LE).
+        archive[cdh + 28] = 0xff;
+        archive[cdh + 29] = 0xff;
+        // Must be a clean Err, never a panic.
+        assert!(read_all(&archive).is_err());
+    }
+
+    #[test]
+    fn corrupt_local_header_offset_is_clean_error() {
+        let mut archive = write_stored(&[("a.odx".to_string(), b"<ODX/>".to_vec())]);
+        let sig = CDH_SIG.to_le_bytes();
+        let cdh = archive
+            .windows(4)
+            .position(|w| w == sig)
+            .expect("central header");
+        // Local-header offset lives at CDH + 42 (u32 LE): point it past the end.
+        archive[cdh + 42..cdh + 46].copy_from_slice(&0xffff_fffeu32.to_le_bytes());
+        assert!(read_all(&archive).is_err());
+    }
+
+    #[test]
+    fn huge_declared_comp_size_is_rejected_not_allocated() {
+        let mut archive = write_stored(&[("a.odx".to_string(), b"<ODX/>".to_vec())]);
+        let sig = CDH_SIG.to_le_bytes();
+        let cdh = archive
+            .windows(4)
+            .position(|w| w == sig)
+            .expect("central header");
+        // Compressed size lives at CDH + 20 (u32 LE).
+        archive[cdh + 20..cdh + 24].copy_from_slice(&0xffff_fff0u32.to_le_bytes());
+        assert!(read_all(&archive).is_err());
     }
 }
