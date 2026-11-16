@@ -54,6 +54,24 @@ android {
     }
 }
 
+// Guard against the bundled ECU-def assets drifting from the canonical root
+// `ecudefs/` set. Runs ../sync-ecudefs.sh --check; fails the build on drift so
+// a stale/missing def can't silently ship in the APK. Fix with:
+//   android/sync-ecudefs.sh
+val checkEcudefsSync by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Verify bundled assets/ecudefs match the root ecudefs/ set."
+    val script = rootProject.file("sync-ecudefs.sh")
+    inputs.file(script)
+    inputs.dir(rootProject.file("app/src/main/assets/ecudefs"))
+    inputs.dir(rootProject.file("../ecudefs"))
+    commandLine("bash", script.absolutePath, "--check")
+}
+
+// Enforce the check on every build and whenever `./gradlew check` runs.
+tasks.named("preBuild") { dependsOn(checkEcudefsSync) }
+tasks.matching { it.name == "check" }.configureEach { dependsOn(checkEcudefsSync) }
+
 dependencies {
     // Jetpack Compose (Material3).
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")

@@ -3,19 +3,19 @@
   "name": "Bosch EDC16U34",
   "maker": "Bosch",
   "family": "EDC16",
-  "notes": "VAG 1.9 TDI PD. Diagnostics over CAN (ISO 15765-4); some vehicles answer KWP2000, others UDS - set diag_layer to match the car. Addresses and flash_size are placeholders for the family and must be confirmed per software variant before any read or write.",
+  "notes": "VAG 1.9 TDI PD. Diagnostics over CAN (ISO 15765-4); some vehicles answer KWP2000, others UDS - set diag_layer to match the car. flash_size is the 2 MiB (2097152-byte) full-flash read the maps below are offsets into; the EDC16 processor flash itself is 512 KiB but the maps were diff-derived against the 2 MiB fixture read. Addresses are placeholders for the family and must be confirmed per software variant before any read or write.",
   "protocol": "iso_tp",
   "diag_layer": "kwp2000",
   "bitrate": 500000,
   "tx_id": 2016,
   "rx_id": 2024,
-  "flash_size": 524288,
+  "flash_size": 2097152,
   "regions": [
     {
       "name": "full",
       "region": {
         "address": 0,
-        "length": 524288
+        "length": 2097152
       },
       "writable": false
     },

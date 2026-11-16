@@ -1,0 +1,4 @@
+# The per-ABI libopentune_ffi.so files are build artifacts (see README.md):
+# produced by ../../../../build-rust.sh (cargo-ndk) or in CI, NOT committed.
+# Ignore the binaries but keep the README and this file tracked.
+*/*.so
