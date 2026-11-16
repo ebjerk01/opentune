@@ -108,5 +108,25 @@
     "source": "public: OM642 3.0 V6 CDI — early cars Bosch EDC16CP31, later cars move to EDC17CP; both generations documented for OM642",
     "confidence": "medium",
     "notes": "Engine family OM642 3.0 V6 CDI. TWO ECU generations span this engine's life: EDC16CP31 (earlier) then EDC17CP (later) — the family field lists both and the split by year/market is NOT resolved here. part_numbers key 'A6421' = engine-642 prefix (engine-family scope). Treat family as a candidate set, not a single value."
+  },
+  {
+    "make": "Mercedes-Benz",
+    "models": [
+      "Mercedes-Benz C-Class (W204/W205)",
+      "Mercedes-Benz E-Class (W212)",
+      "Mercedes-Benz GLK (X204)",
+      "Mercedes-Benz Sprinter (NCV3/W906)",
+      "Mercedes-Benz Vito/Viano (W639/W447)"
+    ],
+    "years": "2008-2019",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC17CP46/EDC17CP57",
+    "ecudef_id": null,
+    "source": "public: OM651 2.1/2.2 CDI (four-cylinder common-rail) runs Bosch EDC17 (EDC17CP46 early, EDC17CP57 later) — the most common modern Mercedes four-cylinder diesel, widely documented in ECU/tuning databases.",
+    "confidence": "medium",
+    "notes": "Engine family OM651 2.1 CDI. EDC17CP family is confident; CP46-vs-CP57 split tracks model/year and is NOT resolved here (candidate set). NO part_numbers shipped: unlike the older OM6xx entries, I could not confirm the exact Mercedes 'A651x' ECU-part prefix (A6511 vs A6519 ambiguity) and refuse to ship a speculative key that would silently fail or mis-match — this entry matches by context (make/model/year/family), not by matches_id. 0x7E0 CAN UDS. 'confidence'/'notes' are informational and ignored by the loader."
   }
 ]

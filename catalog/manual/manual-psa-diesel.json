@@ -1,0 +1,60 @@
+[
+  {
+    "make": "Peugeot",
+    "models": [
+      "Peugeot 206/207/208",
+      "Peugeot 307/308",
+      "Citroen C3/C4",
+      "Citroen Berlingo",
+      "DS 3/DS 4"
+    ],
+    "years": "2004-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C34/SID807/EDC17C10",
+    "ecudef_id": null,
+    "source": "public: PSA 1.4/1.6 HDi (DV4/DV6 engines) runs Bosch EDC16C34 or Siemens/Continental SID807(EVO), later Bosch EDC17C10/C60. The 1.6 HDi is the same DV6 platform shared with Ford/Mazda/Mini/Volvo. Widely documented.",
+    "confidence": "medium",
+    "notes": "1.4/1.6 HDi (DV4/DV6). Family is a candidate SET; the Bosch-vs-Siemens supplier and EDC16-vs-EDC17 generation split by model/year and is NOT resolved here. NO part_numbers shipped: PSA ECU numbers (e.g. '9664843780', Bosch '0281xxx') encode supplier/supersession, not the engine; a prefix would mass-false-positive. Context-match only. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Peugeot",
+    "models": [
+      "Peugeot 406/407/508",
+      "Peugeot 307/308/3008",
+      "Citroen C4/C5/C8",
+      "Citroen Jumpy/Dispatch"
+    ],
+    "years": "1999-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC15C2/EDC16C34/EDC17C10",
+    "ecudef_id": null,
+    "source": "public: PSA 2.0/2.2 HDi (DW10/DW12 engines) runs Bosch EDC15C2 (early 90/110 HDi), then EDC16C34 and EDC17C10/C60. Widely documented across the 406/407/C5 range.",
+    "confidence": "medium",
+    "notes": "2.0/2.2 HDi (DW10/DW12). Candidate ECU set EDC15C2 -> EDC16C34 -> EDC17C10 across the engine's long life; year split not resolved. Early EDC15C2 cars are K-line (no 0x7E0); the 0x7E0 address applies to the EDC16/EDC17 CAN cars only. NO part_numbers shipped (PSA numbers do not encode engine). Context-match only."
+  },
+  {
+    "make": "Peugeot",
+    "models": [
+      "Peugeot 208/2008/308/3008 (BlueHDi)",
+      "Peugeot 508 (BlueHDi)",
+      "Citroen C3/C4/C5 (BlueHDi)",
+      "DS 3/DS 4/DS 7"
+    ],
+    "years": "2013-2021",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC17C60/MD1CS003",
+    "ecudef_id": null,
+    "source": "public: PSA 1.5/1.6/2.0 BlueHDi (DV5/DV6 FC/DW10 FC) runs Bosch EDC17C60, with the newest cars on Bosch MD1CS003. Documented across the BlueHDi range.",
+    "confidence": "medium",
+    "notes": "1.5-2.0 BlueHDi (SCR). EDC17C60 -> MD1 split early-vs-late, not pinned. NO part_numbers shipped. Context-match only. 0x7E0 CAN UDS."
+  }
+]

@@ -1,0 +1,88 @@
+[
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk4 (GTI/1.8T)",
+      "Volkswagen Passat (B5/B5.5)",
+      "Audi A3 (8L)",
+      "Audi A4 (B5/B6)",
+      "Audi TT (8N)",
+      "SEAT Leon Cupra (1M)",
+      "Skoda Octavia vRS (1U)"
+    ],
+    "years": "1997-2006",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["06A906032", "06A906018"],
+    "family": "ME7.5",
+    "ecudef_id": null,
+    "source": "public: EA113 1.8T 20V petrol (engines AGU/AUM/AUQ/AWT/AWP/BAM/APX) runs Bosch ME7.5 (ME7.1/ME7.1.1 variants) — one of the most widely-documented VAG petrol ECUs in the tuning community.",
+    "confidence": "high",
+    "notes": "1.8T 20V petrol. part_numbers keys '06A906032'/'06A906018' = 06A-platform engine-electronics prefixes (engine-family scope, not SW-unique). 0x7E0 assumes CAN UDS (late cars); the earliest ME7.5 cars are K-line — confirm per vehicle. ME7 is a listed OpenTune petrol target but is NOT in the solved-checksum matrix; this entry is for identification only."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk5 GTI",
+      "Volkswagen Passat (B6)",
+      "Audi A3 (8P)",
+      "Audi A4 (B7)",
+      "Audi TT (8J)",
+      "SEAT Leon (1P)/Altea",
+      "Skoda Octavia vRS (1Z)"
+    ],
+    "years": "2004-2010",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["06F906"],
+    "family": "MED9.1/MED9.5.1",
+    "ecudef_id": null,
+    "source": "public: EA113 2.0 FSI/TFSI petrol (naturally-aspirated FSI: BLX/BLR/BVY; turbo TFSI: BWA/BPY/BWE/CDLA) runs Bosch MED9.1 (TFSI) / MED9.5.1 (FSI). Widely documented.",
+    "confidence": "high",
+    "notes": "2.0 FSI/TFSI (EA113) petrol. part_numbers key '06F906' = 06F engine-electronics prefix (engine-family scope). MED9.1 (direct-injection turbo) vs MED9.5.1 (NA FSI) split by induction; family lists both as a candidate set. 0x7E0 CAN UDS. MED9 is not in OpenTune's solved-checksum matrix; identification only."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk6 GTI",
+      "Volkswagen Passat (B7)",
+      "Volkswagen Tiguan (5N)",
+      "Audi A3 (8P)/A4 (B8)/A5 (8T)",
+      "SEAT Leon (1P)/Exeo",
+      "Skoda Octavia vRS (1Z)/Superb (3T)"
+    ],
+    "years": "2008-2014",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["06J906", "06H906"],
+    "family": "Simos 8/MED17.5",
+    "ecudef_id": null,
+    "source": "public: EA888 gen1/gen2 2.0 TSI petrol (engines CCZ/CCTA/CDNC/CAWB/CPMA) runs Continental Simos 8.x or Bosch MED17.5 depending on market/year. Widely documented MQB-predecessor TSI mapping.",
+    "confidence": "medium",
+    "notes": "2.0 TSI (EA888 gen1/2) petrol. part_numbers keys '06J906'/'06H906' = engine-electronics prefixes (engine-family scope). Simos-8 vs MED17.5 split by market/MY and is NOT pinned (candidate set). 0x7E0 CAN UDS. Identification only (not in solved-checksum matrix)."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk6",
+      "Volkswagen Polo GTI (6R)",
+      "Volkswagen Scirocco (13)",
+      "Audi A1 (8X)",
+      "SEAT Ibiza (6J)",
+      "Skoda Fabia (5J)"
+    ],
+    "years": "2008-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["03C906"],
+    "family": "Simos/MED17",
+    "ecudef_id": null,
+    "source": "public: EA111 1.4 TSI petrol (twincharged CAVD/CAVE/CTHE and single-charge variants) runs Continental Simos or Bosch MED17 ECUs under the 03C platform. Documented across VAG TSI references.",
+    "confidence": "medium",
+    "notes": "1.4 TSI (EA111) petrol. part_numbers key '03C906' = 03C engine-electronics prefix (engine-family scope). Exact Simos-vs-MED17 variant not pinned per engine/MY. 0x7E0 CAN UDS. Identification only."
+  }
+]

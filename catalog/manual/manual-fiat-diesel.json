@@ -1,0 +1,43 @@
+[
+  {
+    "make": "Fiat",
+    "models": [
+      "Fiat Punto (Grande/Evo)",
+      "Fiat Panda",
+      "Fiat 500/500L",
+      "Fiat Doblo",
+      "Alfa Romeo MiTo",
+      "Lancia Ypsilon"
+    ],
+    "years": "2003-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "MJD6xx/MJD8xx/EDC16C39",
+    "ecudef_id": null,
+    "source": "public: Fiat 1.3 MultiJet (SDE) runs the Magneti Marelli MultiJet ECU (MJD6F3/MJD6JF/MJD8F3) or Bosch EDC16C39. The 1.3 MultiJet is one of Europe's most common small diesels (also sold as Opel 1.3 CDTi, Suzuki DDiS). Widely documented.",
+    "confidence": "medium",
+    "notes": "1.3 MultiJet (SDE). Family candidate SET: Marelli MJD6xx/8xx and Bosch EDC16C39 by MY/market. NO part_numbers shipped: Fiat/Marelli ECU numbers encode supplier part codes, not the engine. Context-match only. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Fiat",
+    "models": [
+      "Fiat Bravo/Stilo",
+      "Fiat Croma",
+      "Alfa Romeo 147/156/159",
+      "Lancia Delta/Lybra",
+      "Fiat Ducato"
+    ],
+    "years": "1999-2016",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC15C7/EDC16C39/EDC17C49/EDC17C69",
+    "ecudef_id": null,
+    "source": "public: Fiat/Alfa/Lancia 1.9/2.0/2.4 JTD & MultiJet runs Bosch EDC15C7 (early 1.9 JTD), then EDC16C39, then EDC17C49/C69. The JTD common-rail family is extensively documented.",
+    "confidence": "medium",
+    "notes": "1.9-2.4 JTD/MultiJet. Candidate ECU set EDC15C7 -> EDC16C39 -> EDC17 across the engine's life; year split not resolved. Early EDC15C7 cars are K-line (no 0x7E0); the address applies to the EDC16/17 CAN cars. NO part_numbers shipped. Context-match only."
+  }
+]

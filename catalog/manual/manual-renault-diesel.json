@@ -1,0 +1,42 @@
+[
+  {
+    "make": "Renault",
+    "models": [
+      "Renault Clio (II/III/IV)",
+      "Renault Megane (II/III)",
+      "Renault Kangoo",
+      "Dacia Logan/Sandero/Duster",
+      "Nissan Qashqai/Juke (1.5 dCi)"
+    ],
+    "years": "2001-2018",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "SID301/SID305/SID306/SID310/DDCR",
+    "ecudef_id": null,
+    "source": "public: Renault/Nissan 1.5 dCi (K9K engine) runs Siemens/Continental SID301/SID305/SID306/SID310 or Delphi DDCR, with newest cars on Continental SID3xx evo. The K9K 1.5 dCi is one of Europe's highest-volume small diesels; mappings are extensively documented.",
+    "confidence": "medium",
+    "notes": "1.5 dCi (K9K). Family candidate SET: Siemens/Continental SID30x/31x and Delphi DDCR, split by MY/market; not resolved here. NO part_numbers shipped: Renault ECU numbers (e.g. '2370xxxxxx', '8200xxxxxx') encode Renault part supersession, not the engine. Context-match only. 0x7E0 CAN UDS (early DDCR cars may be K-line)."
+  },
+  {
+    "make": "Renault",
+    "models": [
+      "Renault Laguna (II/III)",
+      "Renault Megane (II/III)",
+      "Renault Trafic/Master",
+      "Nissan Primastar/Interstar",
+      "Opel/Vauxhall Vivaro/Movano (M9R/M9T)"
+    ],
+    "years": "2001-2019",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC15C3/EDC16CP33/EDC17C11/EDC17C42",
+    "ecudef_id": null,
+    "source": "public: Renault 1.9 dCi (F9Q) and 2.0/2.3 dCi (M9R/M9T) run Bosch EDC15C3 (early 1.9), then Bosch EDC16CP33 and EDC17C11/C42. The M9R/M9T 2.0/2.3 dCi is also used in Nissan and Opel/Vauxhall vans. Widely documented.",
+    "confidence": "medium",
+    "notes": "1.9/2.0/2.3 dCi (F9Q/M9R/M9T). Candidate ECU set EDC15C3 -> EDC16CP33 -> EDC17 by engine/MY; split not resolved. Early EDC15C3 cars are K-line (no 0x7E0); the address applies to the EDC16/17 CAN cars. NO part_numbers shipped. Context-match only."
+  }
+]

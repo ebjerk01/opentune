@@ -1,0 +1,39 @@
+[
+  {
+    "make": "Volvo",
+    "models": [
+      "Volvo V50/S40",
+      "Volvo V70/S80 (2nd gen)",
+      "Volvo XC60/XC70",
+      "Volvo V60/S60 (2nd gen)"
+    ],
+    "years": "2001-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C34/EDC16CP34/EDC17CP48",
+    "ecudef_id": null,
+    "source": "public: Volvo 2.0/2.4 D5 (five-cylinder) and 2.0D runs Bosch EDC16C34/EDC16CP34 (earlier) then Bosch EDC17 (later). The D5 five-cylinder diesel is well documented in ECU/tuning databases.",
+    "confidence": "medium",
+    "notes": "2.0/2.4 D5 & 2.0D diesels. Candidate ECU set EDC16 -> EDC17 by MY; split not resolved. NO part_numbers shipped: Volvo ECU numbers (e.g. '31xxxxxx', '08xxxxxx') encode Volvo part supersession, not the engine. Context-match only. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Volvo",
+    "models": [
+      "Volvo C30/V50/S40",
+      "Volvo V60/S60",
+      "Volvo V40 (2nd gen)"
+    ],
+    "years": "2006-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "SID807/DCM3.5/EDC17C10",
+    "ecudef_id": null,
+    "source": "public: Volvo 1.6D (PSA-sourced DV6 engine) and 2.0D (Ford/PSA-shared) run Siemens SID807, Delphi DCM3.5 or Bosch EDC17C10 depending on platform/year. These are the shared PSA/Ford diesels also found in Peugeot/Citroen/Ford/Mazda.",
+    "confidence": "medium",
+    "notes": "1.6D/2.0D (PSA/Ford-shared). Family candidate SET across suppliers (Siemens/Delphi/Bosch); not resolved per engine/MY. NO part_numbers shipped. Context-match only. 0x7E0 CAN UDS."
+  }
+]

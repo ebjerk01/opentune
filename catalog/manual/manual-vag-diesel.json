@@ -1,0 +1,130 @@
+[
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk3/Mk4",
+      "Volkswagen Passat (B5)",
+      "Audi A4 (B5)",
+      "Audi A6 (C5)",
+      "SEAT Toledo (1M)",
+      "Skoda Octavia (1U)",
+      "Volkswagen Sharan (7M)"
+    ],
+    "years": "1996-2003",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": ["028906021"],
+    "family": "EDC15V",
+    "ecudef_id": null,
+    "source": "public: EA188 1.9 TDI with the Bosch VP37 rotary injection pump (non-PD; engines 1Z/AHU/AFN/AVG/AHH/AJM) runs Bosch EDC15V — a widely-documented VAG engine->ECU-generation mapping.",
+    "confidence": "high",
+    "notes": "1.9 TDI VP37 (pre-Pumpe-Duese). part_numbers key '028906021' is the VAG part-number prefix AAA(028)+906(engine-electronics group)+subgroup; it scopes to the 028-platform engine ECU but is NOT a single-SW-unique key and will also match sibling 028906021xx variants. K-line (ISO 9141 / KWP2000), so no 0x7E0 address. 'confidence'/'notes' are informational and ignored by the loader."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk4",
+      "Volkswagen Bora",
+      "Volkswagen Passat (B5.5)",
+      "Audi A3 (8L)",
+      "Audi A4 (B6)",
+      "SEAT Leon/Toledo (1M)",
+      "Skoda Octavia (1U)"
+    ],
+    "years": "1999-2004",
+    "ecu": "engine",
+    "addresses": [],
+    "fw_versions": [],
+    "part_numbers": ["038906019"],
+    "family": "EDC15P",
+    "ecudef_id": null,
+    "source": "public: EA188 1.9 TDI PD (Pumpe-Duese; engines ATD/AXR/ASZ/AJM/AUY/BEW) used Bosch EDC15P in the first PD generation before moving to EDC16 — a widely-documented mapping across VAG service and tuning references.",
+    "confidence": "high",
+    "notes": "1.9 TDI PD, first (EDC15P) generation. part_numbers key '038906019' = 038-platform engine-electronics prefix (engine-family scope, not SW-unique). K-line era, no 0x7E0. Later PD cars (2003+) move to EDC16 under the 03G prefix — see the EDC16U34 entry."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk5",
+      "Volkswagen Passat (B6)",
+      "Volkswagen Touran (1T)",
+      "Audi A3 (8P)",
+      "Audi A4 (B7)",
+      "SEAT Leon (1P)/Altea",
+      "Skoda Octavia (1Z)"
+    ],
+    "years": "2003-2010",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["03G906"],
+    "family": "EDC16U31/EDC16U34",
+    "ecudef_id": "bosch-edc16u34",
+    "source": "public: EA188 1.9 TDI PD (BXE/BKC/BLS/BXF) and EA188 2.0 TDI PD (BKD/BMM/BMN/AZV/BKP) run Bosch EDC16U31/U34 (MPC56x). This is the generation OpenTune has a real map library and checksum support for (EDC16U34).",
+    "confidence": "high",
+    "notes": "1.9 & 2.0 TDI PD, EDC16 generation. part_numbers key '03G906' = 03G-platform engine-electronics prefix (engine-family scope; matches 03G906016/018/021 and letter-suffixed SW variants, NOT SW-unique). 0x7E0 = CAN UDS/OBD (EDC16 moved to CAN). Exact U31-vs-U34 sub-variant splits by displacement/power and is not pinned per model/year; ecudef_id points at the EDC16U34 definition OpenTune ships."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk6",
+      "Volkswagen Polo (6R)",
+      "Audi A3 (8P)",
+      "SEAT Leon (1P)/Ibiza (6J)",
+      "Skoda Octavia (1Z)/Fabia (5J)"
+    ],
+    "years": "2009-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["03L906"],
+    "family": "Simos PCR2.1",
+    "ecudef_id": "siemens-pcr21",
+    "source": "public: EA189 1.6 TDI common-rail (engines CAYA/CAYB/CAYC/CAYE/CLNA) runs the Siemens/Continental Simos PCR2.1 ECU — the family OpenTune has a checksum solution and ecudef for. Widely documented across VAG CR TDI references.",
+    "confidence": "high",
+    "notes": "1.6 TDI CR (EA189). part_numbers key '03L906' = EA189 common-rail engine-electronics prefix. NOTE: 03L906 is shared with the EA189 *2.0* TDI CR (Bosch EDC17) entry below — a bare 03L906 part number alone does NOT distinguish 1.6-PCR2.1 from 2.0-EDC17; disambiguate by displacement/engine-code. 0x7E0 CAN UDS. This is the 1.6 'dieselgate' engine (CAYC)."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk6",
+      "Volkswagen Passat (B6/B7)",
+      "Volkswagen Tiguan (5N)",
+      "Audi A3 (8P)/A4 (B8)/A5 (8T)",
+      "SEAT Leon (1P)/Exeo",
+      "Skoda Octavia (1Z)/Superb (3T)"
+    ],
+    "years": "2008-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["03L906"],
+    "family": "EDC17C46/EDC17CP20/EDC17C54",
+    "ecudef_id": null,
+    "source": "public: EA189 2.0 TDI common-rail (engines CBAB/CBBB/CFFB/CFGB/CBDB/CJAA/CLCA/CFHC) runs Bosch EDC17 (EDC17C46/CP20/C54 across markets/years) — widely documented; this is the 2.0 'dieselgate' engine family.",
+    "confidence": "medium",
+    "notes": "2.0 TDI CR (EA189). EDC17 family is confident; the exact EDC17 sub-variant (C46 vs CP20 vs C54) tracks market/MY and is NOT resolved here (treat family as a candidate set). part_numbers key '03L906' is SHARED with the 1.6-PCR2.1 entry above (same EA189 03L platform) — disambiguate by displacement. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Volkswagen",
+    "models": [
+      "Volkswagen Golf Mk7",
+      "Volkswagen Passat (B8)",
+      "Volkswagen Tiguan (AD1)",
+      "Audi A3 (8V)/A4 (B9)",
+      "SEAT Leon (5F)",
+      "Skoda Octavia (5E)/Superb (3V)"
+    ],
+    "years": "2012-2020",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": ["04L906", "05L906"],
+    "family": "EDC17C64/EDC17C74/MD1CS001",
+    "ecudef_id": null,
+    "source": "public: EA288 1.6/2.0 TDI common-rail (engines CRBC/CRLB/DBGC/DFGA/CLHA) runs Bosch EDC17C64/C74, with the later evo cars on Bosch MD1CS001. Widely documented MQB-era mapping.",
+    "confidence": "medium",
+    "notes": "2.0/1.6 TDI CR (EA288). NOTE: the 04L906 scanned part numbers already appear in catalog/opendbc-volkswagen.json but with family=null — this entry adds the ECU-family mapping (and the 05L906 EA288-evo prefix). EDC17 vs MD1 splits early-vs-late and is not pinned. part_numbers keys are engine-electronics-group prefixes (engine-family scope). 0x7E0 CAN UDS."
+  }
+]

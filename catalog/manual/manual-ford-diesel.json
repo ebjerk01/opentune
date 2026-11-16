@@ -1,0 +1,40 @@
+[
+  {
+    "make": "Ford",
+    "models": [
+      "Ford Focus (Mk2/Mk3)",
+      "Ford Fiesta (Mk6/Mk7)",
+      "Ford C-Max",
+      "Ford Fusion"
+    ],
+    "years": "2004-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C34/SID807/EDC17C10",
+    "ecudef_id": null,
+    "source": "public: Ford 1.6 TDCi (DuraTorq / PSA-shared DV6 engine) runs Bosch EDC16C34 or Siemens/Continental SID807 (EVO), with later cars on Bosch EDC17C10/C60. This 1.6 HDi/TDCi platform is shared across Ford, PSA, Mazda, Mini and Volvo and is extensively documented.",
+    "confidence": "medium",
+    "notes": "1.6 TDCi (DV6, PSA-sourced). Family is a candidate SET (Bosch EDC16C34, Siemens SID807, Bosch EDC17C10/C60) that splits by model-year; not resolved here. NO part_numbers shipped: Ford finis/part numbers (e.g. '9Gxx-12A650-xx') encode platform/supersession, not the engine code — shipping a prefix would mass-false-positive. Matches by context (make/model/year/family), not by matches_id. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Ford",
+    "models": [
+      "Ford Mondeo (Mk3/Mk4)",
+      "Ford Transit",
+      "Ford S-Max/Galaxy",
+      "Ford Focus (Mk2, 2.0 TDCi)"
+    ],
+    "years": "2004-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C3/EDC16C34/EDC17C10/DCM3.5",
+    "ecudef_id": null,
+    "source": "public: Ford 2.0/2.2/2.4 TDCi (DuraTorq DW/ZSD/Puma) runs Bosch EDC16C3/EDC16C34 (earlier) then Bosch EDC17C10 or Delphi DCM3.5 (later). Widely documented across Mondeo/Transit/Focus platforms.",
+    "confidence": "medium",
+    "notes": "2.0-2.4 TDCi (DuraTorq). Candidate ECU set spanning EDC16 -> EDC17/DCM3.5; year split not resolved. NO part_numbers shipped (Ford numbers do not encode engine). Context-match only. 0x7E0 CAN UDS. Delphi DCM and Bosch EDC are different suppliers within this candidate set — treat family as a superset."
+  }
+]

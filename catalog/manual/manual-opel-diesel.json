@@ -1,0 +1,40 @@
+[
+  {
+    "make": "Opel",
+    "models": [
+      "Opel/Vauxhall Astra (H/J)",
+      "Opel/Vauxhall Corsa (D)",
+      "Opel/Vauxhall Combo",
+      "Opel/Vauxhall Meriva"
+    ],
+    "years": "2003-2015",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C39/MJD6xx/EDC17C59",
+    "ecudef_id": null,
+    "source": "public: Opel 1.3 CDTi (Fiat-sourced SDE/JTD engine) runs Marelli MultiJet (MJD6F3/8F3) or Bosch EDC16C39; the 1.7 CDTi (Isuzu) uses Denso/Bosch; later small diesels move to Bosch EDC17C59. Widely documented GM/Fiat diesel mappings.",
+    "confidence": "medium",
+    "notes": "1.3/1.7 CDTi small diesels. Family is a candidate SET spanning suppliers (Marelli MJD, Bosch EDC16C39, Bosch EDC17C59) by engine/MY; not resolved here. NO part_numbers shipped: GM/Opel ECU numbers encode GM part supersession, not the engine. Context-match only. 0x7E0 CAN UDS."
+  },
+  {
+    "make": "Opel",
+    "models": [
+      "Opel/Vauxhall Astra (H/J)",
+      "Opel/Vauxhall Vectra (C)",
+      "Opel/Vauxhall Insignia (A)",
+      "Opel/Vauxhall Zafira (B/C)"
+    ],
+    "years": "2002-2017",
+    "ecu": "engine",
+    "addresses": ["0x7e0"],
+    "fw_versions": [],
+    "part_numbers": [],
+    "family": "EDC16C39/EDC17C19/EDC17C59",
+    "ecudef_id": null,
+    "source": "public: Opel 1.9 CDTi (Fiat JTD) and 2.0 CDTi (GM) run Bosch EDC16C39 (1.9) then Bosch EDC17C19/C59 (2.0). Widely documented across Vectra/Astra/Insignia.",
+    "confidence": "medium",
+    "notes": "1.9/2.0 CDTi mid diesels. Candidate ECU set EDC16C39 -> EDC17C19/C59 by engine/MY; split not resolved. NO part_numbers shipped (GM numbers do not encode engine). Context-match only. 0x7E0 CAN UDS."
+  }
+]
