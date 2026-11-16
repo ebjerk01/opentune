@@ -30,3 +30,5 @@ opentune-xdf = { path = "../opentune-xdf" }
 opentune-a2l = { path = "../opentune-a2l" }
 opentune-vin = { path = "../opentune-vin" }
 opentune-scan = { path = "../opentune-scan" }
+opentune-container = { path = "../opentune-container" }
+opentune-cbf = { path = "../opentune-cbf" }
