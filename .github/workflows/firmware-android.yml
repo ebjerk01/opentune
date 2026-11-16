@@ -1,0 +1,112 @@
+name: Firmware & Android compile
+
+# Offline COMPILE coverage for the non-Rust components (ESP32-S3 firmware,
+# Arduino K-line bridge, Android app). These jobs only prove the sources
+# *compile* with pinned toolchains. They do NOT flash a board, run on hardware,
+# talk to an ECU, or make any bench / electrical claim — that validation is
+# manual and stays out of CI. Path filters keep them off Rust-only changes so
+# the pipeline is not needlessly expensive; workflow_dispatch allows manual runs.
+
+# NOTE: the ESP32-S3 and Android sources are "written but unbuilt" (see their
+# READMEs) — they have never been compiled, so the first run is expected to
+# surface real compile errors. To avoid a red X on `main` before that is fixed,
+# this workflow does NOT run on push to main: it runs on PRs that touch these
+# paths and on manual dispatch. Once a dispatch run is green, add a `push:`
+# trigger here to gate main too.
+on:
+  pull_request:
+    paths:
+      - 'hardware/firmware/**'
+      - 'android/**'
+      - '.github/workflows/firmware-android.yml'
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ESP32-S3 interface firmware (ESP-IDF project, hardware/firmware/esp32-s3).
+  # Toolchain pinned to ESP-IDF v5.3.2 (README requires 5.1+), target esp32s3.
+  esp32-s3:
+    name: ESP32-S3 firmware (compiles — not flashed/bench-tested)
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # COMPILE ONLY: `idf.py build` inside the pinned Espressif Docker image.
+      # The resulting app binary is never flashed, run, or electrically verified.
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3.2
+          target: esp32s3
+          path: hardware/firmware/esp32-s3
+
+  # Arduino K-line bridge (hardware/firmware/kline-bridge/kline_bridge.ino).
+  # ATmega328 (Uno/Nano @16 MHz); AVR core pinned to arduino:avr@1.8.6.
+  kline-bridge:
+    name: Arduino K-line bridge (compiles — not flashed/bench-tested)
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up arduino-cli
+        uses: arduino/setup-arduino-cli@v1
+        with:
+          version: 1.1.1
+
+      - name: Install pinned AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+
+      # COMPILE ONLY: no `arduino-cli upload`, no board, no K-line/electrical test.
+      # arduino-cli requires the main sketch file to match its folder name; the
+      # folder is `kline-bridge` but the sketch is `kline_bridge.ino`, so we
+      # compile a renamed temp copy. Source files are left untouched.
+      - name: Compile sketch
+        run: |
+          mkdir -p "$RUNNER_TEMP/kline_bridge"
+          cp hardware/firmware/kline-bridge/kline_bridge.ino \
+             "$RUNNER_TEMP/kline_bridge/kline_bridge.ino"
+          arduino-cli compile \
+            --fqbn arduino:avr:uno \
+            --warnings all \
+            "$RUNNER_TEMP/kline_bridge"
+
+  # Android app (android/, Gradle). JDK 17 + Android SDK (compileSdk 34);
+  # AGP 8.5.2 / Kotlin 1.9.24 / Gradle 8.9 are pinned in the repo itself.
+  android:
+    name: Android app assembleDebug (compiles — not installed/run on a device)
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # COMPILE ONLY: `assembleDebug` builds the app + the checked-in UniFFI
+      # Kotlin bindings (app/src/main/java/org/opentune/ffi/opentune.kt). The
+      # native libopentune_ffi.so (cargo-ndk) is deliberately NOT built here —
+      # that cross-compile is heavy and belongs with the Rust tooling — so the
+      # debug APK carries no native lib. Nothing is installed or run on a device.
+      - name: assembleDebug
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
