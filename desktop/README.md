@@ -15,8 +15,9 @@ standalone / bench tooling here (that lives in a separate private app).
 
 ## Panels
 
-`Image` · `Identify` · `Checksum` · `Maps` (findmaps diff + read-only map
-viewer) · `Flash` · `Vault` · `Drivers` · `Guide` (bundled offline markdown).
+`Image` · `Analyze bin` · `Identify` · `Checksum` · `Maps` (findmaps diff +
+map viewer/editor) · `Compare` · `Flash` · `Vault` · `Drivers` · `Project` ·
+`Utilities` · `Guide` (bundled offline markdown) · `About & updates`.
 
 ## Backend commands
 
@@ -25,6 +26,12 @@ viewer) · `Flash` · `Vault` · `Drivers` · `Guide` (bundled offline markdown)
 `findmaps`, `list_ecudefs`, `list_maps`, `decode_map`, `flash`, `vault_list`,
 `guide_list`, `guide_read` — each calls straight into `opentune-core`,
 `opentune-checksum` and `opentune-flash`.
+
+Self-update is driven by `update_status`, `update_check`, `update_install`
+(emits an `update://progress` event) and `update_relaunch`. A shared
+long-operation guard (`OpGuard`) makes `flash` / `map_write` / `mapdef_write` and
+an update mutually exclusive, so an in-place binary replacement can never race a
+destructive write. See [`UPDATER.md`](UPDATER.md).
 
 ## Layout
 
@@ -125,8 +132,13 @@ In `src-tauri/tauri.conf.json`:
    `.sig` files, and `latest.json`.
 4. Running apps pick up the new version from the endpoint on next check.
 
-Until a real keypair is generated and `pubkey` is filled in, the updater is
-configured but will not verify — treat the placeholder as "not yet signed".
+A real `pubkey` is already present in `tauri.conf.json`, and the check → confirm
+→ download+verify → install → relaunch flow is wired up in the **About & updates**
+panel. What is still needed to ship an update is the matching **private** key in
+the build/CI (`TAURI_SIGNING_PRIVATE_KEY`) and a published, signed release — see
+[`UPDATER.md`](UPDATER.md) for the CI-secret handling and for why updater signing,
+installer code-signing/notarization and build reproducibility are three separate
+concerns (OpenTune makes **no** reproducibility claim).
 
 ## Licence
 

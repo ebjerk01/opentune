@@ -68,7 +68,11 @@ function showPanel(name) {
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
   document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.panel === name));
 }
-document.querySelectorAll(".nav-item").forEach((n) => n.addEventListener("click", () => showPanel(n.dataset.panel)));
+document.querySelectorAll(".nav-item").forEach((n) => n.addEventListener("click", () => {
+  showPanel(n.dataset.panel);
+  // Re-read version + busy state each time the About panel is opened.
+  if (n.dataset.panel === "about" && typeof refreshUpdateStatus === "function") refreshUpdateStatus();
+}));
 
 // Reflect the globally-opened image path into per-panel hints.
 function refreshImageHints() {
@@ -1230,6 +1234,123 @@ $("prjBaseImg").onclick = async () => { const p = await pickFile("Base image for
 $("prjName").oninput = () => { state.project.name = $("prjName").value; };
 $("prjNotes").oninput = () => { state.project.notes = $("prjNotes").value; };
 
+// =================== ABOUT & UPDATES ===================
+// The Tauri updater plugin + endpoint + minisign pubkey live in tauri.conf.json;
+// these handlers are the invocation layer. Nothing downloads until the user
+// clicks, the signature is verified by the backend before install, and the
+// backend refuses to start an update while a flash / map write-back is running.
+const upd = { available: false, installing: false, info: null };
+
+async function refreshUpdateStatus() {
+  try {
+    const s = await invoke("update_status");
+    if ($("abVersion")) $("abVersion").textContent = "v" + s.current_version;
+    const busy = !!s.busy;
+    // While a long op holds the guard, the backend will refuse an update; reflect
+    // that in the UI instead of letting the user hit a wall.
+    const blocked = busy || upd.installing;
+    if ($("btnUpdCheck")) $("btnUpdCheck").disabled = blocked;
+    if ($("btnUpdInstall")) $("btnUpdInstall").disabled = blocked;
+    $("abBusyHint").textContent = busy ? `blocked — "${s.busy_op}" is running` : "";
+  } catch { /* not in Tauri / command missing — leave the panel inert */ }
+}
+
+async function checkForUpdates() {
+  $("abResult").innerHTML = `<div class="banner info">Checking for updates…</div>`;
+  $("btnUpdInstall").hidden = true;
+  $("btnUpdRestart").hidden = true;
+  upd.available = false; upd.info = null;
+  try {
+    const r = await invoke("update_check");
+    if (r.available) {
+      upd.available = true; upd.info = r;
+      const notes = r.notes ? `<div class="note" style="margin-top:10px">${esc(r.notes)}</div>` : "";
+      $("abResult").innerHTML = `<div class="banner ok">Update available: <b>v${esc(r.version)}</b> (you have v${esc(r.current_version)}).</div>${notes}`;
+      $("btnUpdInstall").hidden = false;
+    } else {
+      $("abResult").innerHTML = `<div class="banner ok">You are up to date (v${esc(r.current_version)}).</div>`;
+    }
+  } catch (e) {
+    $("abResult").innerHTML = `<div class="banner bad">Update check failed — ${esc(typeof e === "string" ? e : (e && e.message) || e)}<br><span class="muted small">This is expected offline; try again when you are online.</span></div>`;
+  }
+  refreshUpdateStatus();
+}
+
+function setProgress(downloaded, total) {
+  $("abProgWrap").hidden = false;
+  const fill = $("abProgFill");
+  if (total && total > 0) {
+    const pct = Math.min(100, Math.round((downloaded / total) * 100));
+    fill.classList.remove("indeterminate");
+    fill.style.width = pct + "%";
+    $("abProgText").textContent = `${(downloaded / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MiB (${pct}%)`;
+  } else {
+    // No content-length yet — show an indeterminate sweep.
+    fill.classList.add("indeterminate");
+    $("abProgText").textContent = `${(downloaded / 1048576).toFixed(1)} MiB downloaded…`;
+  }
+}
+
+async function installUpdate() {
+  if (!upd.available || upd.installing) return;
+  // Confirm before replacing the running app.
+  try {
+    const ok = await dialog().confirm(
+      `Download and install v${upd.info.version}? OpenTune will need to restart to finish. Your dumps, projects and backups are not affected.`,
+      { title: "Install update", kind: "info" }
+    );
+    if (!ok) return;
+  } catch { /* confirm unavailable — proceed, the backend still guards */ }
+
+  upd.installing = true;
+  $("btnUpdInstall").disabled = true;
+  $("btnUpdCheck").disabled = true;
+  $("abResult").innerHTML = `<div class="banner info">Downloading & verifying the signed update…</div>`;
+  setProgress(0, 0);
+
+  let unlisten = null;
+  try {
+    if (TAURI.event && TAURI.event.listen) {
+      unlisten = await TAURI.event.listen("update://progress", (ev) => {
+        const p = ev.payload || {};
+        setProgress(p.downloaded || 0, p.total || 0);
+      });
+    }
+    const r = await invoke("update_install");
+    if (r.installed) {
+      $("abProgWrap").hidden = true;
+      $("abResult").innerHTML = `<div class="banner ok">Update v${esc(r.version)} installed and signature-verified. Restart to apply it.</div>`;
+      $("btnUpdInstall").hidden = true;
+      $("btnUpdRestart").hidden = false;
+      toast("Update installed — restart to apply");
+    } else if (r.up_to_date) {
+      $("abProgWrap").hidden = true;
+      $("abResult").innerHTML = `<div class="banner ok">Already up to date.</div>`;
+      $("btnUpdInstall").hidden = true;
+    }
+  } catch (e) {
+    // Bad signature, interrupted download, refused-while-busy, etc. Nothing was
+    // installed; the running app is untouched.
+    $("abProgWrap").hidden = true;
+    $("abResult").innerHTML = `<div class="banner bad">Update failed — ${esc(typeof e === "string" ? e : (e && e.message) || e)}<br><span class="muted small">Nothing was installed; your current version is unchanged.</span></div>`;
+    toast("Update failed", true);
+  } finally {
+    if (unlisten) { try { unlisten(); } catch {} }
+    upd.installing = false;
+    $("btnUpdCheck").disabled = false;
+    refreshUpdateStatus();
+  }
+}
+
+async function initUpdates() {
+  if ($("btnUpdCheck")) $("btnUpdCheck").onclick = checkForUpdates;
+  if ($("btnUpdInstall")) $("btnUpdInstall").onclick = installUpdate;
+  if ($("btnUpdRestart")) $("btnUpdRestart").onclick = async () => {
+    try { await invoke("update_relaunch"); } catch (e) { toast("Restart failed: " + e, true); }
+  };
+  await refreshUpdateStatus();
+}
+
 // =================== BOOT ===================
 async function boot() {
   if (!TAURI.core) { document.body.innerHTML = '<p style="padding:2rem">Tauri API unavailable — run inside the OpenTune app.</p>'; return; }
@@ -1241,6 +1362,7 @@ async function boot() {
   await populateMapDefs();
   await initSeedKey();
   await initGuide();
+  await initUpdates();
   renderRecent();
   renderProject();
   showPanel("image");

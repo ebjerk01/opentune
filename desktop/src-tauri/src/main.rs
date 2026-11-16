@@ -21,7 +21,62 @@ use opentune_core::{
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use tauri::Manager;
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
+
+// ---------------------------------------------------------------------------
+// Long-operation guard
+// ---------------------------------------------------------------------------
+//
+// Destructive / long-running operations (a mock flash, a map write-back) must
+// never overlap with a software update: an in-place binary replacement while a
+// flash is mid-write could corrupt the running session. `OpGuard` is a single
+// managed slot naming the one long operation in flight (or `None` when idle).
+//
+// `begin()` claims the slot and hands back an `OpToken`; dropping the token
+// (normally, on panic, or via `?`) frees the slot, so a failed command can
+// never leave the app wedged as "busy". The update flow claims the same slot,
+// so a flash cannot start mid-update and an update cannot start mid-flash.
+#[derive(Clone, Default)]
+struct OpGuard(Arc<Mutex<Option<String>>>);
+
+/// RAII release token: the long operation is in flight for as long as this is
+/// alive, and the guard slot is cleared the instant it drops.
+#[derive(Debug)]
+struct OpToken(Arc<Mutex<Option<String>>>);
+
+impl Drop for OpToken {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = None;
+        }
+    }
+}
+
+impl OpGuard {
+    /// Claim the single long-operation slot for `name`, or return a clear error
+    /// naming whatever is already running. The returned token frees the slot on
+    /// drop.
+    fn begin(&self, name: &str) -> Result<OpToken, String> {
+        let mut slot = self
+            .0
+            .lock()
+            .map_err(|_| "internal error: operation guard was poisoned".to_string())?;
+        if let Some(cur) = slot.as_ref() {
+            return Err(format!(
+                "'{cur}' is already running — wait for it to finish before starting another operation"
+            ));
+        }
+        *slot = Some(name.to_string());
+        Ok(OpToken(self.0.clone()))
+    }
+
+    /// Name of the long operation currently in flight, if any.
+    fn current(&self) -> Option<String> {
+        self.0.lock().ok().and_then(|s| s.clone())
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Data-directory resolution (ecudefs / catalog / guide)
@@ -795,7 +850,11 @@ fn map_write(
     out_path: Option<String>,
     fix_checksum: Option<bool>,
     state: tauri::State<AppData>,
+    guard: tauri::State<OpGuard>,
 ) -> Result<Value, String> {
+    // A map write-back takes a full-image backup and rewrites the image; hold the
+    // long-operation slot so a software update cannot land in the middle of it.
+    let _op = guard.begin("map write-back")?;
     let defs = load_defs(&state.ecudefs);
     let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
     let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
@@ -831,7 +890,10 @@ fn mapdef_write(
     out_path: Option<String>,
     fix_checksum: Option<bool>,
     checksum_algo: Option<String>,
+    guard: tauri::State<OpGuard>,
 ) -> Result<Value, String> {
+    // Same long-operation guard as the definition-backed write path.
+    let _op = guard.begin("map write-back")?;
     let ecu = EcuId {
         ecu_name: Some(format!("ad-hoc map '{}'", map.name)),
         ..Default::default()
@@ -947,7 +1009,16 @@ fn compare_maps(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-fn flash(path: String, addr: String, data_path: String, min_mv: u32) -> Result<Value, String> {
+fn flash(
+    path: String,
+    addr: String,
+    data_path: String,
+    min_mv: u32,
+    guard: tauri::State<OpGuard>,
+) -> Result<Value, String> {
+    // Hold the long-operation slot for the whole flash so a software update
+    // cannot replace the binary mid-write (freed automatically on return/error).
+    let _op = guard.begin("flash")?;
     let addr = parse_u32(&addr)?;
     let bytes = std::fs::read(&data_path).map_err(|e| e.to_string())?;
     let region = MemoryRegion::new(addr, bytes.len() as u32);
@@ -1686,6 +1757,126 @@ fn project_open(path: String) -> Result<Value, String> {
 }
 
 // ---------------------------------------------------------------------------
+// Software update (Tauri updater plugin)
+// ---------------------------------------------------------------------------
+//
+// The updater PLUGIN is registered in `main()` and its endpoint + minisign
+// public key live in `tauri.conf.json`. These commands are the missing invocation
+// layer: check → (user confirms) → download+install → relaunch. Signature
+// verification is NOT done here by hand — the plugin verifies every downloaded
+// bundle against the configured `pubkey` inside `download()` before it is
+// installed, so a tampered or wrongly-signed artifact fails the download step and
+// never reaches disk. We only surface that failure to the UI.
+//
+// The whole install is gated behind [`OpGuard`]: it refuses to start while a
+// flash or map write-back is in flight, and while it runs those refuse to start,
+// so an in-place binary replacement can never race a destructive operation.
+
+/// Event channel the install flow emits download progress on. The frontend
+/// listens for `{ downloaded, total }` (total is `null` until the server sends a
+/// content-length).
+const UPDATE_PROGRESS_EVENT: &str = "update://progress";
+
+/// Report the running version and whether a long operation currently blocks an
+/// update. Lets the UI disable the "Install update" affordance proactively
+/// instead of only learning on refusal.
+#[tauri::command]
+fn update_status(app: tauri::AppHandle, guard: tauri::State<OpGuard>) -> Value {
+    let busy = guard.current();
+    json!({
+        "current_version": app.package_info().version.to_string(),
+        "busy": busy.is_some(),
+        "busy_op": busy,
+    })
+}
+
+/// Check the configured endpoint for a newer release. Does NOT download or
+/// install — it only tells the UI what is available so it can ask the user.
+/// Offline (no network) this returns an error the UI shows as "check failed",
+/// which is the honest outcome.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Result<Value, String> {
+    let current = app.package_info().version.to_string();
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater unavailable: {e}"))?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(json!({
+            "available": true,
+            "current_version": update.current_version,
+            "version": update.version,
+            "notes": update.body,
+            "date_unix": update.date.map(|d| d.unix_timestamp()),
+        })),
+        Ok(None) => Ok(json!({
+            "available": false,
+            "current_version": current,
+        })),
+        Err(e) => Err(format!("update check failed: {e}")),
+    }
+}
+
+/// Download and install the available update, emitting [`UPDATE_PROGRESS_EVENT`]
+/// as bytes arrive. Refuses while a flash / map write-back is running, and claims
+/// the same guard for its own duration. On success the app is NOT auto-restarted;
+/// the UI confirms and calls [`update_relaunch`] so the user is never surprised by
+/// a restart. Signature verification is enforced by the plugin's `download()`; a
+/// bad signature or an interrupted download surfaces here as a hard error and
+/// nothing is installed.
+#[tauri::command]
+async fn update_install(
+    app: tauri::AppHandle,
+    guard: tauri::State<'_, OpGuard>,
+) -> Result<Value, String> {
+    // Claim the long-operation slot for the whole install (freed on drop).
+    let _op = guard.begin("software update")?;
+
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater unavailable: {e}"))?;
+    let update = match updater
+        .check()
+        .await
+        .map_err(|e| format!("update check failed: {e}"))?
+    {
+        Some(u) => u,
+        None => {
+            return Ok(json!({ "installed": false, "up_to_date": true }));
+        }
+    };
+
+    let version = update.version.clone();
+    let app_ev = app.clone();
+    let mut downloaded: u64 = 0;
+
+    // `download_and_install` verifies the minisign signature against the bundled
+    // pubkey inside `download()`; a mismatch or a truncated/interrupted download
+    // returns Err here and nothing is written over the installed app.
+    update
+        .download_and_install(
+            move |chunk_len, content_len| {
+                downloaded += chunk_len as u64;
+                let _ = app_ev.emit(
+                    UPDATE_PROGRESS_EVENT,
+                    json!({ "downloaded": downloaded, "total": content_len }),
+                );
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("update download/install failed (signature or network): {e}"))?;
+
+    Ok(json!({ "installed": true, "up_to_date": false, "version": version }))
+}
+
+/// Relaunch the app so a freshly-installed update takes effect. Called only after
+/// [`update_install`] reports success and the user confirms. Never returns.
+#[tauri::command]
+fn update_relaunch(app: tauri::AppHandle) {
+    app.restart();
+}
+
+// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
@@ -1727,6 +1918,7 @@ fn main() {
         .setup(|app| {
             let data = resolve_data(app);
             app.manage(data);
+            app.manage(OpGuard::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1760,6 +1952,10 @@ fn main() {
             vault_list,
             guide_list,
             guide_read,
+            update_status,
+            update_check,
+            update_install,
+            update_relaunch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenTune");
@@ -2078,5 +2274,43 @@ mod tests {
         let bad = dir.join("bad.otproj");
         std::fs::write(&bad, b"this is not json").unwrap();
         assert!(project_open(bad.to_string_lossy().into_owned()).is_err());
+    }
+
+    // --- long-operation guard (update ↔ flash/write mutual exclusion) -----
+
+    #[test]
+    fn op_guard_blocks_second_operation() {
+        let g = OpGuard::default();
+        let tok = g.begin("flash").expect("first op claims the slot");
+        assert_eq!(g.current().as_deref(), Some("flash"));
+        // A software update must be refused while a flash holds the slot, and the
+        // error must name what is running.
+        let err = g.begin("software update").unwrap_err();
+        assert!(err.contains("flash"), "error should name the running op: {err}");
+        drop(tok);
+    }
+
+    #[test]
+    fn op_guard_releases_on_drop() {
+        let g = OpGuard::default();
+        {
+            let _tok = g.begin("flash").unwrap();
+            assert!(g.current().is_some());
+        } // token dropped here (mirrors a command returning, via `?`, or panicking)
+        assert!(g.current().is_none(), "slot must free when the token drops");
+        // The slot is reusable afterwards (e.g. an update after the flash finished).
+        let _tok2 = g
+            .begin("software update")
+            .expect("slot reusable after release");
+        assert_eq!(g.current().as_deref(), Some("software update"));
+    }
+
+    #[test]
+    fn op_guard_update_blocks_flash_symmetrically() {
+        let g = OpGuard::default();
+        let _upd = g.begin("software update").unwrap();
+        // While an update holds the slot, a flash is refused too (no destructive
+        // write can race an in-place binary replacement).
+        assert!(g.begin("flash").is_err());
     }
 }

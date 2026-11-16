@@ -310,3 +310,23 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
   .guide-layout { grid-template-columns: 1fr; }
   .guide-nav { flex-direction: row; flex-wrap: wrap; position: static; }
 }
+
+/* Update download progress (About & updates panel) */
+.progress-wrap { display: flex; flex-direction: column; gap: 6px; }
+.progress-bar {
+  height: 10px; width: 100%; border-radius: 6px; overflow: hidden;
+  background: rgba(127, 127, 127, 0.18); border: 1px solid var(--card-border);
+}
+.progress-fill {
+  height: 100%; width: 0%; border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent), #b24d08);
+  transition: width .15s ease;
+}
+.progress-fill.indeterminate {
+  width: 35% !important;
+  animation: ot-indet 1.1s ease-in-out infinite;
+}
+@keyframes ot-indet {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
