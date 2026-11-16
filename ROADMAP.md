@@ -4,113 +4,96 @@
 > pre-release alpha builds and the hardware path is unproven on a car. Don't flash
 > a real vehicle yet. Expect breaking changes.
 
-Progress is tracked here. Checked = done and on `main`. This is a living document.
+**Where it stands:** the **offline toolkit** — identify, checksums, map viewing/editing,
+calibration-definition import/export, diffing, and the CLI + desktop apps — works today on a
+flash image and is largely feature-complete. The **frontier now is getting it onto a real car**:
+the interface drivers are written but unproven on hardware, and the live read/flash path waits on
+an adapter. Android and open hardware are the reach goals.
 
-**Legend:** `[x]` done · `[~]` in progress · `[ ]` planned
+**Legend:** `[x]` done · `[~]` in progress · `[ ]` planned · 🔒 needs hardware
+
+This is a living document; checked = done and on `main`.
 
 ---
 
-## M0 — Foundation (in progress)
-The compiling skeleton everything else builds on.
+## Phase 1 — Offline toolkit (no car needed) — ≈ complete
+Everything here operates on a flash `.bin`.
 
-- [x] Cargo workspace, Rust toolchain pin, release profile
-- [x] `opentune-core`: `Interface` driver trait, error/result types, capabilities
-- [x] Core types: protocols, memory regions, ECU identity, progress reporting
-- [x] Driver registry (enumerate + construct drivers by id)
-- [x] `mock`/file driver (operate on local `.bin`, no hardware)
-- [x] `opentune-cli` wired to the mock driver
-- [x] GPL-3.0 licence, README, this roadmap
-- [x] GitHub Actions CI (fmt + clippy + test + build)
-- [x] Unit tests for core (ISO-TP framing, NRC parsing, CRC32)
+### Core, CLI & project
+- [x] Rust workspace; `opentune-core` (Interface driver trait, protocol layer, ECU identity, flash orchestrator, safety rules); driver registry; `mock`/file driver
+- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · vin · decode-part · dtc`
+- [x] GPL-3.0, README, CI (fmt + clippy + test + build), core unit tests
 
-## M1 — Offline calibration tooling
-Everything you can do with a `.bin` and no car.
+### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
+- [x] `ChecksumAlgo` engine (verify + correct) + generic CRC32 helper
+- [x] **EDC16 (MPC56x), EDC17 (TriCore, + `--reference` bootstrap), Simos PCR2.1, VAG EDC15** — all solved and validated against real dumps
+- [~] **Mercedes EDC15C6 (CR1)** — clean-room constant recovery in progress; the module refuses until validated (never a guess)
 
-- [ ] Binary model: load/save, region map, metadata
-- [x] **Checksum engine**: trait + verify + correct
-  - [x] generic (CRC32-tail example + CRC32 helper)
-  - [x] **Bosch EDC16 (MPC56x): SOLVED** — full directory-walking verify+correct, validated against real full dumps (BMW/KIA). VAG *signed* high-entropy block = separate, unsolved
-  - [x] **Bosch EDC17 (TriCore): SOLVED** — directory-walked CRC32; the firmware-specific VAG per-block constant is bootstrapped from your own stock dump (`checksum fix --reference`)
-  - [x] **Continental Simos PCR2.1: SOLVED** — forward CRC-32 + on-image directory, validated on real 1.6 TDI dumps
-  - [~] **EDC15 / EDC15C6** — VAG variant solved clean-room from GPL sources; Mercedes CR1 constant-recovery in progress (stub refuses until validated)
-- [x] Map diff (compare stock vs modified, byte and region level)
-- [x] **Real map library** — EDC16U34 (Golf): smoke/IQ limiters validated vs real dumps (docs/MAP-LIBRARY.md)
-- [x] **Calibration-definition import/export** — TunerPro **XDF** import+export (round-trip validated) and factory **ASAM A2L** import (`opentune-a2l`; validated on real EDC15/Siemens-PPD/BMW-MSV80, thousands of maps; linear scaling recovered, non-linear flagged)
-- [x] **Map-aware compare** — diff two calibrations map-by-map in physical units (`compare`)
-- [x] **VIN / part-number decoder** (`opentune-vin`): VIN (WMI/country/year/check-digit) + VAG/Bosch part parsing
-- [x] **Mercedes + BMW catalog** entries (catalog/manual/) alongside the 998-car opendbc set
-- [~] **ECU auto-identification** (`identify` command): read UDS/KWP DIDs → match `EcuDef.identify` keys + a vehicle catalog
-  - [x] `identify` field on ECU defs + `opentune identify` (defs + catalog matching)
-  - [x] harvest comma.ai opendbc FW fingerprints (MIT) into a catalog — 998 entries, 14 brands
-  - [ ] read the real identity DIDs in the drivers (0xF187/F189/F190/F18A…)
-- [x] ECU definition format (JSON) + 5 fleet defs + parse test
-- [x] `opentune-cli`: `identify`, `info`, `read`, `dump`, `diff`, `findmaps`, `compare`, `checksum verify|fix`, `flash` (mock) + `--resume`/`--transcript`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`, `import-a2l`, `vin`, `decode-part`, `dtc`
-- [x] Calibration **map-definition format** (docs/MAP-DEFS.md) + `maps` in ECU defs
-- [x] Prior-art survey + credits (docs/PRIOR-ART.md); flash sequences (docs/FLASHING-NOTES.md); Bosch checksum structure (docs/BOSCH-CHECKSUM.md)
-- [x] **ECU identification / autoselect**: `opentune identify` (read DIDs → match ecudefs + catalog), `EcuDef.identify`, `catalog` module, and a **998-entry vehicle catalog harvested from opendbc** (14 makes, MIT); docs/IDENTIFICATION.md
+### Maps & calibration
+- [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
+- [x] **Map-aware compare** (map-by-map, physical units) · byte/region diff · auto map-finder (`findmaps`)
+- [x] **TunerPro XDF import + export** (round-trip validated) and factory **ASAM A2L import** (`opentune-a2l`; validated at scale on real EDC15 / Siemens-PPD / BMW-MSV80, thousands of maps)
 
-## M2 — Read path (hardware)
-Identify and read a real ECU.
+### Identification
+- [x] `opentune identify` + ECU-def `identify` keys + **998-car opendbc catalog** + hand-curated **Mercedes/BMW** entries
+- [x] **VIN / VAG+Bosch part-number decoder** (`opentune-vin`)
+- [ ] 🔒 read the real identity DIDs live from an ECU
 
-- [x] `opentune-core` protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
-- [~] **OpenPort 2.0 driver** (CDC-ACM `at…` protocol) — implemented, awaiting hardware test
-- [~] **SocketCAN driver** — implemented, awaiting hardware test
-- [~] **K-line / ELM327 driver** — implemented, awaiting hardware test
-- [~] **KKL 409.1 raw-K-line driver** — implemented (serial BREAK init, ISO14230 framing), wired into CLI, awaiting hardware
-- [ ] **Cheap / AliExpress clone interface compatibility** (research: docs/CHEAP-INTERFACES.md)
-  - [ ] OpenPort 2.0 clones (via the openport2 driver) — verified on a clone
-  - [ ] ELM327 clones (read/log; most can't flash) via the elm327 driver
-  - [x] **KKL 409.1 raw-K-line driver** (FTDI/CH340; real BREAK init, ISO14230 framing) — awaiting hardware test
-  - [~] **slcan USB-CAN driver** (CANable/CANtact) — implemented, awaiting hardware
-  - [ ] **Generic J2534 driver** (Mongoose/VNCI/SVCI/Scanmatik clones)
-- [ ] ECU identify (part/SW number, VIN)
-- [ ] Full OBD read — Bosch EDC16 first
-- [x] Battery-voltage read, exposed as a safety gate
-- [~] **OBD-II / UDS DTC reader** — read & clear fault codes (OBD-II mode 0x03/0x07, UDS 0x19) and decode them with the built-in 11,140-code database (`opentune-dtc`), shown in the CLI + app. The decoder is done; this is the live read/clear over an interface.
+### Safety, flash orchestration & diagnostics
+- [x] Flash orchestrator state machine (voltage gate → verified backup → write → read-back verify)
+- [x] **Resumable / recoverable flash** — chunked, SHA-256-checkpointed; resume without re-writing verified chunks, never apply the wrong payload
+- [x] **Backup vault** (auto-archived with ECU id + CRC32; `vault` CLI lists/verifies) + **structured session transcript** (`.log`/`.jsonl`)
+- [x] **DTC database + decoder** — 11,140 codes (`opentune dtc`)
 
-## M3 — Flash path
-Write a calibration back, safely.
+### Apps
+- [x] **Desktop (Tauri)** — identify, checksum verify/fix, findmaps, map viewer **+ editor** (edit/interpolate/smooth, write-back + checksum fix), **compare**, flash (mock), vault, offline guide
+- [x] **Portable Linux builds** — glibc baseline fixed (`ubuntu-22.04` CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`); alpha AppImage + `.deb`
+- [x] **Android `opentune-ffi`** — UniFFI binding over the core (compile-verified; Kotlin bindings generated) + a Jetpack Compose app (`android/`)
+- [~] Desktop auto-update from GitHub Releases (configured; needs a signing key)
+- [ ] Build the Android APK (needs Android SDK/NDK) — the FFI + app source are ready
 
-- [x] Security access: `SeedKey` plugin trait + all 3 drivers run the 0x27 seed/key handshake before flash (user supplies the algorithm)
-- [ ] Erase / `requestDownload` / `transferData` / `transferExit`
-- [ ] Calibration-only write (write just the map region where supported)
-- [ ] Read-back verify after write
-- [ ] EDC16 end-to-end on the bench, then in-car
+---
 
-## M4 — Safety & recovery
-- [x] Flash orchestrator state machine (backup → write → verify)
-- [x] Voltage gate (refuse to flash below threshold)
-- [x] **Resumable / recoverable flash** — chunked write with a SHA-256-guarded checkpoint; resume after an interruption without re-writing already-verified chunks, and never apply the wrong payload to a region
-- [x] Backup vault (every read archived with ECU id + timestamp + CRC32); `flash` auto-archives the pre-flash backup; `vault` CLI lists/verifies it
-- [x] **Structured session transcript** — timestamped `.log` + `.jsonl` written beside the vault backup
+## ECU coverage matrix
 
-## M5 — Desktop app (Tauri)
-- [x] Desktop app (Tauri): identify, checksum verify/fix, findmaps, flash (mock), vault, offline guide
-- [x] Map viewer (heat grid) **and editor** (edit/interpolate/smooth, write-back + checksum fix) + map-by-map compare
-- [x] **Portable Linux builds** — glibc baseline fixed (ubuntu-22.04 CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`)
-- [ ] Connect / read a real ECU + flash wizard (hardware)
-- [~] **Auto-update from GitHub Releases** (configured; needs signing key)
+| Family | Example engines | Checksum | Identify | Real maps | Bus |
+|---|---|---|---|---|---|
+| **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD, BMW/KIA | ✅ solved | ✅ keys | ✅ EDC16U34 | OBD/CAN |
+| **EDC17** (TriCore) | later CR diesels incl. VAG | ✅ solved (+`--reference`) | def | — | OBD (bench/boot for full read) |
+| **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | — | OBD (bench/boot) |
+| **EDC15** (VAG TDI) | VAG 1.9 TDI | ✅ solved (clean-room) | — | — | K-line/OBD |
+| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | 🔄 in progress | def | — | K-line |
 
-## M6 — More ECUs
-- [~] Bosch EDC17 — **checksum SOLVED**; OBD flash pending hardware
-- [x] **Continental/Siemens Simos PCR2.1 checksum SOLVED** (forward CRC-32 + on-image directory; validated on real 1.6 TDI dumps; RSA signature block out of scope)
-- [ ] Bosch EDC15C6 over K-line (Mercedes CR1 family)
-- [x] DTC database + decoder (11,140 codes; `opentune dtc <code>`)
-- [ ] Growing community ECU-definition library
+The VAG *signed* high-entropy EDC16 block is a separate, unsolved scheme. Checksum work derived
+from proprietary tools is re-derived and validated independently before it ships.
 
-## M7 — Android app
-- [x] **opentune-ffi** — UniFFI binding over the core (compile-verified; Kotlin bindings generated)
-- [~] Jetpack Compose app (`android/`) — offline identify/checksum/maps/flash on a `.bin`; needs Android SDK/NDK to build the APK, real adapters for USB-OTG/BLE
-- [x] Reuses the same core, ECU defs and safety rules (one engine)
+---
 
-## M8 — Open hardware interface
-- [~] ESP32-S3 + CAN + K-line interface spec (docs/hardware.md); KiCad next
-- [~] **Arduino K-line bridge firmware** (ATmega328, hardware/firmware/kline-bridge) — written; a DIY cheap K-line adapter, host driver to follow
-- [ ] Device firmware (ISO-TP, TP2.0, K-line init, raw UART for boot mode)
-- [ ] USB CDC + optional WiFi/BLE bridge
-- [ ] OpenTune driver for the device
+## Phase 2 — On the car 🔒 (hardware-gated — the frontier)
+The code is written; **nothing here is proven on hardware yet.** Unblocks when an interface +
+bench ECU are available.
 
-## Ongoing
-- [x] Documentation: architecture, driver authoring, ECU-defs, hardware, android
-- [ ] Test fixtures and CI coverage
-- [ ] Reproducible, signed release builds for Linux / Windows / macOS
+- [x] Protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
+- [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge
+- [ ] **Generic J2534** driver (Mongoose/VNCI/SVCI clones) + verify cheap/clone adapters (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
+- [ ] **Live identify + full OBD read** (EDC16 first)
+- [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder done, needs the live transport
+- [x] Battery-voltage read exposed as a safety gate
+- [x] Security access: `SeedKey` trait + the 0x27 handshake wired into the drivers (user supplies the algorithm)
+- [ ] **Flash path**: `requestDownload`/`transferData`/`transferExit` → calibration-region write → read-back verify → **EDC16 end-to-end on the bench, then in-car**
+
+---
+
+## Phase 3 — Reach & ecosystem
+- [ ] **Android app on a phone** — build the APK + USB-OTG / BLE adapter support
+- [~] **Open hardware interface** — ESP32-S3 + CAN + K-line spec (`docs/hardware.md`); **Arduino K-line bridge firmware** written (`hardware/firmware/kline-bridge`) → device firmware (ISO-TP/TP2.0/K-line/boot UART) + USB-CDC/WiFi/BLE bridge + its OpenTune driver
+- [ ] **CAN-FD + DoIP** for newer ECUs
+- [ ] **More ECU families** + a growing **community ECU-definition & map library** (contribution format + review)
+
+---
+
+## Cross-cutting / tooling
+- [x] Documentation — architecture, driver authoring, ECU defs, checksums, hardware, Android, ideas backlog (`docs/`)
+- [~] **ECU-library scanner** (`opentune-scan`, prototyped) — structural ECU-family detection + string/part-number/VIN extraction as metadata enrichment; **not** reliable auto-sort-by-car (that needs better vehicle DBs — measured ~11% confident full-car on a messy library)
+- [ ] **Signed, reproducible releases** for Linux / Windows / macOS (Linux portable build done; Windows + macOS + updater signing pending)
+- [ ] More test fixtures + protocol-layer CI coverage (ISO-TP / TP2.0 / KWP edge cases)
