@@ -580,6 +580,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-driver-esp32"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
 name = "opentune-driver-kkl"
 version = "0.1.0"
 dependencies = [

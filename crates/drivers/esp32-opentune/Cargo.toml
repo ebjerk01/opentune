@@ -1,0 +1,24 @@
+# Host driver for the OpenTune ESP32-S3 interface
+# (hardware/firmware/esp32-s3). Speaks the device's framed USB-CDC protocol and
+# implements opentune-core's `Interface` trait.
+#
+# NOTE: this is a STANDALONE workspace crate for now — the empty `[workspace]`
+# table below detaches it from the repo root so it builds on its own while the
+# root Cargo.toml is being edited elsewhere. To wire it into the main workspace,
+# ADD "crates/drivers/esp32-opentune" to the root `members` list and DELETE the
+# `[workspace]` table at the bottom of this file. (Same pattern opentune-xdf
+# used while it was being brought up.)
+[package]
+name = "opentune-driver-esp32"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "Host driver for the OpenTune ESP32-S3 CAN/ISO-TP/K-line interface."
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+serialport = "4"

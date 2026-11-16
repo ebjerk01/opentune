@@ -12,6 +12,7 @@ members = [
     "crates/drivers/kkl",
     "crates/drivers/kline-bridge",
     "crates/drivers/slcan",
+    "crates/drivers/esp32-opentune",
     "crates/opentune-dtc",
     "crates/opentune-xdf",
     "crates/opentune-a2l",

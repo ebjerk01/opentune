@@ -1,0 +1,15 @@
+# OpenTune ESP32-S3 interface — build defaults.
+# Target is set with `idf.py set-target esp32s3`.
+
+# Use the built-in USB Serial/JTAG controller as the stdio/CDC console path so
+# the device enumerates as a USB-CDC serial port with no external USB chip.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# TWAI (CAN) is part of the `driver` component; no extra Kconfig needed.
+
+# A little more main-task stack for the ISO-TP reassembly buffers.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Keep the default 4 MB flash layout; the app is tiny.
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
