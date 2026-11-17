@@ -264,8 +264,11 @@ enum Command {
     },
     /// Scan a directory of ECU dumps offline and emit identification JSON.
     Scan {
-        /// Directory of dumps (scanned recursively).
+        /// Directory of dumps (scanned recursively), or a single image file.
         dir: PathBuf,
+        /// Print a human-readable recognition summary instead of JSON.
+        #[arg(long)]
+        human: bool,
         /// Catalog directory.
         #[arg(long, default_value = "catalog")]
         catalog: PathBuf,
@@ -1247,6 +1250,21 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            // The mock driver serves a file: recognise the image itself too.
+            if let (true, Some(file)) = (conn.driver == "mock", &conn.file) {
+                if let Ok(bytes) = std::fs::read(file) {
+                    let ctx = opentune_scan::ScanContext {
+                        catalog: Vec::new(),
+                        ecudefs: defs.clone(),
+                    };
+                    let root = file.parent().unwrap_or_else(|| std::path::Path::new("."));
+                    let rec = opentune_scan::scan_file(&ctx, root, file, &bytes);
+                    println!("\nOffline image recognition:");
+                    for l in opentune_scan::describe(&rec) {
+                        println!("  {l}");
+                    }
+                }
+            }
             drv.close()?;
         }
         Command::Db { action } => match action {
@@ -1899,12 +1917,38 @@ fn main() -> Result<()> {
         }
         Command::Scan {
             dir,
+            human,
             catalog,
             ecudefs,
         } => {
             let ctx = opentune_scan::ScanContext::load(&catalog, &ecudefs)?;
-            let report = opentune_scan::scan_dir(&ctx, &dir)?;
-            println!("{}", serde_json::to_string_pretty(&report)?);
+            if dir.is_file() {
+                let bytes =
+                    std::fs::read(&dir).map_err(|e| anyhow!("read {}: {e}", dir.display()))?;
+                let root = dir.parent().unwrap_or_else(|| std::path::Path::new("."));
+                let rec = opentune_scan::scan_file(&ctx, root, &dir, &bytes);
+                if human {
+                    println!("{}", dir.display());
+                    for l in opentune_scan::describe(&rec) {
+                        println!("{l}");
+                    }
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&rec)?);
+                }
+            } else {
+                let report = opentune_scan::scan_dir(&ctx, &dir)?;
+                if human {
+                    for rec in &report.records {
+                        println!("{}", rec.rel_path);
+                        for l in opentune_scan::describe(rec) {
+                            println!("  {l}");
+                        }
+                    }
+                    println!("{}", serde_json::to_string_pretty(&report.summary)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&report)?);
+                }
+            }
         }
         Command::Container { action } => match action {
             ContainerAction::Unpack {

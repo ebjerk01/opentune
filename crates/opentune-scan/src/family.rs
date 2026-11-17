@@ -6,6 +6,8 @@
 
 use serde::Serialize;
 
+use crate::recognize::{supplier, Detection, Tier, STRUCTURAL};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EcuFamily {
     Edc15,
@@ -133,4 +135,22 @@ fn edc15_signal(image: &[u8]) -> (bool, usize) {
         }
         Err(_) => (false, 0),
     }
+}
+
+/// The checksum-structure result as a recognition [`Detection`] (high tier:
+/// a parsed checksum directory / located checksum fields is structure, not a
+/// string coincidence). Empty for `Unknown`.
+pub fn structural_detections(det: &FamilyDetection) -> Vec<Detection> {
+    let (sup, fam) = match det.family {
+        EcuFamily::Edc15 => (supplier::BOSCH, "EDC15"),
+        EcuFamily::Edc16 => (supplier::BOSCH, "EDC16"),
+        EcuFamily::Edc17 => (supplier::BOSCH, "EDC17"),
+        EcuFamily::Pcr21 => (supplier::CONTINENTAL, "PCR2.1"),
+        EcuFamily::Unknown => return Vec::new(),
+    };
+    let mut d = Detection::new(sup, fam, Tier::High, STRUCTURAL);
+    for h in &det.how {
+        d = d.ev(h.clone(), None, None);
+    }
+    vec![d]
 }

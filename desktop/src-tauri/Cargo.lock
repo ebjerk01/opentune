@@ -2730,6 +2730,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "memchr",
  "opentune-checksum",
  "opentune-core",
  "opentune-vin",

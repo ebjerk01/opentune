@@ -1,0 +1,60 @@
+opentune-scan
+=============
+
+Part of the signature-based ECU recognition in `src/recognize/` re-implements,
+in Rust and from scratch, ECU-identification knowledge documented by:
+
+    openremap-core — https://github.com/v-arapidis/openremap-core
+    (MIT License, revision 6c6ba852 consulted)
+
+What was taken: public layout facts and marker strings that the openremap-core
+extractors document, namely
+
+  * Bosch ME7: the `ZZ` ident block at 0x10000 with a non-printable third byte
+    (printable = Marelli ME1.5.5 style) and the ME7 family literals;
+  * Bosch ME9/MED9: the `Bosch.Common.RamLoader.Me9` anchor and the MED9
+    exclusion;
+  * Bosch EDC16: the size → active-section table with `DE CA FE` at
+    active+0x3D and the SW number at active+0x10;
+  * Bosch EDC15: the `TSW` toolchain line and the C167 `PP22..00` bootstrap
+    header;
+  * Siemens/Continental: `5WP4` (Simos), `5WS4…-T` (SID), `5WK9…--…MS4x`
+    (MS4x), `PPD1.x`/`CASN`/`111SN` (PPD), `CAPM3`/`111PM3` (SID801),
+    `CAPO`/`111PO` (SID803) markers;
+  * Delphi Multec's `0x11 "DEL"` header; Marelli `MAG`/MJD and `iaw` tags;
+    the Denso `Copr.DENSO` / `Cpyr.DENSO` / `CopyrightDENSO` anchors;
+  * the exclusion lists that keep those detectors disjoint.
+
+What was NOT taken: no source code was copied or translated line by line;
+OpenTune's detectors, the evidence/tier model, the Bosch project-descriptor
+parser, the VAG ident-block parser, the Siemens calibration-header detector,
+the SuperH reset-vector check, the Delphi copyright/MT/DCM literals and the
+synthetic fixture generator are OpenTune's own. Explicitly excluded from use:
+openremap-core's GS20/SMG2 checksum (derived from a decompiled tool), anything
+it ported from GPL-2.0-only RomRaider (the Denso/Subaru checksum and ROM
+tables), and all checksum algorithms. No firmware, calibration data or dumps
+from any source are included.
+
+openremap-core licence:
+
+    MIT License
+
+    Copyright (c) 2026 v-arapidis
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

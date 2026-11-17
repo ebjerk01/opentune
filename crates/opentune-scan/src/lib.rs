@@ -24,6 +24,9 @@
 pub mod extract;
 pub mod family;
 pub mod filename;
+pub mod identity;
+pub mod recognize;
+pub mod synth;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -36,6 +39,8 @@ use opentune_core::types::EcuId;
 
 use family::EcuFamily;
 use filename::FilenameParse;
+use identity::IdField;
+use recognize::{Recognition, Tier};
 
 /// Honest confidence in the assigned car.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -110,8 +115,23 @@ pub struct ScanRecord {
     pub rel_path: String,
     pub source_folder: String,
     pub size: u64,
+    /// ECU family. For images whose checksum structure is recognised this is
+    /// that structural family (EDC15/EDC16/EDC17/PCR2.1, which also selects the
+    /// checksum engine); otherwise the signature-recognised family, or
+    /// `Unknown`. The precise family/variant is in [`ScanRecord::recognition`].
     pub ecu_family: &'static str,
+    /// Human-readable family signals (structural, then signature evidence).
     pub family_how: Vec<String>,
+    /// Supplier of the recognised ECU (Bosch, Siemens/Continental, …).
+    pub ecu_supplier: Option<&'static str>,
+    /// Sub-variant as named by the image (e.g. `ME7.5.10`, `EDC17CP14`).
+    pub ecu_variant: Option<String>,
+    /// Confidence tier of the recognised family (`high`/`medium`/`low`).
+    pub family_confidence: Option<Tier>,
+    /// Full signature-recognition result with per-marker evidence and offsets.
+    pub recognition: Recognition,
+    /// Identifiers read from the image, each with the offset it came from.
+    pub identity: Vec<IdField>,
     pub size_class: &'static str,
     pub part_numbers: Vec<String>,
     pub bosch_numbers: Vec<String>,
@@ -253,6 +273,23 @@ pub fn scan_file(ctx: &ScanContext, root: &Path, path: &Path, bytes: &[u8]) -> S
 
     let det = family::detect(bytes);
     let ex = extract::extract(bytes);
+    let recognition = recognize::recognize(bytes, family::structural_detections(&det));
+    let identity = identity::identity(bytes, &ex);
+    let ecu_family = if det.family != EcuFamily::Unknown {
+        det.family.as_str()
+    } else {
+        recognition.family()
+    };
+    let mut family_how = det.how.clone();
+    if let Some(p) = &recognition.primary {
+        for e in p
+            .evidence
+            .iter()
+            .filter(|e| e.offset.is_some() || e.text.is_some())
+        {
+            family_how.push(format!("{}: {}", p.family, e.line()));
+        }
+    }
     let fnp = filename::parse(&rel_path);
 
     // Best OEM identity -> EcuId for catalog/ecudef matching.
@@ -310,7 +347,7 @@ pub fn scan_file(ctx: &ScanContext, root: &Path, path: &Path, bytes: &[u8]) -> S
 
     // --- core assignment (structure + catalog + VIN, NO filename) ---
     let (assigned_core, confidence_core) = grade_core(
-        &det.family,
+        ecu_family,
         &catalog_match,
         &ecudef_match,
         &vin_decoded,
@@ -323,8 +360,17 @@ pub fn scan_file(ctx: &ScanContext, root: &Path, path: &Path, bytes: &[u8]) -> S
         rel_path,
         source_folder,
         size: bytes.len() as u64,
-        ecu_family: det.family.as_str(),
-        family_how: det.how,
+        ecu_family,
+        family_how,
+        ecu_supplier: recognition.primary.as_ref().map(|d| d.supplier),
+        ecu_variant: recognition.primary.as_ref().and_then(|d| d.variant.clone()),
+        family_confidence: recognition
+            .primary
+            .as_ref()
+            .filter(|d| d.has_family())
+            .map(|d| d.confidence),
+        recognition,
+        identity,
         size_class: det.size_class,
         part_numbers: ex.vag_part_numbers.clone(),
         bosch_numbers: ex.bosch_numbers.clone(),
@@ -344,9 +390,57 @@ pub fn scan_file(ctx: &ScanContext, root: &Path, path: &Path, bytes: &[u8]) -> S
     }
 }
 
+/// Human-readable recognition summary for one record (CLI / logs): family,
+/// confidence, evidence with offsets, and identity fields with offsets.
+pub fn describe(rec: &ScanRecord) -> Vec<String> {
+    let r = &rec.recognition;
+    let mut out = vec![format!("Image kind : {}", r.image_kind.as_str())];
+    match &r.primary {
+        Some(p) => {
+            out.push(format!(
+                "Family     : {} {} {}[{}]{}",
+                p.supplier,
+                p.family,
+                p.variant
+                    .as_deref()
+                    .map(|v| format!("({v}) "))
+                    .unwrap_or_default(),
+                p.confidence.as_str(),
+                if r.contested { " CONTESTED" } else { "" }
+            ));
+            for e in &p.evidence {
+                out.push(format!("  evidence : {}", e.line()));
+            }
+        }
+        None => out.push("Family     : not recognised".to_string()),
+    }
+    for o in &r.others {
+        out.push(format!(
+            "  also     : {} {} {}[{}] via {}",
+            o.supplier,
+            o.family,
+            o.variant
+                .as_deref()
+                .map(|v| format!("({v}) "))
+                .unwrap_or_default(),
+            o.confidence.as_str(),
+            o.detectors.join("+")
+        ));
+    }
+    for f in &rec.identity {
+        let n = if f.count > 1 {
+            format!(" (x{})", f.count)
+        } else {
+            String::new()
+        };
+        out.push(format!("  {:<16} {} @0x{:X}{n}", f.kind, f.value, f.offset));
+    }
+    out
+}
+
 /// Grade the DB/structure-only assignment.
 fn grade_core(
-    fam: &EcuFamily,
+    fam: &'static str,
     cat: &Option<CatalogHit>,
     ecd: &Option<EcudefHit>,
     vin: &Option<VinDecoded>,
@@ -408,7 +502,7 @@ fn grade_core(
                     make: Some(make.clone()),
                     model: None,
                     engine: None,
-                    ecu: Some(fam.as_str().to_string()),
+                    ecu: Some(fam.to_string()),
                     basis: "vin",
                 },
                 conf,
@@ -427,7 +521,7 @@ fn grade_core(
                         make: Some("VAG (VW/Audi/Seat/Skoda)".to_string()),
                         model: None,
                         engine: None,
-                        ecu: Some(fam.as_str().to_string()),
+                        ecu: Some(fam.to_string()),
                         basis: "part-vag",
                     },
                     Confidence::Low,
@@ -438,13 +532,13 @@ fn grade_core(
     }
 
     // Structural family only (or EPK marker) -> Low. Nothing at all -> None.
-    if *fam != EcuFamily::Unknown {
+    if fam != EcuFamily::Unknown.as_str() {
         return (
             Assignment {
                 make: None,
                 model: None,
                 engine: None,
-                ecu: Some(fam.as_str().to_string()),
+                ecu: Some(fam.to_string()),
                 basis: "structure",
             },
             Confidence::Low,
@@ -578,7 +672,22 @@ fn apply_bootstrap(rec: &mut ScanRecord, index: &BootstrapIndex) {
 #[derive(Debug, Default, Serialize)]
 pub struct Summary {
     pub total: usize,
+    /// Files with a known `ecu_family` (checksum structure OR signatures).
     pub family_by_structure: usize,
+    /// Files whose family came from checksum structure (the pre-signature count).
+    pub family_by_checksum_structure: usize,
+    /// Files whose family was recognised only by signatures.
+    pub family_by_signature_only: usize,
+    /// Files where only the supplier (not the family) was recognised.
+    pub supplier_only: usize,
+    /// Files with two incompatible top-tier family claims.
+    pub contested: usize,
+    /// Recognised family → count (the precise family, e.g. MED17 not EDC17).
+    pub recognized_family_breakdown: BTreeMap<String, usize>,
+    /// high/medium/low → count, over files with a recognised family.
+    pub family_confidence_breakdown: BTreeMap<String, usize>,
+    /// raw/text/winols-project/… → count.
+    pub image_kind_breakdown: BTreeMap<String, usize>,
     pub family_breakdown: BTreeMap<String, usize>,
     pub had_part_or_sw_or_vin: usize,
     pub had_vin: usize,
@@ -623,6 +732,34 @@ impl Summary {
             if r.ecu_family != "Unknown" {
                 s.family_by_structure += 1;
             }
+            let structural = r
+                .recognition
+                .primary
+                .iter()
+                .chain(r.recognition.others.iter())
+                .any(|d| d.detectors.contains(&recognize::STRUCTURAL));
+            let rec_family = r.recognition.family();
+            if structural {
+                s.family_by_checksum_structure += 1;
+            } else if rec_family != recognize::UNKNOWN_FAMILY {
+                s.family_by_signature_only += 1;
+            } else if r.recognition.primary.is_some() {
+                s.supplier_only += 1;
+            }
+            if r.recognition.contested {
+                s.contested += 1;
+            }
+            *s.recognized_family_breakdown
+                .entry(rec_family.to_string())
+                .or_default() += 1;
+            if let Some(t) = r.family_confidence {
+                *s.family_confidence_breakdown
+                    .entry(t.as_str().to_string())
+                    .or_default() += 1;
+            }
+            *s.image_kind_breakdown
+                .entry(r.recognition.image_kind.as_str().to_string())
+                .or_default() += 1;
             *s.family_breakdown
                 .entry(r.ecu_family.to_string())
                 .or_default() += 1;
