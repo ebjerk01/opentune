@@ -642,6 +642,7 @@ name = "opentune-adaptation"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-udssim",
  "serde",
  "serde_json",
 ]
@@ -933,6 +934,7 @@ name = "opentune-servicefn"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-udssim",
  "serde",
  "serde_json",
 ]
