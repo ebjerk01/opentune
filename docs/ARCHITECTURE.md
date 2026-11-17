@@ -57,7 +57,8 @@ a top-level command is added without a row here.
 | `opentune checksum` | Verify / correct checksums; `checksum algos` lists the algorithms |
 | `opentune flash` | Write a region through the safety orchestrator (backup → write → verify) |
 | `opentune dump` | Full read via a driver, archived to the backup vault with ECU id |
-| `opentune findmaps` | Find candidate calibration maps from the diff of two images |
+| `opentune findmaps` | Find candidate calibration maps in one image (scored, with evidence), or from the diff of two images |
+| `opentune recipe` | Portable tune recipes: `create` from a stock/tuned pair, `apply` only to a matching image (checksum-fixed + attested), `show` |
 | `opentune ecudefs` | List / validate ECU-definition files |
 | `opentune identify` | Read the connected ECU's identity and match it to a definition |
 | `opentune db` | Control-unit reference database: list, show, validate |
@@ -82,7 +83,7 @@ a top-level command is added without a row here.
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
 | `opentune log` | Poll live data from a RomRaider-style `logger.xml` to CSV |
-| `opentune obd` | Generic OBD-II mode-01 live data |
+| `opentune obd` | Generic OBD-II: mode-01 live data, readiness, freeze frame, mode-09 info (VIN/CALID/CVN), stored/pending/permanent DTCs |
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
 
@@ -149,6 +150,8 @@ apps that need it.
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
 | `opentune-logdef` | RomRaider-style `logger.xml` parser + live polling loop |
 | `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
+| `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |
+| `opentune-recipe` | Portable tune recipes: anchored patches + source identity, strict/relocating apply |
 | `opentune-packs` | Versioned definition packs (defs, labels, channels, scripts, …) |
 | `opentune-sa2` | Generic SA2 seed→key bytecode VM (caller-supplied program) |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
