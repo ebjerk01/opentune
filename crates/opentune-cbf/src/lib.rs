@@ -27,6 +27,15 @@
 //! for entry in opentune_cbf::dtc_entries(&cbf) {
 //!     println!("{}: {}", entry.code, entry.description);
 //! }
+//! // Or build the normalised, classified diagnostic view (one per ECU),
+//! // with honest notes about anything missing or not decoded:
+//! for diag in opentune_cbf::diagnostics(&cbf) {
+//!     println!("{}: {} DTCs, {} services", diag.ecu.qualifier,
+//!              diag.dtcs.len(), diag.services.len());
+//!     for warning in &diag.warnings {
+//!         eprintln!("note: {warning}");
+//!     }
+//! }
 //! // Or export the whole model as JSON:
 //! let json = opentune_cbf::to_json(&cbf).unwrap();
 //! ```
@@ -40,6 +49,7 @@
 
 #![forbid(unsafe_code)]
 
+mod diagnostics;
 mod error;
 mod header;
 mod model;
@@ -47,6 +57,10 @@ mod parse;
 mod raf;
 mod reader;
 
+pub use diagnostics::{
+    diagnostics, ecu_diagnostics, CbfDiagnostics, CbfDtc, CbfEcuIdentity, CbfService, CbfVariant,
+    Classification, ServiceKind,
+};
 pub use error::{CbfError, Result};
 pub use model::{
     CbfFile, DiagService, Dtc, DtcEntry, Ecu, EcuVariant, Protocol, ServiceType, VariantPattern,
@@ -252,5 +266,25 @@ mod tests {
             cbf.ecus.len(),
             entries.len()
         );
+
+        // Exercise the normalised diagnostic view on the real file too.
+        let diags = diagnostics(&cbf);
+        assert_eq!(diags.len(), cbf.ecus.len());
+        for diag in &diags {
+            // Flattened DTCs must match the ECU pool one-for-one.
+            let ecu = cbf
+                .ecus
+                .iter()
+                .find(|e| e.qualifier == diag.ecu.qualifier)
+                .expect("diagnostics ECU must come from the file");
+            assert_eq!(diag.dtcs.len(), ecu.dtcs.len());
+            assert_eq!(diag.services.len(), ecu.services.len());
+            eprintln!(
+                "  {} — {} services classified, {} warning(s)",
+                diag.ecu.qualifier,
+                diag.services.len(),
+                diag.warnings.len()
+            );
+        }
     }
 }
