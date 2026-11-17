@@ -153,6 +153,15 @@ enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// Import an EcuFlash / RomRaider XML ROM definition and list (or merge) its maps.
+    ImportEcuflash {
+        /// Path to the EcuFlash/RomRaider .xml definition.
+        file: PathBuf,
+        /// Optional ECU-definition JSON to merge the imported maps into
+        /// (existing maps with the same name are left untouched).
+        #[arg(long)]
+        into: Option<PathBuf>,
+    },
     /// List archived reads in a backup vault directory.
     Vault {
         /// Vault directory to scan (default: ./vault).
@@ -948,6 +957,62 @@ fn main() -> Result<()> {
                 }
                 let out = serde_json::to_string_pretty(&def)?;
                 std::fs::write(&into, out).map_err(|e| anyhow!("write {}: {e}", into.display()))?;
+                println!(
+                    "Merged {added} new map(s) into {} ({} total).",
+                    into.display(),
+                    def.maps.len()
+                );
+            }
+        }
+        Command::ImportEcuflash { file, into } => {
+            // EcuFlash/RomRaider XML can be Latin-1/Win-1252; decode lossily.
+            let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+            let src = String::from_utf8_lossy(&raw);
+            let import = opentune_ecuflash::parse_ecuflash(&src).map_err(|e| anyhow!("{e}"))?;
+            let r = &import.rom_id;
+            println!(
+                "EcuFlash: {} {} {} {} [{}] ({}) — {} map(s)",
+                r.make, r.model, r.submodel, r.year, r.xmlid, r.memmodel, import.maps.len()
+            );
+            for w in &import.warnings {
+                println!("  ! warning: {w}");
+            }
+            for m in &import.maps {
+                let note = if m.notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("  ! {}", m.notes)
+                };
+                println!(
+                    "  {:<28} @0x{:06X}  {}x{}  {:?}/{:?}  x{}{:+}{}",
+                    m.name,
+                    m.address,
+                    m.rows,
+                    m.cols,
+                    m.data_type,
+                    m.endian,
+                    m.scaling.factor,
+                    m.scaling.offset,
+                    note
+                );
+            }
+            if let Some(into) = into {
+                let txt = std::fs::read_to_string(&into)
+                    .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
+                let mut def: opentune_core::ecudef::EcuDef = serde_json::from_str(&txt)
+                    .map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+                let have: std::collections::HashSet<String> =
+                    def.maps.iter().map(|m| m.name.clone()).collect();
+                let mut added = 0usize;
+                for m in import.maps {
+                    if have.contains(&m.name) {
+                        continue;
+                    }
+                    def.maps.push(m);
+                    added += 1;
+                }
+                std::fs::write(&into, serde_json::to_string_pretty(&def)?)
+                    .map_err(|e| anyhow!("write {}: {e}", into.display()))?;
                 println!(
                     "Merged {added} new map(s) into {} ({} total).",
                     into.display(),

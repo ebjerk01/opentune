@@ -1,0 +1,20 @@
+# Importer crate: EcuFlash / RomRaider XML ROM definitions -> OpenTune MapDef.
+# Part of the workspace. Mirrors opentune-xdf and reuses its linear-equation
+# fitter (opentune_xdf::math) so `toexpr` scalings import the same way as XDF.
+[package]
+name = "opentune-ecuflash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Import EcuFlash / RomRaider XML ROM map definitions into OpenTune ECU definitions."
+
+[dependencies]
+# roxmltree 0.20.0 (2023-12-29): small pull-free DOM reader, already used by
+# opentune-xdf (no new external version introduced).
+roxmltree = "0.20.0"
+opentune-core = { path = "../opentune-core" }
+opentune-xdf = { path = "../opentune-xdf" }

@@ -676,6 +676,7 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-dtc",
+ "opentune-ecuflash",
  "opentune-flash",
  "opentune-scan",
  "opentune-vin",
@@ -808,6 +809,15 @@ dependencies = [
 [[package]]
 name = "opentune-dtc"
 version = "0.1.0"
+
+[[package]]
+name = "opentune-ecuflash"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-xdf",
+ "roxmltree",
+]
 
 [[package]]
 name = "opentune-ffi"
