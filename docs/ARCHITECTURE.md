@@ -148,6 +148,7 @@ apps that need it.
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
 | `opentune-logdef` | RomRaider-style `logger.xml` parser + live polling loop |
+| `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
 | `opentune-packs` | Versioned definition packs (defs, labels, channels, scripts, …) |
 | `opentune-sa2` | Generic SA2 seed→key bytecode VM (caller-supplied program) |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
