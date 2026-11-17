@@ -61,6 +61,9 @@ opentune-servicefn = { path = "../../crates/opentune-servicefn" }
 opentune-logdef = { path = "../../crates/opentune-logdef" }
 opentune-udssim = { path = "../../crates/opentune-udssim" }
 
+# Control-unit reference database (Database panel).
+opentune-db = { path = "../../crates/opentune-db" }
+
 [features]
 # Tauri's default behaviour for a release build.
 default = ["custom-protocol"]
