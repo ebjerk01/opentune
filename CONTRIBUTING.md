@@ -1,7 +1,7 @@
 # Contributing to OpenTune
 
-Thanks for your interest. OpenTune is an open-source ECU reading, flashing and
-calibration toolkit built around a shared Rust core. Contributions of code,
+Thanks for your interest. OpenTune is an open-source car diagnostics, coding and
+tuning suite built around a shared Rust core. Contributions of code,
 documentation, ECU definitions and hardware designs are all welcome.
 
 ## Building
@@ -29,7 +29,8 @@ cargo test --workspace
 
 ## Scope boundaries
 
-OpenTune is **calibration-focused** and deliberately stays a legitimate project.
+OpenTune is a **diagnostics, coding and tuning** suite and deliberately stays a
+legitimate project.
 Contributions must keep it that way. We will **not** accept features for:
 
 - immobiliser removal or defeat;
@@ -58,7 +59,10 @@ field stating that addresses need per-variant confirmation.
   `opentune-core`/`opentune-flash`, never in individual drivers. A driver must
   not be able to skip them.
 - New interface drivers implement the `Interface` trait and, where they speak
-  CAN, reuse the shared `IsoTp` + `UdsClient` stack. See
+  CAN, reuse the shared `IsoTp` + `UdsClient` stack. A driver that owns a
+  `DiagTransport` **must override `Interface::diag()`** to hand it out — the
+  default returns `None`, and the coding / adaptation / service / auto-scan /
+  logging engines then fail with "no diagnostic transport". See
   [`docs/DRIVERS.md`](docs/DRIVERS.md).
 - Add tests for new behaviour. Offline-testable logic (parsing, checksums,
   framing, ECU-def loading) should ship with unit or integration tests.
