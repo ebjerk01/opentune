@@ -646,6 +646,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-autoscan"
+version = "0.1.0"
+dependencies = [
+ "opentune-dtc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-cbf"
 version = "0.1.0"
 dependencies = [
