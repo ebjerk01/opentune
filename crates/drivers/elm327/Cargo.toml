@@ -1,0 +1,15 @@
+# ELM327 **serial** read-diagnostics driver: a USB ELM327 (CH340 serial) talking
+# ISO 15765-4 (CAN) for the READ side of diagnostics — identify, DTCs, live OBD-II
+# PIDs. Distinct from `opentune-driver-elm327` (kline-elm327, flash/memory
+# oriented) and `opentune-driver-elm327net` (same AT dialect over WiFi/Bluetooth).
+[package]
+name = "opentune-driver-elm327-obd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ELM327 serial read-diagnostics driver (UDS/OBD-II over ISO-TP) for OpenTune."
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+opentune-dtc = { path = "../../opentune-dtc" }
+serialport.workspace = true

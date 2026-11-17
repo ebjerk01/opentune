@@ -16,6 +16,7 @@ members = [
     "crates/drivers/j2534",
     "crates/drivers/gsusb",
     "crates/drivers/elm327net",
+    "crates/drivers/elm327",
     "crates/opentune-dtc",
     "crates/opentune-xdf",
     "crates/opentune-a2l",

@@ -665,6 +665,7 @@ dependencies = [
  "opentune-container",
  "opentune-core",
  "opentune-driver-elm327",
+ "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",
  "opentune-driver-gsusb",
  "opentune-driver-j2534",
@@ -705,6 +706,15 @@ name = "opentune-driver-elm327"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-elm327-obd"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-dtc",
  "serialport",
 ]
 
