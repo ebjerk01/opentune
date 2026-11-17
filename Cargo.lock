@@ -638,6 +638,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-adaptation"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-cbf"
 version = "0.1.0"
 dependencies = [
