@@ -27,6 +27,11 @@ pub enum Error {
     Safety(String),
     #[error("configuration error: {0}")]
     Config(String),
+    /// The interface adapter reset or lost its configuration mid-session (e.g.
+    /// an ELM327 printed its banner or started echoing again). The session
+    /// state is gone; the caller must re-open the interface.
+    #[error("interface adapter reset: {0}")]
+    AdapterReset(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

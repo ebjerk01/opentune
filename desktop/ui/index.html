@@ -19,33 +19,45 @@
         </div>
 
         <nav id="nav">
-          <div class="nav-group-label">Calibration</div>
-          <button class="nav-item" data-panel="image"><span class="ni-ico">▦</span> Image</button>
-          <button class="nav-item" data-panel="analyze"><span class="ni-ico">🔎</span> Analyze bin</button>
-          <button class="nav-item" data-panel="identify"><span class="ni-ico">⌖</span> Identify</button>
-          <button class="nav-item" data-panel="checksum"><span class="ni-ico">✓</span> Checksum</button>
-          <button class="nav-item" data-panel="maps"><span class="ni-ico">▞</span> Maps</button>
-          <button class="nav-item" data-panel="compare"><span class="ni-ico">⇆</span> Compare</button>
-          <button class="nav-item" data-panel="flash"><span class="ni-ico">⚡</span> Flash</button>
-          <button class="nav-item" data-panel="vault"><span class="ni-ico">▣</span> Vault</button>
-          <button class="nav-item" data-panel="drivers"><span class="ni-ico">⇄</span> Drivers</button>
+          <!-- Groups are filled by index.html (calibration/help) and by panels
+               registering through window.OTNav (nav.js). Empty groups hide. -->
+          <div class="nav-group" data-group="calibration">
+            <div class="nav-group-label">Calibration</div>
+            <button class="nav-item" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
+            <button class="nav-item" data-panel="analyze" data-tier="public"><span class="ni-ico">🔎</span> Analyze bin</button>
+            <button class="nav-item" data-panel="identify" data-tier="public"><span class="ni-ico">⌖</span> Identify</button>
+            <button class="nav-item" data-panel="checksum" data-tier="public"><span class="ni-ico">✓</span> Checksum</button>
+            <button class="nav-item" data-panel="maps" data-tier="public"><span class="ni-ico">▞</span> Maps</button>
+            <button class="nav-item" data-panel="compare" data-tier="public"><span class="ni-ico">⇆</span> Compare</button>
+            <button class="nav-item" data-panel="flash" data-tier="public"><span class="ni-ico">⚡</span> Flash</button>
+            <button class="nav-item" data-panel="vault" data-tier="public"><span class="ni-ico">▣</span> Vault</button>
+            <button class="nav-item" data-panel="project" data-tier="public"><span class="ni-ico">🗂</span> Project</button>
+          </div>
 
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">Project</div>
-          <button class="nav-item" data-panel="project"><span class="ni-ico">🗂</span> Project</button>
+          <div class="nav-group" data-group="vehicle" hidden>
+            <div class="nav-divider"></div>
+            <div class="nav-group-label">Vehicle</div>
+          </div>
 
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">Tools</div>
-          <button class="nav-item" data-panel="utils"><span class="ni-ico">🧰</span> Utilities</button>
+          <div class="nav-group" data-group="reference">
+            <div class="nav-divider"></div>
+            <div class="nav-group-label">Reference</div>
+            <button class="nav-item" data-panel="drivers" data-tier="public"><span class="ni-ico">⇄</span> Drivers</button>
+            <button class="nav-item" data-panel="utils" data-tier="public"><span class="ni-ico">🧰</span> Utilities</button>
+          </div>
 
-          <div class="nav-divider debug-only" id="debugNavDiv" hidden></div>
-          <div class="nav-group-label debug-only" id="debugNavLabel" hidden>Debug <span class="bench-note">alpha</span></div>
-          <button class="nav-item debug-only" id="debugNavBtn" data-panel="debug" hidden><span class="ni-ico">⚙</span> Debug</button>
+          <div class="nav-group" data-group="help">
+            <div class="nav-divider"></div>
+            <div class="nav-group-label">Help</div>
+            <button class="nav-item" data-panel="guide" data-tier="public"><span class="ni-ico">❔</span> Guide</button>
+            <button class="nav-item" data-panel="about" data-tier="public"><span class="ni-ico">⟳</span> About &amp; updates</button>
+          </div>
 
-          <div class="nav-divider"></div>
-          <div class="nav-group-label">Help</div>
-          <button class="nav-item" data-panel="guide"><span class="ni-ico">❔</span> Guide</button>
-          <button class="nav-item" data-panel="about"><span class="ni-ico">⟳</span> About &amp; updates</button>
+          <div class="nav-group bench" data-group="bench" hidden>
+            <div class="nav-divider"></div>
+            <div class="nav-group-label bench">Bench <span class="bench-note">untested &amp; private tools</span></div>
+            <button class="nav-item" id="debugNavBtn" data-panel="debug" data-tier="bench" hidden><span class="ni-ico">⚙</span> Debug</button>
+          </div>
         </nav>
 
         <div class="sidebar-foot">
@@ -554,6 +566,7 @@
 
     <div id="toast" class="toast"></div>
     <script src="./src/ot-caps.js"></script>
+    <script src="./src/nav.js"></script>
     <script src="./src/app.js"></script>
     <script src="./src/feat_coding.js"></script>
     <script src="./src/feat_scan.js"></script>
@@ -562,5 +575,10 @@
     <script src="./src/feat_logging.js"></script>
     <script src="./src/feat_obd.js"></script>
     <script src="./src/feat_autodebug.js"></script>
+    <script src="./src/feat_dashboard.js"></script>
+    <script src="./src/feat_candump.js"></script>
+    <script src="./src/feat_database.js"></script>
+    <script src="./src/panel-help.js"></script>
+    <script src="./src/extensions.js"></script>
   </body>
 </html>

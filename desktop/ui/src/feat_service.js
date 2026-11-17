@@ -97,14 +97,7 @@
 
   function build() {
     const nav = document.getElementById("nav");
-    if (nav && !nav.querySelector('.nav-item[data-panel="service"]')) {
-      const btn = document.createElement("button");
-      btn.className = "nav-item";
-      btn.dataset.panel = "service";
-      btn.innerHTML = '<span class="ni-ico">🛠</span> Service fn';
-      btn.addEventListener("click", () => { if (window.showPanel) window.showPanel("service"); });
-      nav.appendChild(btn);
-    }
+    if (nav) window.OTNav.register({ id: "service", label: "Service fn", icon: "🛠", group: "vehicle", tier: "bench" });
     const main = document.getElementById("main");
     if (main && !document.getElementById("panel-service")) {
       const sec = document.createElement("section");

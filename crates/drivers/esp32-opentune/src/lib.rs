@@ -38,6 +38,7 @@ use std::time::Duration;
 type Serial = Box<dyn serialport::SerialPort>;
 
 /// Which transport the current session uses.
+#[derive(Clone, Copy)]
 enum Mode {
     /// UDS over the device's on-board ISO-TP.
     IsoTp,
@@ -162,6 +163,26 @@ impl DiagTransport for KlineDiag<'_> {
     }
 }
 
+/// The driver itself is the session's [`DiagTransport`]: it dispatches each
+/// request to the device's on-board ISO-TP or K-line path, whichever `open()`
+/// selected. (The per-call adapters borrow the device, so this is what
+/// [`Interface::diag`] hands out.)
+impl DiagTransport for Esp32Driver {
+    fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
+        match self.mode.as_ref() {
+            Some(Mode::IsoTp) => IsoTpDiag { dev }.request(req, timeout_ms),
+            Some(Mode::Kline { target, source }) => KlineDiag {
+                dev,
+                target: *target,
+                source: *source,
+            }
+            .request(req, timeout_ms),
+            None => Err(Error::NotConnected),
+        }
+    }
+}
+
 /// Split a raw ISO-14230 byte stream into its service-data payloads.
 fn parse_kwp_stream(buf: &[u8]) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
@@ -239,6 +260,17 @@ impl Interface for Esp32Driver {
         }
     }
 
+    /// Expose the device's ISO-TP (UDS) or K-line (KWP2000) request/response
+    /// path as a [`DiagTransport`] so the coding/adaptation/auto-scan/service/
+    /// logging engines can drive it. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        if self.device.is_some() && self.mode.is_some() {
+            Some(self as &mut dyn DiagTransport)
+        } else {
+            None
+        }
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let path = cfg
             .options
@@ -312,7 +344,7 @@ impl Interface for Esp32Driver {
     }
 
     fn read_ecu_id(&mut self) -> Result<EcuId> {
-        match self.mode.take() {
+        match self.mode {
             Some(Mode::IsoTp) => {
                 let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
                 let mut t = IsoTpDiag { dev };
@@ -360,7 +392,7 @@ impl Interface for Esp32Driver {
         // A full read from a locked ECU needs security access too; a no-op when
         // no handler is set and security is not required.
         self.security_access()?;
-        match self.mode.take() {
+        match self.mode {
             Some(Mode::IsoTp) => {
                 let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
                 let mut t = IsoTpDiag { dev };
@@ -425,7 +457,7 @@ impl Interface for Esp32Driver {
     ) -> Result<()> {
         // Unlock the ECU (service 0x27) before request_download if required.
         self.security_access()?;
-        match self.mode.take() {
+        match self.mode {
             Some(Mode::IsoTp) => {
                 let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
                 let mut t = IsoTpDiag { dev };
@@ -693,6 +725,25 @@ mod seedkey_hook_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn diag_exposes_device_transport_after_connect() {
+        // A pseudo-terminal pair stands in for the adapter's serial port.
+        let (host, _adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let port: Box<dyn serialport::SerialPort> = Box::new(host);
+        let mut d = Esp32Driver::new();
+        assert!(d.diag().is_none(), "no transport before open");
+        d.device = Some(Device::new(port));
+        assert!(d.diag().is_none(), "no transport until a mode is selected");
+        d.mode = Some(Mode::IsoTp);
+        assert!(d.diag().is_some(), "diag() must expose the ISO-TP path");
+        d.mode = Some(Mode::Kline {
+            target: 0x10,
+            source: 0xF1,
+        });
+        assert!(d.diag().is_some(), "diag() must expose the K-line path");
+    }
 
     #[test]
     fn kwp_frame_has_correct_header_and_checksum() {

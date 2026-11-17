@@ -115,6 +115,13 @@ impl Interface for GsUsbDriver {
         }
     }
 
+    /// Expose the host-side ISO-TP over the gs_usb link as a [`DiagTransport`] so the coding/adaptation/
+    /// auto-scan/service/logging engines (and the raw-request console) can
+    /// drive this adapter. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
             return Err(Error::Unsupported(
@@ -453,6 +460,31 @@ fn uds_security_access(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A CAN link with no traffic: enough to stand up the ISO-TP layer.
+    struct IdleLink;
+
+    impl CanLink for IdleLink {
+        fn send_frame(&mut self, _id: u32, _data: &[u8]) -> Result<()> {
+            Ok(())
+        }
+        fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+            Err(Error::Timeout(timeout_ms))
+        }
+    }
+
+    #[test]
+    fn diag_exposes_isotp_after_connect() {
+        assert!(
+            GsUsbDriver::new().diag().is_none(),
+            "no transport before open"
+        );
+        let mut d = GsUsbDriver::with_link(Box::new(IdleLink), 0x7E0, 0x7E8);
+        assert!(
+            d.diag().is_some(),
+            "diag() must expose the ISO-TP transport"
+        );
+    }
     use std::collections::VecDeque;
 
     /// A mocked raw CAN link: returns queued `(id, data)` frames to `recv_frame`

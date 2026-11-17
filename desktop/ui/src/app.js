@@ -1396,8 +1396,8 @@ async function dbgRefreshLog() {
 async function initDebug() {
   let channel = "stable";
   try { channel = await invoke("build_channel"); } catch (e) {}
-  if (channel !== "alpha") return; // keep the Debug tab hidden on stable builds
-  ["debugNavDiv", "debugNavLabel", "debugNavBtn"].forEach((id) => { const n = $(id); if (n) n.hidden = false; });
+  // The Debug tab is a Bench-tier entry: nav.js shows it only on alpha/bench builds.
+  if (channel !== "alpha" && channel !== "bench") return;
 
   // Populate the driver dropdown.
   try {
@@ -1468,6 +1468,9 @@ async function initConnBar() {
     '<div class="conn-row"><select id="connDriver" class="inp" title="interface driver"></select></div>' +
     '<div class="conn-row"><input id="connPort" class="inp" placeholder="/dev/ttyUSB0" title="serial port">' +
     '<select id="connBus" class="inp" title="CAN bus — match the dongle HS/MS switch"><option value="hs">HS</option><option value="ms">MS</option></select></div>' +
+    '<div class="conn-row" title="Target module CAN request / response ids (hex). Blank = use the definition\'s req_id/resp_id; reads then default to the engine (7E0/7E8). Writes, routines and service runs are refused without a known target.">' +
+    '<input id="connTx" class="inp mono" placeholder="tx 7E0" size="5">' +
+    '<input id="connRx" class="inp mono" placeholder="rx 7E8" size="5"></div>' +
     '<div class="conn-row"><button id="connDetect" class="btn">Detect adapter</button></div>';
   foot.insertBefore(bar, $("adapterBadge"));
   try {
@@ -1479,12 +1482,17 @@ async function initConnBar() {
   $("connPort").value = window.OT.conn.port || "";
   $("connBus").value = window.OT.conn.bus || "hs";
   const push = () => {
-    window.OT.setConn({ driver: $("connDriver").value, port: $("connPort").value, bus: $("connBus").value });
+    window.OT.setConn({
+      driver: $("connDriver").value, port: $("connPort").value, bus: $("connBus").value,
+      txId: $("connTx").value, rxId: $("connRx").value,
+    });
     if ($("dbgDriver")) $("dbgDriver").value = $("connDriver").value;
     if ($("dbgPort")) $("dbgPort").value = $("connPort").value;
     if ($("dbgBus")) $("dbgBus").value = $("connBus").value;
   };
-  ["connDriver", "connPort", "connBus"].forEach((id) => $(id).addEventListener("change", push));
+  $("connTx").value = window.OT.conn.txId || "";
+  $("connRx").value = window.OT.conn.rxId || "";
+  ["connDriver", "connPort", "connBus", "connTx", "connRx"].forEach((id) => $(id).addEventListener("change", push));
   $("connDetect").addEventListener("click", () => { push(); window.OT.probe(); });
 }
 

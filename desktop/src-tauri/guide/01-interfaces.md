@@ -21,23 +21,15 @@ Buses OpenTune targets: **K-line** (ISO 9141 / ISO 14230 KWP2000) and **CAN**
 You do not need an expensive tool. A good sub-$50 kit for older VAG / Japanese
 cars:
 
-- **Tactrix OpenPort 2.0 clone (~$15)** — the cheapest interface that can
-  actually reprogram a CAN ECU. Driven by `openport2`.
-  - **Never run a firmware "update" on a clone** — a serial-number blacklist can
-    erase the device. Use it as shipped.
-- **KKL 409.1 cable (~$5)** — a K-line reader/flasher for 1996–~2005 cars.
-  Driven by `kkl`. Prefer a genuine **FTDI FT232** unit over a CH340 clone for
-  the most robust Linux support.
-- **CANable / CANtact (~$10–20)** — with candleLight/gs_usb firmware it is a
-  native SocketCAN device (`socketcan`); with stock slcan firmware use the
-  `slcan` driver.
+- **Tactrix OpenPort 2.0 clone (~$15)** — the cheapest interface that can actually reprogram a CAN ECU. Driven by `openport2`.
+  - **Never run a firmware "update" on a clone** — a serial-number blacklist can erase the device. Use it as shipped.
+- **KKL 409.1 cable (~$5)** — a K-line reader/flasher for 1996–~2005 cars. Driven by `kkl`. Prefer a genuine **FTDI FT232** unit over a CH340 clone for the most robust Linux support.
+- **CANable / CANtact (~$10–20)** — with candleLight/gs_usb firmware it is a native SocketCAN device (`socketcan`); with stock slcan firmware use the `slcan` driver.
 
 ## What to avoid
 
-- **ELM327 clones** read fine but are too slow and command-limited to flash
-  reliably. Genuine **OBDLink / STN** silicon is the dependable ELM-class pipe.
-- **VCDS "HEX" clones** run locked firmware and expose no open command set — not
-  driveable.
+- **ELM327 clones** read fine but are too slow and command-limited to flash reliably. Genuine **OBDLink / STN** silicon is the dependable ELM-class pipe.
+- **VCDS "HEX" clones** run locked firmware and expose no open command set — not driveable.
 - **J2534 passthru** is a Windows-only DLL API; skip it on Linux.
 
 ## The OpenTune reference board

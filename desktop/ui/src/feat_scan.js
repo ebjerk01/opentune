@@ -22,21 +22,7 @@
   const state = { modulesPath: null };
 
   // ---- inject nav button ---------------------------------------------------
-  const nav = document.getElementById("nav");
-  const navBtn = document.createElement("button");
-  navBtn.className = "nav-item";
-  navBtn.dataset.panel = "scan";
-  navBtn.innerHTML = '<span class="ni-ico">🔎</span> Auto-scan';
-  navBtn.addEventListener("click", () => window.showPanel("scan"));
-  if (nav) {
-    // Place it just before the Help group when present, else append.
-    const helpLabel = Array.from(nav.querySelectorAll(".nav-group-label")).find(
-      (el) => /help/i.test(el.textContent || ""),
-    );
-    const anchor = helpLabel ? helpLabel.previousElementSibling || helpLabel : null;
-    if (anchor) nav.insertBefore(navBtn, anchor);
-    else nav.appendChild(navBtn);
-  }
+  window.OTNav.register({ id: "scan", label: "Auto-scan", icon: "🔎", group: "vehicle", tier: "bench" });
 
   // ---- inject panel --------------------------------------------------------
   const sec = document.createElement("section");
@@ -108,8 +94,9 @@
         const err = m.error
           ? `<span class="mono small">${esc(m.error)}</span>`
           : '<span class="muted">—</span>';
+        const addr = m.target ? ` <span class="muted small mono">${esc(m.target.tx)}/${esc(m.target.rx)}</span>` : "";
         return `<tr>
-          <td>${esc(m.name)}</td>
+          <td>${esc(m.name)}${addr}</td>
           <td>${presentPill(m)}</td>
           <td class="small">${identityCell(m)}</td>
           <td>${dtcPill}</td>
@@ -218,6 +205,7 @@
         '<div class="muted small">Choose a vehicle module list (JSON) first.</div>';
       return;
     }
+    if (!window.confirm("Clear stored DTCs on every present module in this list? Each module is addressed on its own CAN ids.")) return;
     $("scanClearResult").innerHTML = '<div class="muted small">Clearing DTCs on present modules…</div>';
     try {
       const r = await invoke("autoscan_clear", {

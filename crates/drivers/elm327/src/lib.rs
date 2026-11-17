@@ -39,6 +39,7 @@
 
 use opentune_core::protocol::diag::check_response;
 use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::elm;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Progress,
@@ -196,8 +197,7 @@ impl ElmTransport {
     /// Send an `AT` command and require a non-error reply.
     fn at_ok(&mut self, cmd: &str) -> Result<()> {
         let reply = self.at(cmd)?;
-        let up = reply.to_uppercase();
-        if up.contains('?') || up.contains("ERROR") {
+        if elm::at_rejected(&reply) {
             return Err(Error::Protocol(format!("ELM rejected {cmd}: {reply}")));
         }
         Ok(())
@@ -217,16 +217,17 @@ impl ElmTransport {
 
     /// Initialise the adapter and select the bus/headers for `cfg`.
     ///
-    /// Handshake order: reset (`ATZ`), capture identity (`ATI`, `AT@1`), echo off
-    /// (`ATE0`), linefeeds off (`ATL0`), spaces off (`ATS0`), headers off
+    /// Handshake order: reset (`ATZ`), echo off (`ATE0`) straight away so the
+    /// identity strings are not polluted by the echo, capture identity (`ATI`,
+    /// `AT@1`), linefeeds off (`ATL0`), spaces off (`ATS0`), headers off
     /// (`ATH0`), adaptive timing (`ATAT1`), protocol select, CAN auto-formatting
     /// (`ATCAF1`), request/receive headers (`ATSH`/`ATCRA`), ISO-TP flow control
     /// (`ATFCSH`/`ATFCSD`/`ATFCSM`) and the response timeout (`ATST`).
     fn init(&mut self, cfg: &ConnectConfig, bus: CanBus) -> Result<()> {
         let _ = self.at("ATZ"); // reset; reply is the banner
+        self.at_ok("ATE0")?; // echo off, before anything whose reply we keep
         self.version = self.at("ATI").unwrap_or_default();
         self.device = self.at("AT@1").unwrap_or_default();
-        self.at_ok("ATE0")?; // echo off
         self.at_ok("ATL0")?; // linefeeds off
         self.at_ok("ATS0")?; // spaces off (compact hex)
         let _ = self.at("ATH0"); // headers off (clones may not ack)
@@ -265,7 +266,7 @@ impl ElmTransport {
         let tx = cfg.tx_id & 0x7FF;
         let rx = cfg.rx_id & 0x7FF;
         self.at_ok(&format!("ATSH {tx:03X}"))?;
-        let _ = self.at(&format!("ATCRA {rx:03X}")); // accept only the ECU rx id
+        self.set_receive_filter(rx)?; // accept only the ECU rx id
 
         // ISO-TP flow control: answer the ECU's first frame with CTS, 0 block
         // size, 0 separation time, using our tx header. `ATFCSM 1` tells the ELM
@@ -279,114 +280,59 @@ impl ElmTransport {
         let _ = self.at("ATST 64");
         Ok(())
     }
+
+    /// Accept only frames from `rx` (11-bit). `ATCRA` is the normal way; if the
+    /// adapter rejects it, fall back explicitly to the older filter/mask pair
+    /// (`ATCF` + `ATCM 7FF`). If both are rejected init fails: without a receive
+    /// filter other ECUs' replies could be taken for this ECU's.
+    fn set_receive_filter(&mut self, rx: u32) -> Result<()> {
+        let reply = self.at(&format!("ATCRA {rx:03X}"))?;
+        if !elm::at_rejected(&reply) {
+            return Ok(());
+        }
+        self.at_ok(&format!("ATCF {rx:03X}"))
+            .and_then(|_| self.at_ok("ATCM 7FF"))
+            .map_err(|e| {
+                Error::Protocol(format!(
+                    "ELM327 rejected ATCRA {rx:03X} and the ATCF/ATCM fallback; \
+                     cannot filter replies to the ECU ({e})"
+                ))
+            })
+    }
 }
 
 impl DiagTransport for ElmTransport {
+    /// One request/response exchange. Requests longer than 7 bytes are refused
+    /// up front (the ELM cannot send multi-frame ISO-TP); the reply is parsed
+    /// per response by [`elm::read_reply`], which drops responsePending
+    /// (`7F xx 78`) frames and waits up to P2* for the real answer.
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
-        let hex: String = req.iter().map(|b| format!("{b:02X}")).collect();
+        elm::check_can_request_len(req)?;
+        let hex = elm::request_hex(req);
         self.stream.drain_input();
         self.write_line(&hex)?;
-
-        // Keep reading blocks while the ECU answers responsePending (NRC 0x78).
-        for _ in 0..40 {
-            let text = self.read_until_prompt(timeout_ms)?;
-            let resp = parse_elm_response(&text)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
-                continue;
-            }
-            return Ok(resp);
-        }
-        Err(Error::Timeout(timeout_ms))
+        let stream = &mut self.stream;
+        let mut read = || read_byte(stream.as_mut());
+        elm::read_reply(&mut read, &hex, timeout_ms, elm::P2_STAR_MS)
     }
 }
 
-/// Parse an ELM327 textual reply into raw diagnostic response bytes.
-///
-/// Handles single-frame replies (spaced or unspaced hex), CAN multi-frame
-/// replies printed with the `NN:` line-counter format (with a leading
-/// total-length line), and the common error strings (`NO DATA`, `CAN ERROR`, …).
-fn parse_elm_response(text: &str) -> Result<Vec<u8>> {
-    let up = text.to_uppercase();
-    for err in [
-        "NO DATA",
-        "UNABLE TO CONNECT",
-        "BUS INIT: ...ERROR",
-        "BUS INIT: ERROR",
-        "BUS ERROR",
-        "CAN ERROR",
-        "DATA ERROR",
-        "BUFFER FULL",
-        "FB ERROR",
-        "STOPPED",
-        "<RX ERROR",
-    ] {
-        if up.contains(err) {
-            return Err(Error::Protocol(format!("ELM: {}", text.trim())));
+/// Read one byte from the stream: `Ok(None)` on an idle tick.
+fn read_byte(stream: &mut dyn ElmStream) -> Result<Option<u8>> {
+    let mut b = [0u8; 1];
+    match stream.read(&mut b) {
+        Ok(1) => Ok(Some(b[0])),
+        Ok(_) => Ok(None),
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+            ) =>
+        {
+            Ok(None)
         }
+        Err(e) => Err(Error::Io(e)),
     }
-
-    // Split on both CR and LF: with linefeeds off (ATL0) the clones delimit
-    // frames with a lone '\r', which `str::lines()` would not split.
-    let lines: Vec<&str> = text
-        .split(['\r', '\n'])
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty() && *l != "SEARCHING..." && *l != "OK")
-        .collect();
-    if lines.is_empty() {
-        return Err(Error::Protocol("empty ELM response".into()));
-    }
-
-    // Multi-frame: at least one line carries an "NN:" frame counter.
-    if lines.iter().any(|l| l.contains(':')) {
-        let mut total: Option<usize> = None;
-        let mut data = Vec::new();
-        for l in &lines {
-            if let Some((_idx, rest)) = l.split_once(':') {
-                data.extend(hex_bytes(rest));
-            } else if let Some(tok) = l.split_whitespace().next() {
-                // The lone leading line is the total length in hex.
-                if let Ok(n) = usize::from_str_radix(tok, 16) {
-                    total = Some(n);
-                }
-            }
-        }
-        if let Some(n) = total {
-            if n <= data.len() {
-                data.truncate(n);
-            }
-        }
-        if data.is_empty() {
-            return Err(Error::Protocol("no data in ELM multi-frame reply".into()));
-        }
-        return Ok(data);
-    }
-
-    // Single frame (possibly wrapped over several lines): concatenate hex.
-    let mut data = Vec::new();
-    for l in &lines {
-        data.extend(hex_bytes(l));
-    }
-    if data.is_empty() {
-        return Err(Error::Protocol(format!(
-            "no hex bytes in ELM reply: {}",
-            text.trim()
-        )));
-    }
-    Ok(data)
-}
-
-/// Extract hex byte pairs from a line, tolerating spaced or unspaced hex.
-fn hex_bytes(s: &str) -> Vec<u8> {
-    let nibbles: Vec<u8> = s
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .map(|c| c.to_digit(16).unwrap() as u8)
-        .collect();
-    nibbles
-        .chunks(2)
-        .filter(|p| p.len() == 2)
-        .map(|p| (p[0] << 4) | p[1])
-        .collect()
 }
 
 /// Parse a byte as decimal or `0x`-prefixed hex.
@@ -779,6 +725,8 @@ mod tests {
         outbox: VecDeque<u8>,
         line: Vec<u8>,
         written: Arc<Mutex<Vec<u8>>>,
+        /// AT command prefixes answered with `?` (adapter rejects them).
+        reject: Vec<String>,
     }
 
     impl MockElm {
@@ -788,6 +736,7 @@ mod tests {
                 outbox: VecDeque::new(),
                 line: Vec::new(),
                 written: Arc::new(Mutex::new(Vec::new())),
+                reject: Vec::new(),
             }
         }
 
@@ -809,7 +758,9 @@ mod tests {
             }
             let up = cmd.to_uppercase();
             if up.starts_with("AT") {
-                let reply: &[u8] = if up.starts_with("ATI") || up == "ATZ" {
+                let reply: &[u8] = if self.reject.iter().any(|r| up.starts_with(r.as_str())) {
+                    b"?"
+                } else if up.starts_with("ATI") || up == "ATZ" {
                     b"ELM327 v1.5"
                 } else if up.starts_with("AT@1") {
                     b"OBDII to RS232 Interpreter"
@@ -1007,20 +958,110 @@ mod tests {
 
     #[test]
     fn parse_single_and_multiframe() {
-        assert_eq!(
-            parse_elm_response("410C1AF8\r").unwrap(),
-            vec![0x41, 0x0C, 0x1A, 0xF8]
-        );
-        let mf = "014\r0:62F19031323334\r1:35363738393031\r2:323334353637";
-        let out = parse_elm_response(mf).unwrap();
+        let one = elm::parse_block("410C1AF8\r", "010C").unwrap();
+        assert_eq!(one.response, Some(vec![0x41, 0x0C, 0x1A, 0xF8]));
+        let mf = "014\r0:62F19031323334\r1:35363738393031\r2:323334353637\r";
+        let out = elm::parse_block(mf, "22F190").unwrap().response.unwrap();
         assert_eq!(out.len(), 20);
         assert_eq!(&out[..3], &[0x62, 0xF1, 0x90]);
     }
 
     #[test]
     fn parse_rejects_error_strings() {
-        assert!(parse_elm_response("NO DATA\r").is_err());
-        assert!(parse_elm_response("CAN ERROR\r").is_err());
+        assert!(elm::parse_block("NO DATA\r", "0100").is_err());
+        assert!(elm::parse_block("CAN ERROR\r", "0100").is_err());
+    }
+
+    #[test]
+    fn response_pending_then_final_in_one_prompt_block() {
+        // Genuine ELM: `7F 19 78` then the real answer before one prompt.
+        let mut d = open_mock(&["7F1978\r5902FF01010008\r"]);
+        let dtcs = d.read_dtcs().unwrap();
+        assert_eq!(dtcs.len(), 1);
+        assert_eq!(dtcs[0].dtc.code, "P0101");
+    }
+
+    #[test]
+    fn response_pending_then_multiframe_vin() {
+        let vin = "7F2278\r014\r0:62F190575657\r1:5A5A5A314B5A41\r2:57303030303031";
+        let mut d = open_mock(&[vin, "NO DATA"]);
+        let id = d.read_ecu_id().unwrap();
+        assert_eq!(id.vin.as_deref(), Some("WVWZZZ1KZAW000001"));
+    }
+
+    #[test]
+    fn truncated_multiframe_is_rejected() {
+        // Length 0x14 but only 10 bytes before the prompt.
+        let mut d = open_mock(&["014\r0:62F19031323334\r1:353637"]);
+        let t = d.diag().unwrap();
+        let err = t.request(&[0x22, 0xF1, 0x90], 300).unwrap_err();
+        assert!(
+            matches!(&err, Error::Protocol(m) if m.contains("truncated")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn oversized_request_rejected_before_writing() {
+        let mock = MockElm::new(&[]);
+        let written = mock.written();
+        let mut d = Elm327Obd::with_stream(Box::new(mock));
+        d.open(&ConnectConfig::default()).unwrap();
+        let before = written.lock().unwrap().len();
+        let req = [0x2E, 0xF1, 0x90, 1, 2, 3, 4, 5];
+        let err = d.diag().unwrap().request(&req, 300).unwrap_err();
+        assert!(matches!(err, Error::Unsupported(_)), "{err:?}");
+        assert_eq!(written.lock().unwrap().len(), before, "nothing written");
+    }
+
+    #[test]
+    fn question_mark_and_bus_busy_are_errors() {
+        let mut d = open_mock(&["?", "BUS BUSY", "ERR94"]);
+        for _ in 0..3 {
+            let err = d.diag().unwrap().request(&[0x01, 0x0C], 300).unwrap_err();
+            assert!(matches!(err, Error::Protocol(_)), "{err:?}");
+        }
+    }
+
+    #[test]
+    fn adapter_reset_mid_session_is_reported() {
+        let mut d = open_mock(&["\r\rELM327 v1.5", "010C\r410C1AF8"]);
+        let err = d.diag().unwrap().request(&[0x01, 0x0C], 300).unwrap_err();
+        assert!(matches!(err, Error::AdapterReset(_)), "{err:?}");
+        // Echo back on (a reset whose banner was missed) is a reset too.
+        let err = d.diag().unwrap().request(&[0x01, 0x0C], 300).unwrap_err();
+        assert!(matches!(err, Error::AdapterReset(_)), "{err:?}");
+    }
+
+    #[test]
+    fn echo_off_is_sent_before_identity_queries() {
+        let log = handshake_log(&ConnectConfig::default());
+        let pos = |c: &str| log.find(c).unwrap_or_else(|| panic!("{c} missing: {log}"));
+        assert!(pos("ATZ") < pos("ATE0"));
+        assert!(pos("ATE0") < pos("ATI"));
+        assert!(pos("ATE0") < pos("AT@1"));
+    }
+
+    #[test]
+    fn atcra_rejected_falls_back_to_filter_and_mask() {
+        let mut mock = MockElm::new(&[]);
+        mock.reject = vec!["ATCRA".into()];
+        let written = mock.written();
+        let mut d = Elm327Obd::with_stream(Box::new(mock));
+        d.open(&ConnectConfig::default()).unwrap();
+        let log = String::from_utf8(written.lock().unwrap().clone()).unwrap();
+        assert!(
+            log.contains("ATCF 7E8") && log.contains("ATCM 7FF"),
+            "{log}"
+        );
+    }
+
+    #[test]
+    fn atcra_and_fallback_rejected_fails_init() {
+        let mut mock = MockElm::new(&[]);
+        mock.reject = vec!["ATCRA".into(), "ATCF".into()];
+        let mut d = Elm327Obd::with_stream(Box::new(mock));
+        assert!(d.open(&ConnectConfig::default()).is_err());
     }
 
     #[test]

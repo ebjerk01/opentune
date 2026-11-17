@@ -30,6 +30,13 @@
 //! itself issues each module's requests on `diag` **in module order**, pinging a
 //! module exactly once before reading from it.
 //!
+//! For a transport whose addressing is fixed when it is opened (an ELM327's
+//! `ATSH`/`ATCRA`, an ISO-TP socket), use the per-module building blocks
+//! [`scan_module`] and [`clear_module`] and re-bind the transport to each
+//! module's `req_id` / `resp_id` before calling them. Calling [`scan`] or
+//! [`clear_all`] over such a transport sends every module's requests to the
+//! one ECU it is bound to.
+//!
 //! ## Honest response checking
 //!
 //! Every UDS exchange is validated the way `opentune-coding`'s engine validates
@@ -519,57 +526,69 @@ fn read_dtcs_obd(diag: &mut dyn RawDiag) -> Result<Vec<Dtc>, String> {
 /// identity or DTC read fails is still reported, with the reason in
 /// [`ModuleResult::error`].
 pub fn scan(diag: &mut dyn RawDiag, modules: &VehicleModules) -> VehicleScan {
-    let mut results = Vec::with_capacity(modules.modules.len());
+    VehicleScan {
+        modules: modules
+            .modules
+            .iter()
+            .map(|module| scan_module(diag, module))
+            .collect(),
+    }
+}
 
-    for module in &modules.modules {
-        if !ping(diag, module) {
-            results.push(ModuleResult {
-                name: module.name.clone(),
-                present: false,
-                identity: None,
-                dtcs: Vec::new(),
-                error: None,
-            });
-            continue;
-        }
-
-        let mut errors: Vec<String> = Vec::new();
-
-        let identity = match module.protocol {
-            Protocol::Uds => match read_identity(diag) {
-                Ok(id) => Some(id),
-                Err(e) => {
-                    errors.push(format!("identity: {e}"));
-                    None
-                }
-            },
-            // Generic OBD modules are not identified by DID; mode 09 is out of
-            // scope for this engine.
-            Protocol::Obd => None,
-        };
-
-        let dtcs = match read_dtcs(diag, module) {
-            Ok(d) => d,
-            Err(e) => {
-                errors.push(format!("dtc: {e}"));
-                Vec::new()
-            }
-        };
-
-        results.push(ModuleResult {
+/// Scan **one** module over a transport that is already bound to that module's
+/// address (`req_id` / `resp_id`): probe presence, then read its identity (UDS
+/// only) and stored DTCs. Read-only.
+///
+/// This is the building block [`scan`] loops over. An application whose
+/// transport must be re-bound per module (e.g. an ELM327, whose request/receive
+/// headers are fixed when the adapter is opened) calls this once per module with
+/// a transport opened on that module's arbitration IDs, so every module is
+/// probed on its own address instead of all of them hitting one ECU.
+pub fn scan_module(diag: &mut dyn RawDiag, module: &ModuleAddr) -> ModuleResult {
+    if !ping(diag, module) {
+        return ModuleResult {
             name: module.name.clone(),
-            present: true,
-            identity,
-            dtcs,
-            error: if errors.is_empty() {
-                None
-            } else {
-                Some(errors.join("; "))
-            },
-        });
+            present: false,
+            identity: None,
+            dtcs: Vec::new(),
+            error: None,
+        };
     }
 
-    VehicleScan { modules: results }
+    let mut errors: Vec<String> = Vec::new();
+
+    let identity = match module.protocol {
+        Protocol::Uds => match read_identity(diag) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                errors.push(format!("identity: {e}"));
+                None
+            }
+        },
+        // Generic OBD modules are not identified by DID; mode 09 is out of
+        // scope for this engine.
+        Protocol::Obd => None,
+    };
+
+    let dtcs = match read_dtcs(diag, module) {
+        Ok(d) => d,
+        Err(e) => {
+            errors.push(format!("dtc: {e}"));
+            Vec::new()
+        }
+    };
+
+    ModuleResult {
+        name: module.name.clone(),
+        present: true,
+        identity,
+        dtcs,
+        error: if errors.is_empty() {
+            None
+        } else {
+            Some(errors.join("; "))
+        },
+    }
 }
 
 /// Clear stored DTCs on **every present module** with ClearDiagnosticInformation
@@ -578,52 +597,62 @@ pub fn scan(diag: &mut dyn RawDiag, modules: &VehicleModules) -> VehicleScan {
 /// This is the engine's only mutating operation, and it is deliberately **not**
 /// part of [`scan`]: the caller invokes it explicitly. Each module is pinged
 /// first; absent modules are skipped (recorded `cleared = false`, no error).
+///
+/// Every module's requests go to the same `diag`, so this is only correct when
+/// that transport routes by module address. A transport bound to one fixed
+/// address must instead call [`clear_module`] once per module, re-bound to that
+/// module's `req_id` / `resp_id` — otherwise every "clear" lands on one ECU.
 pub fn clear_all(diag: &mut dyn RawDiag, modules: &VehicleModules) -> Vec<ClearResult> {
-    let mut out = Vec::with_capacity(modules.modules.len());
+    modules
+        .modules
+        .iter()
+        .map(|module| clear_module(diag, module))
+        .collect()
+}
 
-    for module in &modules.modules {
-        if !ping(diag, module) {
-            out.push(ClearResult {
-                name: module.name.clone(),
-                cleared: false,
-                error: None,
-            });
-            continue;
-        }
-
-        let result = match module.protocol {
-            Protocol::Uds => {
-                let req = [SID_CLEAR_DTC, 0xFF, 0xFF, 0xFF];
-                diag.request(&req)
-                    .and_then(|resp| check(SID_CLEAR_DTC, &resp))
-            }
-            Protocol::Obd => diag.request(&[OBD_MODE_CLEAR_DTC]).and_then(|resp| {
-                if resp.first() == Some(&(OBD_MODE_CLEAR_DTC + 0x40)) {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "unexpected OBD mode-04 response 0x{:02X} (wanted 0x44)",
-                        resp.first().copied().unwrap_or(0)
-                    ))
-                }
-            }),
+/// Clear stored DTCs on **one** module over a transport already bound to that
+/// module's address. Pings first; an absent module is reported `cleared = false`
+/// with no error. `cleared = true` only when the module acknowledged the clear
+/// with the matching positive response.
+pub fn clear_module(diag: &mut dyn RawDiag, module: &ModuleAddr) -> ClearResult {
+    if !ping(diag, module) {
+        return ClearResult {
+            name: module.name.clone(),
+            cleared: false,
+            error: None,
         };
-
-        match result {
-            Ok(()) => out.push(ClearResult {
-                name: module.name.clone(),
-                cleared: true,
-                error: None,
-            }),
-            Err(e) => out.push(ClearResult {
-                name: module.name.clone(),
-                cleared: false,
-                error: Some(e),
-            }),
-        }
     }
 
-    out
+    let result = match module.protocol {
+        Protocol::Uds => {
+            let req = [SID_CLEAR_DTC, 0xFF, 0xFF, 0xFF];
+            diag.request(&req)
+                .and_then(|resp| check(SID_CLEAR_DTC, &resp))
+        }
+        Protocol::Obd => diag.request(&[OBD_MODE_CLEAR_DTC]).and_then(|resp| {
+            if resp.first() == Some(&(OBD_MODE_CLEAR_DTC + 0x40)) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "unexpected OBD mode-04 response 0x{:02X} (wanted 0x44)",
+                    resp.first().copied().unwrap_or(0)
+                ))
+            }
+        }),
+    };
+
+    match result {
+        Ok(()) => ClearResult {
+            name: module.name.clone(),
+            cleared: true,
+            error: None,
+        },
+        Err(e) => ClearResult {
+            name: module.name.clone(),
+            cleared: false,
+            error: Some(e),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -959,5 +988,26 @@ mod tests {
         assert!(!responded(0x3E, &[0x7F, 0x22, 0x11])); // negative for other svc
         assert!(responded(0x3E, &[0x7E, 0x00])); // correct positive
         assert!(responded(0x3E, &[0x7F, 0x3E, 0x11])); // well-formed refusal = present
+    }
+
+    #[test]
+    fn per_module_helpers_scan_and_clear_one_bound_module() {
+        let m = uds("BCM", 0x26);
+        let mut bound = |req: &[u8]| -> Result<Vec<u8>, String> {
+            match req {
+                [0x3E, 0x00] => Ok(vec![0x7E, 0x00]),
+                [0x19, 0x02, _] => Ok(vec![0x59, 0x02, 0xFF]),
+                [0x14, 0xFF, 0xFF, 0xFF] => Ok(vec![0x54]),
+                _ => Err("no response".into()),
+            }
+        };
+        let r = scan_module(&mut bound, &m);
+        assert!(r.present && r.dtcs.is_empty());
+        assert!(clear_module(&mut bound, &m).cleared);
+
+        let mut absent = |_req: &[u8]| -> Result<Vec<u8>, String> { Err("timeout".into()) };
+        let c = clear_module(&mut absent, &m);
+        assert!(!c.cleared && c.error.is_none());
+        assert!(!scan_module(&mut absent, &m).present);
     }
 }

@@ -463,6 +463,13 @@ impl Interface for KklDriver {
         }
     }
 
+    /// Expose the KWP2000/K-line transport (after the ECU wake-up) as a [`DiagTransport`] so the coding/adaptation/
+    /// auto-scan/service/logging engines (and the raw-request console) can
+    /// drive this adapter. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let port = cfg
             .options
@@ -914,6 +921,23 @@ fn kwp_security_access(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn diag_exposes_kline_transport_after_connect() {
+        // A pseudo-terminal pair stands in for the adapter's serial port.
+        let (host, _adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let port: Box<dyn serialport::SerialPort> = Box::new(host);
+        let mut d = KklDriver::new();
+        assert!(d.diag().is_none(), "no transport before open");
+        d.transport = Some(KklTransport {
+            port,
+            target: 0x10,
+            source: TESTER_ADDR,
+            key_bytes: None,
+        });
+        assert!(d.diag().is_some(), "diag() must expose the KKL transport");
+    }
     use std::collections::VecDeque;
 
     #[test]

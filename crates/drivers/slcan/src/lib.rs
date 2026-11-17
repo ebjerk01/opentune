@@ -176,6 +176,13 @@ impl Interface for SlcanDriver {
         }
     }
 
+    /// Expose the host-side ISO-TP over the slcan link as a [`DiagTransport`] so the coding/adaptation/
+    /// auto-scan/service/logging engines (and the raw-request console) can
+    /// drive this adapter. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.isotp.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let path = cfg
             .options
@@ -362,6 +369,29 @@ fn uds_security_access(
 #[cfg(test)]
 mod seedkey_hook_tests {
     use super::*;
+
+    /// A CAN link with no traffic: enough to stand up the ISO-TP layer.
+    struct IdleLink;
+
+    impl CanLink for IdleLink {
+        fn send_frame(&mut self, _id: u32, _data: &[u8]) -> Result<()> {
+            Ok(())
+        }
+        fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+            Err(Error::Timeout(timeout_ms))
+        }
+    }
+
+    #[test]
+    fn diag_exposes_isotp_after_connect() {
+        let mut d = SlcanDriver::new();
+        assert!(d.diag().is_none(), "no transport before open");
+        d.isotp = Some(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8));
+        assert!(
+            d.diag().is_some(),
+            "diag() must expose the ISO-TP transport"
+        );
+    }
     use std::collections::VecDeque;
 
     /// A scripted diagnostic transport: returns queued responses and records
