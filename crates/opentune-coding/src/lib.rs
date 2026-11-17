@@ -71,6 +71,20 @@ pub enum CodingError {
     },
     /// The definition referenced a block index the coding data does not have.
     MissingBlock(usize),
+    /// The definition itself is invalid (duplicate names/DIDs, out-of-range bit
+    /// field, bad block reference, …). Deserialization alone does not validate.
+    InvalidDef(String),
+    /// The coding data to write does not match the definition's block layout
+    /// (wrong DID, wrong order/count, or a block length that changed under us).
+    ShapeMismatch(String),
+    /// The live value drifted from the baseline the edit was made against, at a
+    /// byte the edit would overwrite (optimistic-concurrency conflict).
+    StaleBaseline {
+        /// Block (DID) where the live value no longer matches the baseline.
+        did: u16,
+        /// Byte offset within the block.
+        byte: usize,
+    },
     /// A UDS request returned a negative response (0x7F) or an unexpected SID.
     Protocol(String),
     /// The transport itself failed.
@@ -101,6 +115,12 @@ impl std::fmt::Display for CodingError {
                 "`{param}` byte {byte} out of range in block {block} (len {len})"
             ),
             CodingError::MissingBlock(b) => write!(f, "coding data is missing block {b}"),
+            CodingError::InvalidDef(s) => write!(f, "invalid coding definition: {s}"),
+            CodingError::ShapeMismatch(s) => write!(f, "coding data shape mismatch: {s}"),
+            CodingError::StaleBaseline { did, byte } => write!(
+                f,
+                "stale baseline: live value at block 0x{did:04X} byte {byte} changed since the edit"
+            ),
             CodingError::Protocol(s) => write!(f, "UDS protocol error: {s}"),
             CodingError::Transport(s) => write!(f, "transport error: {s}"),
             CodingError::VerifyMismatch { did } => {
@@ -225,6 +245,62 @@ impl CodingDef {
     /// Find a parameter by name.
     pub fn param(&self, name: &str) -> Option<&CodingParam> {
         self.params.iter().find(|p| p.name == name)
+    }
+
+    /// Semantically validate the definition. `serde` deserialization only proves
+    /// the JSON shape; this checks the invariants the engine relies on: at least
+    /// one block, **unique** DIDs, **unique** parameter names, every parameter's
+    /// `block` in range, `bit < 8`, `1 <= len <= 64`, and every enum option value
+    /// fitting in `len` bits. Called before any write.
+    pub fn validate(&self) -> Result<()> {
+        let dids = self.addressing.dids();
+        if dids.is_empty() {
+            return Err(CodingError::InvalidDef("no blocks (DIDs) declared".into()));
+        }
+        let mut seen_did = std::collections::HashSet::new();
+        for &d in dids {
+            if !seen_did.insert(d) {
+                return Err(CodingError::InvalidDef(format!("duplicate DID 0x{d:04X}")));
+            }
+        }
+        let mut seen_name = std::collections::HashSet::new();
+        for p in &self.params {
+            if !seen_name.insert(p.name.as_str()) {
+                return Err(CodingError::InvalidDef(format!(
+                    "duplicate parameter name `{}`",
+                    p.name
+                )));
+            }
+            if p.block >= dids.len() {
+                return Err(CodingError::InvalidDef(format!(
+                    "`{}` references block {} but only {} declared",
+                    p.name,
+                    p.block,
+                    dids.len()
+                )));
+            }
+            if p.bit >= 8 {
+                return Err(CodingError::InvalidDef(format!(
+                    "`{}` bit {} is not 0..=7",
+                    p.name, p.bit
+                )));
+            }
+            if p.len == 0 || p.len > 64 {
+                return Err(CodingError::InvalidDef(format!(
+                    "`{}` len {} is not 1..=64",
+                    p.name, p.len
+                )));
+            }
+            for o in &p.options {
+                if p.len < 64 && o.value >= (1u64 << p.len) {
+                    return Err(CodingError::InvalidDef(format!(
+                        "`{}` option value {} does not fit in {} bit(s)",
+                        p.name, o.value, p.len
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -493,22 +569,33 @@ where
     }
 }
 
-/// Check a UDS response against the expected positive SID, mapping 0x7F to a
-/// descriptive protocol error.
-fn check(expect_sid: u8, resp: &[u8]) -> Result<()> {
+/// Check a UDS response against the request's service id (`req_sid`): accept a
+/// positive response (`req_sid + 0x40`), and map a negative response (0x7F) to a
+/// descriptive error — rejecting a truncated 0x7F and one that echoes a
+/// *different* requested service (a mis-correlated response).
+fn check(req_sid: u8, resp: &[u8]) -> Result<()> {
     if resp.is_empty() {
         return Err(CodingError::Protocol("empty response".into()));
     }
     if resp[0] == 0x7F {
-        let nrc = resp.get(2).copied().unwrap_or(0);
+        if resp.len() < 3 {
+            return Err(CodingError::Protocol("truncated negative response".into()));
+        }
+        if resp[1] != req_sid {
+            return Err(CodingError::Protocol(format!(
+                "negative response echoes service 0x{:02X}, expected 0x{req_sid:02X}",
+                resp[1]
+            )));
+        }
         return Err(CodingError::Protocol(format!(
-            "negative response 0x{nrc:02X} to service 0x{:02X}",
-            resp.get(1).copied().unwrap_or(0)
+            "negative response 0x{:02X} to service 0x{req_sid:02X}",
+            resp[2]
         )));
     }
-    if resp[0] != expect_sid {
+    let want = req_sid.wrapping_add(0x40);
+    if resp[0] != want {
         return Err(CodingError::Protocol(format!(
-            "unexpected response SID 0x{:02X} (wanted 0x{expect_sid:02X})",
+            "unexpected response SID 0x{:02X} (wanted 0x{want:02X})",
             resp[0]
         )));
     }
@@ -519,7 +606,7 @@ fn check(expect_sid: u8, resp: &[u8]) -> Result<()> {
 fn read_did(diag: &mut dyn RawDiag, did: u16) -> Result<Vec<u8>> {
     let req = [0x22, (did >> 8) as u8, did as u8];
     let resp = diag.request(&req).map_err(CodingError::Transport)?;
-    check(0x62, &resp)?;
+    check(0x22, &resp)?;
     if resp.len() < 3 || resp[1] != (did >> 8) as u8 || resp[2] != did as u8 {
         return Err(CodingError::Protocol(format!(
             "0x22 response did not echo DID 0x{did:04X}"
@@ -528,13 +615,20 @@ fn read_did(diag: &mut dyn RawDiag, did: u16) -> Result<Vec<u8>> {
     Ok(resp[3..].to_vec())
 }
 
-/// Write one DID with WriteDataByIdentifier (0x2E).
+/// Write one DID with WriteDataByIdentifier (0x2E). Requires the positive
+/// response to **echo the full DID** (`6E hi lo`) — a bare `6E` or a `6E` for a
+/// different DID is rejected, so a mis-correlated ack can't be taken as success.
 fn write_did(diag: &mut dyn RawDiag, did: u16, data: &[u8]) -> Result<()> {
     let mut req = Vec::with_capacity(3 + data.len());
     req.extend_from_slice(&[0x2E, (did >> 8) as u8, did as u8]);
     req.extend_from_slice(data);
     let resp = diag.request(&req).map_err(CodingError::Transport)?;
-    check(0x6E, &resp)?;
+    check(0x2E, &resp)?;
+    if resp.len() < 3 || resp[1] != (did >> 8) as u8 || resp[2] != did as u8 {
+        return Err(CodingError::Protocol(format!(
+            "0x2E response did not echo DID 0x{did:04X}"
+        )));
+    }
     Ok(())
 }
 
@@ -557,44 +651,149 @@ pub struct WriteOptions {
     pub dry_run: bool,
     /// Skip the post-write read-back verify (not recommended).
     pub skip_verify: bool,
+    /// Proceed even if the live value drifted from the baseline at a byte the
+    /// edit overwrites (otherwise such drift is a [`CodingError::StaleBaseline`]).
+    pub force_overwrite: bool,
 }
 
-/// The outcome of a (planned or executed) coding write.
+/// What happened in a [`write_coding`] call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteOutcome {
+    /// `dry_run` — the plan was produced, nothing was written.
+    Planned,
+    /// The edit produced no change over the live value; nothing written.
+    NoChange,
+    /// Every changed block was written and read back identical.
+    Verified,
+    /// Blocks were written but verification was skipped by request.
+    Unverified,
+    /// A written block did not read back as written.
+    VerifyFailed {
+        /// The block (DID) that failed to verify.
+        did: u16,
+    },
+    /// A write failed partway. [`WriteReport::written`] holds the acknowledged
+    /// DIDs; this DID's outcome is **unknown** and must not be blindly retried.
+    WriteError {
+        /// The DID whose write did not complete.
+        uncertain_did: u16,
+        /// The underlying error text.
+        message: String,
+    },
+}
+
+/// The outcome of a (planned or executed) coding write. `backup` is always the
+/// live value read immediately before writing, so a restore is possible even
+/// after a partial failure.
 #[derive(Debug, Clone)]
 pub struct WriteReport {
     /// The module's coding as read immediately before writing (for restore).
     pub backup: Coding,
-    /// The raw bytes that changed.
+    /// The merged target (live + the intended edits) that would be / was written.
+    pub target: Coding,
+    /// The raw bytes that change between `backup` and `target`.
     pub byte_changes: Vec<ByteChange>,
-    /// The parameters that changed (decoded).
+    /// The parameters that change (decoded).
     pub param_changes: Vec<ParamChange>,
-    /// DIDs actually written (empty on a dry run).
+    /// DIDs actually written and acknowledged, in order.
     pub written: Vec<u16>,
-    /// Whether every written block read back identical (false if skipped/dry).
-    pub verified: bool,
-    /// True if nothing was written because the flag was set.
-    pub dry_run: bool,
+    /// What happened.
+    pub outcome: WriteOutcome,
     /// True when [`CodingDef::requires_security`] — a reminder the caller must
     /// have unlocked SecurityAccess (0x27) first.
     pub security_required: bool,
 }
 
-/// Write `desired` coding to the module, safely: read a fresh backup, write only
-/// the blocks that changed, then read back to verify. On `dry_run`, returns the
-/// plan without writing. The backup in the report enables one-click restore.
+impl WriteReport {
+    /// True only when every changed block was written and verified.
+    pub fn is_verified(&self) -> bool {
+        self.outcome == WriteOutcome::Verified
+    }
+}
+
+/// Confirm a coding's blocks match the definition's DIDs (count + order), and
+/// optionally that each block is the same length as a reference coding's.
+fn check_layout(def: &CodingDef, c: &Coding, what: &str, reference: Option<&Coding>) -> Result<()> {
+    let dids = def.addressing.dids();
+    if c.blocks.len() != dids.len() {
+        return Err(CodingError::ShapeMismatch(format!(
+            "{what} has {} block(s), definition declares {}",
+            c.blocks.len(),
+            dids.len()
+        )));
+    }
+    for (i, (&did, b)) in dids.iter().zip(c.blocks.iter()).enumerate() {
+        if b.did != did {
+            return Err(CodingError::ShapeMismatch(format!(
+                "{what} block {i} is DID 0x{:04X}, definition says 0x{did:04X}",
+                b.did
+            )));
+        }
+        if let Some(r) = reference {
+            if r.blocks[i].bytes.len() != b.bytes.len() {
+                return Err(CodingError::ShapeMismatch(format!(
+                    "{what} block 0x{did:04X} is {} byte(s), expected {}",
+                    b.bytes.len(),
+                    r.blocks[i].bytes.len()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Write the edits in `desired` (relative to `baseline`) to the module, safely.
+///
+/// `baseline` is the coding the edit was made against; `desired` is the edited
+/// copy. The module is read **fresh** first (the `backup`), and only the bytes
+/// the user actually changed (`desired` vs `baseline`) are merged onto that fresh
+/// read — so a value that drifted elsewhere since the edit is never clobbered. If
+/// the live value drifted at a byte the edit *overwrites*, that is a
+/// [`CodingError::StaleBaseline`] conflict unless [`WriteOptions::force_overwrite`].
+/// Changed blocks are written (0x2E) then read back to verify.
+///
+/// Returns `Err` only when **nothing was written** (invalid definition, shape
+/// mismatch, stale-baseline conflict, or the initial read failed). Once writing
+/// starts, the result is `Ok(report)` whose [`WriteReport::outcome`] records
+/// success, a verify failure or a partial write — always with the `backup`.
 ///
 /// This does **not** perform SecurityAccess; when `def.requires_security` the
 /// caller must already have unlocked the module (the report flags it).
 pub fn write_coding(
     diag: &mut dyn RawDiag,
     def: &CodingDef,
+    baseline: &Coding,
     desired: &Coding,
     opts: &WriteOptions,
 ) -> Result<WriteReport> {
-    let backup = read_coding(diag, def)?;
-    let byte_changes = diff_bytes(&backup, desired);
-    let param_changes = diff_params(def, &backup, desired)?;
+    def.validate()?;
+    check_layout(def, baseline, "baseline", None)?;
+    check_layout(def, desired, "desired", Some(baseline))?;
 
+    // Read the module fresh; this is the backup and the merge base.
+    let live = read_coding(diag, def)?;
+    check_layout(def, &live, "live read", Some(baseline))?;
+
+    // Merge the intended edits (desired vs baseline) onto the fresh live read,
+    // rejecting drift at any byte the edit would overwrite.
+    let dids = def.addressing.dids().to_vec();
+    let mut target = live.clone();
+    for bi in 0..dids.len() {
+        let base = &baseline.blocks[bi].bytes;
+        let des = &desired.blocks[bi].bytes;
+        let liveb = &live.blocks[bi].bytes;
+        for byte in 0..base.len() {
+            if des[byte] != base[byte] {
+                if !opts.force_overwrite && liveb[byte] != base[byte] {
+                    return Err(CodingError::StaleBaseline { did: dids[bi], byte });
+                }
+                target.blocks[bi].bytes[byte] = des[byte];
+            }
+        }
+    }
+
+    let byte_changes = diff_bytes(&live, &target);
+    let param_changes = diff_params(def, &live, &target)?;
     let changed_blocks: Vec<usize> = {
         let mut v: Vec<usize> = byte_changes.iter().map(|c| c.block).collect();
         v.sort_unstable();
@@ -603,42 +802,53 @@ pub fn write_coding(
     };
 
     let mut report = WriteReport {
-        backup: backup.clone(),
+        backup: live.clone(),
+        target: target.clone(),
         byte_changes,
         param_changes,
         written: Vec::new(),
-        verified: false,
-        dry_run: opts.dry_run,
+        outcome: WriteOutcome::NoChange,
         security_required: def.requires_security,
     };
-    if opts.dry_run || report.byte_changes.is_empty() {
-        report.verified = report.byte_changes.is_empty();
+
+    if opts.dry_run {
+        report.outcome = WriteOutcome::Planned;
         return Ok(report);
     }
+    if changed_blocks.is_empty() {
+        return Ok(report); // NoChange
+    }
 
+    // Write each changed block. A failure retains the backup and the DIDs acked
+    // so far, and marks the failing DID uncertain (do not blindly retry).
     for &bi in &changed_blocks {
-        let block = &desired.blocks[bi];
-        write_did(diag, block.did, &block.bytes)?;
-        report.written.push(block.did);
+        let block = &target.blocks[bi];
+        match write_did(diag, block.did, &block.bytes) {
+            Ok(()) => report.written.push(block.did),
+            Err(e) => {
+                report.outcome = WriteOutcome::WriteError {
+                    uncertain_did: block.did,
+                    message: e.to_string(),
+                };
+                return Ok(report);
+            }
+        }
     }
 
     if opts.skip_verify {
-        report.verified = false;
+        report.outcome = WriteOutcome::Unverified;
         return Ok(report);
     }
-    // Read back every written block and confirm it matches.
     let after = read_coding(diag, def)?;
     for &bi in &changed_blocks {
-        let want = &desired.blocks[bi];
-        let got = after
-            .blocks
-            .get(bi)
-            .ok_or(CodingError::MissingBlock(bi))?;
+        let want = &target.blocks[bi];
+        let got = after.blocks.get(bi).ok_or(CodingError::MissingBlock(bi))?;
         if got.bytes != want.bytes {
-            return Err(CodingError::VerifyMismatch { did: want.did });
+            report.outcome = WriteOutcome::VerifyFailed { did: want.did };
+            return Ok(report);
         }
     }
-    report.verified = true;
+    report.outcome = WriteOutcome::Verified;
     Ok(report)
 }
 
@@ -787,8 +997,8 @@ mod tests {
         ]);
         let current = read_coding(&mut io, &def).unwrap();
         let desired = set(&def, &current, "Country", 7).unwrap();
-        let rep = write_coding(&mut io, &def, &desired, &WriteOptions::default()).unwrap();
-        assert!(rep.verified && rep.security_required);
+        let rep = write_coding(&mut io, &def, &current, &desired, &WriteOptions::default()).unwrap();
+        assert!(rep.is_verified() && rep.security_required);
         assert_eq!(rep.written, vec![0x0402]); // only the changed block
         assert_eq!(rep.param_changes.len(), 1);
         assert_eq!(get(&def, &read_coding(&mut io, &def).unwrap(), "Country").unwrap(), 7);
@@ -803,19 +1013,151 @@ mod tests {
         ]);
         let current = read_coding(&mut io, &def).unwrap();
         let desired = set(&def, &current, "Start-Stop", 0).unwrap();
-        let rep = write_coding(&mut io, &def, &desired, &WriteOptions { dry_run: true, skip_verify: false }).unwrap();
-        assert!(rep.dry_run && rep.written.is_empty() && !rep.param_changes.is_empty());
-        // the ECU still reads the original value
+        let rep = write_coding(&mut io, &def, &current, &desired, &WriteOptions { dry_run: true, ..Default::default() }).unwrap();
+        assert_eq!(rep.outcome, WriteOutcome::Planned);
+        assert!(rep.written.is_empty() && !rep.param_changes.is_empty());
         assert_eq!(get(&def, &read_coding(&mut io, &def).unwrap(), "Start-Stop").unwrap(), 1);
+    }
+
+    #[test]
+    fn stale_baseline_conflict_detected() {
+        // Edit vs baseline Country=42; the live byte drifted to 99 -> conflict,
+        // nothing written. force_overwrite proceeds.
+        let def = sample_def();
+        let baseline = sample_coding();
+        let desired = set(&def, &baseline, "Country", 7).unwrap();
+        let mut io = Script::new(&[
+            (0x0401, vec![0b0000_0101, 0x00]),
+            (0x0402, vec![0x00, 0x00, 99]), // live drifted on the Country byte
+        ]);
+        assert!(matches!(
+            write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()),
+            Err(CodingError::StaleBaseline { did: 0x0402, byte: 2 })
+        ));
+        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions { force_overwrite: true, ..Default::default() }).unwrap();
+        assert!(rep.is_verified());
+    }
+
+    #[test]
+    fn merge_preserves_unrelated_live_drift() {
+        // User changed only Country; Start-Stop drifted live. The merge must keep
+        // the live Start-Stop and only write the Country edit (never clobber to 1).
+        let def = sample_def();
+        let baseline = sample_coding(); // SS=1
+        let desired = set(&def, &baseline, "Country", 7).unwrap();
+        let mut io = Script::new(&[
+            (0x0401, vec![0b0000_0100, 0x00]), // live SS=0 (drifted)
+            (0x0402, vec![0x00, 0x00, 0x2A]),
+        ]);
+        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        assert!(rep.is_verified());
+        let after = read_coding(&mut io, &def).unwrap();
+        assert_eq!(get(&def, &after, "Country").unwrap(), 7); // edit applied
+        assert_eq!(get(&def, &after, "Start-Stop").unwrap(), 0); // live drift preserved
+    }
+
+    #[test]
+    fn write_rejects_shape_and_bad_did() {
+        let def = sample_def();
+        let baseline = sample_coding();
+        let mut io = Script::new(&[
+            (0x0401, vec![0b0000_0101, 0x00]),
+            (0x0402, vec![0x00, 0x00, 0x2A]),
+        ]);
+        let mut bad = baseline.clone();
+        bad.blocks[1].did = 0x9999; // DID not in the definition
+        assert!(matches!(
+            write_coding(&mut io, &def, &baseline, &bad, &WriteOptions::default()),
+            Err(CodingError::ShapeMismatch(_))
+        ));
+        let mut bad2 = baseline.clone();
+        bad2.blocks[1].bytes.push(0); // wrong block length
+        assert!(matches!(
+            write_coding(&mut io, &def, &baseline, &bad2, &WriteOptions::default()),
+            Err(CodingError::ShapeMismatch(_))
+        ));
+    }
+
+    #[test]
+    fn partial_write_failure_retains_backup() {
+        let def = sample_def();
+        let baseline = sample_coding();
+        let desired = set(&def, &baseline, "Country", 7).unwrap();
+        let mut io = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            match req[0] {
+                0x22 => {
+                    let did = ((req[1] as u16) << 8) | req[2] as u16;
+                    let data: &[u8] = if did == 0x0401 { &[0b0000_0101, 0x00] } else { &[0x00, 0x00, 0x2A] };
+                    let mut r = vec![0x62, req[1], req[2]];
+                    r.extend_from_slice(data);
+                    Ok(r)
+                }
+                0x2E => Ok(vec![0x7F, 0x2E, 0x22]), // conditionsNotCorrect
+                _ => Err("?".into()),
+            }
+        };
+        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        assert!(matches!(rep.outcome, WriteOutcome::WriteError { uncertain_did: 0x0402, .. }));
+        assert!(rep.written.is_empty());
+        assert_eq!(rep.backup.blocks[1].bytes, vec![0x00, 0x00, 0x2A]); // backup kept
+    }
+
+    #[test]
+    fn write_did_requires_full_echo() {
+        let def = sample_def();
+        let baseline = sample_coding();
+        let desired = set(&def, &baseline, "Country", 7).unwrap();
+        let mut io = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            match req[0] {
+                0x22 => {
+                    let did = ((req[1] as u16) << 8) | req[2] as u16;
+                    let data: &[u8] = if did == 0x0401 { &[0b0000_0101, 0x00] } else { &[0x00, 0x00, 0x2A] };
+                    let mut r = vec![0x62, req[1], req[2]];
+                    r.extend_from_slice(data);
+                    Ok(r)
+                }
+                0x2E => Ok(vec![0x6E]), // bare ack, no DID echo -> rejected
+                _ => Err("?".into()),
+            }
+        };
+        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        assert!(matches!(rep.outcome, WriteOutcome::WriteError { .. }));
+    }
+
+    #[test]
+    fn def_validate_catches_bad_defs() {
+        assert!(sample_def().validate().is_ok());
+        let mut d = sample_def();
+        d.addressing = Addressing::Did { dids: vec![0x0401, 0x0401] };
+        assert!(matches!(d.validate(), Err(CodingError::InvalidDef(_)))); // dup DID
+        let mut d2 = sample_def();
+        d2.params[0].bit = 8;
+        assert!(matches!(d2.validate(), Err(CodingError::InvalidDef(_)))); // bit >= 8
+        let mut d3 = sample_def();
+        d3.params[0].len = 0;
+        assert!(matches!(d3.validate(), Err(CodingError::InvalidDef(_)))); // len 0
+        let mut d4 = sample_def();
+        d4.params[1].len = 1; // "DRL mode" has option value 2, won't fit in 1 bit
+        assert!(matches!(d4.validate(), Err(CodingError::InvalidDef(_))));
+        let mut d5 = sample_def();
+        d5.params[2].block = 5;
+        assert!(matches!(d5.validate(), Err(CodingError::InvalidDef(_)))); // block out of range
     }
 
     #[test]
     fn negative_response_surfaces() {
         let def = sample_def();
         let mut io = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
-            // 0x22 → security denied
-            Ok(vec![0x7F, req[0], 0x33])
+            Ok(vec![0x7F, req[0], 0x33]) // security denied, echoes requested SID
         };
+        assert!(matches!(read_coding(&mut io, &def), Err(CodingError::Protocol(_))));
+    }
+
+    #[test]
+    fn mis_correlated_negative_response_rejected() {
+        let def = sample_def();
+        // 0x22 request but the 0x7F echoes service 0x2E -> rejected as mis-correlated
+        let mut io = |_req: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x7F, 0x2E, 0x33]) };
         assert!(matches!(read_coding(&mut io, &def), Err(CodingError::Protocol(_))));
     }
 
