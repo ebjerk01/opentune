@@ -135,5 +135,7 @@
     panel.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x === b));
     list();
   }));
-  list();
+  // Load the list when the panel is first opened, not at app startup.
+  if (window.onPanelFirstShow) window.onPanelFirstShow("database", list);
+  else list();
 })();

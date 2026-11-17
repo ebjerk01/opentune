@@ -341,12 +341,15 @@
     window.OT.onCaps(() => { if (!window.OT.has(["can"])) stop(); });
   }
 
-  (async function init() {
+  async function init() {
     try { table = await invoke("obd_pid_table"); } catch (e) { table = []; }
     table = table.concat([BOOST]);
     byKey = {};
     table.forEach((t) => { byKey[t.key] = t; });
     drawGauges();
     drawTiles();
-  })();
+  }
+  // Build the gauges when the panel is first opened, not at app startup.
+  if (window.onPanelFirstShow) window.onPanelFirstShow("dashboard", init);
+  else init();
 })();

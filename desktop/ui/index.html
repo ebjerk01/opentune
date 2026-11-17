@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenTune</title>
+    <script>
+      // Startup trace (OPENTUNE_TRACE_STARTUP=1): when the document started parsing.
+      try { window.__TAURI__.core.invoke("startup_mark", { label: "html parsing (page +" + Math.round(performance.now()) + " ms)" }).catch(function () {}); } catch (e) {}
+    </script>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
@@ -23,7 +27,7 @@
                registering through window.OTNav (nav.js). Empty groups hide. -->
           <div class="nav-group" data-group="calibration">
             <div class="nav-group-label">Calibration</div>
-            <button class="nav-item" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
+            <button class="nav-item active" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
             <button class="nav-item" data-panel="analyze" data-tier="public"><span class="ni-ico">🔎</span> Analyze bin</button>
             <button class="nav-item" data-panel="identify" data-tier="public"><span class="ni-ico">⌖</span> Identify</button>
             <button class="nav-item" data-panel="checksum" data-tier="public"><span class="ni-ico">✓</span> Checksum</button>
@@ -69,7 +73,8 @@
       <!-- Main -->
       <main id="main">
         <!-- IMAGE -->
-        <section class="panel" id="panel-image">
+        <!-- Active from the first paint, before any script has run. -->
+        <section class="panel active" id="panel-image">
           <header class="panel-head">
             <h1>Image</h1>
             <p>Open a flash dump and inspect it. Everything downstream works on this file, offline.</p>

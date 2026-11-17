@@ -39,9 +39,10 @@ fn get_impl(db: &Database, id: &str) -> Result<Value, String> {
 }
 
 /// List control units, optionally filtered by kind (`ecu`/`tcu`/`awd`) and a
-/// free-text query.
+/// free-text query. Async, like [`db_get`]: the directory is read per call and
+/// must not hold the UI thread.
 #[tauri::command]
-pub fn db_list(
+pub async fn db_list(
     kind: Option<String>,
     q: Option<String>,
     state: tauri::State<'_, crate::AppData>,
@@ -52,7 +53,7 @@ pub fn db_list(
 
 /// One control unit, exactly as stored in `database/units/<id>.json`.
 #[tauri::command]
-pub fn db_get(id: String, state: tauri::State<'_, crate::AppData>) -> Result<Value, String> {
+pub async fn db_get(id: String, state: tauri::State<'_, crate::AppData>) -> Result<Value, String> {
     let db = load(&state.database)?;
     get_impl(&db, &id)
 }
