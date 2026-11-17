@@ -33,7 +33,7 @@ Everything here operates on a flash `.bin`.
 
 ### Core, CLI & project
 - [x] Rust workspace; `opentune-core` (Interface driver trait, protocol layer, ECU identity, flash orchestrator, safety rules); driver registry; `mock`/file driver
-- [x] **`opentune` CLI** — `drivers · identify · info · read · dump · diff · findmaps · compare · checksum verify|fix|algos · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · a2l2xdf · import-ecuflash · import-ols · packs · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`; `checksum attest` derives the flash-policy attestation from a real verification (`opentune-attest`), never from a caller claim
+- [x] **`opentune` CLI** — `drivers · identify · info · read · dump · diff · findmaps · compare · checksum verify|fix|algos · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · a2l2xdf · import-ecuflash · import-ols · packs · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate · obd · candump · db · recipe`; `checksum attest` derives the flash-policy attestation from a real verification (`opentune-attest`), never from a caller claim
 - [x] **`opentune-image`** — addressed sparse-image model + Intel HEX / Motorola SREC read/write (checksums validated, holes and fill reported, never silently invented)
 - [x] GPL-3.0, README, CI (fmt + clippy + test + build), core unit tests
 
@@ -45,11 +45,15 @@ Everything here operates on a flash `.bin`.
 ### Maps & calibration
 - [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
 - [x] **Map-aware compare** (map-by-map, physical units) · byte/region diff · auto map-finder (`findmaps`)
+- [x] **Single-file map finder** (`opentune-mapfind`, `findmaps <image>`) — counted-table headers + axis pairs, scored candidates with evidence, hints worded as unverified; on the EDC16U34 stock read all defined maps are found, 91.5 % of tune-changed regions across 47 pairs are covered by a candidate. Approach credited to openremap-core (MIT), re-implemented.
+- [x] **Portable tune recipes** (`opentune-recipe`, CLI `recipe create|apply|show`, format in `docs/RECIPES.md`) — anchored patches + source identity; `apply` refuses unless identity and every anchor match (explicit `--relocate` refuses ambiguous matches), then checksum-fixes and attests. Byte-identical on 24 of 45 real pairs; the rest are refused (never guessed).
+- [x] **Log viewer + map overlay** (`opentune-logview`, desktop panel) — Live-log and generic CSV, zoom/pan plot with min/max decimation, cursor readout, per-window stats; overlay a log on a map as hits / time-in-cell / value heat grid, refusing unit mismatches unless accepted.
 - [x] **TunerPro XDF and ASAM A2L import + export** — both round-trip validated; A2L validated at scale on real EDC15 / Siemens-PPD / BMW-MSV80 (thousands of maps), with STD_AXIS address computation and cuboid slicing
 
 ### Identification
 - [x] `opentune identify` + ECU-def `identify` keys + a **1034-entry catalog** (998 opendbc + 36 hand-curated European entries: VAG/Mercedes/BMW/Ford/PSA/Opel/Fiat/Volvo/Renault, with VAG part-number match keys)
 - [x] **VIN / VAG+Bosch part-number decoder** (`opentune-vin`)
+- [x] **Signature-based recognition** (`opentune-scan` `recognize/`) — Bosch (ME7/ME9/MED9/EDC15/16/17, MED17/ME17/MD1/MG1, M7, MP, M1–M5 …), Siemens/Continental (SIMOS, SID, PPD, PCR2.1, MS4x, SIMTEC), Delphi, Magneti Marelli, Denso; each with a high/medium/low tier and byte evidence. Sample library: files with a known family 84 → 260 of 835, fixtures 133/133, 0 contested. Containers (DCM/DAMOS text, WinOLS projects, zip) are classified, never searched.
 - [ ] 🔒 read the real identity DIDs live from an ECU
 
 ### Safety, flash orchestration & diagnostics
@@ -71,11 +75,11 @@ Everything here operates on a flash `.bin`.
 
 | Family | Example engines | Checksum | Identify | Real maps | Bus |
 |---|---|---|---|---|---|
-| **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD, BMW/KIA | ✅ solved | ✅ keys | ✅ EDC16U34 | OBD/CAN |
+| **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD, BMW/KIA | ✅ solved | ✅ keys | ✅ EDC16U34 (18 maps) | OBD/CAN |
 | **EDC17** (TriCore) | later CR diesels incl. VAG | ✅ solved (+`--reference`) | def | — | OBD (bench/boot for full read) |
-| **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | — | OBD (bench/boot) |
+| **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | 🔄 47 raw tables (diff-confirmed, no axes) | OBD (bench/boot) |
 | **EDC15** (VAG TDI) | VAG 1.9 TDI | ✅ solved (clean-room) | — | — | K-line/OBD |
-| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ✅ solved (clean-room) | def | — | K-line |
+| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ✅ solved (clean-room) | def | 🔄 10 maps | K-line |
 | **ME7** (Motronic) | VAG/Porsche petrol | ✅ real-image | def | — | OBD/CAN |
 | **DQ381 TCU** (Bosch) | VAG 7-sp wet DSG | ✅ CAL, real-image | def | — | OBD/CAN |
 | **DQ250 TCU** (MQB) | VAG 6-sp DSG | 🔄 JAMCRC, synthetic-only | — | — | OBD/CAN |
@@ -199,7 +203,10 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Service & diagnostics
 - [~] *(`opentune-servicefn` engine + CLI `service` (plan/dry-run) + desktop panel, udssim-tested; script library + live 🔒)* **Service functions** — declarative, safe UDS scripts (session → security → routine → verify): EPB, DPF regen, oil/service reset, SAS calibration, throttle align, injector coding, battery registration, brake bleed. Script library grows as data.
-- [~] *(`opentune-autoscan` + CLI `autoscan` + desktop panel: data-defined module list, ping → identity → DTCs, read-only; freeze-frame/readiness + live 🔒 open)* **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
+- [~] *(`opentune-autoscan` + CLI `autoscan` + desktop panel: data-defined module list, ping → identity → DTCs, read-only; live 🔒 open)* **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
+
+- [~] **OBD inspection** (`opentune_core::obd::inspect`, CLI `obd readiness|freeze|info|dtcs`, desktop Inspection panel) — MIL + readiness monitors, freeze frame, mode 09 VIN/CALID/CVN/ECU name, stored/pending/permanent DTCs, per-module or all 7E0–7E7; `obdsim` answers all of it. Live 🔒.
+- [x] **Virtual car** (`opentune-driver-vcar`, `packs/vcar-demo`, `docs/VIRTUAL-CAR.md`) — six simulated modules on a virtual CAN bus (engine, gearbox, ABS, airbag, body, cluster) with identity, DTCs, coding, adaptation, routines, IO control, OBD and synthetic CAN traffic; every vehicle panel works offline end to end.
 
 ### Live data & logging
 - [~] **Dashboard** (`opentune_core::obd` + desktop panel + CLI `obd pids|supported|read`) — SAE J1979 mode-01 table (~40 PIDs incl. IAT, MAP + derived boost, MAF, rail pressure, EGT bank 1/2, DPF, torque), supported-PID discovery, up to 6 PIDs per request with single-PID fallback, gauges + tiles with warn/crit thresholds; `obdsim` simulated ECU. Live 🔒.
@@ -217,10 +224,12 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 - [x] **In-app help** — a guide page per panel plus a help strip on every panel (risk, what you need, three steps, open full guide). Guide renderer handles wrapped lists and links.
 - [x] **ECU database** (`database/units`, `opentune-db`, CLI `db`, desktop panel) — 17 ECU/TCU/AWD units with read methods, checksum family, vehicles and sourced bench pinouts; a validator enforces per-pin sources and confidence (disputed pins are never part of bench wiring).
 - [x] **Safer file writes** — checksum fix saves to a new file by default (overwrite archives the original first), flash archives the target to the vault, map write-back reports which checksum it used.
-- [~] *(desktop: adapter capability bar + capability-gated coding/adaptation/autoscan/service/logging/OBD panels in the default build; only the Debug console is behind the `alpha` feature)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
+- [x] **Fast startup** — nothing heavy before the first paint: definitions/catalog parsed once on a background thread and cached, startup commands async, panels load on first show, WebKitGTK DMA-BUF renderer off by default on Linux; `OPENTUNE_TRACE_STARTUP=1` prints a timing breakdown (`docs/TROUBLESHOOTING-STARTUP.md`). ~1.1 s to first frame on a desktop test machine.
+- [x] **Process gates** — `scripts/check.sh` (all CI gates incl. desktop + UI JS), tracked pre-commit hook, CI jobs for the desktop crate and UI, doc-drift tests (CLI commands, drivers, checksum ids, crates must be documented); `docs/DEVELOPMENT.md`.
+- [~] *(desktop: adapter capability bar + capability-gated car-facing panels — coding/adaptation/autoscan/service/logging/OBD/dashboard/inspection/CAN capture — in the Bench tier until vehicle-tested; Debug console alpha-only)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
-- [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs, CLI `packs`). Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
+- [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs, CLI `packs`). Shipped starter packs: `generic-obd2` (J1979 module lists, 34-PID logger, readiness/DTC/VIN scripts, mode-04 clear as the only write), `iso14229-identification`, `vag-modules` (7 UDS modules, each sourced from MIT/BSD projects), `vcar-demo`. Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
 - [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. `<include>` / `<rom base>` base-def merging in the library (`parse_ecuflash_with_bases`; the CLI does not resolve bases yet). 26 tests + fixture-gated real-def test. **Next:** base resolution in the CLI, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
 - [ ] **Subaru / Mitsubishi seed-key** tables as an optional, user-enabled plugin (published tables), same stance as the Ford/Daimler entries above.
 

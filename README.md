@@ -19,9 +19,9 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 ### Working today (offline — on a `.bin` or definition file, fully tested)
 
 - **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **1034-entry catalog** (comma.ai opendbc + hand-curated European entries across VAG / Mercedes / BMW / Ford / PSA / Opel / Fiat / Volvo / Renault).
-- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore), Continental Simos PCR2.1, VAG EDC15, Bosch ME7, and the VAG DQ381 DSG (TCU)** solved and validated against real full dumps; **DQ250, ZF 8HP and Haldex Gen5** are implemented but validated against algorithm vectors + synthetic images only (no real dump yet). `fix` corrects an uncorrected tune; `fix --reference` bootstraps a firmware-specific constant from your own stock dump; it **refuses to guess** on anything unvalidated (anti-brick), and reports *recognised* vs merely *mathematically consistent* results honestly.
+- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore), Continental Simos PCR2.1, VAG EDC15, Mercedes EDC15C6 (CR1, clean-room), Bosch ME7, and the VAG DQ381 DSG (TCU)** solved and validated against real full dumps; **DQ250, ZF 8HP and Haldex Gen5** are implemented but validated against algorithm vectors + synthetic images only (no real dump yet). `fix` corrects an uncorrected tune; `fix --reference` bootstraps a firmware-specific constant from your own stock dump; it **refuses to guess** on anything unvalidated (anti-brick), and reports *recognised* vs merely *mathematically consistent* results honestly.
 - **Flash containers** — decode **FRF / ODX / ODX-F / SGO** (VAG) and **VBF** (Ford / Volvo / Mazda), with per-block and file checksums verified. Caller supplies any keys; none are bundled.
-- **Calibration maps** — map-by-map **compare** in physical units, auto **map-finder** from a stock/tuned diff, and import/export of the big community definition libraries: **TunerPro XDF**, **ASAM A2L**, and **EcuFlash / RomRaider XML** (Subaru/Mitsubishi), plus **WinOLS `.ols`** project import and a direct **A2L → XDF** converter — with lossy conversions flagged, never guessed.
+- **Calibration maps** — map-by-map **compare** in physical units, a **map-finder** for a single image (scored candidates with evidence) or a stock/tuned diff, portable **tune recipes** that only apply to a matching image (checksum-fixed and attested), a **log viewer** with map overlay, and import/export of the big community definition libraries: **TunerPro XDF**, **ASAM A2L**, and **EcuFlash / RomRaider XML** (Subaru/Mitsubishi), plus **WinOLS `.ols`** project import and a direct **A2L → XDF** converter — with lossy conversions flagged, never guessed.
 - **Module coding** — a data-driven coding engine: read a module's configuration, decode it to human-readable parameters via coding-label definitions, edit a parameter (range/option validated), preview the before→after diff, and write it back safely (read-fresh → merge → read-back verify, with dry-run).
 - **Diagnostics data** — an **11,140-code DTC database + decoder**, VIN and VAG/Bosch part-number decoders, and an ECU-library scanner.
 - A **CLI** (`opentune`) exposing all of the above: `drivers · identify · info · read · dump · diff · findmaps · compare · checksum verify|fix|algos|attest · flash · vault · ecudefs · packs · import-xdf|a2l|ecuflash|ols · a2l2xdf · export-xdf|a2l · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`.
@@ -33,7 +33,7 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 - **Interface drivers** — OpenPort 2.0 (J2534/CDC-ACM), generic J2534 PassThru, SocketCAN, slcan, gs_usb/candleLight, ELM327 (serial OBD, K-line, and WiFi/Bluetooth), KKL 409.1 (raw K-line), an Arduino K-line bridge and an ESP32-S3 open interface (both with OpenTune firmware).
 - **Protocol layer** — ISO-TP (hardened), UDS, KWP2000, VW TP2.0, CAN-FD (+ ISO-TP-FD) and **DoIP** (ISO 13400), with security access (`0x27`) wired into every write path — *you supply the seed/key algorithm; OpenTune ships none*.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, resumable/recoverable, with a backup vault and a full session transcript.
-- **Apps** — a Tauri **desktop** app (identify, checksums, map viewer/editor, compare, flash, vault, plus an adapter bar and capability-gated live panels for coding, auto-scan + DTCs, adaptation, service functions, logging and an OBD dashboard; an `alpha` build adds a Debug console) and an **Android** app over the same core (UniFFI).
+- **Apps** — a Tauri **desktop** app (identify, checksums, map viewer/editor, compare, flash, vault, log viewer, ECU database, in-app help, plus an adapter bar and capability-gated live panels for coding, auto-scan + DTCs, adaptation, service functions, logging, an OBD dashboard, OBD inspection and CAN capture — the live panels sit in the Bench section of alpha builds until they are vehicle-tested; plugins can add panels) — try every live panel offline against the built-in **virtual car** (`vcar` driver) and an **Android** app over the same core (UniFFI).
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Because a feature is a service over the protocol layer, it works on any interfac
 Most pillars are now built and tested offline; what remains is mainly proving them on a vehicle. See **[ROADMAP.md](ROADMAP.md)** for the full plan.
 
 - **On-car validation** — run the live diagnostic, coding, adaptation, service-function, auto-scan and logging paths on real vehicles.
-- **Full-vehicle diagnostics** — add freeze-frame and readiness to the auto-scan.
+- **Full-vehicle diagnostics** — validate OBD inspection (readiness, freeze frame, CALID/CVN) on real cars.
 - **Datalogging** — Subaru SSM transport, plus dashboards and triggers.
 - **Module & ECU flashing** — finish the UDS flash path (`0x34`/`0x36`/`0x37` + security + erase/checksum) end-to-end, container-driven, behind the flash-safety policy.
 - **Broader coverage** — real dumps to validate the DQ250 / ZF 8HP / Haldex checksums, and a growing community definition & map library.
@@ -126,14 +126,16 @@ Early alpha, moving fast. The full plan lives in **[ROADMAP.md](ROADMAP.md)**; t
 short version:
 
 **Landed**
-- ✅ Checksum correction — EDC15/16/17, Simos PCR2.1, ME7, DQ381 TCU; DQ250, ZF-8HP and Haldex *(synthetic-validated only)*
+- ✅ Checksum correction — EDC15/16/17, Mercedes EDC15C6, Simos PCR2.1, ME7, DQ381 TCU; DQ250, ZF-8HP and Haldex *(synthetic-validated only)*
 - ✅ Flash containers — FRF / ODX / SGO / VBF, plus a sparse HEX / SREC image model
 - ✅ Definition import — TunerPro XDF, ASAM A2L, EcuFlash / RomRaider XML, WinOLS `.ols`
 - ✅ Loadable **definition packs** — grow coverage by data, not code
 - ✅ Module **coding** — bit-field decode/edit with safe, baseline-aware writes
 - ✅ **Adaptation** channels and actuator / output tests
 - ✅ Declarative **service functions** — DPF regen, service reset, SAS calibration, …
-- ✅ Full-vehicle **auto-scan** — every module, DTCs, identities *(freeze-frame and readiness still pending)*
+- ✅ Full-vehicle **auto-scan** — every module, DTCs, identities
+- ✅ **OBD inspection** — readiness monitors, freeze frame, VIN/CALID/CVN, stored/pending/permanent DTCs
+- ✅ **Virtual car** — a simulated six-module vehicle so every live panel works offline
 - ✅ **Datalogging** — logger.xml definitions + a live polling loop to CSV over UDS DIDs, OBD-II PIDs and `0x23` memory reads *(Subaru SSM still pending)*
 - ✅ Protocol stack — ISO-TP, UDS, KWP2000, VW TP2.0, OBD-II, CAN-FD, DoIP
 - ✅ Diagnostics driver — ELM327 / OBD, with a UDS conformance simulator for offline tests
@@ -143,7 +145,6 @@ short version:
 **Next**
 - 🔲 Extend live **datalogging** to the Subaru SSM transport, plus dashboards and triggers
 - 🔲 On-car validation of the live diagnostic, adaptation and logging paths
-- 🔲 Freeze-frame and readiness in the auto-scan
 - 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
 - 🔲 Desktop & Android UX — guided wizards over the engines
 - 🔲 A growing community definition & pack library, and broader drivetrain/AWD coverage
