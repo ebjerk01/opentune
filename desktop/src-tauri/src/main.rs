@@ -26,8 +26,9 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 // Live-diagnostics feature panels (each self-contained; they reuse the shared
-// adapter opener `debug_open_diag` and the public engine crates). The guided
+// adapter hub `adapter::AdapterHub` and the public engine crates). The guided
 // Auto-debug wizard is UI-only (it orchestrates these commands from the browser).
+mod adapter;
 mod feat_adaptation;
 mod feat_coding;
 mod feat_logging;
@@ -207,80 +208,76 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// Open a driver that exposes a diagnostic transport, applying an optional serial
-/// port/baud (for e.g. `elm327obd`) and CAN bus select (`hs`/`ms`). For a switched
-/// ELM327 the `bus` sets the CAN speed, which must match the dongle's physical
-/// HS/MS-CAN switch. Shared by the probe, the Debug tab, and every feature panel.
-pub(crate) fn debug_open_diag(
-    driver: &str,
-    port: Option<&str>,
-    baud: Option<&str>,
-    bus: Option<&str>,
-) -> Result<Box<dyn Interface>, String> {
+/// Open a registry driver bound to `key`: its serial port/baud, CAN bus select
+/// (`hs`/`ms` — for a switched ELM327 this must match the dongle's physical
+/// HS/MS-CAN switch) and the target module's CAN request/response ids. Only the
+/// adapter worker ([`adapter::AdapterHub`]) calls this; panels go through the hub.
+pub(crate) fn open_registry_driver(key: &adapter::ConnKey) -> Result<Box<dyn Interface>, String> {
     let reg = registry();
+    let driver = &key.driver;
     let mut drv = reg
         .make(driver)
         .ok_or_else(|| format!("unknown driver '{driver}'"))?;
-    let mut cfg = ConnectConfig::default();
-    if let Some(p) = port {
-        if !p.trim().is_empty() {
-            cfg.options.insert("port".into(), p.to_string());
-        }
-    }
-    if let Some(b) = baud {
-        if !b.trim().is_empty() {
-            cfg.options.insert("baud".into(), b.to_string());
-        }
-    }
-    if let Some(bus) = bus {
-        if !bus.trim().is_empty() {
-            cfg.options.insert("bus".into(), bus.to_string());
-        }
-    }
+    let cfg = key.config()?;
     drv.open(&cfg).map_err(|e| format!("open {driver}: {e}"))?;
     Ok(drv)
 }
 
 /// Send one raw UDS/OBD request to a live (or mock) adapter and return the hex
-/// response. The exchange is appended to the session log. Async so the blocking
-/// serial I/O never runs on the UI thread (a sync command would freeze the app).
+/// response. The exchange is appended to the session log. `tx_id`/`rx_id`
+/// select the target module (hex; default: the engine ECU 7E0/7E8). Async so
+/// the blocking serial I/O never runs on the UI thread.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn debug_raw_request(
     driver: String,
     port: Option<String>,
     baud: Option<String>,
     bus: Option<String>,
+    tx_id: Option<String>,
+    rx_id: Option<String>,
     request: String,
     timeout_ms: u64,
     log: tauri::State<'_, DebugLog>,
+    hub: tauri::State<'_, adapter::AdapterHub>,
 ) -> Result<String, String> {
     alpha_only()?;
     let req = parse_hex(&request)?;
-    let mut drv = debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
-    let transport = drv
-        .diag()
-        .ok_or_else(|| format!("driver '{driver}' has no diagnostic transport"))?;
+    let (addr, _) = adapter::read_addr(adapter::resolve(tx_id.as_deref(), rx_id.as_deref(), None)?);
+    let key = adapter::ConnKey::new(
+        &driver,
+        port.as_deref(),
+        baud.as_deref(),
+        bus.as_deref(),
+        addr,
+    );
+    let req2 = req.clone();
     let t0 = std::time::Instant::now();
-    match transport.request(&req, timeout_ms) {
+    let res = hub.run("raw request", move |s| {
+        s.with_diag(&key, timeout_ms, |d| {
+            opentune_core::RawDiag::request(d, &req2)
+        })
+    });
+    let to = format!("{:03X}", addr.tx_id);
+    match res {
         Ok(resp) => {
             let ms = t0.elapsed().as_millis();
             let hex = hexs(&resp);
-            log.push(format!("-> {}  <- {hex}  ({ms} ms)", hexs(&req)));
+            log.push(format!("[{to}] -> {}  <- {hex}  ({ms} ms)", hexs(&req)));
             Ok(hex)
         }
-        Err(e) => {
-            let m = format!("{e}");
-            log.push(format!("-> {}  ERR {m}", hexs(&req)));
+        Err(m) => {
+            log.push(format!("[{to}] -> {}  ERR {m}", hexs(&req)));
             Err(m)
         }
     }
 }
 
-/// Probe for an adapter: open the selected driver (which, for `elm327obd`, runs
-/// the ELM327 handshake) and report whether it answered, its firmware banner,
-/// battery voltage and capabilities. A general app-wide command (not debug-only):
-/// the sidebar shows the adapter status everywhere, and the Debug tab shows the
-/// detail. Async so the handshake never blocks the UI thread.
+/// Probe for an adapter: open the selected driver fresh (which, for
+/// `elm327obd`, runs the ELM327 handshake) and report whether it answered, its
+/// firmware banner, battery voltage and capabilities. A general app-wide command
+/// (not debug-only): the sidebar shows the adapter status everywhere. When
+/// another adapter operation is running it reports `busy` instead of probing.
 #[tauri::command]
 async fn probe_adapter(
     driver: String,
@@ -288,12 +285,32 @@ async fn probe_adapter(
     baud: Option<String>,
     bus: Option<String>,
     log: tauri::State<'_, DebugLog>,
+    hub: tauri::State<'_, adapter::AdapterHub>,
 ) -> Result<Value, String> {
-    match debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref()) {
-        Ok(mut drv) => {
+    let key = adapter::ConnKey::new(
+        &driver,
+        port.as_deref(),
+        baud.as_deref(),
+        bus.as_deref(),
+        adapter::Addr::ENGINE,
+    );
+    let res = hub.run("detect adapter", move |s| {
+        // A probe is an explicit "is it there?" — always a fresh handshake.
+        s.invalidate();
+        let r = (|| {
+            let drv = s.interface(&key)?;
             let info = drv.info();
             let caps = drv.capabilities();
             let battery_mv = drv.battery_millivolts().ok().flatten();
+            Ok::<_, String>((info, caps, battery_mv))
+        })();
+        if r.is_err() {
+            s.invalidate();
+        }
+        Ok(r)
+    });
+    match res {
+        Ok(Ok((info, caps, battery_mv))) => {
             log.push(format!(
                 "probe {driver}: FOUND {} {}",
                 info.display_name,
@@ -318,10 +335,12 @@ async fn probe_adapter(
                 },
             }))
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             log.push(format!("probe {driver}: {e}"));
             Ok(json!({ "connected": false, "error": e }))
         }
+        // The hub refused (another operation holds the adapter) — not "absent".
+        Err(e) => Ok(json!({ "connected": false, "busy": true, "error": e })),
     }
 }
 
@@ -2250,6 +2269,7 @@ fn main() {
             app.manage(data);
             app.manage(OpGuard::default());
             app.manage(DebugLog::default());
+            app.manage(adapter::AdapterHub::with_registry());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

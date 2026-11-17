@@ -108,8 +108,9 @@
         const err = m.error
           ? `<span class="mono small">${esc(m.error)}</span>`
           : '<span class="muted">—</span>';
+        const addr = m.target ? ` <span class="muted small mono">${esc(m.target.tx)}/${esc(m.target.rx)}</span>` : "";
         return `<tr>
-          <td>${esc(m.name)}</td>
+          <td>${esc(m.name)}${addr}</td>
           <td>${presentPill(m)}</td>
           <td class="small">${identityCell(m)}</td>
           <td>${dtcPill}</td>
@@ -218,6 +219,7 @@
         '<div class="muted small">Choose a vehicle module list (JSON) first.</div>';
       return;
     }
+    if (!window.confirm("Clear stored DTCs on every present module in this list? Each module is addressed on its own CAN ids.")) return;
     $("scanClearResult").innerHTML = '<div class="muted small">Clearing DTCs on present modules…</div>';
     try {
       const r = await invoke("autoscan_clear", {
