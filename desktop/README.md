@@ -68,7 +68,8 @@ destructive write. See [`UPDATER.md`](UPDATER.md).
 desktop/
 ├── ui/                     # frontend (build.frontendDist = "../ui")
 │   ├── index.html
-│   └── src/{app.js,ot-caps.js,feat_*.js,styles.css}
+│   ├── src/{util.js,app-*.js,nav.js,ot-caps.js,feat_*.js,panel-help.*,extensions.js,styles.css}
+│   └── tests/              # node --test unit tests (helpers, nav tiers, script load order)
 ├── package.json            # Tauri CLI wrapper scripts
 └── src-tauri/
     ├── Cargo.toml          # core + driver crates by relative path

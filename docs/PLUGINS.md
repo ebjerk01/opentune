@@ -234,6 +234,12 @@ An overlay panel script:
   (`#panel-<id>`) when present instead of forking the public script.
 - Use `OT.connArgs()` for adapter arguments (driver/port/baud/bus/txId/rxId) so
   plugin commands target the same module as the public panels.
+- Globals an overlay may rely on: `window.OT` (`conn`, `connArgs`, `gate`,
+  `probe`, `onCaps`), `window.OTNav.register`, `window.showPanel`,
+  `window.onPanelFirstShow`, `toast(msg, bad)`, and the pure helpers in
+  `window.OTUtil` (`esc`, `hex8`, `parseHexInput`, `renderMarkdown`, …). The
+  public app scripts (`util.js`, `app-core.js` … `app-boot.js`) load before any
+  overlay. `desktop/ui/tests/load.test.mjs` checks these globals.
 
 ## CLI host API
 

@@ -340,7 +340,7 @@
     );
   }
 
-  // Mount after the DOM (and app.js) are ready.
+  // Mount after the DOM (and the app scripts) are ready.
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mount);
   } else {

@@ -30,7 +30,7 @@ Every line is `[startup <ms since main> ms] <milestone>`, for example:
 [startup     61.0 ms] event loop ready
 [startup    140.2 ms] page load Started: tauri://localhost
 [startup    310.7 ms] ipc build_channel (dispatch held the UI thread 0.1 ms)
-[startup    315.2 ms] ui: app.js running (page +170 ms)
+[startup    315.2 ms] ui: app-core.js running (page +170 ms)
 [startup    360.9 ms] ui: first frame painted (page +215 ms)
 [startup    410.3 ms] ui: boot done (page +265 ms)
 ```
@@ -41,7 +41,7 @@ How to read the gaps:
 |---|---|
 | "process was alive N ms before this point" | Dynamic linking and the AppImage FUSE mount (see section 4) |
 | `setup plugin: done` → `window created` / `webview created` | GTK/WebKit init: D-Bus, portal, accessibility bus, GPU/EGL (sections 2 and 3) |
-| `webview created` → `page load Started` / `ui: app.js running` | The WebKit web process starting: GPU renderer, GStreamer, fonts (sections 2 and 3) |
+| `webview created` → `page load Started` / `ui: app-core.js running` | The WebKit web process starting: GPU renderer, GStreamer, fonts (sections 2 and 3) |
 | `ipc <cmd> (dispatch held the UI thread N ms)` with a large N | A synchronous backend command. Please report it: it is an OpenTune bug |
 | `data: parsed ecudefs ... (N ms)` | Definition parsing. It runs on a background thread and should not delay the window |
 

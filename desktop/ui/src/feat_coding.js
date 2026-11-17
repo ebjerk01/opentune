@@ -3,7 +3,7 @@
 // Read, decode and write module coding over the connected adapter. Injects its
 // own nav item + panel, gates on the "can" (CAN bus) capability, and drives the
 // coding_read / coding_set_preview / coding_write Tauri commands. Load this
-// AFTER ot-caps.js and app.js (needs window.OT and window.showPanel), e.g.
+// AFTER ot-caps.js and the app-*.js scripts (needs window.OT and window.showPanel), e.g.
 //   <script src="src/feat_coding.js"></script>
 "use strict";
 (function () {

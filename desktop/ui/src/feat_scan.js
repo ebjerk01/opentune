@@ -3,7 +3,7 @@
 // Self-contained feature: injects its own nav button + panel at load, drives the
 // `autoscan_run` / `autoscan_clear` backend commands over the shared adapter
 // connection (window.OT), and renders a per-module presence / identity / DTC
-// report. Loaded after app.js and ot-caps.js, so window.OT and window.showPanel
+// report. Loaded after the app-*.js scripts and ot-caps.js, so window.OT and window.showPanel
 // already exist. Uses only existing CSS classes — adds no styles of its own.
 "use strict";
 (function () {
@@ -11,7 +11,7 @@
   const invoke = (cmd, args) => TAURI.core.invoke(cmd, args);
   const dialog = () => TAURI.dialog;
 
-  // Minimal local helpers (kept self-contained; does not lean on app.js scope).
+  // Minimal local helpers (kept self-contained; does not lean on the app scripts' scope).
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]),

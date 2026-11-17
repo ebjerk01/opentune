@@ -6,15 +6,8 @@
 // window.OTHelp.add(id, entry). Panels added later are decorated automatically.
 "use strict";
 (function () {
-  const esc = (s) =>
-    String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-  const RISK = {
-    none: { cls: "neutral", text: "Offline" },
-    "read-only": { cls: "ok", text: "Read-only" },
-    "writes-file": { cls: "accent", text: "Writes a file" },
-    "writes-ecu": { cls: "bad", text: "Can write to the car" },
-  };
+  // The strip's markup (risk pill, needs, steps) is built by OTUtil.helpStripHtml (util.js).
+  const { helpStripHtml } = window.OTUtil;
 
   // Three short steps per panel; the guide page has the detail.
   const STEPS = {
@@ -55,19 +48,10 @@
   }
 
   function strip(id, h) {
-    const r = RISK[h.risk] || RISK.none;
     const div = document.createElement("div");
     div.className = "ph";
     div.dataset.for = id;
-    const needs = (h.needs || []).map((n) => `<span class="ph-need">${esc(n)}</span>`).join("");
-    const steps = (STEPS[id] || []).map((s) => `<li>${esc(s)}</li>`).join("");
-    div.innerHTML = `
-      <div class="ph-top">
-        <span class="pill ${r.cls}">${r.text}</span>
-        <div class="ph-needs">${needs || '<span class="ph-need">Nothing — works offline</span>'}</div>
-        ${h.guide ? '<button class="btn sm ph-guide" type="button">Open full guide →</button>' : ""}
-      </div>
-      ${steps ? `<ol class="ph-steps">${steps}</ol>` : ""}`;
+    div.innerHTML = helpStripHtml(h, STEPS[id]);
     const b = div.querySelector(".ph-guide");
     if (b) b.addEventListener("click", () => openGuide(h.guide));
     return div;
