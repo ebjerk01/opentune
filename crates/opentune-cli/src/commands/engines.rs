@@ -128,7 +128,38 @@ fn hex_bytes(b: &[u8]) -> String {
         .join(" ")
 }
 
-/// Dispatch the `log` subcommand: parse a logger.xml and poll live data to CSV.
+/// Build the `log` command's fast-logging policy from its flags, validating
+/// that every dynamic DID it may use lies in 0xF200..=0xF3FF.
+pub fn fast_log_config(
+    fast: bool,
+    dynamic_did: &str,
+    max_record: usize,
+    session: Option<&str>,
+) -> Result<opentune_logdef::FastLogConfig> {
+    let did = crate::util::parse_num(dynamic_did)?;
+    let first_did = u16::try_from(did)
+        .map_err(|_| anyhow!("--dynamic-did {dynamic_did} is not a 16-bit DID"))?;
+    let session = session
+        .map(|s| {
+            crate::util::parse_num(s).and_then(|v| {
+                u8::try_from(v).map_err(|_| anyhow!("--fast-session {s} is not one byte"))
+            })
+        })
+        .transpose()?;
+    let cfg = opentune_logdef::FastLogConfig {
+        enabled: fast,
+        first_did,
+        max_record_len: max_record,
+        session,
+        ..Default::default()
+    };
+    cfg.validate().map_err(|e| anyhow!("--dynamic-did: {e}"))?;
+    Ok(cfg)
+}
+
+/// Dispatch the `log` subcommand: parse a logger.xml and log live data to CSV,
+/// per-channel polling or (with `fast.enabled`) over UDS 0x2C dynamic DIDs.
+/// The achieved rate and the mode (with the fallback reason) go to stderr.
 #[allow(clippy::too_many_arguments)]
 pub fn run_log(
     reg: &Registry,
@@ -140,8 +171,10 @@ pub fn run_log(
     interval_ms: u64,
     out: Option<&std::path::Path>,
     params: &[String],
+    fast: opentune_logdef::FastLogConfig,
 ) -> Result<()> {
     use opentune_core::CoreDiag;
+    use opentune_logdef::{LiveSession, LogMode};
 
     let raw = std::fs::read(def_path)
         .with_context(|| format!("read logger def {}", def_path.display()))?;
@@ -157,17 +190,76 @@ pub fn run_log(
         .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
     let mut diag = CoreDiag::new(transport, timeout_ms);
 
-    match out {
+    let mut session = LiveSession::new(&def, &ids, fast).map_err(|e| anyhow!("{e}"))?;
+    let started = session.start(&mut diag).clone();
+    match started.mode {
+        LogMode::Fast2c => {
+            let dids: Vec<String> = started
+                .dynamic_dids
+                .iter()
+                .map(|d| {
+                    format!(
+                        "0x{:04X} ({} B, {} ch)",
+                        d.did,
+                        d.record_len,
+                        d.channels.len()
+                    )
+                })
+                .collect();
+            eprintln!(
+                "mode: fast-2c via {}; {} channel(s) polled individually",
+                dids.join(", "),
+                started.polled.len()
+            );
+            for n in &started.notes {
+                eprintln!("  note: {n}");
+            }
+        }
+        LogMode::Polling => eprintln!(
+            "mode: polling ({})",
+            started.reason.as_deref().unwrap_or("no reason given")
+        ),
+    }
+
+    let t0 = std::time::Instant::now();
+    let result = match out {
         Some(path) => {
             let mut f = std::fs::File::create(path)
                 .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
-            opentune_logdef::poll_to_csv(&mut diag, &def, &ids, rounds, interval_ms, &mut f)?;
-            println!("Logged {rounds} round(s) to {}", path.display());
+            session.run_csv(&mut diag, rounds, interval_ms, &mut f)
         }
         None => {
             let mut stdout = std::io::stdout().lock();
-            opentune_logdef::poll_to_csv(&mut diag, &def, &ids, rounds, interval_ms, &mut stdout)?;
+            session.run_csv(&mut diag, rounds, interval_ms, &mut stdout)
         }
+    };
+    let elapsed = t0.elapsed().as_secs_f64();
+    // Always clear the dynamic DIDs, even if writing the CSV failed.
+    let st = session.stop(&mut diag).clone();
+    result?;
+
+    if st.mode == LogMode::Polling && started.mode == LogMode::Fast2c {
+        eprintln!(
+            "mode: fell back to polling mid-log ({})",
+            st.reason.as_deref().unwrap_or("no reason given")
+        );
+    }
+    let channels = session.params().len();
+    let rate = if elapsed > 0.0 {
+        rounds as f64 / elapsed
+    } else {
+        0.0
+    };
+    eprintln!(
+        "{rounds} sample(s) of {channels} channel(s) in {elapsed:.3} s: {rate:.1} samples/s \
+         ({:.1} channel values/s), {:.2} requests/sample, {} setup request(s), {} re-define(s)",
+        rate * channels as f64,
+        st.requests_per_tick(),
+        st.setup_requests,
+        st.redefines
+    );
+    if let Some(path) = out {
+        println!("Logged {rounds} round(s) to {}", path.display());
     }
     Ok(())
 }
@@ -509,4 +601,24 @@ pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fast_log_config;
+
+    #[test]
+    fn fast_log_flags_validate_the_dynamic_range() {
+        let cfg = fast_log_config(true, "0xF200", 32, Some("0x03")).unwrap();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.first_did, 0xF200);
+        assert_eq!(cfg.max_record_len, 32);
+        assert_eq!(cfg.session, Some(0x03));
+        assert!(!fast_log_config(false, "0xF3FC", 8, None).unwrap().enabled);
+        // Outside 0xF200..=0xF3FF, not 16-bit, a zero record, a 2-byte session.
+        assert!(fast_log_config(true, "0xF190", 32, None).is_err());
+        assert!(fast_log_config(true, "0x1F200", 32, None).is_err());
+        assert!(fast_log_config(true, "0xF200", 0, None).is_err());
+        assert!(fast_log_config(true, "0xF200", 32, Some("0x103")).is_err());
+    }
 }
