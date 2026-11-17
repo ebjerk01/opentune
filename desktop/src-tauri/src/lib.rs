@@ -2599,7 +2599,7 @@ pub fn builder_with(
         .on_page_load(|_w, p| startup::mark(&format!("page load {:?}: {}", p.event(), p.url())))
         .on_event(|_app, ev| match ev {
             tauri::RunEvent::Ready => startup::mark("event loop ready"),
-            tauri::RunEvent::WindowEvent { event, .. } => {
+            tauri::RunEvent::WindowEvent { event, .. } if startup::enabled() => {
                 startup::window_event(&format!("{event:?}"))
             }
             _ => {}
