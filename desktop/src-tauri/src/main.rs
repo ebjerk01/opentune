@@ -137,6 +137,163 @@ fn build_channel() -> &'static str {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Debug panel (alpha builds) — live engines + a session log
+// ---------------------------------------------------------------------------
+//
+// These commands drive real adapters and the service engines. They refuse to
+// run unless this is an alpha build, and every exchange is appended to a
+// session log so a run can be saved and handed back for debugging.
+
+/// A shared, in-memory session log of diagnostic exchanges.
+#[derive(Clone, Default)]
+struct DebugLog(Arc<Mutex<Vec<String>>>);
+
+impl DebugLog {
+    fn push(&self, line: impl Into<String>) {
+        if let Ok(mut v) = self.0.lock() {
+            v.push(line.into());
+        }
+    }
+}
+
+/// Gate: debug commands run only in an alpha build.
+fn alpha_only() -> Result<(), String> {
+    if cfg!(feature = "alpha") {
+        Ok(())
+    } else {
+        Err("debug commands are available only in alpha builds".into())
+    }
+}
+
+/// Uppercase space-separated hex.
+fn hexs(b: &[u8]) -> String {
+    b.iter()
+        .map(|x| format!("{x:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Parse a whitespace-tolerant hex string.
+fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
+    let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if clean.len() % 2 != 0 {
+        return Err(format!("hex string '{s}' has an odd number of digits"));
+    }
+    (0..clean.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'")))
+        .collect()
+}
+
+/// Open a driver that exposes a diagnostic transport, applying an optional
+/// serial port/baud (for e.g. `elm327obd`).
+fn debug_open_diag(
+    driver: &str,
+    port: Option<&str>,
+    baud: Option<&str>,
+) -> Result<Box<dyn Interface>, String> {
+    let reg = registry();
+    let mut drv = reg
+        .make(driver)
+        .ok_or_else(|| format!("unknown driver '{driver}'"))?;
+    let mut cfg = ConnectConfig::default();
+    if let Some(p) = port {
+        if !p.trim().is_empty() {
+            cfg.options.insert("port".into(), p.to_string());
+        }
+    }
+    if let Some(b) = baud {
+        if !b.trim().is_empty() {
+            cfg.options.insert("baud".into(), b.to_string());
+        }
+    }
+    drv.open(&cfg).map_err(|e| format!("open {driver}: {e}"))?;
+    Ok(drv)
+}
+
+/// Send one raw UDS/OBD request to a live (or mock) adapter and return the hex
+/// response. The exchange is appended to the session log.
+#[tauri::command]
+fn debug_raw_request(
+    driver: String,
+    port: Option<String>,
+    baud: Option<String>,
+    request: String,
+    timeout_ms: u64,
+    log: tauri::State<DebugLog>,
+) -> Result<String, String> {
+    alpha_only()?;
+    let req = parse_hex(&request)?;
+    let mut drv = debug_open_diag(&driver, port.as_deref(), baud.as_deref())?;
+    let transport = drv
+        .diag()
+        .ok_or_else(|| format!("driver '{driver}' has no diagnostic transport"))?;
+    let t0 = std::time::Instant::now();
+    match transport.request(&req, timeout_ms) {
+        Ok(resp) => {
+            let ms = t0.elapsed().as_millis();
+            let hex = hexs(&resp);
+            log.push(format!("-> {}  <- {hex}  ({ms} ms)", hexs(&req)));
+            Ok(hex)
+        }
+        Err(e) => {
+            let m = format!("{e}");
+            log.push(format!("-> {}  ERR {m}", hexs(&req)));
+            Err(m)
+        }
+    }
+}
+
+/// Run the in-memory UDS conformance server offline: seed DIDs, handle raw
+/// requests, return the hex responses. No hardware.
+#[tauri::command]
+fn debug_simulate(
+    dids: Vec<String>,
+    requests: Vec<String>,
+    require_security_write: bool,
+    log: tauri::State<DebugLog>,
+) -> Result<Vec<String>, String> {
+    use opentune_udssim::server::{ServerConfig, UdsServer};
+    alpha_only()?;
+    let cfg = ServerConfig {
+        require_security_for_write: require_security_write,
+        ..Default::default()
+    };
+    let mut server = UdsServer::with_config(cfg);
+    for d in &dids {
+        let (id, hx) = d
+            .split_once('=')
+            .ok_or_else(|| format!("expected ID=HEX, got '{d}'"))?;
+        let did = u16::from_str_radix(id.trim().trim_start_matches("0x"), 16)
+            .map_err(|_| format!("invalid DID '{id}'"))?;
+        server.set_did(did, parse_hex(hx)?);
+    }
+    let mut out = Vec::new();
+    for r in &requests {
+        let req = parse_hex(r)?;
+        let resp = server.handle(&req);
+        let hex = hexs(&resp);
+        log.push(format!("sim -> {}  <- {hex}", hexs(&req)));
+        out.push(hex);
+    }
+    Ok(out)
+}
+
+/// Return the current session log.
+#[tauri::command]
+fn debug_log_dump(log: tauri::State<DebugLog>) -> Vec<String> {
+    log.0.lock().map(|v| v.clone()).unwrap_or_default()
+}
+
+/// Clear the session log.
+#[tauri::command]
+fn debug_log_clear(log: tauri::State<DebugLog>) {
+    if let Ok(mut v) = log.0.lock() {
+        v.clear();
+    }
+}
+
 /// Open the mock/file driver on `path` (the offline image).
 fn open_file(path: &str) -> Result<Box<dyn Interface>, String> {
     let reg = registry();
@@ -1934,10 +2091,15 @@ fn main() {
             let data = resolve_data(app);
             app.manage(data);
             app.manage(OpGuard::default());
+            app.manage(DebugLog::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             build_channel,
+            debug_raw_request,
+            debug_simulate,
+            debug_log_dump,
+            debug_log_clear,
             list_drivers,
             data_paths,
             image_info,
