@@ -1,0 +1,15 @@
+# Importer crate: WinOLS `.ols` project container -> OpenTune ROM image + MapDef.
+# Part of the workspace.
+[package]
+name = "opentune-ols"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Read WinOLS .ols project files (ROM image + map definitions) into OpenTune."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }

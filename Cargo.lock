@@ -879,6 +879,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-ols"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+]
+
+[[package]]
 name = "opentune-packs"
 version = "0.1.0"
 dependencies = [

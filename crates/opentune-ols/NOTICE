@@ -1,0 +1,42 @@
+opentune-ols
+============
+
+This crate reads WinOLS `.ols` project files (the proprietary EVC/WinOLS project
+container: ROM image + project map/table definitions + metadata).
+
+The `.ols` container and record layout implemented here — the 24-byte header and
+"WinOLS File" signature, the MFC CArchive-style length-prefixed metadata fields,
+the version-directory anchor and record sizing, and the WinOLS 5 map-record /
+axis field walk — was learned from the STRUCTURE described by two open-source
+GPL-3.0 readers and re-implemented from scratch:
+
+    ZedSuite — https://github.com/LeZed97/ZedSuite
+      (src-tauri/src/ols_import.rs, ols_maps.rs)
+    romHEX14-community — https://github.com/ctabuyo/romHEX14-community
+      (src/io/ols/*.cpp), cross-referenced by ZedSuite
+
+Both are licensed GPL-3.0, which is compatible with OpenTune
+(GPL-3.0-or-later). This crate is NOT a line-for-line translation or a vendored
+copy: it uses its own types, its own module decomposition, its own reader and
+validation, and shares no source text with either project. The on-disk byte
+order and offsets follow the format those readers document so that real WinOLS
+files decode consistently.
+
+SCOPE / HONESTY
+---------------
+WinOLS `.ols` is only partly a plaintext format. This crate:
+
+  * recovers the plaintext parts — header, identification metadata, version
+    directory, the raw (uncompressed) ROM image of each saved version, and, for
+    WinOLS 5 containers (format version >= 800), the project's map definitions;
+  * does NOT decode WinOLS 4.x (format < 800) map-record layouts (ROM still
+    extracts; maps come back empty with a warning);
+  * does NOT decrypt encrypted / "protected" WinOLS projects (they fail with a
+    "not a container" error because the plaintext layout is absent);
+  * does NOT recover WinOLS internal checksum-region definitions (not present in
+    the metadata this parser reads — reported as a warning, never fabricated);
+  * flags, rather than fabricates, anything with no OpenTune equivalent
+    (64-bit cell types, non-linear scaling).
+
+No `.ols` files are shipped with this crate. See LICENSE (GPL-3.0-or-later) in
+the repository root for the full license text.
