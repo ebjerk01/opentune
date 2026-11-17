@@ -367,6 +367,13 @@ impl Interface for OpenPort2Driver {
         }
     }
 
+    /// Expose the host-side ISO-TP over the OpenPort 2.0 CAN channel as a [`DiagTransport`] so the coding/adaptation/
+    /// auto-scan/service/logging engines (and the raw-request console) can
+    /// drive this adapter. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
             return Err(Error::Unsupported(
@@ -685,6 +692,29 @@ pub(crate) fn uds_write_memory(
 #[cfg(test)]
 mod seedkey_hook_tests {
     use super::*;
+
+    /// A CAN link with no traffic: enough to stand up the ISO-TP layer.
+    struct IdleLink;
+
+    impl CanLink for IdleLink {
+        fn send_frame(&mut self, _id: u32, _data: &[u8]) -> Result<()> {
+            Ok(())
+        }
+        fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+            Err(Error::Timeout(timeout_ms))
+        }
+    }
+
+    #[test]
+    fn diag_exposes_isotp_after_connect() {
+        let mut d = OpenPort2Driver::new();
+        assert!(d.diag().is_none(), "no transport before open");
+        d.transport = Some(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8));
+        assert!(
+            d.diag().is_some(),
+            "diag() must expose the ISO-TP transport"
+        );
+    }
     use opentune_core::protocol::diag::DiagTransport;
     use std::collections::VecDeque;
 
