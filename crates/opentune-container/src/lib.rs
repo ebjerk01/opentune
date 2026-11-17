@@ -1,9 +1,11 @@
 //! # opentune-container
 //!
-//! Decode (and, where feasible, repack) VAG/VW-Group flash containers for
-//! OpenTune: **FRF**, **ODX / ODX-F** and **SGO**. These are the tester flash
-//! files for Simos engine ECUs and the DQ/DL/AL/VL/ZF transmission (TCU)
-//! families (DQ200 → AL1000, DQ250-MQB, DQ381, DL382/DL501, ZF-8HP, …).
+//! Decode (and, where feasible, repack) automotive flash containers for
+//! OpenTune: the VAG/VW-Group **FRF**, **ODX / ODX-F** and **SGO** tester files
+//! for Simos engine ECUs and the DQ/DL/AL/VL/ZF transmission (TCU) families
+//! (DQ200 → AL1000, DQ250-MQB, DQ381, DL382/DL501, ZF-8HP, …), plus the Ford /
+//! Volvo / Mazda **VBF** (Versatile Binary Format) module-flash file (see
+//! [`vbf`]) — a plaintext container that needs no key material.
 //!
 //! ## Pipeline
 //!
@@ -57,6 +59,7 @@ pub mod error;
 pub mod frf;
 pub mod odx;
 pub mod sgo;
+pub mod vbf;
 pub mod zip;
 
 pub use compress::Compression;
@@ -64,6 +67,7 @@ pub use crypto::BlockCipher;
 pub use error::{Error, Result};
 pub use frf::{ContainerKind, Unpacked};
 pub use sgo::SgoCipher;
+pub use vbf::{Vbf, VbfBlock, VbfHeader};
 
 /// Where a segment's bytes came from inside the container.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +78,8 @@ pub enum SegmentSource {
     ExternalBin(String),
     /// A block inside an SGO object.
     Sgo,
+    /// A block from a Ford / Volvo / Mazda VBF container.
+    Vbf,
 }
 
 /// One decoded flash segment.
@@ -125,6 +131,8 @@ pub enum InputFormat {
     Odx,
     /// A bare SGO object.
     Sgo,
+    /// A Ford / Volvo / Mazda VBF flash container (plaintext; no keys needed).
+    Vbf,
 }
 
 /// Best-effort detection of the top-level container format from a byte prefix.
@@ -133,6 +141,8 @@ pub fn detect(bytes: &[u8]) -> InputFormat {
         InputFormat::Sgo
     } else if bytes.starts_with(b"PK\x03\x04") {
         InputFormat::Zip
+    } else if vbf::looks_like_vbf(bytes) {
+        InputFormat::Vbf
     } else if is_xml_odx(bytes) {
         InputFormat::Odx
     } else {
@@ -199,6 +209,8 @@ pub fn unpack(bytes: &[u8], keys: &Keys) -> Result<Unpacked> {
                 members: Vec::new(),
             })
         }
+        // VBF is plaintext (Ford/Volvo/Mazda); no key material is consulted.
+        InputFormat::Vbf => Ok(vbf::Vbf::parse(bytes)?.into_unpacked()),
     }
 }
 

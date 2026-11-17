@@ -23,6 +23,8 @@ pub enum ContainerKind {
     OdxF,
     /// One or more raw SGO objects.
     Sgo,
+    /// A Ford / Volvo / Mazda VBF flash container (plaintext).
+    Vbf,
 }
 
 /// Result of decoding a container.
