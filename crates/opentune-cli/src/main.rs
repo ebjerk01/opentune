@@ -278,6 +278,90 @@ enum Command {
         #[command(subcommand)]
         action: CodingAction,
     },
+    /// Read adaptation channels (value / routine / actuator) from a module.
+    ///
+    /// Data-defined by `--def` (an `AdaptationDef`). With the default `mock`
+    /// driver it runs offline against a `--store` JSON; no hardware is touched.
+    Adaptation {
+        /// Adaptation definition (`AdaptationDef`) JSON file.
+        #[arg(long)]
+        def: PathBuf,
+        /// Driver id (see `drivers`); must expose a diagnostic transport.
+        #[arg(long, default_value = "mock")]
+        driver: String,
+        /// For the `mock` driver: JSON UDS store backing the offline transport.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Per-request UDS timeout, milliseconds.
+        #[arg(long, default_value_t = 1000)]
+        timeout_ms: u64,
+        #[command(subcommand)]
+        action: AdaptAction,
+    },
+    /// Scan every module in a vehicle map: presence, identity and stored DTCs.
+    ///
+    /// Data-defined by `--modules` (a `VehicleModules` map). Read-only. With the
+    /// default `mock` driver it runs offline against a `--store` JSON.
+    Autoscan {
+        /// Vehicle module map (`VehicleModules`) JSON file.
+        #[arg(long)]
+        modules: PathBuf,
+        /// Driver id (see `drivers`); must expose a diagnostic transport.
+        #[arg(long, default_value = "mock")]
+        driver: String,
+        /// For the `mock` driver: JSON UDS store backing the offline transport.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Per-request UDS timeout, milliseconds.
+        #[arg(long, default_value_t = 1000)]
+        timeout_ms: u64,
+    },
+    /// Plan or run a service-function script (DPF regen, service reset, …).
+    ///
+    /// Data-defined by `--script` (a `ServiceScript`). OpenTune ships no OEM
+    /// seed/key: a script that needs SecurityAccess requires a caller-supplied
+    /// key provider, which the CLI does not yet pass — so secured scripts can be
+    /// planned but not executed here. `plan` sends nothing; `run` needs `--ack`.
+    Service {
+        /// Service-function script (`ServiceScript`) JSON file.
+        #[arg(long)]
+        script: PathBuf,
+        /// Driver id (see `drivers`); must expose a diagnostic transport.
+        #[arg(long, default_value = "mock")]
+        driver: String,
+        /// For the `mock` driver: JSON UDS store backing the offline transport.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Per-request UDS timeout, milliseconds.
+        #[arg(long, default_value_t = 1000)]
+        timeout_ms: u64,
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum AdaptAction {
+    /// List the channels declared in the definition (no I/O).
+    List,
+    /// Read a value channel's current reading (0x22).
+    Read {
+        /// Channel name (as in the definition).
+        channel: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServiceAction {
+    /// Validate the script and print its plan without sending anything.
+    Plan,
+    /// Execute the script. Requires `--ack`; refuses secured scripts (no key
+    /// provider is wired in the CLI yet).
+    Run {
+        /// Acknowledge that this sends real requests to the module.
+        #[arg(long)]
+        ack: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1628,6 +1712,26 @@ fn main() -> Result<()> {
             }
         }
         Command::Coding { action } => run_coding(&reg, action)?,
+        Command::Adaptation {
+            def,
+            driver,
+            store,
+            timeout_ms,
+            action,
+        } => run_adaptation(&reg, &def, &driver, store.as_deref(), timeout_ms, action)?,
+        Command::Autoscan {
+            modules,
+            driver,
+            store,
+            timeout_ms,
+        } => run_autoscan(&reg, &modules, &driver, store.as_deref(), timeout_ms)?,
+        Command::Service {
+            script,
+            driver,
+            store,
+            timeout_ms,
+            action,
+        } => run_service(&reg, &script, &driver, store.as_deref(), timeout_ms, action)?,
     }
     Ok(())
 }
@@ -1657,6 +1761,173 @@ fn load_coding_def(conn: &CodingConn) -> Result<opentune_coding::CodingDef> {
     def.validate()
         .map_err(|e| anyhow!("invalid coding def {}: {e}", conn.def.display()))?;
     Ok(def)
+}
+
+/// Open a driver that exposes a diagnostic transport, optionally backing the
+/// `mock` driver's offline UDS with a `--store` JSON. Shared by the adaptation,
+/// auto-scan and service-function subcommands.
+fn open_diag_driver(
+    reg: &Registry,
+    driver: &str,
+    store: Option<&std::path::Path>,
+) -> Result<Box<dyn Interface>> {
+    let mut drv = reg
+        .make(driver)
+        .ok_or_else(|| anyhow!("unknown driver '{driver}'"))?;
+    let mut cfg = ConnectConfig::default();
+    if let Some(store) = store {
+        cfg.options
+            .insert("coding_store".into(), store.to_string_lossy().into_owned());
+    }
+    drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
+    Ok(drv)
+}
+
+/// Dispatch the `adaptation` subcommand.
+fn run_adaptation(
+    reg: &Registry,
+    def_path: &std::path::Path,
+    driver: &str,
+    store: Option<&std::path::Path>,
+    timeout_ms: u64,
+    action: AdaptAction,
+) -> Result<()> {
+    use opentune_adaptation::AdaptationDef;
+    use opentune_core::CoreDiag;
+
+    let text = std::fs::read_to_string(def_path)
+        .with_context(|| format!("read adaptation def {}", def_path.display()))?;
+    let def = AdaptationDef::from_json(&text)
+        .map_err(|e| anyhow!("parse adaptation def {}: {e}", def_path.display()))?;
+    def.validate()
+        .map_err(|e| anyhow!("invalid adaptation def {}: {e}", def_path.display()))?;
+
+    match action {
+        AdaptAction::List => {
+            println!("Adaptation channels in {} ({}):", def.name, def.id);
+            for ch in &def.channels {
+                println!("  {}", ch.name);
+            }
+        }
+        AdaptAction::Read { channel } => {
+            let mut drv = open_diag_driver(reg, driver, store)?;
+            let transport = drv.diag().ok_or_else(|| {
+                anyhow!("driver '{driver}' does not expose a diagnostic transport")
+            })?;
+            let mut diag = CoreDiag::new(transport, timeout_ms);
+            let r = opentune_adaptation::read_value(&mut diag, &def, &channel)
+                .map_err(|e| anyhow!("{e}"))?;
+            println!(
+                "{}: raw={} engineering={} {}",
+                r.channel, r.raw, r.engineering, r.unit
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Dispatch the `autoscan` subcommand (read-only whole-vehicle scan).
+fn run_autoscan(
+    reg: &Registry,
+    modules_path: &std::path::Path,
+    driver: &str,
+    store: Option<&std::path::Path>,
+    timeout_ms: u64,
+) -> Result<()> {
+    use opentune_autoscan::VehicleModules;
+    use opentune_core::CoreDiag;
+
+    let text = std::fs::read_to_string(modules_path)
+        .with_context(|| format!("read module map {}", modules_path.display()))?;
+    let modules = VehicleModules::from_json(&text)
+        .map_err(|e| anyhow!("parse module map {}: {e}", modules_path.display()))?;
+
+    let mut drv = open_diag_driver(reg, driver, store)?;
+    let transport = drv
+        .diag()
+        .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
+    let mut diag = CoreDiag::new(transport, timeout_ms);
+    let scan = opentune_autoscan::scan(&mut diag, &modules);
+
+    let present = scan.present().count();
+    println!(
+        "Scanned {} modules: {} present, {} DTC(s) total",
+        scan.modules.len(),
+        present,
+        scan.dtc_count()
+    );
+    for m in &scan.modules {
+        let mark = if m.present { "+" } else { "-" };
+        print!("  [{mark}] {:<24}", m.name);
+        if let Some(id) = &m.identity {
+            if let Some(vin) = &id.vin {
+                print!(" VIN={vin}");
+            }
+        }
+        if !m.dtcs.is_empty() {
+            print!(" {} DTC(s)", m.dtcs.len());
+        }
+        if let Some(err) = &m.error {
+            print!(" ({err})");
+        }
+        println!();
+    }
+    Ok(())
+}
+
+/// Dispatch the `service` subcommand.
+fn run_service(
+    reg: &Registry,
+    script_path: &std::path::Path,
+    driver: &str,
+    store: Option<&std::path::Path>,
+    timeout_ms: u64,
+    action: ServiceAction,
+) -> Result<()> {
+    use opentune_core::CoreDiag;
+    use opentune_servicefn::{run_script, RunOptions, ServiceScript};
+
+    let text = std::fs::read_to_string(script_path)
+        .with_context(|| format!("read service script {}", script_path.display()))?;
+    let script = ServiceScript::from_json(&text)
+        .map_err(|e| anyhow!("parse service script {}: {e}", script_path.display()))?;
+
+    let dry_run = matches!(action, ServiceAction::Plan);
+    if let ServiceAction::Run { ack } = &action {
+        if !ack {
+            return Err(anyhow!(
+                "`service run` sends real requests; re-run with --ack (or use `service plan`)"
+            ));
+        }
+    }
+
+    let mut drv = open_diag_driver(reg, driver, store)?;
+    let transport = drv
+        .diag()
+        .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
+    let mut diag = CoreDiag::new(transport, timeout_ms);
+
+    let opts = RunOptions {
+        dry_run,
+        skip_waits: false,
+    };
+    // The CLI ships no OEM seed/key provider; a secured script errors cleanly.
+    let report = run_script(&mut diag, &script, None, &opts).map_err(|e| anyhow!("{e}"))?;
+
+    println!(
+        "Service '{}': {:?}{}",
+        report.script_id,
+        report.outcome,
+        if report.security_unlocked {
+            " (security unlocked)"
+        } else {
+            ""
+        }
+    );
+    for s in &report.steps {
+        println!("  #{:<2} {:<20} {:?}  {}", s.index, s.op, s.status, s.detail);
+    }
+    Ok(())
 }
 
 /// Resolve a user-supplied value for `name`: a number (decimal or `0x` hex), or
