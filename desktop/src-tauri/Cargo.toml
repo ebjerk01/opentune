@@ -36,9 +36,22 @@ opentune-driver-openport2 = { path = "../../crates/drivers/j2534-openport" }
 opentune-driver-socketcan = { path = "../../crates/drivers/socketcan" }
 opentune-driver-slcan = { path = "../../crates/drivers/slcan" }
 opentune-driver-elm327 = { path = "../../crates/drivers/kline-elm327" }
+opentune-driver-elm327-obd = { path = "../../crates/drivers/elm327" }
 opentune-driver-kkl = { path = "../../crates/drivers/kkl" }
+
+# Service engines + conformance sim, wired into the (alpha) Debug panel.
+opentune-coding = { path = "../../crates/opentune-coding" }
+opentune-adaptation = { path = "../../crates/opentune-adaptation" }
+opentune-autoscan = { path = "../../crates/opentune-autoscan" }
+opentune-servicefn = { path = "../../crates/opentune-servicefn" }
+opentune-logdef = { path = "../../crates/opentune-logdef" }
+opentune-udssim = { path = "../../crates/opentune-udssim" }
+opentune-attest = { path = "../../crates/opentune-attest" }
 
 [features]
 # Tauri's default behaviour for a release build.
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Alpha channel: exposes the live Debug panel (all engines + live drivers +
+# session log). Never enabled in a stable/release build.
+alpha = []

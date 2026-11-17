@@ -2501,10 +2501,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-adaptation"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-attest"
+version = "0.1.0"
+dependencies = [
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-flash",
+]
+
+[[package]]
+name = "opentune-autoscan"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-dtc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-checksum"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+]
+
+[[package]]
+name = "opentune-coding"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2521,9 +2558,14 @@ name = "opentune-desktop"
 version = "0.1.0"
 dependencies = [
  "opentune-a2l",
+ "opentune-adaptation",
+ "opentune-attest",
+ "opentune-autoscan",
  "opentune-checksum",
+ "opentune-coding",
  "opentune-core",
  "opentune-driver-elm327",
+ "opentune-driver-elm327-obd",
  "opentune-driver-kkl",
  "opentune-driver-mock",
  "opentune-driver-openport2",
@@ -2531,7 +2573,10 @@ dependencies = [
  "opentune-driver-socketcan",
  "opentune-dtc",
  "opentune-flash",
+ "opentune-logdef",
  "opentune-scan",
+ "opentune-servicefn",
+ "opentune-udssim",
  "opentune-vin",
  "opentune-xdf",
  "serde",
@@ -2547,6 +2592,15 @@ name = "opentune-driver-elm327"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-elm327-obd"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-dtc",
  "serialport",
 ]
 
@@ -2604,6 +2658,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-logdef"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-xdf",
+ "roxmltree",
+ "serde",
+]
+
+[[package]]
 name = "opentune-scan"
 version = "0.1.0"
 dependencies = [
@@ -2614,6 +2678,22 @@ dependencies = [
  "opentune-vin",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "opentune-servicefn"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-udssim"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
 ]
 
 [[package]]

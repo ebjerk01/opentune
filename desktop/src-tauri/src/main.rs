@@ -119,7 +119,22 @@ fn registry() -> Registry {
     r.register("kkl", "K-line (KKL 409.1 raw)", || {
         Box::new(opentune_driver_kkl::KklDriver::new())
     });
+    r.register("elm327obd", "ELM327 serial (OBD diagnostics)", || {
+        Box::new(opentune_driver_elm327_obd::Elm327Obd::new())
+    });
     r
+}
+
+/// Build channel: `"alpha"` when compiled with the `alpha` feature (the Debug
+/// panel is available), else `"stable"`. The UI shows the Debug tab only for
+/// `"alpha"`.
+#[tauri::command]
+fn build_channel() -> &'static str {
+    if cfg!(feature = "alpha") {
+        "alpha"
+    } else {
+        "stable"
+    }
 }
 
 /// Open the mock/file driver on `path` (the offline image).
@@ -1922,6 +1937,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            build_channel,
             list_drivers,
             data_paths,
             image_info,
