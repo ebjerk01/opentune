@@ -9,6 +9,394 @@
   "bitrate": 10400,
   "tx_id": 1,
   "rx_id": 0,
+  "maps": [
+    {
+      "name": "injection quantity limiter (smoke limiter, vs boost pressure)",
+      "notes": "CONFIDENCE: HIGH. DIFF-DERIVED (reference stock/tuned pair raised the cells at >=1600 hPa) + in-image header at 0x16412 (16 rpm 500..4200 x 16 boost pressure 700..2200 hPa, ids 0xC694/0xC646). Cells decode at the EDC 0.01 mg/stroke LSB to 23.6..86.5 mg/stroke, rising with boost - a boost-pressure-based smoke limiter. Also changed by the reference tunes of SW 1037351637 (identical address) and SW 1037351736/351737 (same header, 0x12 bytes later). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 91226,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 16,
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "boost pressure",
+        "unit": "hPa",
+        "count": 16,
+        "address": 91194,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 91158,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 120.0
+    },
+    {
+      "name": "boost pressure target",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. In-image header at 0x15580 (12 rpm 800..4200 x 12 injection quantity 2.5..80 mg/stroke at 0.01 mg/LSB, ids 0xC694/0xD1F2); stock decodes 1100..1780 hPa absolute, rising with load and falling at the rpm limit - a boost setpoint. Not changed by this read's own tune. The same header (same input ids, same offset) sits at the identical address in SW 1037351637 (reference stock/tuned pair), where a tune changed it. There the tune raised the mid/high-load setpoint (to 2200 hPa). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 87480,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 12,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "hPa",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 12,
+        "address": 87456,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 12,
+        "address": 87428,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 3000.0
+    },
+    {
+      "name": "driver's wish (pedal map)",
+      "notes": "CONFIDENCE: MEDIUM (structure only, not diff-confirmed). In-image header at 0x16F88 (8 rpm 0..5000 x 8 accelerator pedal 1.2..100 % at 0.01 %/LSB, ids 0xC694/0xC8CA); cells decode at 0.01 mg/stroke to 0..80 mg/stroke, 0 at closed pedal and rising with pedal at every rpm - the driver's-wish shape. None of the reference tunes changed it. Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 94128,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 8,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 94112,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 8,
+        "address": 94092,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 120.0
+    },
+    {
+      "name": "start of injection, main (role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (reference tune changed the >=30 mg columns at 1000..4000 rpm) + in-image header at 0x121C6 (12 rpm 0..4200 x 12 injection quantity 0..100 mg/stroke, ids 0xC694/0xD084). Signed cells go slightly negative at minimal load and rise with quantity - the shape of a main-injection start (advance) map; tunes advance it to burn the added fuel. The crank-angle LSB is not confirmed for this software, so cells are RAW signed counts. Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 74238,
+      "data_type": "s16",
+      "endian": "little",
+      "rows": 12,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (crank angle)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 12,
+        "address": 74214,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 12,
+        "address": 74186,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 1 of 6 (set A, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x12928 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD092). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 76152,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 76112,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 76076,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 2 of 6 (set B, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x12BF8 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD094). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 76872,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 76832,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 76796,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 3 of 6 (set A, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x1A280 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD092). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 107216,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 107176,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 107140,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 4 of 6 (set A, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x1A550 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD092). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 107936,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 107896,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 107860,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 5 of 6 (set B, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x1A820 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD094). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 108656,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 108616,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 108580,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injector energizing time 6 of 6 (set B, role inferred)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM on role, scaling left RAW. DIFF-DERIVED (the reference tune changed all six 16x20 tables) + in-image header at 0x1AAF0 (16 rail pressure 119..1350 bar at 0.1 bar/LSB x 20 injection quantity 0..100 mg/stroke, ids 0xCA00/0xD094). Cells fall with rail pressure and rise with quantity (0 at 0 mg) - the injection-quantity-to-energizing-time conversion; tunes extend it so the added quantity is actually delivered. Unit is most likely microseconds but is not confirmed (RAW). Set A/B = the two quantity inputs (ids 0xD092/0xD094). Layout: Bosch EDC15 (C167, little-endian) inline header [input-id u16][n u16][Y axis][input-id u16][m u16][X axis][data n*m]; the id word names the input quantity (0xC694 = engine speed in every map here). Byte offsets into the 1 MiB read of SW 1037351686 (0281010826); this read holds the calibration four times (copies at +0xC000, +0x18000 and +0xE0000 - the reference tunes changed all four), so apply the same edit to every copy. Confirm per software variant before any write.",
+      "address": 109376,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 16,
+      "cols": 20,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (energizing time)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 20,
+        "address": 109336,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "rail pressure",
+        "unit": "bar",
+        "count": 16,
+        "address": 109300,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      }
+    }
+  ],
   "flash_size": 524288,
   "regions": [
     {
