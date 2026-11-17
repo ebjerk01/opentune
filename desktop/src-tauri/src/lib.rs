@@ -43,6 +43,7 @@ mod feat_db;
 mod feat_logging;
 mod feat_logview;
 mod feat_obd;
+mod feat_obdinfo;
 mod feat_scan;
 mod feat_service;
 
@@ -2627,6 +2628,7 @@ macro_rules! core_command_list {
             feat_dash::obd_pid_table,
             feat_dash::obd_supported,
             feat_dash::obd_read,
+            feat_obdinfo::obd_inspect,
             feat_db::db_list,
             feat_db::db_get,
             feat_candump::candump_start,

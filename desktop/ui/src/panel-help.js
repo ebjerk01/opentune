@@ -31,6 +31,7 @@
     scan: ["Detect the adapter (HS/MS switch on the module bus)", "Choose the vehicle's module list and Scan", "Clear codes per module only after fixing the cause"],
     dashboard: ["Detect the adapter, engine running", "Pick a preset or your own values", "Start: only values the ECU reports are shown"],
     obd: ["Detect the adapter", "Start with the ignition on", "Values read — when the ECU does not report them"],
+    inspection: ["Detect the adapter, ignition on", "Read all (tick All OBD modules for every ECU)", "Check MIL, monitors not ready, codes and CVNs"],
     logging: ["Load a logger definition", "Pick parameters and Start", "Save the log as CSV"],
     logview: ["Open a CSV log and tick channels to plot", "Zoom with the wheel, drag to pan, read values at the cursor", "Map overlay: definition, map, image, X/Y channels → Overlay"],
     candump: ["Detect a CAN-capable adapter on the right bus", "Choose format and file, then Start", "Stop to close the file; watch Dropped"],
