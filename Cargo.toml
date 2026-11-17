@@ -25,6 +25,7 @@ members = [
     "crates/opentune-scan",
     "crates/opentune-container",
     "crates/opentune-cbf",
+    "crates/opentune-coding",
 ]
 
 [workspace.package]

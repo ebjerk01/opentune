@@ -1,0 +1,14 @@
+[package]
+name = "opentune-coding"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Module coding / configuration engine (read, decode, edit, diff, write) for OpenTune, driven by data-defined coding-label sets over UDS"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
