@@ -1,11 +1,5 @@
-//! PRIVATE checksum engine for the Siemens/Continental **Simos PCR2.1** diesel
-//! ECU (VAG 1.6 TDI common-rail; Infineon TriCore **TC1796**), plus the
-//! MPPS-reconstructed **EDC16 word-wise** core kept for documentation.
-//!
-//! This crate is **not** part of the public `opentune` repository. It depends on
-//! `opentune-checksum` by path, read-only, and mirrors its [`ChecksumAlgo`]
-//! trait so the algorithm can be lifted into the public crate later *iff* the
-//! project owner decides to publish it.
+//! Checksum engine for the Siemens/Continental **Simos PCR2.1** diesel ECU
+//! (VAG 1.6 TDI common-rail; Infineon TriCore **TC1796**).
 //!
 //! # PCR2.1 — SOLVED and validated
 //!
@@ -51,23 +45,9 @@
 //! tune (same file, maps changed) keeps the old stored CRC `0x7E122B3B` while the
 //! data now hashes to `0x0F466CF6` — exactly the failure [`Pcr21::correct`] fixes.
 //!
-//! The owner's car is a Passat CAYC; CAYB/CAYC are the same 1.6 TDI PCR2.1
-//! family (same ECU, same SW platform, same checksum). No literal CAYC dump was
-//! available in the library, so the two validated dumps are CAYB / Seat 1.6 TDI.
-//!
-//! # EDC16 word-wise — reconstructed but NOT confirmed in-situ
-//!
-//! the EDC16-CR word-wise variant (refuted in-situ; not included) carries a faithful reconstruction of the MPPS `Check020` (EDC16
-//! Common-Rail) / `Check048` (EDC16 PD) word-wise checksum **core** from the
-//! private `mpps-re` decompile notes. It is covered by deterministic
-//! round-trip unit tests, but it could **not** be confirmed against any real
-//! dump: the `C3 3C 55 AA` area-table signature it keys off is absent from all
-//! 1054 EDC16/CDI/CR dumps in the reference library, and the checksum regions in
-//! real EDC16 CR (Mercedes 2.2 CDI) and PD (VW) dumps are high-entropy
-//! signed/encrypted 0x80-byte blocks, not a plainly reproducible word-wise
-//! field. A bounded directory-walk brute force found no self-consistent match.
-//! Therefore the EDC16-CR variant **verifies/surfaces only and refuses to
-//! correct** — the project's standing rule for an unvalidated algorithm.
+//! CAYB/CAYC are the same 1.6 TDI PCR2.1 family (same ECU, same SW platform,
+//! same checksum); no literal CAYC dump was available, so the two validated
+//! dumps are CAYB / Seat 1.6 TDI.
 
 use crate::{crc32_bosch, BlockStatus, ChecksumAlgo, Fix};
 use opentune_core::{Error, MemoryRegion, Result};

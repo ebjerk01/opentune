@@ -13,7 +13,7 @@ run over its diagnostic transport, with each action gated on the adapter's
 reported capabilities. These live paths are **not yet validated on a vehicle**.
 
 There is deliberately **no** immobiliser / EEPROM / standalone / bench tooling
-here (that lives in a separate private app).
+here — it is out of scope for this app.
 
 > This crate is **not** part of the root Cargo workspace. It builds on its own so
 > the workspace stays lean and the desktop-only dependencies (Tauri) don't leak

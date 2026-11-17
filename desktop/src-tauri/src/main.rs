@@ -8,7 +8,7 @@
 //   browse a backup vault.
 //
 // It is deliberately calibration-only: there is NO immobiliser / EEPROM /
-// standalone / bench tooling here (that lives in a separate private app). ECU
+// standalone / bench tooling here (out of scope for this app). ECU
 // definitions, the vehicle catalog and the in-app guide are resolved from
 // bundled resources (or a dev path) at startup.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]

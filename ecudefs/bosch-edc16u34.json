@@ -34,7 +34,7 @@
   "maps": [
     {
       "name": "injection quantity limiter (smoke / air-mass limiter)",
-      "notes": "CONFIDENCE: HIGH. Source: DIFF-DERIVED from the owner's Golf 1.9 TDI PD stock.bin vs Wiktor 'squeeze' tune (tuned_uncorrected.bin) plus the in-image map header, cross-checked against the EDC16 standard 0.01 mg/stroke IQ LSB. This is the Mengenbegrenzung ueber Luftmasse (injected-quantity limit vs engine speed and air mass); the tune raised these cells to release fuel. Addresses are byte offsets into the 2 MiB full-flash read (matches the fixtures). The in-flash header at 0x1D307E encodes rows=16, cols=13 followed by the two axis tables. Stock decodes to 13.9..59.1 mg/stroke (full-load smoke limit ~59 mg, tapering at high rpm) with both axes strictly monotonic. Confirm per software variant before any write.",
+      "notes": "CONFIDENCE: HIGH. Source: DIFF-DERIVED from a Golf 1.9 TDI PD stock.bin vs a third-party 'squeeze' tune (tuned_uncorrected.bin) plus the in-image map header, cross-checked against the EDC16 standard 0.01 mg/stroke IQ LSB. This is the Mengenbegrenzung ueber Luftmasse (injected-quantity limit vs engine speed and air mass); the tune raised these cells to release fuel. Addresses are byte offsets into the 2 MiB full-flash read (matches the fixtures). The in-flash header at 0x1D307E encodes rows=16, cols=13 followed by the two axis tables. Stock decodes to 13.9..59.1 mg/stroke (full-load smoke limit ~59 mg, tapering at high rpm) with both axes strictly monotonic. Confirm per software variant before any write.",
       "address": 1913020,
       "data_type": "u16",
       "endian": "big",
@@ -74,7 +74,7 @@
     },
     {
       "name": "injection quantity - driver demand / full-load (vs engine speed)",
-      "notes": "CONFIDENCE: MEDIUM-HIGH that this is an injection-quantity (fuel demand) map; MEDIUM on the exact role (driver-wish vs full-load) and on the Y-axis unit. Source: DIFF-DERIVED (the second of the two regions the Wiktor tune changed) plus the in-image header. Header at 0x1D16F6 encodes rows=4, cols=20, then Y[4] at 0x1D16FA and the rpm X[20] at 0x1D1702; data starts at 0x1D172E after two zero-word padding. Stock decodes to a humped 0..31.6 mg/stroke curve over rpm with fuel cut (0) at the top three rpm breakpoints - textbook fuel-demand shape; the tune raised every active cell ~5-11%. The 4-point Y axis [600,700,890,930] is stored (unit unconfirmed - likely ambient/charge pressure in mbar/hPa or an altitude correction index). Byte offsets into the 2 MiB read; confirm per software variant before any write.",
+      "notes": "CONFIDENCE: MEDIUM-HIGH that this is an injection-quantity (fuel demand) map; MEDIUM on the exact role (driver-wish vs full-load) and on the Y-axis unit. Source: DIFF-DERIVED (the second of the two regions the tune changed) plus the in-image header. Header at 0x1D16F6 encodes rows=4, cols=20, then Y[4] at 0x1D16FA and the rpm X[20] at 0x1D1702; data starts at 0x1D172E after two zero-word padding. Stock decodes to a humped 0..31.6 mg/stroke curve over rpm with fuel cut (0) at the top three rpm breakpoints - textbook fuel-demand shape; the tune raised every active cell ~5-11%. The 4-point Y axis [600,700,890,930] is stored (unit unconfirmed - likely ambient/charge pressure in mbar/hPa or an altitude correction index). Byte offsets into the 2 MiB read; confirm per software variant before any write.",
       "address": 1906478,
       "data_type": "u16",
       "endian": "big",
@@ -114,7 +114,7 @@
     },
     {
       "name": "injection quantity vs air mass (base smoke-limiter family)",
-      "notes": "CONFIDENCE: MEDIUM (structure-derived, NOT diff-confirmed). Source: in-image map header at 0x1C2370 (rows=16, cols=8), identified by its textbook engine-speed x air-mass layout and injected-quantity data range. One of a family of ~7 near-identical 16x8 maps at 0x1C2370..0x1C2A1E that share the same rpm and air-mass axes - most likely slices of a 3-D limiter indexed by a third variable (gear/EGR/condition); this is slice 0. Stock decodes to 0..42.9 mg/stroke with monotonic rpm (0..5355) and air-mass (10..1000 mg) axes. Not changed by the Wiktor tune. Byte offsets into the 2 MiB read; confirm the exact family member and role per software variant before any write.",
+      "notes": "CONFIDENCE: MEDIUM (structure-derived, NOT diff-confirmed). Source: in-image map header at 0x1C2370 (rows=16, cols=8), identified by its textbook engine-speed x air-mass layout and injected-quantity data range. One of a family of ~7 near-identical 16x8 maps at 0x1C2370..0x1C2A1E that share the same rpm and air-mass axes - most likely slices of a 3-D limiter indexed by a third variable (gear/EGR/condition); this is slice 0. Stock decodes to 0..42.9 mg/stroke with monotonic rpm (0..5355) and air-mass (10..1000 mg) axes. Not changed by the tune. Byte offsets into the 2 MiB read; confirm the exact family member and role per software variant before any write.",
       "address": 1844132,
       "data_type": "u16",
       "endian": "big",

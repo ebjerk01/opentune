@@ -13,13 +13,13 @@ no proprietary A2L/DAMOS content and no VINs.
 
 The EDC16U34 PD is read as a **2 MiB** full-flash image. Addresses in the map
 definitions are **byte offsets into that 2 MiB read**, which is what the viewer
-loads. The reference images used to establish and validate the maps are the
-owner's own Golf 1.9 TDI PD reads:
+loads. The reference images used to establish and validate the maps are a
+Golf 1.9 TDI PD stock read and a tune of it:
 
 | File | Role |
 |---|---|
 | `stock.bin` | factory calibration (validation target) |
-| `tuned_uncorrected.bin` | Wiktor "squeeze" tune, checksums *not* re-fixed |
+| `tuned_uncorrected.bin` | third-party "squeeze" tune, checksums *not* re-fixed |
 | `tuned_fixed.bin` | same edits, checksums corrected |
 
 > Note on `flash_size`. The shipped `ecudefs/bosch-edc16u34.json` keeps its
@@ -35,7 +35,7 @@ Two independent methods were combined; where they agree, confidence is high.
 ### 1. Diff-derived (stock vs tune)
 
 `opentune findmaps stock.bin tuned_uncorrected.bin` (and a byte-level diff)
-report that the Wiktor tune changed **exactly two** regions — a fuel-only PD
+report that the tune changed **exactly two** regions — a fuel-only PD
 squeeze (driver demand + smoke limiter raised, boost/timing left stock):
 
 ```

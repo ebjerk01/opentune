@@ -5,7 +5,7 @@ A living backlog of features worth building. Grouped by theme; rough effort in
 emissions defeat, odometer fraud, or theft.
 
 ## Checksums & integrity
-- `[M]` **EDC17** (TriCore) — your Passat CC's engine *(done: verify + correct; VAG constant
+- `[M]` **EDC17** (TriCore) — VAG 2.0 TDI CR and others *(done: verify + correct; VAG constant
   bootstrapped from your own stock via `checksum fix --reference`)*.
 - `[M]` **Simos PCR2.1** — VAG 1.6 TDI CR *(done: self-contained on-image directory)*.
 - `[S]` **EDC16-CR in-situ** confirmation (constants validated, needs a live word-wise dump).
@@ -89,7 +89,7 @@ emissions defeat, odometer fraud, or theft.
 - `[S]` Docs site + screenshots.
 - `[M]` Community ECU-definition & map library (contribution format + review).
 
-## Drivetrain control units — TCUs + AWD/4WD (scope expansion; user, 2026-11-16)
+## Drivetrain control units — TCUs + AWD/4WD (scope expansion, 2026-11-16)
 OpenTune's identify / checksum / maps / flash pipeline is **not engine-specific**. Make
 **transmission (TCU) and all-wheel/4WD controllers first-class targets alongside engine ECUs**,
 across every vehicle family this project has worked on. Each target just needs its own definitions +
@@ -100,7 +100,7 @@ Targets by family (what we've actually touched):
 - **VAG** — DSG/TCU (Temic **DQ250/DQ200/DQ381/DL382**, Simos-based); **Haldex** AWD coupling
   (Gen1–5; Gen4/5 BorgWarner = the "Haldex performance" targets). Refs: bri3d/VW_Flash,
   TheFlashBold/DQ250-MQB-Bench-Flash, dspl1236/simos-suite.
-- **Mercedes** — 722.9 (7G-Tronic) TCU; 4MATIC transfer-case / traction control (STAR-PC/XENTRY context).
+- **Mercedes** — 722.9 (7G-Tronic) TCU; 4MATIC transfer-case / traction control.
 - **BMW** — ZF 6HP/8HP TCU (EGS); xDrive transfer case (ATC).
 - **Ford** — PowerShift / 6F35 TCU; Haldex-style AWD coupling.
 - **Mitsubishi** — Pajero Super-Select 4WD + auto TCU.
