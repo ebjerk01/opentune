@@ -75,12 +75,16 @@
   }
   function gaugeSvg(id, lo, hi, red, ticks, tickFmt) {
     const tk = ticks.map((v) => {
-      const f = (v - lo) / (hi - lo), [x, y] = pt(A0 + SWEEP * f);
-      const [lx, ly] = [C + (x - C) * 1.24, C + (y - C) * 1.24];
-      return `<text class="g-tick" x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="middle">${tickFmt(v)}</text>`;
+      // Labels sit just outside the track, anchored away from the arc so they
+      // never run into it or off the drawing.
+      const a = ((A0 + SWEEP * (v - lo) / (hi - lo)) * Math.PI) / 180;
+      const cx = Math.cos(a), rl = R + 15;
+      const lx = C + rl * cx, ly = C + rl * Math.sin(a);
+      const anchor = cx > 0.3 ? "start" : cx < -0.3 ? "end" : "middle";
+      return `<text class="g-tick" x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${anchor}">${tickFmt(v)}</text>`;
     }).join("");
     const redArc = red != null ? `<path class="g-red" d="${arc((red - lo) / (hi - lo), 1)}"/>` : "";
-    return `<svg viewBox="0 0 200 172" class="g-svg" role="img" aria-labelledby="${id}Lbl">
+    return `<svg viewBox="-26 -6 252 178" class="g-svg" role="img" aria-labelledby="${id}Lbl">
       <path class="g-track" d="${arc(0, 1)}"/>${redArc}
       <path class="g-val" id="${id}Arc" d=""/>${tk}
       <text class="g-num" id="${id}Num" x="100" y="108" text-anchor="middle">—</text>
