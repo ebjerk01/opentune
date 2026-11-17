@@ -865,6 +865,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-sa2"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-scan"
 version = "0.1.0"
 dependencies = [

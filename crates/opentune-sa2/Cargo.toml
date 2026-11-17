@@ -1,0 +1,19 @@
+# SA2 (Security Access, method 2) seed->key bytecode VM for OpenTune.
+#
+# This crate ships ONLY the interpreter. The per-ECU SA2 bytecode program is
+# always user-supplied (from the vehicle's own A2L/ODX description or the user).
+# No OEM bytecode, keys, or fixed manufacturer algorithm sets are bundled.
+[package]
+name = "opentune-sa2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "SA2 (Security Access) seed->key bytecode virtual machine: runs a user-supplied SA2 program over a seed to compute the service 0x27 key. Ships no OEM bytecode."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+thiserror = { workspace = true }
