@@ -186,6 +186,32 @@ enum Command {
         #[arg(long, default_value = "0")]
         base: String,
     },
+    /// Convert an ASAM A2L description straight into a TunerPro XDF.
+    ///
+    /// Composes the A2L importer and the XDF exporter: it parses the A2L
+    /// (lossy UTF-8, like `import-a2l`), rebases every CPU/logical address to a
+    /// flash-file offset by subtracting `--base` with **checked** subtraction
+    /// (an address below the base is reported, never silently wrapped),
+    /// optionally keeps only maps whose name contains `--only`, writes the XDF
+    /// to `--out` (or stdout) and always prints a conversion-loss report so a
+    /// seemingly complete conversion never hides a silent loss.
+    #[command(name = "a2l2xdf")]
+    A2l2Xdf {
+        /// Path to the input `.a2l` file.
+        file: PathBuf,
+        /// Output `.xdf` path (defaults to stdout; the loss report always goes
+        /// to stderr so it never mixes into a piped XDF).
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+        /// Base to subtract from each A2L CPU/logical address to get the bin
+        /// file offset (hex ok, e.g. 0xA0000000 for TriCore). A2L addresses are
+        /// logical, not file offsets; supply the ECU's memory-map base here.
+        #[arg(long, default_value = "0")]
+        base: String,
+        /// Keep only maps whose name contains this substring (case-insensitive).
+        #[arg(long)]
+        only: Option<String>,
+    },
     /// Export an ECU definition's maps as a TunerPro XDF (modern XML).
     ExportXdf {
         /// Directory of ECU definitions.
@@ -458,6 +484,67 @@ fn parse_num(s: &str) -> Result<u32> {
     } else {
         s.parse::<u32>().with_context(|| format!("bad number: {s}"))
     }
+}
+
+/// Outcome of rebasing an A2L import's CPU/logical addresses to flash-file
+/// offsets. Both lists are empty when every address sat at or above the base.
+#[derive(Debug, Default)]
+struct RebaseReport {
+    /// Maps whose own data address was below `base` and so could not be located
+    /// in the image; each was dropped from the map list. Formatted for display.
+    dropped: Vec<String>,
+    /// Stored axis addresses that were below `base`. The map was kept but the
+    /// offending axis address was cleared (so no wrong byte is ever read).
+    axis_failures: Vec<String>,
+}
+
+/// Rebase every map (and its stored axes) in place from A2L CPU/logical
+/// addresses down to flash-file offsets by subtracting `base`, using **checked**
+/// subtraction so an address below `base` is reported rather than silently
+/// wrapped. A map whose own data address underflows is removed from `maps`; an
+/// axis address that underflows is cleared and the map kept. This is the single
+/// rebasing path shared by `import-a2l` and `a2l2xdf` so both behave identically.
+fn rebase_maps_checked(maps: &mut Vec<opentune_core::ecudef::MapDef>, base: u32) -> RebaseReport {
+    fn rebase_axis(
+        ax: Option<&mut opentune_core::ecudef::AxisDef>,
+        base: u32,
+        map_name: &str,
+        which: &str,
+        failures: &mut Vec<String>,
+    ) {
+        if let Some(ax) = ax {
+            if let Some(a) = ax.address {
+                match a.checked_sub(base) {
+                    Some(v) => ax.address = Some(v),
+                    None => {
+                        ax.address = None;
+                        failures.push(format!(
+                            "{map_name} {which}-axis @0x{a:X} < base 0x{base:X}"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut report = RebaseReport::default();
+    let mut kept = Vec::with_capacity(maps.len());
+    for mut m in std::mem::take(maps) {
+        match m.address.checked_sub(base) {
+            Some(a) => m.address = a,
+            None => {
+                report
+                    .dropped
+                    .push(format!("{} @0x{:X} < base 0x{:X}", m.name, m.address, base));
+                continue;
+            }
+        }
+        rebase_axis(m.x_axis.as_mut(), base, &m.name, "x", &mut report.axis_failures);
+        rebase_axis(m.y_axis.as_mut(), base, &m.name, "y", &mut report.axis_failures);
+        kept.push(m);
+    }
+    *maps = kept;
+    report
 }
 
 fn open_driver(reg: &Registry, conn: &ConnectArgs) -> Result<Box<dyn Interface>> {
@@ -1162,20 +1249,14 @@ fn main() -> Result<()> {
                 import.maps.len(),
                 base
             );
-            // Rebase CPU addresses to bin file offsets.
+            // Rebase CPU addresses to bin file offsets (checked: never wrap).
             let mut maps = import.maps;
-            for m in &mut maps {
-                m.address = m.address.wrapping_sub(base);
-                if let Some(ax) = m.x_axis.as_mut() {
-                    if let Some(a) = ax.address.as_mut() {
-                        *a = a.wrapping_sub(base);
-                    }
-                }
-                if let Some(ax) = m.y_axis.as_mut() {
-                    if let Some(a) = ax.address.as_mut() {
-                        *a = a.wrapping_sub(base);
-                    }
-                }
+            let rebase = rebase_maps_checked(&mut maps, base);
+            for d in &rebase.dropped {
+                println!("  DROPPED (address below base): {d}");
+            }
+            for a in &rebase.axis_failures {
+                println!("  WARN axis address below base (cleared): {a}");
             }
             for m in maps.iter().take(60) {
                 let note = if m.notes.is_empty() {
@@ -1272,6 +1353,125 @@ fn main() -> Result<()> {
                     "  {:<40} sw={:<12} @{} {} bytes crc={}{}",
                     name, sw, addr, len, stored_crc, status
                 );
+            }
+        }
+        Command::A2l2Xdf {
+            file,
+            out,
+            base,
+            only,
+        } => {
+            let base = parse_num(&base)?;
+            // A2L text can be Latin-1/Win-1252; decode lossily (ASCII structure),
+            // exactly like `import-a2l`.
+            let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+            let src = String::from_utf8_lossy(&raw);
+            let import = opentune_a2l::parse_a2l(&src).map_err(|e| anyhow!("{e}"))?;
+            let title = import
+                .module
+                .clone()
+                .or_else(|| import.project.clone())
+                .unwrap_or_else(|| "a2l2xdf".to_string());
+            let parsed_total = import.maps.len();
+            let mut maps = import.maps;
+
+            // Optional name filter (case-insensitive substring), applied before
+            // rebasing so dropped-vs-filtered stay distinct in the report.
+            let mut filtered_out: Vec<String> = Vec::new();
+            if let Some(sub) = &only {
+                let needle = sub.to_ascii_lowercase();
+                let mut kept = Vec::with_capacity(maps.len());
+                for m in std::mem::take(&mut maps) {
+                    if m.name.to_ascii_lowercase().contains(&needle) {
+                        kept.push(m);
+                    } else {
+                        filtered_out.push(m.name.clone());
+                    }
+                }
+                maps = kept;
+            }
+
+            // Rebase CPU/logical addresses to flash-file offsets (checked).
+            let rebase = rebase_maps_checked(&mut maps, base);
+
+            // Flag non-linear conversions: the A2L importer imports any
+            // non-affine COMPU_METHOD pre-scaled (factor 1, offset 0) and records
+            // it in `notes` — surface that so the XDF is not mistaken for exact.
+            let nonlinear: Vec<String> = maps
+                .iter()
+                .filter(|m| m.notes.contains("pre-scaled"))
+                .map(|m| format!("{}: {}", m.name, m.notes))
+                .collect();
+
+            if maps.is_empty() {
+                return Err(anyhow!(
+                    "no maps to export (parsed {parsed_total}, {} filtered out, {} dropped by rebasing)",
+                    filtered_out.len(),
+                    rebase.dropped.len()
+                ));
+            }
+
+            let xml = opentune_xdf::export_xdf(Some(&title), &maps);
+            match &out {
+                Some(p) => {
+                    std::fs::write(p, &xml).map_err(|e| anyhow!("write {}: {e}", p.display()))?;
+                }
+                None => print!("{xml}"),
+            }
+
+            // --- Conversion-loss report (always; to stderr so it never mixes
+            // into a piped XDF on stdout). Never silently lossy. ---
+            eprintln!("=== a2l2xdf conversion-loss report ===");
+            eprintln!(
+                "A2L: project {:?} module {:?} — parsed {parsed_total} map(s), base 0x{base:X}",
+                import.project.as_deref().unwrap_or("?"),
+                import.module.as_deref().unwrap_or("?"),
+            );
+            eprintln!("Exported {} map(s) to XDF.", maps.len());
+            if let Some(sub) = &only {
+                eprintln!(
+                    "Filtered by --only {sub:?}: {} map(s) excluded (not loss).",
+                    filtered_out.len()
+                );
+                for n in &filtered_out {
+                    eprintln!("    - {n}");
+                }
+            }
+            if rebase.dropped.is_empty() {
+                eprintln!("Maps dropped (address rebasing underflowed base): none.");
+            } else {
+                eprintln!(
+                    "Maps dropped (address rebasing underflowed base): {}",
+                    rebase.dropped.len()
+                );
+                for d in &rebase.dropped {
+                    eprintln!("    - {d}");
+                }
+            }
+            if rebase.axis_failures.is_empty() {
+                eprintln!("Axis addresses that failed rebasing: none.");
+            } else {
+                eprintln!(
+                    "Axis addresses that failed rebasing (axis cleared, map kept): {}",
+                    rebase.axis_failures.len()
+                );
+                for a in &rebase.axis_failures {
+                    eprintln!("    - {a}");
+                }
+            }
+            if nonlinear.is_empty() {
+                eprintln!("Non-linear scalings imported pre-scaled: none.");
+            } else {
+                eprintln!(
+                    "Non-linear scalings flagged (imported pre-scaled, factor 1 / offset 0): {}",
+                    nonlinear.len()
+                );
+                for n in &nonlinear {
+                    eprintln!("    ! {n}");
+                }
+            }
+            if let Some(p) = &out {
+                eprintln!("Wrote {} map(s) to {}", maps.len(), p.display());
             }
         }
         Command::ExportXdf { ecudefs, def, out } => {

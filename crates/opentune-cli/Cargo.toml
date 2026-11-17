@@ -35,3 +35,8 @@ opentune-scan = { path = "../opentune-scan" }
 opentune-container = { path = "../opentune-container" }
 opentune-cbf = { path = "../opentune-cbf" }
 opentune-coding = { path = "../opentune-coding" }
+
+[dev-dependencies]
+# Re-import the generated XDF in the a2l2xdf round-trip integration test.
+opentune-xdf = { path = "../opentune-xdf" }
+opentune-core = { path = "../opentune-core" }
