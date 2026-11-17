@@ -139,9 +139,9 @@ fn csv_has_a_header_and_one_row_per_sample_per_round() {
 
 // ---------------------------------------------------------------------------
 // OBD-II PID and raw-memory reads. The `opentune-udssim` server models UDS
-// services (RDBI etc.) but not OBD-II mode 01 or ReadMemoryByAddress, so these
-// drive a scripted `RawDiag` closure that both asserts the exact request bytes
-// and returns a canned response. The closure form uses the blanket `RawDiag`
+// services (incl. ReadMemoryByAddress) but not OBD-II mode 01, and these tests
+// pin the exact request bytes, so they drive a scripted `RawDiag` closure that
+// both asserts the request and returns a canned response. The closure form uses the blanket `RawDiag`
 // impl in `opentune-core`.
 
 #[test]

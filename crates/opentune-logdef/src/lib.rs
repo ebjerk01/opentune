@@ -5,7 +5,10 @@
 //! data-driven. The parser describes *how* a parameter is read and scaled; the
 //! [`live`] module then polls the selected parameters over a `RawDiag`
 //! transport (UDS `0x22` DIDs, OBD-II mode `0x01` PIDs and UDS `0x23` memory
-//! reads) and applies their linear conversions.
+//! reads) and applies their linear conversions. The [`fast`] module's
+//! [`LiveSession`] packs UDS DID and memory channels into dynamically defined
+//! DIDs (UDS `0x2C`) and reads them with one request per record, falling back
+//! to per-channel polling when the ECU refuses.
 //!
 //! ## Formats
 //!
@@ -73,6 +76,12 @@ pub use parse::parse;
 
 pub mod live;
 pub use live::{poll_once, poll_to_csv, Sample};
+
+pub mod fast;
+pub use fast::{
+    DynamicDidInfo, FastLogConfig, LiveSession, LiveStatus, LogMode, DEFAULT_DYNAMIC_DID,
+    DYNAMIC_DID_RANGE,
+};
 
 /// Error parsing a RomRaider-style logger document.
 #[derive(Debug)]
