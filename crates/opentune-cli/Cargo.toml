@@ -34,3 +34,4 @@ opentune-vin = { path = "../opentune-vin" }
 opentune-scan = { path = "../opentune-scan" }
 opentune-container = { path = "../opentune-container" }
 opentune-cbf = { path = "../opentune-cbf" }
+opentune-coding = { path = "../opentune-coding" }

@@ -1,4 +1,5 @@
 //! The interface-driver abstraction. Every reader/flasher implements [`Interface`].
+use crate::protocol::DiagTransport;
 use crate::{Capabilities, ConnectConfig, EcuId, MemoryRegion, Progress, Result};
 
 /// Static description of a connected interface.
@@ -43,4 +44,16 @@ pub trait Interface {
         data: &[u8],
         progress: &mut dyn FnMut(Progress),
     ) -> Result<()>;
+
+    /// Borrow this driver's request/response [`DiagTransport`] for raw UDS/KWP
+    /// exchanges (module coding, routines, DIDs), when the driver can expose one.
+    ///
+    /// The default returns `None`: a driver that only implements the block
+    /// read/write pipeline does not offer a generic diagnostic transport, and a
+    /// caller that needs one (e.g. the coding engine) must handle its absence.
+    /// Drivers that own a `DiagTransport` override this to hand it out, so an
+    /// application can obtain a transport generically from any registry driver.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        None
+    }
 }

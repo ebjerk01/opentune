@@ -237,6 +237,69 @@ enum Command {
         #[arg(long)]
         dtcs: bool,
     },
+    /// Module coding / configuration over UDS (read, decode, edit, write).
+    ///
+    /// Driven by a data-defined coding-label set (`--def`). With the default
+    /// `mock` driver everything runs offline against a JSON coding store
+    /// (`--store`); no hardware is touched and no on-car behaviour is implied.
+    Coding {
+        #[command(subcommand)]
+        action: CodingAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum CodingAction {
+    /// Read every coding block and print its raw bytes (DID + hex).
+    Read {
+        #[command(flatten)]
+        conn: CodingConn,
+    },
+    /// Read and decode every parameter, printing value + label.
+    Decode {
+        #[command(flatten)]
+        conn: CodingConn,
+    },
+    /// Preview applying `NAME = VALUE`: print the byte/parameter changes a write
+    /// would make, without writing anything (a dry run).
+    Set {
+        /// Parameter name (as in the definition).
+        name: String,
+        /// New value: a number (decimal or `0x` hex) or an enum option label.
+        value: String,
+        #[command(flatten)]
+        conn: CodingConn,
+    },
+    /// Apply `NAME = VALUE` to the module: re-reads fresh, merges the single
+    /// changed field onto the live bytes, writes it and reads back to verify.
+    Write {
+        /// Parameter name (as in the definition).
+        name: String,
+        /// New value: a number (decimal or `0x` hex) or an enum option label.
+        value: String,
+        /// Produce the plan (backup + diff) without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        #[command(flatten)]
+        conn: CodingConn,
+    },
+}
+
+#[derive(clap::Args)]
+struct CodingConn {
+    /// Coding definition (`CodingDef`) JSON file.
+    #[arg(long)]
+    def: PathBuf,
+    /// Driver id (see `drivers`); must expose a diagnostic transport.
+    #[arg(long, default_value = "mock")]
+    driver: String,
+    /// For the `mock` driver: JSON coding store (`{ "<did>": "<hex>" }`) that
+    /// backs the offline UDS transport. Writes persist back to this file.
+    #[arg(long)]
+    store: Option<PathBuf>,
+    /// Per-request UDS timeout, milliseconds.
+    #[arg(long, default_value_t = 1000)]
+    timeout_ms: u64,
 }
 
 #[derive(Subcommand)]
@@ -470,17 +533,50 @@ fn main() -> Result<()> {
         }
         Command::Checksum { action } => match action {
             ChecksumAction::Verify { algo, file } => {
+                use opentune_checksum::{ChecksumKind, Recognition, Representation};
                 let algo = opentune_checksum::get(&algo)
                     .ok_or_else(|| anyhow!("unknown checksum algo '{algo}'"))?;
                 let img = std::fs::read(&file)?;
-                for b in algo.verify(&img)? {
+                // A file handed to `checksum verify` is a full ECU image; declare
+                // it so, and let the algorithm narrow it (or confirm recognition).
+                let reports = opentune_checksum::report_detailed(
+                    &*algo,
+                    &img,
+                    Representation::RawFullImage,
+                )?;
+                for r in &reports {
+                    let rep = match r.representation {
+                        Representation::RawFullImage => "full image",
+                        Representation::ProgrammingBlock => "extracted block",
+                        Representation::ContainerSegment => "container segment",
+                        Representation::Unknown => "unknown representation",
+                    };
+                    let kind = match r.checksum_kind {
+                        ChecksumKind::Embedded => "embedded",
+                        ChecksumKind::Transfer => "transfer",
+                    };
+                    // A merely-consistent match must never read as a recognised
+                    // ECU family: only a Recognised block is "supported".
+                    let recog = match r.recognition {
+                        Recognition::Recognised => "recognised",
+                        Recognition::Consistent => "consistent-only",
+                    };
                     println!(
-                        "{:<16} {} stored=0x{:08X} computed=0x{:08X}",
-                        b.name,
-                        if b.ok { "OK  " } else { "BAD " },
-                        b.stored,
-                        b.computed
+                        "{:<16} {} stored=0x{:08X} computed=0x{:08X}  [{} | {} | {}]",
+                        r.status.name,
+                        if r.status.ok { "OK  " } else { "BAD " },
+                        r.status.stored,
+                        r.status.computed,
+                        rep,
+                        kind,
+                        recog,
                     );
+                    if r.status.ok && !r.is_supported() {
+                        println!(
+                            "                 note: mathematical match only — NOT a recognised {} family (do not treat as supported)",
+                            algo.id()
+                        );
+                    }
                 }
             }
             ChecksumAction::Fix {
@@ -940,6 +1036,39 @@ fn main() -> Result<()> {
                     note
                 );
             }
+            // Scalar constants are a distinct object class; surface them too
+            // (previously dropped) with name/addr/type/scaling/unit.
+            if !import.constants.is_empty() {
+                println!("Constants ({}):", import.constants.len());
+                for c in &import.constants {
+                    let unit = if c.unit.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  [{}]", c.unit)
+                    };
+                    let note = if c.notes.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  ! {}", c.notes)
+                    };
+                    println!(
+                        "  {:<28} @0x{:06X}  {:?}/{:?}  x{}{:+}{}{}",
+                        c.name,
+                        c.address,
+                        c.data_type,
+                        c.endian,
+                        c.scaling.factor,
+                        c.scaling.offset,
+                        unit,
+                        note
+                    );
+                }
+            }
+            // Import warnings were also dropped before; print them so a lossy /
+            // skipped-entry import is visible rather than silent.
+            for w in &import.warnings {
+                println!("  ! warning: {w}");
+            }
             if let Some(into) = into {
                 let txt = std::fs::read_to_string(&into)
                     .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
@@ -1243,6 +1372,177 @@ fn main() -> Result<()> {
                     );
                 }
             }
+        }
+        Command::Coding { action } => run_coding(&reg, action)?,
+    }
+    Ok(())
+}
+
+/// Open the `conn`'s driver and borrow its diagnostic transport, erroring
+/// clearly when the driver cannot expose one.
+fn open_coding_driver(reg: &Registry, conn: &CodingConn) -> Result<Box<dyn Interface>> {
+    let mut drv = reg
+        .make(&conn.driver)
+        .ok_or_else(|| anyhow!("unknown driver '{}'", conn.driver))?;
+    let mut cfg = ConnectConfig::default();
+    if let Some(store) = &conn.store {
+        cfg.options
+            .insert("coding_store".into(), store.to_string_lossy().into_owned());
+    }
+    drv.open(&cfg)
+        .map_err(|e| anyhow!("open {}: {e}", conn.driver))?;
+    Ok(drv)
+}
+
+/// Load and semantically validate a coding definition from `conn.def`.
+fn load_coding_def(conn: &CodingConn) -> Result<opentune_coding::CodingDef> {
+    let text = std::fs::read_to_string(&conn.def)
+        .with_context(|| format!("read coding def {}", conn.def.display()))?;
+    let def = opentune_coding::CodingDef::from_json(&text)
+        .map_err(|e| anyhow!("parse coding def {}: {e}", conn.def.display()))?;
+    def.validate()
+        .map_err(|e| anyhow!("invalid coding def {}: {e}", conn.def.display()))?;
+    Ok(def)
+}
+
+/// Resolve a user-supplied value for `name`: a number (decimal or `0x` hex), or
+/// an enum option label declared for that parameter.
+fn resolve_coding_value(def: &opentune_coding::CodingDef, name: &str, value: &str) -> Result<u64> {
+    let v = value.trim();
+    let num = if let Some(hex) = v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
+        u64::from_str_radix(hex, 16).ok()
+    } else {
+        v.parse::<u64>().ok()
+    };
+    if let Some(n) = num {
+        return Ok(n);
+    }
+    // Not numeric: try to match an enum option label.
+    let param = def
+        .param(name)
+        .ok_or_else(|| anyhow!("unknown parameter '{name}'"))?;
+    param
+        .options
+        .iter()
+        .find(|o| o.label.eq_ignore_ascii_case(v))
+        .map(|o| o.value)
+        .ok_or_else(|| anyhow!("value '{value}' is neither a number nor a known option of '{name}'"))
+}
+
+/// Print one coding's blocks as `DID  hex`.
+fn print_coding_blocks(coding: &opentune_coding::Coding) {
+    for b in &coding.blocks {
+        let hex: String = b.bytes.iter().map(|x| format!("{x:02X}")).collect();
+        println!("  0x{:04X}  {}", b.did, hex);
+    }
+}
+
+/// Print a write report's plan (byte + parameter changes) and its outcome.
+fn print_coding_report(rep: &opentune_coding::WriteReport) {
+    if rep.security_required {
+        println!("note: this module requires SecurityAccess (0x27) to be unlocked first");
+    }
+    if rep.param_changes.is_empty() {
+        println!("No parameter changes.");
+    } else {
+        println!("Parameter changes:");
+        for pc in &rep.param_changes {
+            println!(
+                "  {:<20} {} ({}) -> {} ({})",
+                pc.name, pc.old.0, pc.old.1, pc.new.0, pc.new.1
+            );
+        }
+    }
+    if !rep.byte_changes.is_empty() {
+        println!("Byte changes:");
+        for bc in &rep.byte_changes {
+            println!(
+                "  0x{:04X}[{}] 0x{:02X} -> 0x{:02X}",
+                bc.did, bc.byte, bc.old, bc.new
+            );
+        }
+    }
+    match &rep.outcome {
+        opentune_coding::WriteOutcome::Planned => println!("Outcome: planned (dry run, nothing written)"),
+        opentune_coding::WriteOutcome::NoChange => println!("Outcome: no change (nothing written)"),
+        opentune_coding::WriteOutcome::Verified => println!("Outcome: written and verified"),
+        opentune_coding::WriteOutcome::Unverified => println!("Outcome: written (verify skipped)"),
+        opentune_coding::WriteOutcome::VerifyFailed { did } => {
+            println!("Outcome: VERIFY FAILED for block 0x{did:04X}")
+        }
+        opentune_coding::WriteOutcome::WriteError {
+            uncertain_did,
+            message,
+        } => println!("Outcome: WRITE ERROR at block 0x{uncertain_did:04X} ({message}); backup retained"),
+    }
+}
+
+/// Dispatch the `coding` subcommand: load the def, obtain a transport from the
+/// selected driver, wrap it in [`opentune_coding::CoreDiag`] and run the op.
+fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
+    use opentune_coding::{read_coding, set, write_coding, CoreDiag, WriteOptions};
+
+    let conn = match &action {
+        CodingAction::Read { conn }
+        | CodingAction::Decode { conn }
+        | CodingAction::Set { conn, .. }
+        | CodingAction::Write { conn, .. } => conn,
+    };
+    let def = load_coding_def(conn)?;
+    let timeout = conn.timeout_ms;
+    let mut drv = open_coding_driver(reg, conn)?;
+    let transport = drv.diag().ok_or_else(|| {
+        anyhow!(
+            "driver '{}' does not expose a diagnostic transport for coding (try --driver mock --store <file>)",
+            conn.driver
+        )
+    })?;
+    let mut diag = CoreDiag::new(transport, timeout);
+
+    match action {
+        CodingAction::Read { .. } => {
+            let coding = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
+            println!("Coding for {} ({}):", def.name, def.id);
+            print_coding_blocks(&coding);
+        }
+        CodingAction::Decode { .. } => {
+            let coding = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
+            let params = opentune_coding::decode(&def, &coding).map_err(|e| anyhow!("{e}"))?;
+            println!("Decoded coding for {} ({}):", def.name, def.id);
+            for p in params {
+                println!("  {:<20} {:>6}  {}", p.name, p.value, p.label);
+            }
+        }
+        CodingAction::Set { name, value, .. } => {
+            let val = resolve_coding_value(&def, &name, &value)?;
+            // Preview only: read fresh as the baseline, apply the edit, dry-run.
+            let baseline = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
+            let desired = set(&def, &baseline, &name, val).map_err(|e| anyhow!("{e}"))?;
+            let opts = WriteOptions {
+                dry_run: true,
+                ..Default::default()
+            };
+            let rep = write_coding(&mut diag, &def, &baseline, &desired, &opts)
+                .map_err(|e| anyhow!("{e}"))?;
+            println!("Planned change: {name} = {value}");
+            print_coding_report(&rep);
+        }
+        CodingAction::Write {
+            name,
+            value,
+            dry_run,
+            ..
+        } => {
+            let val = resolve_coding_value(&def, &name, &value)?;
+            let baseline = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
+            let desired = set(&def, &baseline, &name, val).map_err(|e| anyhow!("{e}"))?;
+            let opts = WriteOptions {
+                dry_run,
+                ..Default::default()
+            };
+            let rep = write_coding(&mut diag, &def, &baseline, &desired, &opts)
+                .map_err(|e| anyhow!("{e}"))?;
+            print_coding_report(&rep);
         }
     }
     Ok(())
