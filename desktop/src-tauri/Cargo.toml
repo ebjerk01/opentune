@@ -8,6 +8,17 @@ license = "GPL-3.0-or-later"
 # app builds on its own (`cargo build` / `tauri build` from `desktop/`).
 [workspace]
 
+# Library + thin binary: the `opentune_desktop` library holds the whole backend
+# so another Tauri app can embed it and add its own commands (docs/PLUGINS.md);
+# src/main.rs only runs it.
+[lib]
+name = "opentune_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opentune-desktop"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

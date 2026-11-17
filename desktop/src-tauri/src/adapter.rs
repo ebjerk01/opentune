@@ -31,7 +31,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 /// Close the cached adapter (releasing the serial port) after this long idle.
-pub(crate) const IDLE_RELEASE: Duration = Duration::from_secs(20);
+pub const IDLE_RELEASE: Duration = Duration::from_secs(20);
 
 // ---------------------------------------------------------------------------
 // Addressing
@@ -39,7 +39,7 @@ pub(crate) const IDLE_RELEASE: Duration = Duration::from_secs(20);
 
 /// A module's diagnostic CAN request (`tx_id`) / response (`rx_id`) ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Addr {
+pub struct Addr {
     pub tx_id: u32,
     pub rx_id: u32,
 }
@@ -63,7 +63,7 @@ impl Addr {
 
 /// Parse a CAN id: hex with or without `0x` (`"7E0"`, `"0x7E0"`). CAN ids are
 /// conventionally written in hex, so a bare number is hex too.
-pub(crate) fn parse_can_id(s: &str) -> Result<u32, String> {
+pub fn parse_can_id(s: &str) -> Result<u32, String> {
     let t = s.trim();
     let h = t
         .strip_prefix("0x")
@@ -83,7 +83,7 @@ fn nz(s: Option<&str>) -> Option<&str> {
 /// Read an optional top-level `req_id`/`resp_id` pair from a definition's JSON
 /// text (the same field names the auto-scan module list uses). A JSON number is
 /// taken as-is, a string as hex. Both or neither must be present.
-pub(crate) fn def_addr(def_text: &str) -> Result<Option<Addr>, String> {
+pub fn def_addr(def_text: &str) -> Result<Option<Addr>, String> {
     let v: Value =
         serde_json::from_str(def_text).map_err(|e| format!("parse definition JSON: {e}"))?;
     let get = |k: &str| -> Result<Option<u32>, String> {
@@ -107,7 +107,7 @@ pub(crate) fn def_addr(def_text: &str) -> Result<Option<Addr>, String> {
 
 /// Resolve the target module address: UI-entered ids win, then the
 /// definition's `req_id`/`resp_id`; `Ok(None)` when neither is given.
-pub(crate) fn resolve(
+pub fn resolve(
     tx: Option<&str>,
     rx: Option<&str>,
     def_text: Option<&str>,
@@ -127,7 +127,7 @@ pub(crate) fn resolve(
 
 /// Address for a **read-only** operation: the resolved one, else the engine
 /// ECU. The flag is `true` when the engine was assumed.
-pub(crate) fn read_addr(resolved: Option<Addr>) -> (Addr, bool) {
+pub fn read_addr(resolved: Option<Addr>) -> (Addr, bool) {
     match resolved {
         Some(a) => (a, false),
         None => (Addr::ENGINE, true),
@@ -136,7 +136,7 @@ pub(crate) fn read_addr(resolved: Option<Addr>) -> (Addr, bool) {
 
 /// Address for a **mutating** operation (write / routine / actuator / service /
 /// clear): refuses rather than defaulting to the engine ECU.
-pub(crate) fn write_addr(resolved: Option<Addr>, what: &str) -> Result<Addr, String> {
+pub fn write_addr(resolved: Option<Addr>, what: &str) -> Result<Addr, String> {
     resolved.ok_or_else(|| {
         format!(
             "{what} refused: the target module's CAN address is unknown. Enter the module's \
@@ -153,7 +153,7 @@ pub(crate) fn write_addr(resolved: Option<Addr>, what: &str) -> Result<Addr, Str
 /// Everything that identifies one opened adapter binding. Two operations with
 /// the same key reuse the same opened driver.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ConnKey {
+pub struct ConnKey {
     pub driver: String,
     pub port: Option<String>,
     pub baud: Option<String>,
@@ -221,10 +221,10 @@ impl ConnKey {
 // ---------------------------------------------------------------------------
 
 /// Opens a driver for a key. The production opener builds it from the registry.
-pub(crate) type Opener = Box<dyn FnMut(&ConnKey) -> Result<Box<dyn Interface>, String>>;
+pub type Opener = Box<dyn FnMut(&ConnKey) -> Result<Box<dyn Interface>, String>>;
 
 /// The (at most one) opened adapter, reused across operations with equal keys.
-pub(crate) struct Session {
+pub struct Session {
     opener: Opener,
     cur: Option<(ConnKey, Box<dyn Interface>)>,
 }
@@ -283,7 +283,7 @@ impl Session {
 
 /// Enter the extended diagnostic session (`10 03`) on the bound module. Writes,
 /// routines and actuator tests are rejected by most ECUs in the default session.
-pub(crate) fn enter_extended_session(diag: &mut dyn RawDiag) -> Result<(), String> {
+pub fn enter_extended_session(diag: &mut dyn RawDiag) -> Result<(), String> {
     let resp = diag
         .request(&[0x10, 0x03])
         .map_err(|e| format!("extended session (10 03): {e}"))?;
@@ -299,7 +299,7 @@ pub(crate) fn enter_extended_session(diag: &mut dyn RawDiag) -> Result<(), Strin
 }
 
 /// Best-effort return to the default session (`10 01`) after a mutating flow.
-pub(crate) fn leave_session(diag: &mut dyn RawDiag) {
+pub fn leave_session(diag: &mut dyn RawDiag) {
     let _ = diag.request(&[0x10, 0x01]);
 }
 
@@ -310,7 +310,7 @@ pub(crate) fn leave_session(diag: &mut dyn RawDiag) {
 type Job = Box<dyn FnOnce(&mut Session) + Send>;
 
 /// Tauri-managed handle to the adapter worker.
-pub(crate) struct AdapterHub {
+pub struct AdapterHub {
     jobs: Mutex<mpsc::Sender<Job>>,
     busy: Arc<Mutex<Option<String>>>,
 }
