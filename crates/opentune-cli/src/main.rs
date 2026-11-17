@@ -162,6 +162,12 @@ enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// Load definition pack(s) from a directory and report their contents.
+    Packs {
+        /// A pack directory (contains pack.json), or a root holding several packs.
+        #[arg(default_value = "packs")]
+        dir: PathBuf,
+    },
     /// List archived reads in a backup vault directory.
     Vault {
         /// Vault directory to scan (default: ./vault).
@@ -1235,6 +1241,54 @@ fn main() -> Result<()> {
                     def.maps.len()
                 );
             }
+        }
+        Command::Packs { dir } => {
+            let lib = opentune_packs::PackLibrary::load_all(&dir);
+            if lib.packs.is_empty() && lib.failed.is_empty() {
+                println!(
+                    "No packs found under {} (a pack is a directory with pack.json).",
+                    dir.display()
+                );
+            }
+            for p in &lib.packs {
+                let m = &p.manifest;
+                let name = if m.name.is_empty() { "(unnamed)" } else { &m.name };
+                let ver = if m.version.is_empty() { "?" } else { &m.version };
+                println!("pack {} — {name} v{ver}", m.id);
+                if !m.maker.is_empty() || !m.platform.is_empty() {
+                    println!("  {} {}", m.maker, m.platform);
+                }
+                if !m.license.is_empty() {
+                    println!("  license: {}", m.license);
+                }
+                println!(
+                    "  defs: {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list  ({} loaded)",
+                    p.ecudefs.len(),
+                    p.coding.len(),
+                    p.adaptation.len(),
+                    p.services.len(),
+                    p.loggers.len(),
+                    p.modules.len(),
+                    p.report.loaded,
+                );
+                for n in &p.report.notes {
+                    println!("  ! {} [{}]: {}", n.file, n.kind.dir(), n.message);
+                }
+            }
+            for (d, e) in &lib.failed {
+                println!("! failed to open pack {}: {e}", d.display());
+            }
+            let c = lib.counts();
+            println!(
+                "TOTAL across {} pack(s): {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list",
+                lib.packs.len(),
+                c[0].1,
+                c[1].1,
+                c[2].1,
+                c[3].1,
+                c[4].1,
+                c[5].1,
+            );
         }
         Command::ImportA2l { file, into, base } => {
             let base = parse_num(&base)?;

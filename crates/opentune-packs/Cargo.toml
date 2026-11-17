@@ -1,0 +1,20 @@
+[package]
+name = "opentune-packs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Definition packs for OpenTune: one versioned, loadable bundle of ECU defs, coding labels, adaptation channels, service-function scripts, logger defs and module lists."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+opentune-core = { path = "../opentune-core" }
+opentune-coding = { path = "../opentune-coding" }
+opentune-adaptation = { path = "../opentune-adaptation" }
+opentune-servicefn = { path = "../opentune-servicefn" }
+opentune-logdef = { path = "../opentune-logdef" }
+opentune-autoscan = { path = "../opentune-autoscan" }

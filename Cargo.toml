@@ -33,6 +33,7 @@ members = [
     "crates/opentune-autoscan",
     "crates/opentune-image",
     "crates/opentune-sa2",
+    "crates/opentune-packs",
 ]
 
 [workspace.package]

@@ -696,6 +696,7 @@ dependencies = [
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
+ "opentune-packs",
  "opentune-scan",
  "opentune-vin",
  "opentune-xdf",
@@ -873,6 +874,20 @@ dependencies = [
  "opentune-core",
  "opentune-xdf",
  "roxmltree",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-packs"
+version = "0.1.0"
+dependencies = [
+ "opentune-adaptation",
+ "opentune-autoscan",
+ "opentune-coding",
+ "opentune-core",
+ "opentune-logdef",
+ "opentune-servicefn",
  "serde",
  "serde_json",
 ]
