@@ -73,18 +73,18 @@
       "max": 80.0
     },
     {
-      "name": "injection quantity - driver demand / full-load (vs engine speed)",
-      "notes": "CONFIDENCE: MEDIUM-HIGH that this is an injection-quantity (fuel demand) map; MEDIUM on the exact role (driver-wish vs full-load) and on the Y-axis unit. Source: DIFF-DERIVED (the second of the two regions the tune changed) plus the in-image header. Header at 0x1D16F6 encodes rows=4, cols=20, then Y[4] at 0x1D16FA and the rpm X[20] at 0x1D1702; data starts at 0x1D172E after two zero-word padding. Stock decodes to a humped 0..31.6 mg/stroke curve over rpm with fuel cut (0) at the top three rpm breakpoints - textbook fuel-demand shape; the tune raised every active cell ~5-11%. The 4-point Y axis [600,700,890,930] is stored (unit unconfirmed - likely ambient/charge pressure in mbar/hPa or an altitude correction index). Byte offsets into the 2 MiB read; confirm per software variant before any write.",
-      "address": 1906478,
-      "data_type": "u16",
+      "name": "torque limiter (vs engine speed and atmospheric pressure)",
+      "notes": "CONFIDENCE: HIGH on location/shape, MEDIUM-HIGH on the physical unit. Source: DIFF-DERIVED (one of the two regions the reference tune changed, +5..11% on every active cell) plus the in-image header at 0x1D16F6 (rows=4, cols=20, Y[4] at 0x1D16FA, rpm X[20] at 0x1D1702, data at 0x1D172A). Earlier releases placed this map 4 bytes late (0x1D172E), which shifted every row by two cells; the 0/550/551 rpm breakpoints and the 0 at 5100 rpm only line up at 0x1D172A. Y axis 600/700/890/930 = atmospheric pressure in hPa (altitude derate). Unit: EDC16 PD uses a torque-based structure - this limiter feeds the torque-to-injection-quantity conversion map, whose torque axis spans 0..336 Nm; read as 0.1 Nm/LSB the stock limit peaks at 316 Nm and converts to ~56 mg/stroke at 3000 rpm, just under the 59 mg smoke limit, while a 0.01 mg/stroke reading (31.6 mg) would make the engine unable to reach its smoke limit. Stock decodes 0..316 Nm. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1906474,
+      "data_type": "s16",
       "endian": "big",
       "rows": 4,
       "cols": 20,
       "scaling": {
-        "factor": 0.01,
+        "factor": 0.1,
         "offset": 0.0
       },
-      "unit": "mg/stroke",
+      "unit": "Nm",
       "x_axis": {
         "name": "engine speed",
         "unit": "rpm",
@@ -98,8 +98,8 @@
         }
       },
       "y_axis": {
-        "name": "pressure / correction index (unconfirmed)",
-        "unit": "",
+        "name": "atmospheric pressure",
+        "unit": "hPa",
         "count": 4,
         "address": 1906426,
         "data_type": "u16",
@@ -110,30 +110,30 @@
         }
       },
       "min": 0.0,
-      "max": 80.0
+      "max": 500.0
     },
     {
-      "name": "injection quantity vs air mass (base smoke-limiter family)",
-      "notes": "CONFIDENCE: MEDIUM (structure-derived, NOT diff-confirmed). Source: in-image map header at 0x1C2370 (rows=16, cols=8), identified by its textbook engine-speed x air-mass layout and injected-quantity data range. One of a family of ~7 near-identical 16x8 maps at 0x1C2370..0x1C2A1E that share the same rpm and air-mass axes - most likely slices of a 3-D limiter indexed by a third variable (gear/EGR/condition); this is slice 0. Stock decodes to 0..42.9 mg/stroke with monotonic rpm (0..5355) and air-mass (10..1000 mg) axes. Not changed by the tune. Byte offsets into the 2 MiB read; confirm the exact family member and role per software variant before any write.",
+      "name": "driver's wish (pedal map) 1 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C2370 (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
       "address": 1844132,
-      "data_type": "u16",
+      "data_type": "s16",
       "endian": "big",
       "rows": 16,
       "cols": 8,
       "scaling": {
-        "factor": 0.01,
+        "factor": 0.1,
         "offset": 0.0
       },
-      "unit": "mg/stroke",
+      "unit": "Nm",
       "x_axis": {
-        "name": "air mass",
-        "unit": "mg/stroke",
+        "name": "accelerator pedal",
+        "unit": "%",
         "count": 8,
         "address": 1844116,
         "data_type": "u16",
         "endian": "big",
         "scaling": {
-          "factor": 0.1,
+          "factor": 0.01,
           "offset": 0.0
         }
       },
@@ -149,8 +149,600 @@
           "offset": 0.0
         }
       },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 2 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C24C6 (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1844474,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1844458,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1844426,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 3 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C261C (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1844816,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1844800,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1844768,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 4 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C2772 (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1845158,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1845142,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1845110,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 5 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C28C8 (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1845500,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1845484,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1845452,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 6 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C2A1E (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1845842,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1845826,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1845794,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 7 of 8",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C2B74 (rows=16 rpm 0..5355, cols=8 accelerator pedal 1..100 % at 0.01 %/LSB) - one of a block of 7 same-axis 16x8 tables at 0x1C2370..0x1C2CA8 plus an 8th at 0x1C2CCA with an rpm axis to 6000. Not changed by the reference tune (a fuel/torque-limit tune). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the part-to-full-pedal columns of every member. Unit: requested torque, 0.1 Nm/LSB signed (member 7 holds -2.0 Nm drag-torque cells, impossible for a fuel quantity; stock full-pedal requests 219..429 Nm, consistent with the torque limiter and the torque-to-IQ conversion axis). Which member is active depends on gear/mode selection that is not decoded; tuners edit all of them consistently. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1846184,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1846168,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1846136,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "driver's wish (pedal map) 8 of 8 (rpm axis to 6000)",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1C2CCA (rows=16 rpm 0..6000, cols=8 pedal 1.18..100 %). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Same unit reasoning as members 1..7 (0.1 Nm/LSB, signed requested torque); stock decodes 0..429 Nm. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1846526,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 8,
+      "scaling": {
+        "factor": 0.1,
+        "offset": 0.0
+      },
+      "unit": "Nm",
+      "x_axis": {
+        "name": "accelerator pedal",
+        "unit": "%",
+        "count": 8,
+        "address": 1846510,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1846478,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": -50.0,
+      "max": 500.0
+    },
+    {
+      "name": "torque to injection quantity conversion",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1D3FA0 (rows=15 rpm 1000..5000, cols=16 torque 0..336 Nm at 0.1 Nm/LSB, data 0..72.4 mg/stroke at 0.01 mg/LSB). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the high-torque columns (more fuel per Nm). The near-linear rows (0 Nm -> 0 mg, ~0.19 mg per Nm) are the textbook torque-to-fuel conversion shape. Not changed by the reference tune. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1916898,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 15,
+      "cols": 16,
+      "scaling": {
+        "factor": 0.01,
+        "offset": 0.0
+      },
+      "unit": "mg/stroke",
+      "x_axis": {
+        "name": "requested torque",
+        "unit": "Nm",
+        "count": 16,
+        "address": 1916866,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.1,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 15,
+        "address": 1916836,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
       "min": 0.0,
-      "max": 80.0
+      "max": 100.0
+    },
+    {
+      "name": "boost pressure target 1 of 2",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1E470C (rows=16 rpm 0..4746, cols=10 injection quantity 0..45 mg/stroke at 0.01 mg/LSB, data absolute charge pressure in hPa/mbar). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the mid/high-load cells. Stock decodes 198..2214 hPa (the 198 row is the 0 rpm breakpoint). Not changed by the reference tune. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1984324,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 10,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "hPa",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 10,
+        "address": 1984304,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1984272,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 3000.0
+    },
+    {
+      "name": "boost pressure target 2 of 2",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1E4884 (rows=16 rpm 0..4746, cols=10 injection quantity 0..45 mg/stroke at 0.01 mg/LSB, data absolute charge pressure in hPa/mbar). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the mid/high-load cells. Stock decodes 198..2214 hPa (the 198 row is the 0 rpm breakpoint). Not changed by the reference tune. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1984700,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 16,
+      "cols": 10,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "hPa",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 10,
+        "address": 1984680,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 16,
+        "address": 1984648,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 3000.0
+    },
+    {
+      "name": "boost pressure limiter (vs atmospheric pressure)",
+      "notes": "CONFIDENCE: MEDIUM-HIGH. Source: in-image header at 0x1E49FC (rows=11 rpm 1490..4494, cols=10 atmospheric pressure 626..1007 hPa, data absolute charge-pressure ceiling in hPa). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the cells above ~700 hPa ambient. Stock decodes 1109..2225 hPa, falling with altitude and at high rpm (turbo overspeed protection). Not changed by the reference tune. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1985066,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 11,
+      "cols": 10,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "hPa",
+      "x_axis": {
+        "name": "atmospheric pressure",
+        "unit": "hPa",
+        "count": 10,
+        "address": 1985046,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 11,
+        "address": 1985024,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
+      "min": 0.0,
+      "max": 3000.0
+    },
+    {
+      "name": "injection duration (PD crank-angle) 1 of 4",
+      "notes": "CONFIDENCE: MEDIUM-HIGH on location/role, LOW on the angle scaling (left RAW). Source: in-image header at 0x1DF162 (rows=19 rpm, cols=15 injection quantity 0.5..60 mg/stroke at 0.01 mg/LSB, signed cells). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the >=20 mg columns of all four tables in step with their fuel increase. The cells grow ~8x from 0.5 to 60 mg at every rpm and go negative only at minimal quantity/high rpm (no injection) - the shape of a quantity-to-duration (solenoid valve closing angle) map rather than start-of-injection. Cells are shipped as RAW signed counts: the crank-angle LSB is not confirmed for this software (Bosch commonly uses 3/128 deg = 0.0234375 deg/LSB; verify before reading absolute degrees). Edit by ratio, not absolute angle. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1962410,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 19,
+      "cols": 15,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (crank angle)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 15,
+        "address": 1962380,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 19,
+        "address": 1962342,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injection duration (PD crank-angle) 2 of 4",
+      "notes": "CONFIDENCE: MEDIUM-HIGH on location/role, LOW on the angle scaling (left RAW). Source: in-image header at 0x1DF3E4 (rows=19 rpm, cols=15 injection quantity 0.5..60 mg/stroke at 0.01 mg/LSB, signed cells). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the >=20 mg columns of all four tables in step with their fuel increase. The cells grow ~8x from 0.5 to 60 mg at every rpm and go negative only at minimal quantity/high rpm (no injection) - the shape of a quantity-to-duration (solenoid valve closing angle) map rather than start-of-injection. Cells are shipped as RAW signed counts: the crank-angle LSB is not confirmed for this software (Bosch commonly uses 3/128 deg = 0.0234375 deg/LSB; verify before reading absolute degrees). Edit by ratio, not absolute angle. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1963052,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 19,
+      "cols": 15,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (crank angle)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 15,
+        "address": 1963022,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 19,
+        "address": 1962984,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injection duration (PD crank-angle) 3 of 4",
+      "notes": "CONFIDENCE: MEDIUM-HIGH on location/role, LOW on the angle scaling (left RAW). Source: in-image header at 0x1DF666 (rows=19 rpm, cols=15 injection quantity 0.5..60 mg/stroke at 0.01 mg/LSB, signed cells). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the >=20 mg columns of all four tables in step with their fuel increase. The cells grow ~8x from 0.5 to 60 mg at every rpm and go negative only at minimal quantity/high rpm (no injection) - the shape of a quantity-to-duration (solenoid valve closing angle) map rather than start-of-injection. Cells are shipped as RAW signed counts: the crank-angle LSB is not confirmed for this software (Bosch commonly uses 3/128 deg = 0.0234375 deg/LSB; verify before reading absolute degrees). Edit by ratio, not absolute angle. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1963694,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 19,
+      "cols": 15,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (crank angle)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 15,
+        "address": 1963664,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 19,
+        "address": 1963626,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      }
+    },
+    {
+      "name": "injection duration (PD crank-angle) 4 of 4",
+      "notes": "CONFIDENCE: MEDIUM-HIGH on location/role, LOW on the angle scaling (left RAW). Source: in-image header at 0x1DF8E8 (rows=19 rpm, cols=15 injection quantity 0.5..60 mg/stroke at 0.01 mg/LSB, signed cells). Cross-checked on two further P447 software variants (SW 1037381814 and 1037389289; reference stock/tuned read pairs): there a tune changed the table with the identical header dimensions and axis breakpoints, which pins down its role. Those tunes raised the >=20 mg columns of all four tables in step with their fuel increase. The cells grow ~8x from 0.5 to 60 mg at every rpm and go negative only at minimal quantity/high rpm (no injection) - the shape of a quantity-to-duration (solenoid valve closing angle) map rather than start-of-injection. Cells are shipped as RAW signed counts: the crank-angle LSB is not confirmed for this software (Bosch commonly uses 3/128 deg = 0.0234375 deg/LSB; verify before reading absolute degrees). Edit by ratio, not absolute angle. Byte offsets into the 2 MiB full-flash read of SW 1037382088 (P447); addresses move between software variants - locate the same header (dims + axis breakpoints) in your own read and confirm before any write.",
+      "address": 1964336,
+      "data_type": "s16",
+      "endian": "big",
+      "rows": 19,
+      "cols": 15,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (crank angle)",
+      "x_axis": {
+        "name": "injection quantity",
+        "unit": "mg/stroke",
+        "count": 15,
+        "address": 1964306,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 0.01,
+          "offset": 0.0
+        }
+      },
+      "y_axis": {
+        "name": "engine speed",
+        "unit": "rpm",
+        "count": 19,
+        "address": 1964268,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      }
     }
   ],
   "identify": {

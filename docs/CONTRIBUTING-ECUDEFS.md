@@ -7,7 +7,7 @@ rules:
 
 - [`docs/ECU-DEFS.md`](ECU-DEFS.md) — the full `EcuDef` field reference.
 - [`docs/MAP-DEFS.md`](MAP-DEFS.md) — the `MapDef` / axis format.
-- [`docs/MAP-LIBRARY.md`](MAP-LIBRARY.md) — a worked map library (EDC16U34).
+- [`docs/MAP-LIBRARY.md`](MAP-LIBRARY.md) — the shipped map libraries (EDC16U34, EDC15C6, PCR2.1) and their confidence.
 - [`docs/IDENTIFICATION.md`](IDENTIFICATION.md) — identity → definition matching.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — scope boundaries, DCO sign-off, CI.
 
