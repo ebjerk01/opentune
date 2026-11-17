@@ -29,6 +29,7 @@ members = [
     "crates/opentune-adaptation",
     "crates/opentune-ecuflash",
     "crates/opentune-logdef",
+    "crates/opentune-servicefn",
 ]
 
 [workspace.package]
