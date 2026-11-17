@@ -47,6 +47,7 @@ pub mod sid {
     pub const ECU_RESET: u8 = 0x11;
     pub const SECURITY_ACCESS: u8 = 0x27;
     pub const READ_DATA_BY_ID: u8 = 0x22;
+    pub const READ_MEMORY_BY_ADDRESS: u8 = 0x23;
     pub const WRITE_DATA_BY_ID: u8 = 0x2E;
     pub const ROUTINE_CONTROL: u8 = 0x31;
     pub const REQUEST_DOWNLOAD: u8 = 0x34;
@@ -244,9 +245,23 @@ impl<'a> UdsClient<'a> {
     /// 0x74 positive response's `lengthFormatIdentifier` + `maxNumberOfBlockLength`
     /// shape is validated and a truncated response is rejected.
     pub fn request_download(&mut self, data_format: u8, address: u32, size: u32) -> Result<usize> {
-        let mut req = vec![sid::REQUEST_DOWNLOAD, data_format, 0x44];
-        req.extend_from_slice(&address.to_be_bytes());
-        req.extend_from_slice(&size.to_be_bytes());
+        self.request_download_with_format(data_format, 0x44, address, size)
+    }
+
+    /// `requestDownload` (0x34) with an explicit `addressAndLengthFormatIdentifier`
+    /// (high nibble = memorySize bytes, low nibble = memoryAddress bytes). A
+    /// compact format (e.g. `0x22`) keeps the request short enough for adapters
+    /// that can only transmit a single ISO-TP frame. See
+    /// [`encode_address_and_length`].
+    pub fn request_download_with_format(
+        &mut self,
+        data_format: u8,
+        alfid: u8,
+        address: u32,
+        size: u32,
+    ) -> Result<usize> {
+        let mut req = vec![sid::REQUEST_DOWNLOAD, data_format, alfid];
+        req.extend(encode_address_and_length(alfid, address, size)?);
         let resp = self.call_pending(&req)?;
         parse_max_block_len(&resp)
     }
@@ -254,11 +269,44 @@ impl<'a> UdsClient<'a> {
     /// `requestUpload` (0x35): returns the ECU's maximum block length. The 0x75
     /// positive response shape is validated like [`request_download`].
     pub fn request_upload(&mut self, data_format: u8, address: u32, size: u32) -> Result<usize> {
-        let mut req = vec![sid::REQUEST_UPLOAD, data_format, 0x44];
-        req.extend_from_slice(&address.to_be_bytes());
-        req.extend_from_slice(&size.to_be_bytes());
+        self.request_upload_with_format(data_format, 0x44, address, size)
+    }
+
+    /// `requestUpload` (0x35) with an explicit `addressAndLengthFormatIdentifier`;
+    /// see [`request_download_with_format`](Self::request_download_with_format).
+    pub fn request_upload_with_format(
+        &mut self,
+        data_format: u8,
+        alfid: u8,
+        address: u32,
+        size: u32,
+    ) -> Result<usize> {
+        let mut req = vec![sid::REQUEST_UPLOAD, data_format, alfid];
+        req.extend(encode_address_and_length(alfid, address, size)?);
         let resp = self.call_pending(&req)?;
         parse_max_block_len(&resp)
+    }
+
+    /// `ReadMemoryByAddress` (0x23) of `size` bytes at `address`, encoded with
+    /// `alfid` (see [`encode_address_and_length`]). Returns the data record after
+    /// the 0x63 positive-response id. An empty record is rejected; a record
+    /// longer than requested is truncated to `size` (some ECUs pad).
+    pub fn read_memory_by_address(
+        &mut self,
+        alfid: u8,
+        address: u32,
+        size: u32,
+    ) -> Result<Vec<u8>> {
+        let mut req = vec![sid::READ_MEMORY_BY_ADDRESS, alfid];
+        req.extend(encode_address_and_length(alfid, address, size)?);
+        let mut data = self.call(&req)?;
+        if data.is_empty() {
+            return Err(Error::Protocol(format!(
+                "ReadMemoryByAddress 0x{address:08X}: empty data record"
+            )));
+        }
+        data.truncate(size as usize);
+        Ok(data)
     }
 
     /// `transferData` (0x36) with a block sequence counter.
@@ -308,6 +356,36 @@ pub fn seed_is_unlocked(seed: &[u8]) -> bool {
 /// Next `transferData` block sequence counter, wrapping 0xFF→0x00.
 pub fn next_block_seq(seq: u8) -> u8 {
     seq.wrapping_add(1)
+}
+
+/// Encode `memoryAddress` + `memorySize` for an `addressAndLengthFormatIdentifier`
+/// (ISO 14229-1 §7.5.4: high nibble = memorySize byte count, low nibble =
+/// memoryAddress byte count, each 1..=4 here since both values are `u32`).
+/// Big-endian. Rejects a zero/oversized nibble and a value that does not fit
+/// its field, rather than silently truncating an address.
+pub fn encode_address_and_length(alfid: u8, address: u32, size: u32) -> Result<Vec<u8>> {
+    let size_len = (alfid >> 4) as usize;
+    let addr_len = (alfid & 0x0F) as usize;
+    if !(1..=4).contains(&size_len) || !(1..=4).contains(&addr_len) {
+        return Err(Error::Config(format!(
+            "addressAndLengthFormatIdentifier 0x{alfid:02X}: address and size must each be 1..=4 bytes"
+        )));
+    }
+    let fits = |v: u32, n: usize| n >= 4 || u64::from(v) < (1u64 << (8 * n));
+    if !fits(address, addr_len) {
+        return Err(Error::Config(format!(
+            "address 0x{address:08X} does not fit the {addr_len}-byte address field of format 0x{alfid:02X}"
+        )));
+    }
+    if !fits(size, size_len) {
+        return Err(Error::Config(format!(
+            "size {size} does not fit the {size_len}-byte size field of format 0x{alfid:02X}"
+        )));
+    }
+    let mut out = Vec::with_capacity(addr_len + size_len);
+    out.extend_from_slice(&address.to_be_bytes()[4 - addr_len..]);
+    out.extend_from_slice(&size.to_be_bytes()[4 - size_len..]);
+    Ok(out)
 }
 
 /// Verify a sub-function service's positive response echoes the requested
@@ -473,6 +551,60 @@ mod tests {
         assert!(seed_is_unlocked(&[0, 0, 0, 0]));
         assert!(!seed_is_unlocked(&[0, 0, 1, 0]));
         assert!(!seed_is_unlocked(&[])); // no seed is not "unlocked"
+    }
+
+    #[test]
+    fn address_and_length_encoding() {
+        assert_eq!(
+            encode_address_and_length(0x14, 0x0080_1000, 0x80).unwrap(),
+            vec![0x00, 0x80, 0x10, 0x00, 0x80]
+        );
+        assert_eq!(
+            encode_address_and_length(0x22, 0x1234, 0x0100).unwrap(),
+            vec![0x12, 0x34, 0x01, 0x00]
+        );
+        assert_eq!(
+            encode_address_and_length(0x13, 0x01_2345, 0xFF).unwrap(),
+            vec![0x01, 0x23, 0x45, 0xFF]
+        );
+        assert_eq!(
+            encode_address_and_length(0x44, 0xDEAD_BEEF, 1)
+                .unwrap()
+                .len(),
+            8
+        );
+        // An address or size that does not fit its field is refused, not truncated.
+        assert!(encode_address_and_length(0x22, 0x1_0000, 1).is_err());
+        assert!(encode_address_and_length(0x14, 0, 0x100).is_err());
+        assert!(encode_address_and_length(0x05, 0, 1).is_err());
+        assert!(encode_address_and_length(0x10, 0, 1).is_err());
+    }
+
+    #[test]
+    fn read_memory_by_address_request_and_record() {
+        let mut t = Recorder::new(vec![vec![0x63, 0xAA, 0xBB, 0xCC]]);
+        let mut uds = UdsClient::new(&mut t);
+        assert_eq!(
+            uds.read_memory_by_address(0x14, 0x0001_0000, 2).unwrap(),
+            vec![0xAA, 0xBB]
+        );
+        assert_eq!(t.reqs[0], vec![0x23, 0x14, 0x00, 0x01, 0x00, 0x00, 0x02]);
+        let mut e = Script::new(vec![vec![0x63]]);
+        assert!(UdsClient::new(&mut e)
+            .read_memory_by_address(0x14, 0, 1)
+            .is_err());
+    }
+
+    #[test]
+    fn compact_upload_format_is_encoded() {
+        let mut t = Recorder::new(vec![vec![0x75, 0x20, 0x01, 0x02]]);
+        let mut uds = UdsClient::new(&mut t);
+        assert_eq!(
+            uds.request_upload_with_format(0x00, 0x22, 0x8000, 0x0400)
+                .unwrap(),
+            0x0102
+        );
+        assert_eq!(t.reqs[0], vec![0x35, 0x00, 0x22, 0x80, 0x00, 0x04, 0x00]);
     }
 
     #[test]
