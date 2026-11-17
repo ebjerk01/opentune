@@ -247,6 +247,8 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "dq250" | "tcu-jamcrc" => Some(Box::new(tcu::Dq250Jamcrc)),
         "dq381" | "tcu-crc32" => Some(Box::new(tcu::Dq381Crc32)),
         "tcu-ccitt" => Some(Box::new(tcu::CcittTrailer)),
+        "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
+        "haldex" | "haldex-gen5" => Some(Box::new(tcu::HaldexGen5)),
         _ => None,
     }
 }
@@ -369,6 +371,32 @@ pub fn algorithms() -> Vec<AlgoInfo> {
             notes: "Generic big-endian CRC-CCITT (0x1021, CCITT-FALSE) trailer over \
                     the block body; layout-agnostic. CCITT vectors validated; a \
                     specific CCITT-protected dump for end-to-end validation is pending.",
+        },
+        AlgoInfo {
+            id: "zf8hp",
+            name: "ZF 8HP TCU (AL551 CAL CRC-32)",
+            family: "tcu",
+            needs_reference: true,
+            notes: "Alias: zf-8hp. AL551-generation (method 0x22, e.g. 4G0/4H1 — \
+                    8HP55/8HP90) CAL block: zlib CRC-32 over CAL_DATA \
+                    0x190000..=0x1FFD5F, stored big-endian at 0x180244. AES variants \
+                    (4M0/8W0) and Gen3 TriCore not claimed. CRC-32 vectors + synthetic \
+                    only (no real dump): standalone correct refuses an edited image \
+                    (fixed-offset layout unconfirmed) — correct_with_reference with a \
+                    validating stock dump is required; never guessed.",
+        },
+        AlgoInfo {
+            id: "haldex",
+            name: "BorgWarner Haldex Gen5 AWD",
+            family: "tcu",
+            needs_reference: false,
+            notes: "Alias: haldex-gen5. Per-block 16-bit little-endian word-sum \
+                    (0xFFFF - sum) over the block minus its 10-byte checksum header, \
+                    stored LE at cs_loc+0x8 (CAL 0x10, ASW 0x200, VERSION 0x0; DRIVER \
+                    unchecked). Block identified by its data-independent embedded \
+                    length field, so it self-corrects like dq381 across SW versions. \
+                    Synthetic + algorithm-vector validated only; real-dump validation \
+                    pending.",
         },
     ]
 }
@@ -551,6 +579,10 @@ mod tests {
             "dq381",
             "tcu-crc32",
             "tcu-ccitt",
+            "zf8hp",
+            "zf-8hp",
+            "haldex",
+            "haldex-gen5",
         ];
         let infos = algorithms();
         for id in resolvable {
