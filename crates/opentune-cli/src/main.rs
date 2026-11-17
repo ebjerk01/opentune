@@ -9,6 +9,8 @@ use opentune_container::{BlockCipher, Keys, SgoCipher};
 use opentune_core::{ConnectConfig, Interface, MemoryRegion, Progress, Registry};
 use std::path::PathBuf;
 
+mod obd_cmd;
+
 #[derive(Parser)]
 #[command(
     name = "opentune",
@@ -380,6 +382,12 @@ enum Command {
         out: Option<PathBuf>,
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
+    },
+    /// Generic OBD-II mode-01 live data: channel table, supported PIDs, reads
+    /// (multi-PID batched). `--driver obdsim` runs against a simulated ECU.
+    Obd {
+        #[command(subcommand)]
+        action: obd_cmd::ObdAction,
     },
     /// Run the in-memory UDS conformance server offline and exchange raw
     /// requests against it — no hardware, for testing and demos.
@@ -1898,6 +1906,7 @@ fn main() -> Result<()> {
             require_security_write,
             requests,
         } => run_simulate(&dids, require_security_write, &requests)?,
+        Command::Obd { action } => obd_cmd::run(&reg, action)?,
         Command::Log {
             def,
             driver,

@@ -10,6 +10,7 @@ pub mod diag;
 pub mod ecudef;
 pub mod error;
 pub mod interface;
+pub mod obd;
 pub mod protocol;
 pub mod registry;
 pub mod types;
