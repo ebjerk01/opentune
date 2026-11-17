@@ -922,6 +922,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-udssim"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+]
+
+[[package]]
 name = "opentune-vin"
 version = "0.1.0"
 

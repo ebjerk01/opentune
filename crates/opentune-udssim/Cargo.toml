@@ -1,0 +1,24 @@
+# In-memory UDS/DoIP ECU simulator + conformance harness for OpenTune.
+#
+# This crate is a clean-room, offline test peer: an independent implementation
+# of the *server* side of the ISO 14229 (UDS) services OpenTune's client speaks,
+# so `opentune_core::protocol::UdsClient` can be driven against a peer that was
+# not derived from the client's own code. The server semantics were
+# reimplemented from the ISO 14229 / ISO 13400 service catalogue and
+# cross-checked against the behaviour of two independent MIT references
+# (pylessard/python-udsoncan and driftregion/iso14229); no code was copied.
+#
+# Offline conformance only — this never touches hardware or a real vehicle bus.
+[package]
+name = "opentune-udssim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "In-memory UDS (ISO 14229) ECU simulator + DoIP entity and a conformance harness that drives OpenTune's UdsClient against an independent peer. Fault injection + request/response trace recording. Offline only; no hardware."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
