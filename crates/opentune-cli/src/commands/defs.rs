@@ -100,7 +100,7 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
                 bad_files
             );
             if total_errors > 0 {
-                std::process::exit(2);
+                return Err(crate::ExitStatus(2).into());
             }
         }
     }

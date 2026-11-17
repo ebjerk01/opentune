@@ -27,7 +27,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             out,
         } => device::read(ctx, conn, addr, len, out),
         Command::Diff { a, b } => image::diff_files(a, b),
-        Command::Checksum { action } => checksum::run(action),
+        Command::Checksum { action } => checksum::run(ctx, action),
         Command::Flash {
             conn,
             addr,
@@ -136,8 +136,17 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             driver,
             store,
             timeout_ms,
+            seedkey,
             action,
-        } => engines::run_service(reg, &script, &driver, store.as_deref(), timeout_ms, action),
+        } => engines::run_service(
+            ctx,
+            &script,
+            &driver,
+            store.as_deref(),
+            timeout_ms,
+            seedkey.as_deref(),
+            action,
+        ),
         Command::Simulate {
             dids,
             require_security_write,
@@ -165,6 +174,6 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             &params,
         ),
         Command::Candump(args) => candump::run(reg, args),
-        Command::Recipe { action } => recipe_cmd::run(action),
+        Command::Recipe { action } => recipe_cmd::run(ctx, action),
     }
 }

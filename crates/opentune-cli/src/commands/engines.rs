@@ -2,6 +2,7 @@
 //! coding, adaptation, auto-scan, service functions, logging, and the
 //! offline UDS simulator.
 use crate::cli::{AdaptAction, CodingAction, CodingConn, ServiceAction};
+use crate::context::CliContext;
 use anyhow::{anyhow, Context, Result};
 use opentune_core::{ConnectConfig, Interface, Registry};
 
@@ -284,13 +285,24 @@ pub fn run_autoscan(
     Ok(())
 }
 
+/// A [`SeedKey`](opentune_core::protocol::seedkey::SeedKey) handler used as a
+/// service script's [`KeyProvider`](opentune_servicefn::KeyProvider).
+struct SeedKeyProvider(Box<dyn opentune_core::protocol::seedkey::SeedKey>);
+
+impl opentune_servicefn::KeyProvider for SeedKeyProvider {
+    fn key(&self, seed: &[u8], level: u8) -> std::result::Result<Vec<u8>, String> {
+        self.0.compute(seed, level).map_err(|e| e.to_string())
+    }
+}
+
 /// Dispatch the `service` subcommand.
 pub fn run_service(
-    reg: &Registry,
+    ctx: &CliContext,
     script_path: &std::path::Path,
     driver: &str,
     store: Option<&std::path::Path>,
     timeout_ms: u64,
+    seedkey: Option<&str>,
     action: ServiceAction,
 ) -> Result<()> {
     use opentune_core::CoreDiag;
@@ -310,7 +322,11 @@ pub fn run_service(
         }
     }
 
-    let mut drv = open_diag_driver(reg, driver, store)?;
+    let key = seedkey
+        .map(|id| ctx.require_seed_key(id).map(SeedKeyProvider))
+        .transpose()?;
+
+    let mut drv = open_diag_driver(ctx.registry(), driver, store)?;
     let transport = drv
         .diag()
         .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
@@ -320,8 +336,12 @@ pub fn run_service(
         dry_run,
         skip_waits: false,
     };
-    // The CLI ships no OEM seed/key provider; a secured script errors cleanly.
-    let report = run_script(&mut diag, &script, None, &opts).map_err(|e| anyhow!("{e}"))?;
+    // OpenTune ships no OEM seed/key provider: without `--seedkey` (resolved by
+    // an embedding build) a secured script errors cleanly.
+    let key = key
+        .as_ref()
+        .map(|k| k as &dyn opentune_servicefn::KeyProvider);
+    let report = run_script(&mut diag, &script, key, &opts).map_err(|e| anyhow!("{e}"))?;
 
     println!(
         "Service '{}': {:?}{}",

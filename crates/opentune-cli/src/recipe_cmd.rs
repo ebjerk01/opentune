@@ -1,8 +1,11 @@
 //! `opentune recipe create|apply|show` — portable tune recipes
 //! (`opentune-recipe`, format documented in docs/RECIPES.md).
+use crate::context::CliContext;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Subcommand;
-use opentune_recipe::{apply, create, ApplyMode, ApplyOptions, CreateOptions, PatchStatus, Recipe};
+use opentune_recipe::{
+    apply_with, create_with, ApplyMode, ApplyOptions, CreateOptions, PatchStatus, Recipe,
+};
 use std::path::{Path, PathBuf};
 
 /// `opentune recipe …` subcommands.
@@ -138,7 +141,9 @@ fn show(r: &Recipe) {
 }
 
 /// Run a `recipe` subcommand.
-pub fn run(action: RecipeAction) -> Result<()> {
+pub fn run(ctx: &CliContext, action: RecipeAction) -> Result<()> {
+    // Checksum ids resolve like `checksum --algo`: embedder first, then public.
+    let lookup = |id: &str| ctx.checksum(id);
     match action {
         RecipeAction::Create {
             stock,
@@ -173,7 +178,8 @@ pub fn run(action: RecipeAction) -> Result<()> {
                 opts.maps = d.maps;
                 opts.def_id = Some(d.id);
             }
-            let (recipe, warnings) = create(&a, &b, &opts).map_err(|e| anyhow!("{e}"))?;
+            let (recipe, warnings) =
+                create_with(&a, &b, &opts, &lookup).map_err(|e| anyhow!("{e}"))?;
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
@@ -201,7 +207,7 @@ pub fn run(action: RecipeAction) -> Result<()> {
                 },
                 checksum,
             };
-            let rep = apply(&r, &t, &opts);
+            let rep = apply_with(&r, &t, &opts, &lookup);
             println!(
                 "Applying {} ({} patch(es)) to {} in {:?} mode",
                 recipe.display(),

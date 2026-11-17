@@ -1,14 +1,17 @@
 //! `checksum`: verify, fix, list and attest.
+//!
+//! Algorithm ids resolve through the [`CliContext`]: the embedder's resolvers
+//! first, then the public set. `algos` lists only the public set.
 use crate::cli::ChecksumAction;
+use crate::context::CliContext;
 use anyhow::{anyhow, Context, Result};
 
 /// `checksum <action>`
-pub fn run(action: ChecksumAction) -> Result<()> {
+pub fn run(ctx: &CliContext, action: ChecksumAction) -> Result<()> {
     match action {
         ChecksumAction::Verify { algo, file } => {
             use opentune_checksum::{ChecksumKind, Recognition, Representation};
-            let algo = opentune_checksum::get(&algo)
-                .ok_or_else(|| anyhow!("unknown checksum algo '{algo}'"))?;
+            let algo = ctx.require_checksum(&algo)?;
             let img = std::fs::read(&file)?;
             // A file handed to `checksum verify` is a full ECU image; declare
             // it so, and let the algorithm narrow it (or confirm recognition).
@@ -55,8 +58,7 @@ pub fn run(action: ChecksumAction) -> Result<()> {
             reference,
             only_bad,
         } => {
-            let algo = opentune_checksum::get(&algo)
-                .ok_or_else(|| anyhow!("unknown checksum algo '{algo}'"))?;
+            let algo = ctx.require_checksum(&algo)?;
             let mut img = std::fs::read(&file)?;
             let fixes = match reference {
                 Some(r) => {
@@ -95,7 +97,14 @@ pub fn run(action: ChecksumAction) -> Result<()> {
         }
         ChecksumAction::Attest { algo, file, out } => {
             let img = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
-            let att = opentune_attest::attest_image(&algo, &img).map_err(|e| anyhow!("{e}"))?;
+            let imp = ctx.checksum(&algo).ok_or_else(|| {
+                anyhow!(
+                    "{}",
+                    opentune_attest::AttestError::UnknownAlgorithm(algo.clone())
+                )
+            })?;
+            let att = opentune_attest::attest_image_with(&*imp, &algo, &img)
+                .map_err(|e| anyhow!("{e}"))?;
             let json = serde_json::to_string_pretty(&att)?;
             if let Some(out) = out {
                 std::fs::write(&out, &json).map_err(|e| anyhow!("write {}: {e}", out.display()))?;

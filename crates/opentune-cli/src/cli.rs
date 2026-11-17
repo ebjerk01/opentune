@@ -343,8 +343,9 @@ pub enum Command {
     ///
     /// Data-defined by `--script` (a `ServiceScript`). OpenTune ships no OEM
     /// seed/key: a script that needs SecurityAccess requires a caller-supplied
-    /// key provider, which the CLI does not yet pass — so secured scripts can be
-    /// planned but not executed here. `plan` sends nothing; `run` needs `--ack`.
+    /// key provider (`--seedkey`, resolved by the embedding build — the public
+    /// build knows none), so without one secured scripts can be planned but not
+    /// executed. `plan` sends nothing; `run` needs `--ack`.
     Service {
         /// Service-function script (`ServiceScript`) JSON file.
         #[arg(long)]
@@ -358,6 +359,10 @@ pub enum Command {
         /// Per-request UDS timeout, milliseconds.
         #[arg(long, default_value_t = 1000)]
         timeout_ms: u64,
+        /// Seed/key handler id for the script's SecurityAccess steps. Resolved
+        /// by the embedding build; the public OpenTune ships none.
+        #[arg(long, value_name = "ID")]
+        seedkey: Option<String>,
         #[command(subcommand)]
         action: ServiceAction,
     },
@@ -433,8 +438,8 @@ pub enum AdaptAction {
 pub enum ServiceAction {
     /// Validate the script and print its plan without sending anything.
     Plan,
-    /// Execute the script. Requires `--ack`; refuses secured scripts (no key
-    /// provider is wired in the CLI yet).
+    /// Execute the script. Requires `--ack`; refuses secured scripts unless a
+    /// key provider is given with `--seedkey`.
     Run {
         /// Acknowledge that this sends real requests to the module.
         #[arg(long)]
@@ -635,7 +640,10 @@ pub enum ChecksumAction {
     },
 }
 
-#[derive(clap::Args)]
+/// The driver options shared by `info`, `read`, `flash`, `dump` and
+/// `identify`. An extra command can flatten it into its own arguments and open
+/// the driver with [`CliContext::open_connect`](crate::CliContext::open_connect).
+#[derive(clap::Args, Debug, Clone)]
 pub struct ConnectArgs {
     /// Driver id (see `drivers`).
     #[arg(long, default_value = "mock")]
@@ -646,4 +654,8 @@ pub struct ConnectArgs {
     /// Base address mapped to file offset 0 (hex).
     #[arg(long, default_value = "0x0")]
     pub base: String,
+    /// Seed/key handler id for the driver's security-access unlock. Resolved
+    /// by the embedding build; the public OpenTune ships none.
+    #[arg(long, value_name = "ID")]
+    pub seedkey: Option<String>,
 }
