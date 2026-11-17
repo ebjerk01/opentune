@@ -19,6 +19,7 @@
 //!   `tx_id`.
 
 use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::elm;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
@@ -34,23 +35,65 @@ const TESTER_ADDR: u8 = 0xF1;
 /// Per-read serial timeout while assembling one ELM reply.
 const READ_CHUNK_MS: u64 = 100;
 
-/// Owns the serial port and talks the ELM327 AT dialect. Implements
+/// Byte transport the ELM327 driver reads and writes over: a serial port in
+/// normal use, a scripted mock in tests. Reads return a `WouldBlock`/`TimedOut`
+/// error (or zero bytes) when nothing arrived within the stream's timeout.
+pub trait ElmStream: Send {
+    /// Read up to `buf.len()` bytes, blocking at most the stream's timeout.
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
+    /// Write the whole buffer to the adapter.
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()>;
+    /// Flush any buffered output.
+    fn flush(&mut self) -> std::io::Result<()>;
+    /// Best-effort discard of any buffered input; a no-op is acceptable.
+    fn drain_input(&mut self) {}
+}
+
+/// A serial (USB or Bluetooth RFCOMM) ELM327.
+struct SerialElm {
+    port: Box<dyn serialport::SerialPort>,
+}
+
+impl ElmStream for SerialElm {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.port.read(buf)
+    }
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        self.port.write_all(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.port.flush()
+    }
+    fn drain_input(&mut self) {
+        let _ = self.port.clear(serialport::ClearBuffer::Input);
+    }
+}
+
+/// Owns the byte stream and talks the ELM327 AT dialect. Implements
 /// [`DiagTransport`] so the core UDS/KWP clients can drive it.
 struct ElmTransport {
-    port: Box<dyn serialport::SerialPort>,
+    port: Box<dyn ElmStream>,
     version: String,
+    /// The session is on CAN (ISO 15765): requests are limited to one
+    /// single-frame ISO-TP payload (7 bytes).
+    can: bool,
 }
 
 impl ElmTransport {
+    fn new(port: Box<dyn ElmStream>) -> Self {
+        Self {
+            port,
+            version: String::new(),
+            can: false,
+        }
+    }
+
     fn open(port_path: &str, baud: u32) -> Result<Self> {
         let port = serialport::new(port_path, baud)
             .timeout(Duration::from_millis(READ_CHUNK_MS))
             .open()
             .map_err(|e| Error::Config(format!("cannot open ELM327 port {port_path}: {e}")))?;
-        Ok(Self {
-            port,
-            version: String::new(),
-        })
+        Ok(Self::new(Box::new(SerialElm { port })))
     }
 
     /// Read characters until the ELM command prompt `>` or the deadline.
@@ -67,7 +110,11 @@ impl ElmTransport {
                     out.push(byte[0]);
                 }
                 Ok(_) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                    ) => {}
                 Err(e) => return Err(Error::Io(e)),
             }
             if Instant::now() >= deadline {
@@ -90,7 +137,7 @@ impl ElmTransport {
 
     /// Send an `AT` command and return the adapter's text reply.
     fn at(&mut self, cmd: &str) -> Result<String> {
-        let _ = self.port.clear(serialport::ClearBuffer::Input);
+        self.port.drain_input();
         self.write_line(cmd)?;
         let reply = self.read_until_prompt(2000)?;
         Ok(reply.trim().to_string())
@@ -99,8 +146,7 @@ impl ElmTransport {
     /// Send an `AT` command and require an `OK`/non-error reply.
     fn at_ok(&mut self, cmd: &str) -> Result<()> {
         let reply = self.at(cmd)?;
-        let up = reply.to_uppercase();
-        if up.contains('?') || up.contains("ERROR") {
+        if elm::at_rejected(&reply) {
             return Err(Error::Protocol(format!("ELM rejected {cmd}: {reply}")));
         }
         Ok(())
@@ -121,8 +167,8 @@ impl ElmTransport {
     /// Initialise the adapter and select the protocol/header for `cfg`.
     fn init(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let _ = self.at("ATZ"); // reset; reply is the banner
+        self.at_ok("ATE0")?; // echo off first, so ATI is not polluted by it
         self.version = self.at("ATI").unwrap_or_default();
-        self.at_ok("ATE0")?; // echo off
         self.at_ok("ATL0")?; // linefeeds off
         let _ = self.at("ATH0"); // headers off (clones may not ack)
         self.at_ok("ATAT1")?; // adaptive timing
@@ -136,8 +182,9 @@ impl ElmTransport {
                 self.set_can_header(cfg.tx_id, extended)?;
                 // Accept responses from the ECU rx id.
                 if !extended {
-                    let _ = self.at(&format!("ATCRA {:03X}", cfg.rx_id));
+                    self.set_receive_filter(cfg.rx_id & 0x7FF)?;
                 }
+                self.can = true;
             }
             Protocol::Iso14230Kline => {
                 self.at_ok("ATSP5")?; // ISO14230, fast init
@@ -164,6 +211,23 @@ impl ElmTransport {
         }
     }
 
+    /// Accept only frames from `rx` (11-bit): `ATCRA`, or explicitly the older
+    /// `ATCF` + `ATCM 7FF` pair if the adapter rejects it; fail if both are
+    /// rejected (another ECU's reply could otherwise be taken for this one's).
+    fn set_receive_filter(&mut self, rx: u32) -> Result<()> {
+        let reply = self.at(&format!("ATCRA {rx:03X}"))?;
+        if !elm::at_rejected(&reply) {
+            return Ok(());
+        }
+        self.at_ok(&format!("ATCF {rx:03X}"))
+            .and_then(|_| self.at_ok("ATCM 7FF"))
+            .map_err(|e| {
+                Error::Protocol(format!(
+                    "ELM327 rejected ATCRA {rx:03X} and the ATCF/ATCM fallback ({e})"
+                ))
+            })
+    }
+
     /// K-line header: physical addressing, length in a separate byte
     /// (format 0x80), ECU target, tester source.
     fn set_kline_header(&mut self, target: u8) -> Result<()> {
@@ -175,110 +239,39 @@ impl ElmTransport {
 }
 
 impl DiagTransport for ElmTransport {
+    /// One request/response exchange. On CAN, requests over 7 bytes are refused
+    /// before anything is written (the ELM cannot send multi-frame ISO-TP); the
+    /// reply is parsed per response by [`elm::read_reply`] (responsePending,
+    /// truncation, adapter reset/echo and error-string handling).
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
-        let hex: String = req.iter().map(|b| format!("{b:02X}")).collect();
-        let _ = self.port.clear(serialport::ClearBuffer::Input);
+        if self.can {
+            elm::check_can_request_len(req)?;
+        }
+        let hex = elm::request_hex(req);
+        self.port.drain_input();
         self.write_line(&hex)?;
-
-        // Keep reading blocks while the ECU answers requestCorrectlyReceived-
-        // ResponsePending (NRC 0x78).
-        for _ in 0..40 {
-            let text = self.read_until_prompt(timeout_ms)?;
-            let resp = parse_elm_response(&text)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
-                continue;
-            }
-            return Ok(resp);
-        }
-        Err(Error::Timeout(timeout_ms))
+        let stream = &mut self.port;
+        let mut read = || read_byte(stream.as_mut());
+        elm::read_reply(&mut read, &hex, timeout_ms, elm::P2_STAR_MS)
     }
 }
 
-/// Parse an ELM327 textual reply into the raw diagnostic response bytes.
-///
-/// Handles single-frame replies, CAN multi-frame replies printed with the
-/// `NN: ...` line-counter format (with a leading total-length line), and the
-/// common error strings.
-fn parse_elm_response(text: &str) -> Result<Vec<u8>> {
-    let up = text.to_uppercase();
-    for err in [
-        "NO DATA",
-        "UNABLE TO CONNECT",
-        "BUS INIT: ...ERROR",
-        "BUS INIT: ERROR",
-        "BUS ERROR",
-        "CAN ERROR",
-        "DATA ERROR",
-        "BUFFER FULL",
-        "FB ERROR",
-        "STOPPED",
-        "<RX ERROR",
-    ] {
-        if up.contains(err) {
-            return Err(Error::Protocol(format!("ELM: {}", text.trim())));
+/// Read one byte from the stream: `Ok(None)` on an idle tick.
+fn read_byte(stream: &mut dyn ElmStream) -> Result<Option<u8>> {
+    let mut b = [0u8; 1];
+    match stream.read(&mut b) {
+        Ok(1) => Ok(Some(b[0])),
+        Ok(_) => Ok(None),
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+            ) =>
+        {
+            Ok(None)
         }
+        Err(e) => Err(Error::Io(e)),
     }
-
-    let lines: Vec<&str> = text
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty() && *l != "SEARCHING..." && *l != "OK")
-        .collect();
-    if lines.is_empty() {
-        return Err(Error::Protocol("empty ELM response".into()));
-    }
-
-    // Multi-frame: at least one line carries an "NN:" frame counter.
-    if lines.iter().any(|l| l.contains(':')) {
-        let mut total: Option<usize> = None;
-        let mut data = Vec::new();
-        for l in &lines {
-            if let Some((_idx, rest)) = l.split_once(':') {
-                data.extend(hex_bytes(rest));
-            } else if let Some(tok) = l.split_whitespace().next() {
-                // The lone leading line is the total length in hex.
-                if let Ok(n) = usize::from_str_radix(tok, 16) {
-                    total = Some(n);
-                }
-            }
-        }
-        if let Some(n) = total {
-            if n <= data.len() {
-                data.truncate(n);
-            }
-        }
-        if data.is_empty() {
-            return Err(Error::Protocol("no data in ELM multi-frame reply".into()));
-        }
-        return Ok(data);
-    }
-
-    // Single frame (possibly wrapped over several lines): concatenate hex.
-    let mut data = Vec::new();
-    for l in &lines {
-        data.extend(hex_bytes(l));
-    }
-    if data.is_empty() {
-        return Err(Error::Protocol(format!(
-            "no hex bytes in ELM reply: {}",
-            text.trim()
-        )));
-    }
-    Ok(data)
-}
-
-/// Extract hex byte pairs from a line, tolerating spaced or unspaced hex.
-fn hex_bytes(s: &str) -> Vec<u8> {
-    let nibbles: Vec<u8> = s
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .map(|c| c.to_digit(16).unwrap() as u8)
-        .collect();
-    nibbles
-        .chunks(2)
-        .filter(|p| p.len() == 2)
-        .map(|p| (p[0] << 4) | p[1])
-        .collect()
 }
 
 pub struct Elm327Driver {
@@ -288,6 +281,8 @@ pub struct Elm327Driver {
     /// Optional seed/key handler for security access (service 0x27), used on
     /// both the UDS and KWP2000 paths. No OEM algorithm ships with OpenTune.
     seed_key: Option<Box<dyn SeedKey>>,
+    /// A pre-built stream injected for tests, used in place of opening serial.
+    injected: Option<Box<dyn ElmStream>>,
 }
 
 impl Default for Elm327Driver {
@@ -297,6 +292,7 @@ impl Default for Elm327Driver {
             diag_layer: DiagLayer::Uds,
             cfg: None,
             seed_key: None,
+            injected: None,
         }
     }
 }
@@ -304,6 +300,14 @@ impl Default for Elm327Driver {
 impl Elm327Driver {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Inject a pre-connected byte stream (e.g. a test mock). `open` then runs
+    /// the AT init over it instead of opening a serial port.
+    pub fn with_stream(stream: Box<dyn ElmStream>) -> Self {
+        let mut d = Self::new();
+        d.injected = Some(stream);
+        d
     }
 
     /// Install the seed/key handler used to unlock the ECU (service 0x27)
@@ -368,6 +372,13 @@ impl Interface for Elm327Driver {
         }
     }
 
+    /// Expose the ELM request/response transport (UDS or KWP2000 framing is the
+    /// caller's) so the coding/adaptation/auto-scan/service/logging engines can
+    /// drive this adapter. Available once `open()` has brought it up.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let port = cfg
             .options
@@ -380,7 +391,10 @@ impl Interface for Elm327Driver {
             .and_then(|s| s.parse().ok())
             .unwrap_or(38_400);
 
-        let mut transport = ElmTransport::open(port, baud)?;
+        let mut transport = match self.injected.take() {
+            Some(stream) => ElmTransport::new(stream),
+            None => ElmTransport::open(port, baud)?,
+        };
         transport.init(cfg)?;
         self.transport = Some(transport);
         self.diag_layer = cfg.diag_layer;
@@ -889,5 +903,100 @@ mod seedkey_hook_tests {
         cfg.options.insert("seedkey_level".into(), "0x05".into());
         assert!(security_required(Some(&cfg)));
         assert_eq!(seedkey_level(Some(&cfg), 0x01), 0x05);
+    }
+}
+
+#[cfg(test)]
+mod elm_transport_tests {
+    use super::*;
+    use std::collections::VecDeque;
+
+    /// Scripted byte stream: hands out `inbox`, then idles.
+    struct MockStream {
+        inbox: VecDeque<u8>,
+    }
+
+    impl MockStream {
+        fn boxed(script: &str) -> Box<dyn ElmStream> {
+            Box::new(Self {
+                inbox: script.bytes().collect(),
+            })
+        }
+    }
+
+    impl ElmStream for MockStream {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            match (buf.first_mut(), self.inbox.pop_front()) {
+                (Some(slot), Some(b)) => {
+                    *slot = b;
+                    Ok(1)
+                }
+                _ => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "idle")),
+            }
+        }
+        fn write_all(&mut self, _buf: &[u8]) -> std::io::Result<()> {
+            Ok(())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn diag_is_exposed_after_open() {
+        // 10 AT replies for the 11-bit ISO-TP handshake, then one diag reply.
+        let script = format!("{}410C1AF8\r>", "OK\r>".repeat(10));
+        let mut d = Elm327Driver::with_stream(MockStream::boxed(&script));
+        assert!(d.diag().is_none(), "no transport before open");
+        d.open(&ConnectConfig::default()).unwrap();
+        let t = d.diag().expect("diag transport after open");
+        assert_eq!(
+            t.request(&[0x01, 0x0C], 300).unwrap(),
+            [0x41, 0x0C, 0x1A, 0xF8]
+        );
+        assert!(matches!(
+            t.request(&[0x2E, 0xF1, 0x90, 1, 2, 3, 4, 5], 300),
+            Err(Error::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn response_pending_then_final_in_one_prompt_block() {
+        let mut t = ElmTransport::new(MockStream::boxed("7F3178\r7101FF00\r\r>"));
+        assert_eq!(
+            t.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap(),
+            [0x71, 0x01, 0xFF, 0x00]
+        );
+    }
+
+    #[test]
+    fn response_pending_then_prompt_then_final() {
+        let mut t = ElmTransport::new(MockStream::boxed("7F3178\r\r>7101FF00\r"));
+        assert_eq!(
+            t.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap(),
+            [0x71, 0x01, 0xFF, 0x00]
+        );
+    }
+
+    #[test]
+    fn kline_init_banner_and_long_kwp_request() {
+        // K-line: the CAN 7-byte limit does not apply; the init banner is
+        // skipped.
+        let mut t = ElmTransport::new(MockStream::boxed("BUS INIT: ...OK\rC1EF8F\r\r>"));
+        assert_eq!(t.request(&[0x81], 300).unwrap(), [0xC1, 0xEF, 0x8F]);
+    }
+
+    #[test]
+    fn truncated_multiframe_and_reset_are_errors() {
+        let mut t = ElmTransport::new(MockStream::boxed("014\r0:62F19031323334\r\r>"));
+        assert!(matches!(
+            t.request(&[0x22, 0xF1, 0x90], 300),
+            Err(Error::Protocol(_))
+        ));
+        let mut t = ElmTransport::new(MockStream::boxed("\r\rELM327 v1.5\r\r>"));
+        assert!(matches!(
+            t.request(&[0x22, 0xF1, 0x90], 300),
+            Err(Error::AdapterReset(_))
+        ));
     }
 }
