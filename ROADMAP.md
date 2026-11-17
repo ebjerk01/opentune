@@ -12,6 +12,15 @@ an adapter. Android and open hardware are the reach goals. **Phase 4** then broa
 more checksum families (ME7, TCU), flash-container decode, real DoIP, and transmission/AWD control
 units — most of it buildable offline; see the **build order** at the end.
 
+**Suite direction (Phase 5):** OpenTune is growing from a tuning toolkit into a full **diagnostic
+& service suite** — one local app that does, over any interface: identify → auto-scan → fault codes
+→ live data → **coding** → **adaptation** → service functions → **flashing** → tuning (ForScan +
+VCDS + OpenPort + WinOLS in one). It ships as **two local builds**: a **public** (clean-room, open
+standards, user-supplied keys) and a **private "Bench"** (public *plus* brand seed-keys, private
+checksums and protected definition packs). Every feature is a *service* on the shared protocol
+layer, so it works across every interface; new vehicles are new **data** (defs/label packs), not
+new code. See **Phase 5** below.
+
 **Legend:** `[x]` done · `[~]` in progress · `[ ]` planned · 🔒 needs hardware
 
 This is a living document; checked = done and on `main`.
@@ -85,8 +94,9 @@ bench ECU are available.
 - [x] Protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
 - [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge, ESP32-S3, **generic J2534 PassThru** (Mongoose/VNCI/SVCI; Windows FFI gated), **gs_usb/candleLight USB-CAN**, **ELM327-over-WiFi/Bluetooth**
 - [ ] Verify cheap/clone adapters on real hardware (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
-- [ ] **Live identify + full OBD read** (EDC16 first)
-- [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder done, needs the live transport
+- [~] **ELM327 OBD read driver** (`opentune-driver-elm327-obd`, CLI `elm327obd`) — serial ELM init (HS-CAN `SP6` / MS-CAN `SPB` + physical switch), ISO-TP, and a UDS read client: live identify (VIN 0xF190 + part/HW/SW/supplier DIDs), DTC read (0x19 sub 0x02) + decode, clear (0x14), OBD mode-01 live PIDs (RPM/coolant/speed) + mode-03 fallback, battery (`ATRV`). 15 tests vs scripted ELM responses; **read-only** (no ECU writes). *Adapter verified live on hp-elite-x2; driver not yet exercised on a car.*
+- [~] **Live identify + full OBD read** (EDC16 first) — read path now exists in the ELM327 driver above; needs on-car verification
+- [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder + driver read path done, needs a live bus
 - [x] Battery-voltage read exposed as a safety gate
 - [x] Security access: `SeedKey` trait + the 0x27 handshake wired into **every driver's read/write path** — refuses to write unlocked when security is required but no algorithm is set (user supplies the algorithm)
 - [ ] **Flash path**: `requestDownload`/`transferData`/`transferExit` → calibration-region write → read-back verify → **EDC16 end-to-end on the bench, then in-car**
@@ -136,9 +146,11 @@ All `[ ]` = planned.
 
 ### Seed/key (security access) — new plugin layer
 - [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 attack path below.
+- [ ] 🔒 **Ford/Mazda seed→key** (24-bit LFSR + per-module secret table) — algorithm recovered from the open-source FoCCCus; it is the write-enabler, so it lives in the **private Bench** build only. Needs **one live bench seed/key capture** (the ELM327 can do it) to bit-validate the LFSR port before use. Public build keeps the user-supplies-the-algorithm stance.
 
-### Flash-container decode — new
-- [ ] **FRF / ODX-F / SGO** unpack+repack: LZSS10 + AES + SGO parsing (DQ200→AL1000, Simos). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD). ⚠️ never bundle recovered keys (`frf.key` legal caution).
+### Flash-container decode
+- [x] **FRF / ODX / ODX-F / SGO** unpack (`opentune-container`): FRF rolling-XOR → ZIP → ODX/SGO; LZSS10 / LZSS-DQ / ZF-8HP LZZ decompress; AES-CBC / repeating-XOR / SGO family-cipher block crypto — **caller supplies every key, none bundled** (`frf.key` legal caution respected). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD).
+- [x] **VBF (Ford / Volvo / Mazda Versatile Binary Format)** (`opentune-container::vbf`) — plaintext module-flash container: comment-aware header parse + typed fields, binary blocks, **per-block CRC-16/CCITT-FALSE + CRC-32 `file_checksum` verify** (const tables, standard check-vectors). Validated against **33 real Ford module VBFs** (1–6 blocks each). Pairs with the ELM327/Ford suite work. Key-free.
 - [ ] **a2l2xdf** converter path (A2L→XDF). Ref: VW_Flash.
 - [ ] **WinOLS `.ols`** import. Refs: ZedSuite, **TheFlashBold/tune-editor** (GPL-3).
 
@@ -165,6 +177,33 @@ programming driver. Concrete route to obtain/observe it:
 ### Hardware 🔒 (mostly)
 - [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch. *(porting is offline; compile/flash/on-bench is 🔒)*
 - [ ] Reference ECUFlash/RomRaider definition parsers from **FastECU** (GPL-3) for broader def import. *(offline)*
+
+---
+
+## Phase 5 — Full diagnostic & service suite (public + private Bench)
+Turn the toolkit into a complete suite. Every pillar is a **service engine** (code, written once)
+over the existing protocol layer + **data-defined packs** (defs/labels/scripts), so brands/vehicles
+drop in as data. Engines are **public**; sensitive data (brand seed-keys, protected label/map packs)
+lives in the **private Bench** build. Most engines are buildable + unit-testable offline; the live
+paths are 🔒 (need the car/adapter we now have).
+
+### Coding & adaptation
+- [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Generic engine + 7 unit tests done (scripted transport). Next: adapt to core's `DiagTransport`, CLI/desktop surface, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
+- [ ] **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
+- [ ] **Actuator / output tests** — `InputOutputControlByIdentifier` (0x2F).
+
+### Service & diagnostics
+- [ ] **Service functions** — declarative, safe UDS scripts (session → security → routine → verify): EPB, DPF regen, oil/service reset, SAS calibration, throttle align, injector coding, battery registration, brake bleed. Script library grows as data.
+- [ ] **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
+
+### Flashing to modules (not just engine ECUs)
+- [ ] **UDS module flash** end-to-end — `0x34`/`0x36`/`0x37` + security + erase/checksum `RoutineControl`, **container-driven** (VBF/ODX/FRF/SGO/bin → RequestDownload address/length), behind the existing **flash-safety policy** (voltage → backup → write → read-back verify → recovery). 🔒 Ford module flashing (VBF + Bench seed-key) is the first concrete target.
+
+### Frontends (all local — no server)
+- [ ] Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Public **OpenTune** AppImage + private **Bench** AppImage.
+
+### Definition ecosystem (the scaling lever)
+- [ ] New data formats — **coding-label** (done, in `opentune-coding`), **adaptation-channel map**, **service-function script**, **seed-key DB** (private). Public **community** pack + private **premium** pack, versioned files the app loads locally (no hosting).
 
 ---
 
