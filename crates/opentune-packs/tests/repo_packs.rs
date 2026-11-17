@@ -130,12 +130,16 @@ fn module_lists_use_valid_can_ids() {
                     m.name
                 );
                 assert_ne!(m.req_id, m.resp_id, "{}", m.name);
-                assert_eq!(
-                    m.addr,
-                    (m.req_id & 0xFF) as u8,
-                    "{}: addr convention",
-                    m.name
-                );
+                // Real-vehicle packs use the documented low-byte convention;
+                // the simulator pack keeps its own module numbers.
+                if !is_simulator_pack(p) {
+                    assert_eq!(
+                        m.addr,
+                        (m.req_id & 0xFF) as u8,
+                        "{}: addr convention",
+                        m.name
+                    );
+                }
                 assert!(seen.insert(m.req_id), "{}: duplicate request id", m.name);
                 if p.manifest.id == "vag-modules" {
                     assert_eq!(m.protocol, Protocol::Uds);
@@ -145,11 +149,21 @@ fn module_lists_use_valid_can_ids() {
     }
 }
 
+/// Packs that only target the `vcar` simulator (never a real vehicle).
+fn is_simulator_pack(p: &Pack) -> bool {
+    p.manifest.id.starts_with("vcar")
+}
+
 #[test]
 fn obd_clear_is_the_only_shipped_write() {
+    // Writes in simulator packs are exercised against the virtual car only;
+    // for packs aimed at real vehicles, OBD mode 04 is the only write shipped.
     let lib = PackLibrary::load_all(&packs_root());
     let writers: Vec<&str> = lib
-        .services()
+        .packs
+        .iter()
+        .filter(|p| !is_simulator_pack(p))
+        .flat_map(|p| p.services.iter())
         .filter(|s| s.steps.iter().any(|st| st.is_write()))
         .map(|s| s.id.as_str())
         .collect();
