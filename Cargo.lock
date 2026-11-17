@@ -662,6 +662,7 @@ dependencies = [
  "opentune-a2l",
  "opentune-cbf",
  "opentune-checksum",
+ "opentune-coding",
  "opentune-container",
  "opentune-core",
  "opentune-driver-elm327",
@@ -688,6 +689,7 @@ dependencies = [
 name = "opentune-coding"
 version = "0.1.0"
 dependencies = [
+ "opentune-core",
  "serde",
  "serde_json",
 ]
@@ -780,6 +782,7 @@ name = "opentune-driver-mock"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "serde_json",
 ]
 
 [[package]]

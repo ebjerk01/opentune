@@ -569,6 +569,40 @@ where
     }
 }
 
+/// Adapter that runs the coding engine's [`RawDiag`] requests over an
+/// `opentune-core` [`DiagTransport`](opentune_core::protocol::DiagTransport).
+///
+/// This is the integration seam the crate-level docs describe: the engine stays
+/// standalone over the tiny [`RawDiag`] abstraction, and the application wraps a
+/// real driver's transport in `CoreDiag` to drive it. The core transport already
+/// handles ISO-TP framing and the UDS `responsePending` (0x78) loop, so each
+/// `request` returns the final raw response bytes — **including** a `0x7F`
+/// negative response, which the coding engine then classifies itself. Hard
+/// transport failures (timeout, I/O) are mapped from the core [`Error`] to the
+/// `String` that [`RawDiag`] uses.
+///
+/// [`Error`]: opentune_core::Error
+pub struct CoreDiag<'a> {
+    inner: &'a mut dyn opentune_core::protocol::DiagTransport,
+    timeout_ms: u64,
+}
+
+impl<'a> CoreDiag<'a> {
+    /// Wrap a core [`DiagTransport`](opentune_core::protocol::DiagTransport),
+    /// issuing every request with `timeout_ms`.
+    pub fn new(inner: &'a mut dyn opentune_core::protocol::DiagTransport, timeout_ms: u64) -> Self {
+        CoreDiag { inner, timeout_ms }
+    }
+}
+
+impl RawDiag for CoreDiag<'_> {
+    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
+        self.inner
+            .request(req, self.timeout_ms)
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Check a UDS response against the request's service id (`req_sid`): accept a
 /// positive response (`req_sid + 0x40`), and map a negative response (0x7F) to a
 /// descriptive error — rejecting a truncated 0x7F and one that echoes a
@@ -1171,5 +1205,83 @@ mod tests {
         let def = CodingDef::from_json(js).unwrap();
         assert_eq!(def.addressing.dids(), &[1025, 1026]);
         assert_eq!(def.params[0].len, 1);
+    }
+
+    /// A scripted `opentune-core` [`DiagTransport`] mirroring the `Script` in
+    /// `opentune-core/src/protocol/uds.rs`: answers 0x22 from a per-DID store,
+    /// applies 0x2E, and records the per-request timeout it was called with so
+    /// the [`CoreDiag`] adapter's wiring can be asserted.
+    struct CoreScript {
+        store: std::collections::HashMap<u16, Vec<u8>>,
+        timeouts: Vec<u64>,
+    }
+    impl CoreScript {
+        fn new(blocks: &[(u16, Vec<u8>)]) -> Self {
+            CoreScript {
+                store: blocks.iter().cloned().collect(),
+                timeouts: Vec::new(),
+            }
+        }
+    }
+    impl opentune_core::protocol::DiagTransport for CoreScript {
+        fn request(&mut self, req: &[u8], timeout_ms: u64) -> opentune_core::Result<Vec<u8>> {
+            self.timeouts.push(timeout_ms);
+            match req[0] {
+                0x22 => {
+                    let did = ((req[1] as u16) << 8) | req[2] as u16;
+                    let data = self
+                        .store
+                        .get(&did)
+                        .ok_or_else(|| opentune_core::Error::Protocol("no such DID".into()))?;
+                    let mut r = vec![0x62, req[1], req[2]];
+                    r.extend_from_slice(data);
+                    Ok(r)
+                }
+                0x2E => {
+                    let did = ((req[1] as u16) << 8) | req[2] as u16;
+                    self.store.insert(did, req[3..].to_vec());
+                    Ok(vec![0x6E, req[1], req[2]])
+                }
+                other => Err(opentune_core::Error::Protocol(format!(
+                    "unexpected service 0x{other:02X}"
+                ))),
+            }
+        }
+    }
+
+    #[test]
+    fn core_diag_adapter_round_trips_over_diagtransport() {
+        let def = sample_def();
+        let mut transport = CoreScript::new(&[
+            (0x0401, vec![0b0000_0101, 0x00]),
+            (0x0402, vec![0x00, 0x00, 0x2A]),
+        ]);
+        {
+            let mut diag = CoreDiag::new(&mut transport, 2_000);
+            // Read -> edit -> write -> verify, all through the core transport.
+            let current = read_coding(&mut diag, &def).unwrap();
+            assert_eq!(get(&def, &current, "Country").unwrap(), 42);
+            let desired = set(&def, &current, "Country", 7).unwrap();
+            let rep =
+                write_coding(&mut diag, &def, &current, &desired, &WriteOptions::default()).unwrap();
+            assert!(rep.is_verified());
+            assert_eq!(rep.written, vec![0x0402]); // only the changed block
+            assert_eq!(get(&def, &read_coding(&mut diag, &def).unwrap(), "Country").unwrap(), 7);
+        }
+        // The adapter passed the configured timeout to every exchange.
+        assert!(transport.timeouts.iter().all(|&t| t == 2_000));
+    }
+
+    #[test]
+    fn core_diag_adapter_maps_transport_error_to_string() {
+        let def = sample_def();
+        // Empty store -> every 0x22 is a core Error, which the adapter must turn
+        // into the `String` the coding engine surfaces as a transport error.
+        let mut transport = CoreScript::new(&[]);
+        let mut diag = CoreDiag::new(&mut transport, 1_000);
+        assert!(matches!(
+            read_coding(&mut diag, &def),
+            Err(CodingError::Transport(_))
+        ));
     }
 }
