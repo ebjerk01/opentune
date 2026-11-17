@@ -16,6 +16,7 @@
 //! GPL source.
 use crate::protocol::diag::DiagTransport;
 use crate::{Error, Result};
+use std::time::{Duration, Instant};
 
 /// DoIP protocol version. 0x02 = ISO 13400-2:2012; the header carries its
 /// bitwise inverse for validation.
@@ -24,6 +25,17 @@ pub const PROTOCOL_VERSION: u8 = 0x02;
 /// The fixed DoIP header length: version, inverse version, payload type (2),
 /// payload length (4).
 pub const HEADER_LEN: usize = 8;
+
+/// **P2\* / extended per-response budget** for a diagnostic exchange: after the
+/// ECU answers UDS NRC 0x78 (`responsePending`) the transport keeps receiving
+/// under at least this window per follow-up message.
+pub const P2_STAR_MS: u64 = 5000;
+
+/// **Absolute cap on one diagnostic exchange.** Captured from a monotonic clock
+/// when the request is sent, it bounds the *total* time spent waiting across all
+/// interleaved acks, alive-checks and `responsePending` replies, so a chatty or
+/// hostile entity cannot reset the wait indefinitely by trickling traffic.
+pub const TOTAL_DIAG_TIMEOUT_MS: u64 = 60_000;
 
 /// The IANA-registered DoIP port for both the TCP data socket and the UDP
 /// discovery socket (ISO 13400-2 §5.1).
@@ -287,10 +299,27 @@ pub struct DoIpTransport<S: DoIpStream> {
     pub target_address: u16,
     /// Whether routing activation has completed successfully.
     activated: bool,
+    /// Whether the last successful activation returned code 0x11
+    /// ("activated — confirmation required / further action needed") rather than
+    /// 0x10 (plain success). Kept distinct so a caller can tell the two apart
+    /// instead of treating 0x11 as an unconditional success.
+    confirmation_required: bool,
     /// The DoIP entity's logical address, learned from the routing-activation
     /// response (ISO 13400-2 §7.1). May differ from `target_address` when a
     /// gateway routes to several ECUs.
     entity_address: Option<u16>,
+}
+
+/// Remaining time until `deadline`, as whole milliseconds clamped to a minimum of
+/// 1 (so a read always gets a non-zero timeout); `None` once the deadline has
+/// passed.
+fn remaining_ms(deadline: Instant) -> Option<u64> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        None
+    } else {
+        Some((left.as_millis().min(u64::MAX as u128) as u64).max(1))
+    }
 }
 
 impl DoIpTransport<std::net::TcpStream> {
@@ -315,6 +344,7 @@ impl<S: DoIpStream> DoIpTransport<S> {
             source_address,
             target_address,
             activated: false,
+            confirmation_required: false,
             entity_address: None,
         }
     }
@@ -360,8 +390,12 @@ impl<S: DoIpStream> DoIpTransport<S> {
         ))?;
 
         // The entity may interleave an alive-check request before answering.
+        // Bound the whole wait with one absolute deadline so that a stream of
+        // alive-checks cannot reset the per-message timeout forever.
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let resp = loop {
-            let msg = self.read_message(timeout_ms)?;
+            let budget = remaining_ms(deadline).ok_or(Error::Timeout(timeout_ms))?;
+            let msg = self.read_message(budget)?;
             match msg.payload_type {
                 payload_type::ROUTING_ACTIVATION_RESPONSE => break msg,
                 payload_type::ALIVE_CHECK_REQUEST => self.answer_alive_check()?,
@@ -379,19 +413,43 @@ impl<S: DoIpStream> DoIpTransport<S> {
                 }
             }
         };
-        // Response: tester addr (2) + entity addr (2) + response code (1) + reserved (4).
-        if resp.payload.len() < 5 {
-            return Err(Error::Protocol("short routing activation response".into()));
+        // Response (ISO 13400-2 Table 22): tester logical addr (2) + entity
+        // logical addr (2) + response code (1) + reserved (4) [+ optional OEM
+        // (4)]. Require the fixed 9-byte minimum so the code byte and the echoed
+        // tester address are really present.
+        if resp.payload.len() < 9 {
+            return Err(Error::Protocol(format!(
+                "short routing activation response: {} bytes, need at least 9",
+                resp.payload.len()
+            )));
+        }
+        // The entity must echo our tester (source) logical address, confirming
+        // the activation is correlated to this socket and not another tester's.
+        let echoed_tester = u16::from_be_bytes([resp.payload[0], resp.payload[1]]);
+        if echoed_tester != self.source_address {
+            return Err(Error::Protocol(format!(
+                "routing activation echoed tester address 0x{echoed_tester:04X} != ours 0x{:04X}",
+                self.source_address
+            )));
         }
         self.entity_address = Some(u16::from_be_bytes([resp.payload[2], resp.payload[3]]));
         let code = resp.payload[4];
-        if code != routing_activation::RESPONSE_SUCCESS
-            && code != routing_activation::RESPONSE_SUCCESS_CONFIRMATION_REQUIRED
-        {
-            return Err(Error::Protocol(format!(
-                "routing activation denied: response code 0x{code:02X} ({})",
-                routing_activation::name(code)
-            )));
+        match code {
+            routing_activation::RESPONSE_SUCCESS => {
+                self.confirmation_required = false;
+            }
+            routing_activation::RESPONSE_SUCCESS_CONFIRMATION_REQUIRED => {
+                // 0x11 is "activated, but confirmation / further action required".
+                // Recorded distinctly from a plain 0x10 success so the caller is
+                // not misled into treating it as unconditionally ready.
+                self.confirmation_required = true;
+            }
+            _ => {
+                return Err(Error::Protocol(format!(
+                    "routing activation denied: response code 0x{code:02X} ({})",
+                    routing_activation::name(code)
+                )));
+            }
         }
         self.activated = true;
         Ok(())
@@ -403,8 +461,12 @@ impl<S: DoIpStream> DoIpTransport<S> {
     /// activation.
     pub fn identify(&mut self, timeout_ms: u64) -> Result<VehicleInfo> {
         self.write_message(&vehicle_identification_request())?;
+        // One absolute deadline for the whole wait, so interleaved alive-checks
+        // cannot extend it past `timeout_ms`.
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         loop {
-            let msg = self.read_message(timeout_ms)?;
+            let budget = remaining_ms(deadline).ok_or(Error::Timeout(timeout_ms))?;
+            let msg = self.read_message(budget)?;
             match msg.payload_type {
                 payload_type::VEHICLE_ANNOUNCEMENT => {
                     let info = VehicleInfo::parse(&msg.payload)?;
@@ -438,9 +500,20 @@ impl<S: DoIpStream> DoIpTransport<S> {
         ))
     }
 
-    /// True once routing activation has succeeded.
+    /// True once routing activation has succeeded (response code 0x10 **or**
+    /// 0x11). Use [`activation_confirmation_required`](Self::activation_confirmation_required)
+    /// to tell the two apart.
     pub fn is_activated(&self) -> bool {
         self.activated
+    }
+
+    /// True when routing activation succeeded with code 0x11 ("confirmation
+    /// required / further action needed") rather than 0x10 (plain success). The
+    /// socket is activated either way, but on 0x11 the entity may still gate
+    /// diagnostics behind an out-of-band confirmation, so a caller should not
+    /// treat it as an unconditional green light.
+    pub fn activation_confirmation_required(&self) -> bool {
+        self.confirmation_required
     }
 
     /// The DoIP entity's logical address, once learned from routing activation
@@ -459,22 +532,61 @@ impl<S: DoIpStream> DoIpTransport<S> {
         self.write_message(&DoIpMessage::new(payload_type::DIAGNOSTIC_MESSAGE, payload))
     }
 
+    /// Validate that a diagnostic message / ack echoes a sane source/target pair:
+    /// the message must be addressed to us (target == our source address) and
+    /// come from the ECU we are talking to (source == our target, or the learned
+    /// entity address when a gateway relays). Rejects a reply addressed to a
+    /// different tester or forged from an unrelated source so a cross-talking
+    /// message on the socket is not accepted as this exchange's answer.
+    fn correlate_addresses(&self, kind: &str, payload: &[u8]) -> Result<()> {
+        // source(2) + target(2) are the first four bytes of every diagnostic /
+        // ack payload.
+        let src = u16::from_be_bytes([payload[0], payload[1]]);
+        let tgt = u16::from_be_bytes([payload[2], payload[3]]);
+        if tgt != self.source_address {
+            return Err(Error::Protocol(format!(
+                "DoIP {kind} target address 0x{tgt:04X} is not our tester address 0x{:04X}",
+                self.source_address
+            )));
+        }
+        let expected = self.entity_address.unwrap_or(self.target_address);
+        if src != self.target_address && src != expected {
+            return Err(Error::Protocol(format!(
+                "DoIP {kind} source address 0x{src:04X} is neither the target 0x{:04X} nor the entity 0x{expected:04X}",
+                self.target_address
+            )));
+        }
+        Ok(())
+    }
+
     /// Read DoIP messages until a diagnostic message (the UDS response) arrives,
-    /// validating and skipping any interleaved diagnostic-message acks.
-    fn read_uds_response(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
+    /// validating and skipping any interleaved diagnostic-message acks. All
+    /// reads share the one absolute `deadline`, so interleaved acks / alive-checks
+    /// cannot reset the wait.
+    fn read_uds_response(&mut self, deadline: Instant) -> Result<Vec<u8>> {
         loop {
-            let msg = self.read_message(timeout_ms)?;
+            let budget = remaining_ms(deadline).ok_or(Error::Timeout(TOTAL_DIAG_TIMEOUT_MS))?;
+            let msg = self.read_message(budget)?;
             match msg.payload_type {
                 payload_type::DIAGNOSTIC_MESSAGE => {
                     // source(2) + target(2) + UDS data.
                     if msg.payload.len() < 4 {
                         return Err(Error::Protocol("short DoIP diagnostic message".into()));
                     }
+                    self.correlate_addresses("diagnostic message", &msg.payload)?;
                     return Ok(msg.payload[4..].to_vec());
                 }
                 payload_type::DIAGNOSTIC_MESSAGE_POS_ACK => {
-                    // source(2)+target(2)+ack code(1); code 0 = ok. Keep reading.
-                    if msg.payload.len() >= 5 && msg.payload[4] != 0x00 {
+                    // source(2) + target(2) + ack code(1): the full 5 bytes must
+                    // be present. code 0 = ok; keep reading for the real response.
+                    if msg.payload.len() < 5 {
+                        return Err(Error::Protocol(format!(
+                            "short DoIP diagnostic positive ack: {} bytes, need 5",
+                            msg.payload.len()
+                        )));
+                    }
+                    self.correlate_addresses("diagnostic positive ack", &msg.payload)?;
+                    if msg.payload[4] != 0x00 {
                         return Err(Error::Protocol(format!(
                             "diagnostic message ack code 0x{:02X}",
                             msg.payload[4]
@@ -482,7 +594,14 @@ impl<S: DoIpStream> DoIpTransport<S> {
                     }
                 }
                 payload_type::DIAGNOSTIC_MESSAGE_NEG_ACK => {
-                    let code = msg.payload.get(4).copied().unwrap_or(0);
+                    if msg.payload.len() < 5 {
+                        return Err(Error::Protocol(format!(
+                            "short DoIP diagnostic negative ack: {} bytes, need 5",
+                            msg.payload.len()
+                        )));
+                    }
+                    self.correlate_addresses("diagnostic negative ack", &msg.payload)?;
+                    let code = msg.payload[4];
                     return Err(Error::Protocol(format!(
                         "diagnostic message negative ack 0x{code:02X} ({})",
                         diag_nack::name(code)
@@ -490,7 +609,8 @@ impl<S: DoIpStream> DoIpTransport<S> {
                 }
                 payload_type::ALIVE_CHECK_REQUEST => {
                     // The entity is probing the socket mid-exchange; answer and
-                    // keep waiting for the diagnostic response.
+                    // keep waiting for the diagnostic response under the same
+                    // deadline.
                     self.answer_alive_check()?;
                 }
                 payload_type::GENERIC_NEGATIVE_ACK => {
@@ -517,17 +637,28 @@ impl<S: DoIpStream> DiagTransport for DoIpTransport<S> {
                 "DoIP routing not activated; call activate() first".into(),
             ));
         }
+        // Send the request exactly once. On responsePending we keep *receiving*;
+        // the request is never re-sent, so a write is never duplicated.
         self.send_diagnostic(req)?;
-        // Honor UDS responsePending (0x78): the ECU sends more diagnostic
-        // messages (each its own DoIP message) until the real response.
-        for _ in 0..32 {
-            let resp = self.read_uds_response(timeout_ms)?;
+
+        // One absolute monotonic deadline bounds the whole exchange. The ECU may
+        // extend each response under P2* by answering UDS NRC 0x78, but the total
+        // wait is capped: trickled 0x78/ack/alive-check traffic cannot reset it.
+        let first_budget = timeout_ms.max(1);
+        let total = first_budget.max(P2_STAR_MS).max(TOTAL_DIAG_TIMEOUT_MS);
+        let deadline = Instant::now() + Duration::from_millis(total);
+        loop {
+            if remaining_ms(deadline).is_none() {
+                return Err(Error::Timeout(total));
+            }
+            let resp = self.read_uds_response(deadline)?;
             if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
+                // responsePending: wait for the next message under the same
+                // deadline (no re-send, no per-message reset).
                 continue;
             }
             return Ok(resp);
         }
-        Err(Error::Timeout(timeout_ms))
     }
 }
 
@@ -549,12 +680,16 @@ pub fn discover(
 ) -> Result<Vec<(std::net::SocketAddr, VehicleInfo)>> {
     let sock = std::net::UdpSocket::bind(bind_addr)?;
     sock.set_broadcast(broadcast)?;
-    sock.set_read_timeout(Some(std::time::Duration::from_millis(timeout_ms.max(1))))?;
     sock.send_to(&vehicle_identification_request().encode(), dest_addr)?;
 
+    // Collect announcements until one absolute deadline, re-arming the per-recv
+    // timeout from the time left so a steady trickle of packets cannot keep the
+    // loop alive past `timeout_ms`.
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(1));
     let mut found = Vec::new();
     let mut buf = [0u8; 1024];
-    loop {
+    while let Some(left) = remaining_ms(deadline) {
+        sock.set_read_timeout(Some(Duration::from_millis(left)))?;
         match sock.recv_from(&mut buf) {
             Ok((n, from)) => {
                 if n < HEADER_LEN {
@@ -848,17 +983,185 @@ mod tests {
         assert!(saw_alive, "expected an alive-check response to be sent");
     }
 
-    #[test]
-    fn routing_activation_confirmation_required_is_accepted() {
+    /// Build a routing-activation response with an explicit echoed tester
+    /// address and response code (9-byte fixed form).
+    fn routing_resp(echoed_tester: u16, entity: u16, code: u8) -> DoIpMessage {
         let mut p = Vec::new();
-        p.extend_from_slice(&0x0E00u16.to_be_bytes());
-        p.extend_from_slice(&0x1000u16.to_be_bytes());
-        p.push(routing_activation::RESPONSE_SUCCESS_CONFIRMATION_REQUIRED);
+        p.extend_from_slice(&echoed_tester.to_be_bytes());
+        p.extend_from_slice(&entity.to_be_bytes());
+        p.push(code);
         p.extend_from_slice(&[0u8; 4]);
-        let msg = DoIpMessage::new(payload_type::ROUTING_ACTIVATION_RESPONSE, p);
+        DoIpMessage::new(payload_type::ROUTING_ACTIVATION_RESPONSE, p)
+    }
+
+    #[test]
+    fn routing_activation_confirmation_required_is_distinct_from_success() {
+        // 0x11 activates, but is recorded distinctly from a 0x10 success.
+        let msg = routing_resp(
+            0x0E00,
+            0x1000,
+            routing_activation::RESPONSE_SUCCESS_CONFIRMATION_REQUIRED,
+        );
         let mut tp = DoIpTransport::with_stream(MockStream::new(vec![msg]), 0x0E00, 0x1000);
         tp.activate(1000).unwrap();
         assert!(tp.is_activated());
+        assert!(
+            tp.activation_confirmation_required(),
+            "0x11 must set the confirmation-required flag"
+        );
+
+        // A plain 0x10 success leaves the flag clear.
+        let ok = routing_resp(0x0E00, 0x1000, routing_activation::RESPONSE_SUCCESS);
+        let mut tp2 = DoIpTransport::with_stream(MockStream::new(vec![ok]), 0x0E00, 0x1000);
+        tp2.activate(1000).unwrap();
+        assert!(tp2.is_activated());
+        assert!(
+            !tp2.activation_confirmation_required(),
+            "0x10 must leave the confirmation-required flag clear"
+        );
+    }
+
+    #[test]
+    fn routing_activation_rejects_wrong_tester_echo() {
+        // The entity echoes a tester address (0x0EFF) that is not ours (0x0E00).
+        let msg = routing_resp(0x0EFF, 0x1000, routing_activation::RESPONSE_SUCCESS);
+        let mut tp = DoIpTransport::with_stream(MockStream::new(vec![msg]), 0x0E00, 0x1000);
+        assert!(matches!(tp.activate(1000), Err(Error::Protocol(_))));
+        assert!(!tp.is_activated());
+    }
+
+    #[test]
+    fn routing_activation_rejects_short_payload() {
+        // A 5-byte response (old lenient minimum) is now rejected: the fixed
+        // form carries the 4 reserved bytes, so < 9 is malformed.
+        let mut p = Vec::new();
+        p.extend_from_slice(&0x0E00u16.to_be_bytes());
+        p.extend_from_slice(&0x1000u16.to_be_bytes());
+        p.push(routing_activation::RESPONSE_SUCCESS);
+        let msg = DoIpMessage::new(payload_type::ROUTING_ACTIVATION_RESPONSE, p);
+        let mut tp = DoIpTransport::with_stream(MockStream::new(vec![msg]), 0x0E00, 0x1000);
+        assert!(matches!(tp.activate(1000), Err(Error::Protocol(_))));
+    }
+
+    #[test]
+    fn diagnostic_reply_to_wrong_tester_is_rejected() {
+        let tester = 0x0E00;
+        let ecu = 0x1000;
+        // The ECU answers but addresses the message to a different tester 0x0E99.
+        let resp_uds = vec![0x62, 0xF1, 0x90, 0x7B];
+        let msgs = vec![
+            routing_ok(tester, ecu),
+            diag_pos_ack(ecu, tester),
+            diag_msg(ecu, 0x0E99, &resp_uds),
+        ];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        let mut uds = UdsClient::new(&mut tp);
+        assert!(matches!(
+            uds.read_data_by_id(0xF190),
+            Err(Error::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn diagnostic_reply_from_wrong_source_is_rejected() {
+        let tester = 0x0E00;
+        let ecu = 0x1000;
+        // A reply forged from an unrelated source address 0x2222.
+        let resp_uds = vec![0x62, 0xF1, 0x90, 0x7B];
+        let msgs = vec![
+            routing_ok(tester, ecu),
+            diag_pos_ack(ecu, tester),
+            diag_msg(0x2222, tester, &resp_uds),
+        ];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        let mut uds = UdsClient::new(&mut tp);
+        assert!(matches!(
+            uds.read_data_by_id(0xF190),
+            Err(Error::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn short_diagnostic_positive_ack_is_rejected() {
+        let tester: u16 = 0x0E00;
+        let ecu: u16 = 0x1000;
+        // A positive ack missing its ack-code byte (only src+tgt = 4 bytes).
+        let mut p = Vec::new();
+        p.extend_from_slice(&ecu.to_be_bytes());
+        p.extend_from_slice(&tester.to_be_bytes());
+        let short_ack = DoIpMessage::new(payload_type::DIAGNOSTIC_MESSAGE_POS_ACK, p);
+        let msgs = vec![routing_ok(tester, ecu), short_ack];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        let mut uds = UdsClient::new(&mut tp);
+        assert!(matches!(
+            uds.read_data_by_id(0xF190),
+            Err(Error::Protocol(_))
+        ));
+    }
+
+    #[test]
+    fn diagnostic_negative_ack_is_correlated_and_named() {
+        let tester: u16 = 0x0E00;
+        let ecu: u16 = 0x1000;
+        // A well-formed negative ack (src+tgt+code) with a known code.
+        let mut p = Vec::new();
+        p.extend_from_slice(&ecu.to_be_bytes());
+        p.extend_from_slice(&tester.to_be_bytes());
+        p.push(diag_nack::UNKNOWN_TARGET_ADDRESS);
+        let nack = DoIpMessage::new(payload_type::DIAGNOSTIC_MESSAGE_NEG_ACK, p);
+        let msgs = vec![routing_ok(tester, ecu), nack];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        let mut uds = UdsClient::new(&mut tp);
+        match uds.read_data_by_id(0xF190) {
+            Err(Error::Protocol(msg)) => assert!(
+                msg.contains("unknownTargetAddress"),
+                "message should name the NACK code: {msg}"
+            ),
+            other => panic!("expected a protocol error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn responsepending_does_not_resend_the_request() {
+        // Two 0x78 pendings then the real response: the client sends the request
+        // once and the transport keeps receiving. Assert exactly one diagnostic
+        // message (the request) was written.
+        let tester = 0x0E00;
+        let ecu = 0x1000;
+        let pending = vec![0x7F, 0x22, 0x78];
+        let real = vec![0x62, 0xF1, 0x90, 0x42];
+        let msgs = vec![
+            routing_ok(tester, ecu),
+            diag_pos_ack(ecu, tester),
+            diag_msg(ecu, tester, &pending),
+            diag_msg(ecu, tester, &pending),
+            diag_msg(ecu, tester, &real),
+        ];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        let written_before = tp.stream.written.len();
+        {
+            let mut uds = UdsClient::new(&mut tp);
+            assert_eq!(uds.read_data_by_id(0xF190).unwrap(), vec![0x42]);
+        }
+        // Count DIAGNOSTIC_MESSAGE payloads written after activation: must be 1.
+        let mut rest = &tp.stream.written[written_before..];
+        let mut diag_requests = 0;
+        while rest.len() >= HEADER_LEN {
+            let (ptype, plen) = DoIpMessage::parse_header(rest).unwrap();
+            if ptype == payload_type::DIAGNOSTIC_MESSAGE {
+                diag_requests += 1;
+            }
+            rest = &rest[HEADER_LEN + plen..];
+        }
+        assert_eq!(
+            diag_requests, 1,
+            "the UDS request must be sent exactly once despite the responsePending replies"
+        );
     }
 
     /// Offline UDP discovery: a loopback "entity" answers one vehicle
