@@ -1,0 +1,37 @@
+{
+  "id": "vcar-engine-fan-test",
+  "name": "Virtual car - radiator fan test",
+  "description": "Engine (7E0/7E8): extended session, drive IO 0x0500 on, wait, return control to the ECU. OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "7E0",
+  "resp_id": "7E8",
+  "requires_security": false,
+  "steps": [
+    {
+      "op": "diagnostic_session",
+      "subfunction": 3
+    },
+    {
+      "op": "io_control",
+      "did": 1280,
+      "control": 3,
+      "data": [
+        1
+      ]
+    },
+    {
+      "op": "expect_positive"
+    },
+    {
+      "op": "wait",
+      "ms": 500
+    },
+    {
+      "op": "io_control",
+      "did": 1280,
+      "control": 0
+    },
+    {
+      "op": "expect_positive"
+    }
+  ]
+}

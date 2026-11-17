@@ -1,0 +1,40 @@
+{
+  "id": "vcar-airbag",
+  "name": "Virtual car - Airbag",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "715",
+  "resp_id": "77F",
+  "requires_security": true,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Passenger airbag deactivation switch",
+      "byte": 0,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Rear seat-belt reminder",
+      "byte": 0,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Seat occupancy sensor",
+      "byte": 0,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    }
+  ]
+}

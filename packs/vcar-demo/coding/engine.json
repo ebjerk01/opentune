@@ -1,0 +1,84 @@
+{
+  "id": "vcar-engine",
+  "name": "Virtual car - Engine",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "7E0",
+  "resp_id": "7E8",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Start-stop",
+      "byte": 0,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Fuel type",
+      "byte": 0,
+      "bit": 1,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "petrol"
+        },
+        {
+          "value": 1,
+          "label": "diesel"
+        },
+        {
+          "value": 2,
+          "label": "hybrid"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "name": "Cruise control",
+      "byte": 1,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Gearbox type",
+      "byte": 1,
+      "bit": 1,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "manual"
+        },
+        {
+          "value": 1,
+          "label": "automatic"
+        },
+        {
+          "value": 2,
+          "label": "dual-clutch"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "name": "Speed limiter",
+      "byte": 2,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    }
+  ]
+}

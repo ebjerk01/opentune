@@ -22,9 +22,11 @@
 //!
 //! - [`server::UdsServer`] — the simulated ECU. [`UdsServer::handle`] turns one
 //!   UDS request into one UDS response. It implements DiagnosticSessionControl
-//!   (0x10), ECUReset (0x11), ReadDTCInformation (0x19), ReadDataByIdentifier
-//!   (0x22), SecurityAccess (0x27, with an injected [`security::SecurityChecker`]),
-//!   WriteDataByIdentifier (0x2E), RoutineControl (0x31), RequestDownload /
+//!   (0x10), ECUReset (0x11), ClearDiagnosticInformation (0x14),
+//!   ReadDTCInformation (0x19), ReadDataByIdentifier (0x22), SecurityAccess
+//!   (0x27, with an injected [`security::SecurityChecker`]),
+//!   WriteDataByIdentifier (0x2E), InputOutputControlByIdentifier (0x2F),
+//!   RoutineControl (0x31), RequestDownload /
 //!   RequestUpload (0x34 / 0x35), TransferData (0x36, with block-counter
 //!   tracking), RequestTransferExit (0x37) and TesterPresent (0x3E).
 //! - [`transport::SimTransport`] — wraps the server as an `opentune_core`

@@ -1,0 +1,62 @@
+{
+  "id": "vcar-abs",
+  "name": "Virtual car - ABS / ESC",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "713",
+  "resp_id": "77D",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Hill hold",
+      "byte": 0,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "ESC off button",
+      "byte": 0,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Tyre pressure monitoring",
+      "byte": 0,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Brake disc size",
+      "byte": 1,
+      "bit": 0,
+      "len": 8,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "small"
+        },
+        {
+          "value": 1,
+          "label": "standard"
+        },
+        {
+          "value": 2,
+          "label": "large"
+        }
+      ],
+      "note": ""
+    }
+  ]
+}

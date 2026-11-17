@@ -1,0 +1,77 @@
+{
+  "id": "vcar-body-adaptation",
+  "name": "Virtual car - Body / central adaptation",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "70E",
+  "resp_id": "778",
+  "requires_security": false,
+  "channels": [
+    {
+      "name": "Auto-lock speed",
+      "kind": "value",
+      "did": 1552,
+      "field": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": "km/h"
+        }
+      },
+      "min": 5,
+      "max": 40,
+      "note": "DID 0x0610"
+    },
+    {
+      "name": "Coming-home light duration",
+      "kind": "value",
+      "did": 1553,
+      "field": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": "s"
+        }
+      },
+      "min": 0,
+      "max": 90,
+      "note": "DID 0x0611"
+    },
+    {
+      "name": "Window position initialisation",
+      "kind": "routine",
+      "id": 560,
+      "result": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "RoutineControl 0x0230; result 00 = OK"
+    },
+    {
+      "name": "Interior light",
+      "kind": "actuator",
+      "did": 1360,
+      "state": [
+        1
+      ],
+      "status": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "IO control 0x0550; 01 = on, control returned to the ECU afterwards"
+    }
+  ]
+}

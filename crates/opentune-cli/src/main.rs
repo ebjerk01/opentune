@@ -680,6 +680,11 @@ fn registry() -> Registry {
     r.register("elm327obd", "ELM327 serial (OBD read diagnostics)", || {
         Box::new(opentune_driver_elm327_obd::Elm327Obd::new())
     });
+    r.register(
+        "vcar",
+        "Virtual car (offline multi-module simulator)",
+        || Box::new(opentune_driver_vcar::VcarDriver::new()),
+    );
     r
 }
 
@@ -2226,12 +2231,33 @@ fn run_autoscan(
     let modules = VehicleModules::from_json(&text)
         .map_err(|e| anyhow!("parse module map {}: {e}", modules_path.display()))?;
 
-    let mut drv = open_diag_driver(reg, driver, store)?;
-    let transport = drv
-        .diag()
-        .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
-    let mut diag = CoreDiag::new(transport, timeout_ms);
-    let scan = opentune_autoscan::scan(&mut diag, &modules);
+    // Bind the adapter to each module's own request/response ids before
+    // probing it (as the desktop does): one binding would send every module's
+    // requests to the one ECU it is bound to.
+    let mut results = Vec::with_capacity(modules.modules.len());
+    for m in &modules.modules {
+        let mut drv = reg
+            .make(driver)
+            .ok_or_else(|| anyhow!("unknown driver '{driver}'"))?;
+        let mut cfg = ConnectConfig {
+            tx_id: m.req_id,
+            rx_id: m.resp_id,
+            ..ConnectConfig::default()
+        };
+        if let Some(store) = store {
+            cfg.options
+                .insert("coding_store".into(), store.to_string_lossy().into_owned());
+        }
+        apply_serial_env(&mut cfg);
+        drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
+        let transport = drv
+            .diag()
+            .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
+        let mut diag = CoreDiag::new(transport, timeout_ms);
+        results.push(opentune_autoscan::scan_module(&mut diag, m));
+        let _ = drv.close();
+    }
+    let scan = opentune_autoscan::VehicleScan { modules: results };
 
     let present = scan.present().count();
     println!(

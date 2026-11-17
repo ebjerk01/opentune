@@ -1,0 +1,62 @@
+{
+  "id": "vcar-body",
+  "name": "Virtual car - Body / central",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "70E",
+  "resp_id": "778",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Auto-lock when driving",
+      "byte": 0,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Comfort opening via remote",
+      "byte": 0,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Daytime running lights",
+      "byte": 0,
+      "bit": 2,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "off"
+        },
+        {
+          "value": 1,
+          "label": "on"
+        },
+        {
+          "value": 2,
+          "label": "automatic"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "name": "Rear fog lamp",
+      "byte": 1,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "id": "vcar-cluster",
+  "name": "Virtual car - Instrument cluster",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "714",
+  "resp_id": "77E",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Units",
+      "byte": 0,
+      "bit": 0,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "metric"
+        },
+        {
+          "value": 1,
+          "label": "imperial"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "name": "Digital speed display",
+      "byte": 0,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Service interval display",
+      "byte": 0,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Language",
+      "byte": 1,
+      "bit": 0,
+      "len": 8,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "English"
+        },
+        {
+          "value": 1,
+          "label": "Norwegian"
+        },
+        {
+          "value": 2,
+          "label": "German"
+        },
+        {
+          "value": 3,
+          "label": "French"
+        }
+      ],
+      "note": ""
+    }
+  ]
+}

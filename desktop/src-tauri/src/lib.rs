@@ -46,6 +46,8 @@ mod feat_obd;
 mod feat_obdinfo;
 mod feat_scan;
 mod feat_service;
+#[cfg(test)]
+mod vcar_e2e;
 
 // ---------------------------------------------------------------------------
 // Long-operation guard
@@ -160,6 +162,9 @@ fn registry() -> Registry {
     });
     r.register("j2534", "J2534 PassThru (generic)", || {
         Box::new(opentune_driver_j2534::J2534Driver::new())
+    });
+    r.register("vcar", "Virtual car (offline simulator)", || {
+        Box::new(opentune_driver_vcar::VcarDriver::new())
     });
     r
 }

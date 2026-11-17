@@ -23,10 +23,12 @@ use std::collections::BTreeMap;
 mod sid {
     pub const SESSION_CONTROL: u8 = 0x10;
     pub const ECU_RESET: u8 = 0x11;
+    pub const CLEAR_DTC: u8 = 0x14;
     pub const READ_DTC_INFORMATION: u8 = 0x19;
     pub const READ_DATA_BY_ID: u8 = 0x22;
     pub const SECURITY_ACCESS: u8 = 0x27;
     pub const WRITE_DATA_BY_ID: u8 = 0x2E;
+    pub const IO_CONTROL: u8 = 0x2F;
     pub const ROUTINE_CONTROL: u8 = 0x31;
     pub const REQUEST_DOWNLOAD: u8 = 0x34;
     pub const REQUEST_UPLOAD: u8 = 0x35;
@@ -75,6 +77,18 @@ impl DtcRecord {
     pub fn new(dtc: [u8; 3], status: u8) -> Self {
         Self { dtc, status }
     }
+}
+
+/// One InputOutputControlByIdentifier (0x2F) channel: the ECU's own default
+/// state and the state currently driven on the output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IoChannel {
+    /// The state the ECU itself would drive (restored by returnControlToECU).
+    default: Vec<u8>,
+    /// The state currently on the output.
+    current: Vec<u8>,
+    /// Whether the tester currently holds control of the output.
+    overridden: bool,
 }
 
 /// Tunable ECU policy.
@@ -127,12 +141,13 @@ pub struct UdsServer {
     dids: BTreeMap<u16, Vec<u8>>,
     routines: BTreeMap<u16, Vec<u8>>,
     dtcs: Vec<DtcRecord>,
+    io: BTreeMap<u16, IoChannel>,
     session: u8,
     security_unlocked: bool,
     /// The (request-seed odd level, seed) last issued, awaiting a key.
     current_seed: Option<(u8, Vec<u8>)>,
     sec_attempts_left: u32,
-    checker: Box<dyn SecurityChecker>,
+    checker: Box<dyn SecurityChecker + Send>,
     transfer: Option<TransferState>,
 }
 
@@ -157,6 +172,7 @@ impl UdsServer {
             dids: BTreeMap::new(),
             routines: BTreeMap::new(),
             dtcs: Vec::new(),
+            io: BTreeMap::new(),
             session: 0x01,
             security_unlocked: false,
             current_seed: None,
@@ -166,8 +182,10 @@ impl UdsServer {
         }
     }
 
-    /// Install the seed→key relationship the ECU enforces for 0x27.
-    pub fn set_security_checker(&mut self, checker: Box<dyn SecurityChecker>) {
+    /// Install the seed→key relationship the ECU enforces for 0x27. The checker
+    /// is `Send` so a simulated ECU can live behind a shared `Mutex` (the
+    /// virtual-car driver keeps one vehicle across driver instances).
+    pub fn set_security_checker(&mut self, checker: Box<dyn SecurityChecker + Send>) {
         self.checker = checker;
     }
 
@@ -189,6 +207,41 @@ impl UdsServer {
     /// Append a DTC to the store read by ReadDTCInformation (0x19).
     pub fn add_dtc(&mut self, dtc: DtcRecord) {
         self.dtcs.push(dtc);
+    }
+
+    /// The DTC store (in insertion order), for assertions after a clear.
+    pub fn dtcs(&self) -> &[DtcRecord] {
+        &self.dtcs
+    }
+
+    /// Empty the DTC store (what ClearDiagnosticInformation `14 FF FF FF` does).
+    pub fn clear_dtcs(&mut self) {
+        self.dtcs.clear();
+    }
+
+    /// Register an InputOutputControlByIdentifier (0x2F) channel whose ECU
+    /// default (and initial) output state is `default_state`.
+    pub fn set_io(&mut self, did: u16, default_state: impl Into<Vec<u8>>) {
+        let d = default_state.into();
+        self.io.insert(
+            did,
+            IoChannel {
+                current: d.clone(),
+                default: d,
+                overridden: false,
+            },
+        );
+    }
+
+    /// The state currently driven on IO channel `did`, if registered.
+    pub fn io_state(&self, did: u16) -> Option<&[u8]> {
+        self.io.get(&did).map(|c| c.current.as_slice())
+    }
+
+    /// Whether the tester currently holds control of IO channel `did` (a
+    /// shortTermAdjustment / freeze / reset without a returnControlToECU yet).
+    pub fn io_overridden(&self, did: u16) -> bool {
+        self.io.get(&did).is_some_and(|c| c.overridden)
     }
 
     /// The active diagnostic session.
@@ -216,10 +269,12 @@ impl UdsServer {
         match service {
             sid::SESSION_CONTROL => self.session_control(req),
             sid::ECU_RESET => self.ecu_reset(req),
+            sid::CLEAR_DTC => self.clear_dtc(req),
             sid::READ_DTC_INFORMATION => self.read_dtc(req),
             sid::READ_DATA_BY_ID => self.read_data_by_id(req),
             sid::SECURITY_ACCESS => self.security_access(req),
             sid::WRITE_DATA_BY_ID => self.write_data_by_id(req),
+            sid::IO_CONTROL => self.io_control(req),
             sid::ROUTINE_CONTROL => self.routine_control(req),
             sid::REQUEST_DOWNLOAD => self.request_transfer(req, true),
             sid::REQUEST_UPLOAD => self.request_transfer(req, false),
@@ -299,6 +354,65 @@ impl UdsServer {
         self.dids.insert(did, req[3..].to_vec());
         // 6E <did hi> <did lo>.
         vec![0x6E, req[1], req[2]]
+    }
+
+    fn clear_dtc(&mut self, req: &[u8]) -> Vec<u8> {
+        // 14 <groupOfDTC: 3 bytes>.
+        if req.len() != 4 {
+            return neg(sid::CLEAR_DTC, nrc::INCORRECT_LENGTH);
+        }
+        let group = [req[1], req[2], req[3]];
+        if group == [0xFF, 0xFF, 0xFF] {
+            // All groups.
+            self.dtcs.clear();
+        } else {
+            // A single DTC: it must be one the ECU knows.
+            let before = self.dtcs.len();
+            self.dtcs.retain(|d| d.dtc != group);
+            if self.dtcs.len() == before {
+                return neg(sid::CLEAR_DTC, nrc::REQUEST_OUT_OF_RANGE);
+            }
+        }
+        vec![0x54]
+    }
+
+    fn io_control(&mut self, req: &[u8]) -> Vec<u8> {
+        // 2F <did hi> <did lo> <inputOutputControlParameter> [controlState…].
+        if req.len() < 4 {
+            return neg(sid::IO_CONTROL, nrc::INCORRECT_LENGTH);
+        }
+        let did = u16::from_be_bytes([req[1], req[2]]);
+        let option = req[3];
+        let Some(ch) = self.io.get_mut(&did) else {
+            return neg(sid::IO_CONTROL, nrc::REQUEST_OUT_OF_RANGE);
+        };
+        match option {
+            // returnControlToECU.
+            0x00 => {
+                ch.current = ch.default.clone();
+                ch.overridden = false;
+            }
+            // resetToDefault.
+            0x01 => {
+                ch.current = ch.default.clone();
+                ch.overridden = true;
+            }
+            // freezeCurrentState.
+            0x02 => ch.overridden = true,
+            // shortTermAdjustment: the new state must be supplied.
+            0x03 => {
+                if req.len() == 4 {
+                    return neg(sid::IO_CONTROL, nrc::INCORRECT_LENGTH);
+                }
+                ch.current = req[4..].to_vec();
+                ch.overridden = true;
+            }
+            _ => return neg(sid::IO_CONTROL, nrc::REQUEST_OUT_OF_RANGE),
+        }
+        // 6F <did hi> <did lo> <parameter> <controlStatusRecord = current state>.
+        let mut out = vec![0x6F, req[1], req[2], option];
+        out.extend_from_slice(&ch.current);
+        out
     }
 
     fn security_access(&mut self, req: &[u8]) -> Vec<u8> {
@@ -654,6 +768,56 @@ mod tests {
         assert_eq!(
             s.handle(&[0x19, 0x7F]),
             vec![0x7F, 0x19, nrc::SUB_FUNCTION_NOT_SUPPORTED]
+        );
+    }
+
+    #[test]
+    fn clear_dtc_all_groups_and_single() {
+        let mut s = UdsServer::new();
+        s.add_dtc(DtcRecord::new([0x11, 0x22, 0x33], 0x24));
+        s.add_dtc(DtcRecord::new([0x44, 0x55, 0x66], 0x01));
+        // A DTC the ECU does not store.
+        assert_eq!(
+            s.handle(&[0x14, 0x01, 0x02, 0x03]),
+            vec![0x7F, 0x14, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        assert_eq!(s.handle(&[0x14, 0x11, 0x22, 0x33]), vec![0x54]);
+        assert_eq!(s.dtcs().len(), 1);
+        assert_eq!(s.handle(&[0x14, 0xFF, 0xFF, 0xFF]), vec![0x54]);
+        assert!(s.dtcs().is_empty());
+        assert_eq!(
+            s.handle(&[0x14, 0xFF]),
+            vec![0x7F, 0x14, nrc::INCORRECT_LENGTH]
+        );
+    }
+
+    #[test]
+    fn io_control_adjust_then_return_control() {
+        let mut s = UdsServer::new();
+        s.set_io(0x0501, vec![0x00]);
+        assert_eq!(
+            s.handle(&[0x2F, 0x05, 0x01, 0x03, 0x01]),
+            vec![0x6F, 0x05, 0x01, 0x03, 0x01]
+        );
+        assert_eq!(s.io_state(0x0501), Some(&[0x01][..]));
+        assert!(s.io_overridden(0x0501));
+        assert_eq!(
+            s.handle(&[0x2F, 0x05, 0x01, 0x00]),
+            vec![0x6F, 0x05, 0x01, 0x00, 0x00]
+        );
+        assert!(!s.io_overridden(0x0501));
+        // Unknown IO DID, missing state, unknown parameter.
+        assert_eq!(
+            s.handle(&[0x2F, 0x09, 0x99, 0x00]),
+            vec![0x7F, 0x2F, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        assert_eq!(
+            s.handle(&[0x2F, 0x05, 0x01, 0x03]),
+            vec![0x7F, 0x2F, nrc::INCORRECT_LENGTH]
+        );
+        assert_eq!(
+            s.handle(&[0x2F, 0x05, 0x01, 0x07]),
+            vec![0x7F, 0x2F, nrc::REQUEST_OUT_OF_RANGE]
         );
     }
 

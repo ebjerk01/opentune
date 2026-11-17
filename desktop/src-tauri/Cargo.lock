@@ -2584,6 +2584,7 @@ dependencies = [
  "opentune-driver-openport2",
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
+ "opentune-driver-vcar",
  "opentune-dtc",
  "opentune-flash",
  "opentune-logdef",
@@ -2680,6 +2681,16 @@ version = "0.1.0"
 dependencies = [
  "opentune-core",
  "socketcan",
+]
+
+[[package]]
+name = "opentune-driver-vcar"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-udssim",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
