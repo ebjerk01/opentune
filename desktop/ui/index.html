@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenTune</title>
+    <script>
+      // Startup trace (OPENTUNE_TRACE_STARTUP=1): when the document started parsing.
+      try { window.__TAURI__.core.invoke("startup_mark", { label: "html parsing (page +" + Math.round(performance.now()) + " ms)" }).catch(function () {}); } catch (e) {}
+    </script>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>

@@ -1630,6 +1630,13 @@ async function boot() {
   })();
   await Promise.allSettled([dataPaths, initDrivers(), initSeedKey(), initUpdates(), conn]);
   startupMark("boot done");
+  try {
+    // For the startup trace: the slowest page resources (scripts, CSS).
+    const slow = performance.getEntriesByType("resource")
+      .sort((a, b) => b.duration - a.duration).slice(0, 4)
+      .map((r) => `${r.name.split("/").pop()} ${Math.round(r.startTime)}+${Math.round(r.duration)} ms`).join(", ");
+    if (slow) startupMark("slowest resources: " + slow);
+  } catch (e) {}
 
   // 3. Heavier, not-yet-visible work in idle time: the definition lists (Maps /
   //    Compare load them on first show anyway). The guide loads on first open.

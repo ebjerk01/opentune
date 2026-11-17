@@ -114,6 +114,17 @@ cargo tauri build
 The frontend is served directly from `ui/index.html` (`build.frontendDist` is
 `"../ui"`), so there is nothing to bundle on the web side.
 
+### Startup
+
+Nothing heavy runs before the window paints. The ECU definitions and the
+catalog are parsed once on a background thread and cached. Startup-path
+commands are `async`, so they run off the GTK thread. Panels load their data
+the first time they are shown (`window.onPanelFirstShow`). On Linux the app
+sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless that variable is already set.
+To opt out, set `OPENTUNE_KEEP_WEBKIT_ENV=1`. If the app starts slowly, run it
+with `OPENTUNE_TRACE_STARTUP=1` to get a timing breakdown. See
+[docs/TROUBLESHOOTING-STARTUP.md](../docs/TROUBLESHOOTING-STARTUP.md).
+
 ## Auto-update (signed GitHub Releases)
 
 The app is configured to update itself from the project's **GitHub Releases**.
