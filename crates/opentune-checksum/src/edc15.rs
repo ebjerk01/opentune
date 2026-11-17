@@ -38,18 +38,44 @@
 //! filled with `0xC3` are skipped, and a stored `0xC3C3C3C3` is a "leave alone"
 //! marker.
 //!
-//! # What is NOT solved: Mercedes EDC15C6 ("CR1", 1 MiB)
+//! # Mercedes EDC15C6 ("CR1", 1 MiB)
 //!
-//! The owner's Mercedes EDC15C6 dumps use the **same loop shape** but
-//! **non-standard seed/finalisation constants** and a different, self-describing
-//! block directory (each block ends with the halfword `0xC058`, a 4-byte stored
-//! word, then `0xC3` fill). No standard VAG seed/constant reproduces those
-//! blocks, and the C6-specific constants are not yet recovered. Following the
-//! project rule *never write a value we cannot compute*, this module therefore
-//! only **surfaces** the located EDC15C6 fields ([`verify`](Edc15C6::verify)
-//! reports them as not-confirmed) and **refuses** to correct them
-//! ([`correct`](Edc15C6::correct) returns [`Error::Unsupported`]). The same
-//! refusal applies to any image whose blocks it cannot self-validate.
+//! The Mercedes EDC15C6 (e.g. Sprinter 2.2 CDI `1037351686`) uses the **same
+//! loop structure** as the VAG algorithm above with **different constants**:
+//! every block is seeded `(0, 0)`, the mid-loop add is `0x3962`, and the
+//! finalisation is `seed_a += 0x8432`, `seed_b ^= 0x4711`; the 32-bit result
+//! `(seed_b << 16) | seed_a` is stored little-endian.
+//!
+//! ## Provenance of the EDC15C6 constants
+//!
+//! Constants derived by exhaustive search against the owner's own stock and
+//! tuned dumps; loop structure = the public VAG EDC15 algorithm in this crate.
+//! The search treated the seeds, the mid-loop add and the finalisation as
+//! unknown (finalisation solved analytically per block), and exactly one
+//! parameter set reproduces every checksum slot of the stock **and** the
+//! independently ECU-flashed tuned image (including the four tune-changed
+//! calibration blocks), and of three further Mercedes EDC15C6 stock/tuned pairs
+//! that were not used in the search. No proprietary tooling or data was used.
+//!
+//! ## Block layout (discovered from the data)
+//!
+//! Each protected block ends with the halfword `0xC058` followed by its 4-byte
+//! stored checksum, and the byte after the stored word is always 256-byte
+//! aligned. The checksum covers `[start, slot)` (the `0xC058` halfword
+//! included, the stored word excluded). A block **starts** either directly
+//! after the previous block's stored word (chained blocks, e.g. a calibration
+//! header followed by its body), or — when `0xC3`/`0xFF` fill follows the
+//! previous block — at the first 4 KiB-aligned offset whose first halfword is
+//! not fill. A block typically opens with a magic halfword (`0x5555`
+//! calibration, `0xA5A5` code patch, `0xAAAA` program), but the walk does not
+//! depend on it.
+//!
+//! The image is only treated as EDC15C6 when it is exactly 1 MiB, the walk is
+//! well-formed and at least one block already verifies (a stock image matches
+//! every block; a tuned one matches every block the tune did not touch).
+//! [`correct`](Edc15C6::correct) refuses (returns [`Error::Unsupported`]) when
+//! the image is not recognised, or when two chained blocks both fail (the
+//! block boundary between them would then be ambiguous) — never guessing.
 use crate::{BlockStatus, ChecksumAlgo, Fix};
 use opentune_core::{Error, MemoryRegion, Result};
 
@@ -76,10 +102,18 @@ fn word(img: &[u8], i: usize) -> Option<u16> {
     Some(u16::from_le_bytes([*img.get(i)?, *img.get(i + 1)?]))
 }
 
-/// VAG TDI v4.1v2 region checksum over `[start, end)` (`end` exclusive, i.e. the
-/// offset of the stored word). Returns `None` on any out-of-range / misaligned
-/// range rather than panicking, so a non-VAG image is simply not recognised.
-fn calc_vag(img: &[u8], start: usize, end: usize, mut seed_a: u16, mut seed_b: u16) -> Option<u32> {
+/// The public VAG EDC15 dual 16-bit accumulator loop over `[start, end)`
+/// (`end` exclusive), returning the raw `(seed_a, seed_b)` state before
+/// finalisation. Returns `None` on any out-of-range / misaligned range rather
+/// than panicking, so a foreign image is simply not recognised.
+fn edc15_loop(
+    img: &[u8],
+    start: usize,
+    end: usize,
+    mut seed_a: u16,
+    mut seed_b: u16,
+    mid_add: u16,
+) -> Option<(u16, u16)> {
     if end <= start || !(end - start).is_multiple_of(4) || end + 1 >= img.len() {
         return None;
     }
@@ -102,7 +136,7 @@ fn calc_vag(img: &[u8], start: usize, end: usize, mut seed_a: u16, mut seed_b: u
         }
         seed_a = seed_a.wrapping_sub(word(img, p)?);
         p += 2;
-        seed_a = seed_a.wrapping_add(MID_ADD);
+        seed_a = seed_a.wrapping_add(mid_add);
         seed_b ^= word(img, p)?;
         p += 2;
         let n = seed_a & 0xF;
@@ -113,9 +147,16 @@ fn calc_vag(img: &[u8], start: usize, end: usize, mut seed_a: u16, mut seed_b: u
             break;
         }
     }
-    seed_a = seed_a.wrapping_sub(FIN_SUB).wrapping_add(FIN_ADD);
-    seed_b ^= FIN_XOR;
-    Some(((seed_b as u32) << 16) | seed_a as u32)
+    Some((seed_a, seed_b))
+}
+
+/// VAG TDI v4.1v2 region checksum over `[start, end)` (`end` exclusive, i.e. the
+/// offset of the stored word).
+fn calc_vag(img: &[u8], start: usize, end: usize, seed_a: u16, seed_b: u16) -> Option<u32> {
+    let (a, b) = edc15_loop(img, start, end, seed_a, seed_b, MID_ADD)?;
+    let a = a.wrapping_sub(FIN_SUB).wrapping_add(FIN_ADD);
+    let b = b ^ FIN_XOR;
+    Some(((b as u32) << 16) | a as u32)
 }
 
 /// Is `[start, end-4)` entirely `0xC3` fill (an "empty" region)?
@@ -233,30 +274,124 @@ fn is_vag_tdi(img: &[u8]) -> Option<Vec<VagRegion>> {
     }
 }
 
-/// A located EDC15C6 (Mercedes, 1 MiB) checksum field: the 4 bytes after a
-/// `0xC058` halfword that are immediately followed by `0xC3` fill.
-fn edc15c6_fields(img: &[u8]) -> Vec<(usize, u32)> {
-    let mut out = Vec::new();
-    if img.len() != 0x10_0000 {
-        return out;
-    }
-    let mut i = 0usize;
-    while i + 8 <= img.len() {
-        // marker 0xC058 (LE bytes 0x58 0xC0), then 4-byte slot, then 0xC3 fill
-        if img[i] == 0x58 && img[i + 1] == 0xC0 && img[i + 6] == 0xC3 && img[i + 7] == 0xC3 {
-            let slot = i + 2;
-            let v = u32::from_le_bytes([img[slot], img[slot + 1], img[slot + 2], img[slot + 3]]);
-            out.push((slot, v));
-            i += 6;
-        } else {
-            i += 1;
-        }
-    }
-    out
+/// EDC15C6 (Mercedes, 1 MiB) image length.
+const C6_IMAGE_LEN: usize = 0x10_0000;
+/// Halfword stamped directly before every EDC15C6 stored checksum.
+const C6_MARKER: u16 = 0xC058;
+/// The byte after an EDC15C6 stored word is always aligned to this.
+const C6_SLOT_END_ALIGN: usize = 0x100;
+/// A block that follows fill starts on this alignment.
+const C6_START_ALIGN: usize = 0x1000;
+/// EDC15C6 constants (seed `(0, 0)` for every block). Derived by exhaustive
+/// search against the owner's own stock and tuned dumps; loop structure = the
+/// public VAG EDC15 algorithm in this crate (see the module docs).
+const C6_MID_ADD: u16 = 0x3962;
+const C6_FIN_ADD: u16 = 0x8432;
+const C6_FIN_XOR: u16 = 0x4711;
+
+/// EDC15C6 block checksum over `[start, slot)`.
+fn calc_c6(img: &[u8], start: usize, slot: usize) -> Option<u32> {
+    let (a, b) = edc15_loop(img, start, slot, 0, 0, C6_MID_ADD)?;
+    let a = a.wrapping_add(C6_FIN_ADD);
+    let b = b ^ C6_FIN_XOR;
+    Some(((b as u32) << 16) | a as u32)
 }
 
-/// Bosch EDC15 checksum scheme. VAG TDI v4.1v2 (512 KiB) is fully solved;
-/// Mercedes EDC15C6 (1 MiB) is located-only and refused (not yet solved).
+/// Is the halfword at `i` erased/fill (`0xC3C3` or `0xFFFF`)?
+fn c6_fill_at(img: &[u8], i: usize) -> bool {
+    matches!(word(img, i), Some(0xC3C3) | Some(0xFFFF))
+}
+
+/// Every EDC15C6 stored-checksum slot: the 4 bytes after a `0xC058` halfword
+/// whose end is 256-byte aligned.
+fn c6_slots(img: &[u8]) -> Vec<usize> {
+    if img.len() != C6_IMAGE_LEN {
+        return Vec::new();
+    }
+    (C6_SLOT_END_ALIGN..=img.len())
+        .step_by(C6_SLOT_END_ALIGN)
+        .filter(|&e| word(img, e - 6) == Some(C6_MARKER))
+        .map(|e| e - 4)
+        .collect()
+}
+
+/// One walked EDC15C6 block: checksum over `[start, slot)`, stored at `slot`.
+struct C6Block {
+    start: usize,
+    slot: usize,
+    stored: u32,
+    computed: u32,
+    /// Starts directly after the previous block's stored word.
+    chained: bool,
+}
+
+/// Walk the EDC15C6 block chain (see the module docs for the start rule).
+/// `None` if the image is not 1 MiB, has no slots, or a block start cannot be
+/// placed.
+fn walk_c6(img: &[u8]) -> Option<Vec<C6Block>> {
+    let slots = c6_slots(img);
+    if slots.is_empty() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(slots.len());
+    let mut prev_end = 0usize;
+    for slot in slots {
+        let chained = prev_end > 0 && !c6_fill_at(img, prev_end);
+        let start = if chained {
+            prev_end
+        } else {
+            let first = prev_end.next_multiple_of(C6_START_ALIGN);
+            (first..slot)
+                .step_by(C6_START_ALIGN)
+                .find(|&a| !c6_fill_at(img, a))?
+        };
+        let stored = u32::from_le_bytes(img.get(slot..slot + 4)?.try_into().ok()?);
+        let computed = calc_c6(img, start, slot)?;
+        out.push(C6Block {
+            start,
+            slot,
+            stored,
+            computed,
+            chained,
+        });
+        prev_end = slot + 4;
+    }
+    Some(out)
+}
+
+/// Is this a recognised Mercedes EDC15C6 image? The walk must be well-formed
+/// and at least one block must already verify.
+fn is_c6(img: &[u8]) -> Option<Vec<C6Block>> {
+    let blocks = walk_c6(img)?;
+    if blocks.iter().any(|b| b.stored == b.computed) {
+        Some(blocks)
+    } else {
+        None
+    }
+}
+
+/// Two chained blocks that both fail leave their shared boundary ambiguous (a
+/// coincidental `0xC058` could have split one block), so correction refuses.
+fn c6_ambiguous(blocks: &[C6Block]) -> bool {
+    blocks
+        .windows(2)
+        .any(|w| w[1].chained && w[0].stored != w[0].computed && w[1].stored != w[1].computed)
+}
+
+/// Located-but-unconfirmed EDC15C6 fields of a 1 MiB image whose block walk
+/// does not validate (unknown variant): surfaced, never corrected.
+fn edc15c6_fields(img: &[u8]) -> Vec<(usize, u32)> {
+    c6_slots(img)
+        .into_iter()
+        .map(|slot| {
+            let v = u32::from_le_bytes([img[slot], img[slot + 1], img[slot + 2], img[slot + 3]]);
+            (slot, v)
+        })
+        .collect()
+}
+
+/// Bosch EDC15 checksum scheme: VAG TDI v4.1v2 (512 KiB) and Mercedes EDC15C6
+/// (1 MiB), both verified and self-correcting; anything else is refused.
 pub struct Edc15C6;
 
 impl ChecksumAlgo for Edc15C6 {
@@ -283,8 +418,21 @@ impl ChecksumAlgo for Edc15C6 {
             }
             return Ok(out);
         }
-        // Mercedes EDC15C6 (or any unrecognised image): surface located fields
-        // but report them not-confirmed (the C6 algorithm is not solved).
+        // Recognised Mercedes EDC15C6 image: report every block.
+        if let Some(blocks) = is_c6(image) {
+            return Ok(blocks
+                .iter()
+                .map(|b| BlockStatus {
+                    name: format!("edc15c6-block-{:#07x}", b.start),
+                    region: MemoryRegion::new(b.start as u32, (b.slot + 4 - b.start) as u32),
+                    stored: b.stored as u64,
+                    computed: b.computed as u64,
+                    ok: b.stored == b.computed,
+                })
+                .collect());
+        }
+        // Unrecognised 1 MiB image with 0xC058 slots: surface the located
+        // fields, reported not-confirmed (the block walk did not validate).
         let mut out = Vec::new();
         for (off, stored) in edc15c6_fields(image) {
             out.push(BlockStatus {
@@ -292,18 +440,39 @@ impl ChecksumAlgo for Edc15C6 {
                 region: MemoryRegion::new(off as u32, 4),
                 stored: stored as u64,
                 computed: 0,
-                ok: false, // algorithm not reverse-engineered: cannot confirm
+                ok: false, // walk not validated: cannot confirm
             });
         }
         Ok(out)
     }
 
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
-        // Only correct a confidently-recognised VAG TDI v4.1v2 image.
+        // Mercedes EDC15C6: correct only a recognised, unambiguous walk.
+        if let Some(blocks) = is_c6(image) {
+            if c6_ambiguous(&blocks) {
+                return Err(Error::Unsupported(
+                    "EDC15C6: two chained blocks both fail, so the block boundary is \
+                     ambiguous; refusing to guess"
+                        .into(),
+                ));
+            }
+            let mut fixes = Vec::new();
+            for b in blocks.iter().filter(|b| b.stored != b.computed) {
+                image[b.slot..b.slot + 4].copy_from_slice(&b.computed.to_le_bytes());
+                fixes.push(Fix {
+                    name: format!("edc15c6-block-{:#07x}", b.start),
+                    offset: b.slot as u32,
+                    old: b.stored as u64,
+                    new: b.computed as u64,
+                });
+            }
+            return Ok(fixes);
+        }
+        // Otherwise only correct a confidently-recognised VAG TDI v4.1v2 image.
         let Some(regions) = is_vag_tdi(image) else {
             return Err(Error::Unsupported(
-                "EDC15C6 (Mercedes CR1) checksum not reverse-engineered, and image is not a \
-                 recognised VAG TDI v4.1v2 layout; refusing to guess (see crate::edc15 docs)"
+                "image is neither a recognised VAG TDI v4.1v2 nor a recognised Mercedes \
+                 EDC15C6 layout; refusing to guess (see crate::edc15 docs)"
                     .into(),
             ));
         };
@@ -436,24 +605,221 @@ mod tests {
         );
     }
 
+    /// Write the 0xC058 marker in front of `slot`.
+    fn c6_mark(img: &mut [u8], slot: usize) {
+        img[slot - 2..slot].copy_from_slice(&C6_MARKER.to_le_bytes());
+    }
+
+    /// Synthetic 1 MiB EDC15C6 image: `0xFF` boot area, `0xC3` fill, a
+    /// calibration header + chained body, and a fill-anchored code-patch block,
+    /// each with its correct checksum written.
+    fn synthetic_c6() -> Vec<u8> {
+        let mut img = vec![0xC3u8; C6_IMAGE_LEN];
+        img[..0x1_0000].fill(0xFF);
+        // header [0x10000, 0x10ffc) + chained body [0x11000, 0x1bffc)
+        for (k, b) in img[0x1_0000..0x1_0100].iter_mut().enumerate() {
+            *b = (k as u8).wrapping_mul(5) ^ 0x21;
+        }
+        img[0x1_0000..0x1_0002].copy_from_slice(&0x5555u16.to_le_bytes());
+        for (k, b) in img[0x1_1000..0x1_1800].iter_mut().enumerate() {
+            *b = (k as u8).wrapping_mul(13).wrapping_add(1);
+        }
+        // fill-anchored code patch [0x4c000, 0x4c2fc)
+        for (k, b) in img[0x4_c000..0x4_c200].iter_mut().enumerate() {
+            *b = (k as u8) ^ 0x96;
+        }
+        img[0x4_c000..0x4_c002].copy_from_slice(&0xA5A5u16.to_le_bytes());
+        for slot in [0x1_0FFC, 0x1_BFFC, 0x4_C2FC] {
+            c6_mark(&mut img, slot);
+        }
+        for b in walk_c6(&img).unwrap() {
+            img[b.slot..b.slot + 4].copy_from_slice(&b.computed.to_le_bytes());
+        }
+        img
+    }
+
     #[test]
-    fn mercedes_edc15c6_is_located_but_refused() {
-        // synthesize a 1 MiB image with one C058-marked field surrounded by C3.
-        let mut img = vec![0xC3u8; 0x10_0000];
+    fn c6_known_answer() {
+        // Pins the derived constants: an independent reference implementation
+        // gives 0xA85E1F2C for this block.
+        let mut img = vec![0xC3u8; C6_IMAGE_LEN];
+        for (k, b) in img.iter_mut().enumerate().take(0x1_00FA).skip(0x1_0000) {
+            *b = (k as u8).wrapping_mul(7);
+        }
+        img[0x1_0000..0x1_0002].copy_from_slice(&0x5555u16.to_le_bytes());
+        c6_mark(&mut img, 0x1_00FC);
+        assert_eq!(calc_c6(&img, 0x1_0000, 0x1_00FC), Some(0xA85E_1F2C));
+    }
+
+    #[test]
+    fn c6_walk_finds_chained_and_fill_anchored_blocks() {
+        let img = synthetic_c6();
+        let blocks = walk_c6(&img).unwrap();
+        let geo: Vec<(usize, usize, bool)> = blocks
+            .iter()
+            .map(|b| (b.start, b.slot, b.chained))
+            .collect();
+        assert_eq!(
+            geo,
+            vec![
+                (0x1_0000, 0x1_0FFC, false),
+                (0x1_1000, 0x1_BFFC, true),
+                (0x4_C000, 0x4_C2FC, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn c6_synthetic_verifies_then_needs_no_fix() {
+        let img = synthetic_c6();
+        let algo = Edc15C6;
+        let st = algo.verify(&img).unwrap();
+        assert_eq!(st.len(), 3);
+        assert!(st
+            .iter()
+            .all(|s| s.ok && s.name.starts_with("edc15c6-block-")));
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn c6_corrupted_block_is_detected_and_corrected() {
+        let mut img = synthetic_c6();
+        img[0x1_1234] ^= 0x5A; // body data changed, stored word now stale
+        let algo = Edc15C6;
+        assert_eq!(
+            algo.verify(&img).unwrap().iter().filter(|s| !s.ok).count(),
+            1
+        );
+        let fixes = algo.correct(&mut img).unwrap();
+        assert_eq!(fixes.len(), 1);
+        assert_eq!(fixes[0].offset, 0x1_BFFC);
+        assert!(algo.verify(&img).unwrap().iter().all(|s| s.ok));
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn c6_two_failing_chained_blocks_are_refused() {
+        // Header and its chained body both fail: the boundary is ambiguous.
+        let mut img = synthetic_c6();
+        img[0x1_0010] ^= 0x01;
+        img[0x1_1010] ^= 0x01;
+        let before = img.clone();
+        assert!(matches!(
+            Edc15C6.correct(&mut img).unwrap_err(),
+            Error::Unsupported(_)
+        ));
+        assert_eq!(img, before, "a refused image is left untouched");
+    }
+
+    #[test]
+    fn unrecognised_c6_field_is_located_but_refused() {
+        // 1 MiB of fill with one C058-marked field and a stored word that no
+        // block reproduces: surfaced as not-confirmed, correction refused.
+        let mut img = vec![0xC3u8; C6_IMAGE_LEN];
         let slot = 0x0F_BFFC;
-        img[slot - 2] = 0x58; // 0xC058 marker (LE)
-        img[slot - 1] = 0xC0;
+        c6_mark(&mut img, slot);
         img[slot..slot + 4].copy_from_slice(&0xB778_D5F2u32.to_le_bytes());
-        // followed by C3 fill already (whole image is C3)
         let algo = Edc15C6;
         let st = algo.verify(&img).unwrap();
         assert_eq!(st.len(), 1, "one EDC15C6 field located");
         assert_eq!(st[0].stored, 0xB778_D5F2);
-        assert!(!st[0].ok, "EDC15C6 field cannot be confirmed (unsolved)");
+        assert!(!st[0].ok, "unvalidated field cannot be confirmed");
         assert!(
             matches!(algo.correct(&mut img).unwrap_err(), Error::Unsupported(_)),
-            "EDC15C6 must refuse correction, never guess"
+            "an unrecognised EDC15C6-like image must refuse correction, never guess"
         );
+    }
+
+    /// Fixture regression on the owner's Mercedes EDC15C6 dumps (stock + an
+    /// independently ECU-flashed tune, plus further stock/tuned pairs when
+    /// present). CI has no access, so `#[ignore]`d. Run with:
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
+    ///     cargo test -p opentune-checksum -- --ignored --nocapture
+    #[test]
+    #[ignore = "needs owner EDC15 fixtures via OPENTUNE_FIXTURES"]
+    fn reference_mercedes_edc15c6_dumps() {
+        let dir = match std::env::var("OPENTUNE_FIXTURES") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let algo = Edc15C6;
+        let base = format!("{dir}/edc15/mb_sprinter_edc15c6_351686");
+        let (Ok(ori), Ok(modf)) = (
+            std::fs::read(format!("{base}_ori.bin")),
+            std::fs::read(format!("{base}_mod.bin")),
+        ) else {
+            panic!("EDC15C6 Sprinter fixture missing under OPENTUNE_FIXTURES");
+        };
+
+        // (1) every one of the 15 blocks verifies in BOTH dumps.
+        for (what, img) in [("stock", &ori), ("tuned", &modf)] {
+            let st = algo.verify(img).unwrap();
+            assert_eq!(st.len(), 15, "{what}: expected 15 EDC15C6 blocks");
+            assert!(st.iter().all(|s| s.ok), "{what}: every block must verify");
+            assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+        }
+
+        // (2) the strong proof: wipe the stored word of every block the tune
+        //     changed, then correct(): it must re-derive exactly the ECU's own
+        //     stored values, i.e. reproduce the real tuned dump byte-for-byte.
+        let tuned: Vec<usize> = walk_c6(&modf)
+            .unwrap()
+            .iter()
+            .filter(|b| ori[b.start..b.slot] != modf[b.start..b.slot])
+            .map(|b| b.slot)
+            .collect();
+        assert_eq!(
+            tuned.len(),
+            4,
+            "the tune changes the four calibration bodies"
+        );
+        let mut wiped = modf.clone();
+        for &slot in &tuned {
+            wiped[slot..slot + 4].fill(0);
+        }
+        assert_eq!(
+            algo.verify(&wiped)
+                .unwrap()
+                .iter()
+                .filter(|s| !s.ok)
+                .count(),
+            4
+        );
+        let fixes = algo.correct(&mut wiped).unwrap();
+        assert_eq!(fixes.len(), 4);
+        assert_eq!(
+            wiped, modf,
+            "corrected image is byte-identical to the real tune"
+        );
+
+        // (3) the stock image with the tune's calibration data (old checksums)
+        //     is corrected to exactly the tuned dump.
+        let mut stale = modf.clone();
+        for &slot in &tuned {
+            stale[slot..slot + 4].copy_from_slice(&ori[slot..slot + 4]);
+        }
+        assert_eq!(algo.correct(&mut stale).unwrap().len(), 4);
+        assert_eq!(stale, modf);
+
+        // (4) further owner EDC15C6 pairs, when present: every block verifies.
+        for name in ["mb_c200_351737", "mb_c220_351637", "mb_c220_351736"] {
+            for sfx in ["ori", "mod"] {
+                let Ok(img) = std::fs::read(format!("{dir}/edc15/{name}_{sfx}.bin")) else {
+                    continue;
+                };
+                let st = algo.verify(&img).unwrap();
+                assert!(
+                    st.len() >= 10,
+                    "{name}_{sfx}: too few blocks ({})",
+                    st.len()
+                );
+                assert!(
+                    st.iter()
+                        .all(|s| s.ok && s.name.starts_with("edc15c6-block-")),
+                    "{name}_{sfx}: every block must verify"
+                );
+            }
+        }
     }
 
     /// Fixtures regression against the real owner dumps. Requires the EDC15

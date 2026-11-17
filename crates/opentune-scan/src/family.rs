@@ -75,15 +75,16 @@ pub fn detect(image: &[u8]) -> FamilyDetection {
     }
 
     // EDC15: use the checksum engine's verify surface. A VAG TDI v4.1v2 image
-    // yields "vag-region-*" statuses; a Mercedes EDC15C6 image yields located
-    // "edc15c6-field-*" statuses (require several to avoid coincidental markers).
+    // yields "vag-region-*" statuses; a Mercedes EDC15C6 image yields
+    // "edc15c6-block-*" (recognised) or "edc15c6-field-*" (located only)
+    // statuses (require several to avoid coincidental markers).
     let (edc15_vag, edc15c6_fields) = edc15_signal(image);
     if edc15_vag {
         how.push("EDC15: VAG TDI v4.1v2 checksum regions located".to_string());
     }
     if edc15c6_fields >= 4 {
         how.push(format!(
-            "EDC15C6: {edc15c6_fields} located 0xC058/0xC3-fill checksum field(s)"
+            "EDC15C6: {edc15c6_fields} located 0xC058 checksum block(s)/field(s)"
         ));
     }
 
@@ -126,7 +127,7 @@ fn edc15_signal(image: &[u8]) -> (bool, usize) {
             let vag = blocks.iter().any(|b| b.name.starts_with("vag-region"));
             let c6 = blocks
                 .iter()
-                .filter(|b| b.name.starts_with("edc15c6-field"))
+                .filter(|b| b.name.starts_with("edc15c6-"))
                 .count();
             (vag, c6)
         }

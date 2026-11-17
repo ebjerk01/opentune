@@ -111,7 +111,7 @@ address. Build the VAG DSG + Haldex pair first (best open refs), then generalize
 schema so other brands drop in.
 
 ## External reference projects (surveyed 2026-11-16; licenses checked for GPL-3.0 reuse)
-- **Flash kernels (also the EDC15C6 lead):** `fenugrec/npkern` (GPL-3.0 — RAM-resident reflash-kernel
+- **Flash kernels (also EDC15C6 programming access):** `fenugrec/npkern` (GPL-3.0 — RAM-resident reflash-kernel
   model: upload→execute→flash-ops→reset) + `nisprog`; `NefMoto/NefMotoOpenSource` (GPL-3.0 — EDC15
   bootmode + **C167/C166 bootstrap loaders**, directly relevant to EDC15C6's C167 class).
 - **VAG flashing / flash-container decode:** `bri3d/VW_Flash` (BSD-2 — checksums, LZSS+AES, FRF/ODX
