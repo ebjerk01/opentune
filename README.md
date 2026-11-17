@@ -100,4 +100,30 @@ cargo run -p opentune-cli -- --help
 
 ## Status & roadmap
 
-Early alpha, moving fast. Progress is tracked in **[ROADMAP.md](ROADMAP.md)**.
+Early alpha, moving fast. The full plan lives in **[ROADMAP.md](ROADMAP.md)**; the
+short version:
+
+**Landed**
+- ✅ Checksum correction — EDC15/16/17, Simos PCR2.1, ME7, DQ250/DQ381 TCU, ZF-8HP, Haldex
+- ✅ Flash containers — FRF / ODX / SGO / VBF, plus a sparse HEX / SREC image model
+- ✅ Definition import — TunerPro XDF, ASAM A2L, EcuFlash / RomRaider XML, WinOLS `.ols`
+- ✅ Loadable **definition packs** — grow coverage by data, not code
+- ✅ Module **coding** — bit-field decode/edit with safe, baseline-aware writes
+- ✅ **Adaptation** channels and actuator / output tests
+- ✅ Declarative **service functions** — DPF regen, service reset, SAS calibration, …
+- ✅ Full-vehicle **auto-scan** — every module, DTCs, identities, freeze-frame, readiness
+- ✅ **Datalogging** definitions — OBD/UDS, address-based and Subaru-SSM
+- ✅ Protocol stack — ISO-TP, UDS, KWP2000, VW TP2.0, OBD-II, CAN-FD, DoIP
+- ✅ Diagnostics driver — ELM327 / OBD, with a UDS conformance simulator for offline tests
+- ✅ SecurityAccess SA2 bytecode VM (runs caller-supplied bytecode)
+- ✅ Mercedes CBF diagnostic descriptions
+
+**Next**
+- 🔲 On-car validation of the live diagnostic, adaptation and logging paths
+- 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
+- 🔲 Desktop & Android UX — guided wizards over the engines
+- 🔲 A growing community definition & pack library, and broader drivetrain/AWD coverage
+- 🔲 CAN-FD, DoIP and J2534 flashing validated on hardware
+
+OEM seed/key algorithms and protected calibration data are never bundled — OpenTune
+takes them as caller-supplied inputs or leaves them out of scope.
