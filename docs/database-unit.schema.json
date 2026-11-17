@@ -33,7 +33,7 @@
         "notes": { "type": "string", "minLength": 1 }
       }
     },
-    "checksum": { "type": ["string", "null"], "description": "An opentune_checksum::get() id (edc15, edc15c6, edc16, edc17, pcr21, me7, dq250, dq381, zf8hp, haldex, tcu-ccitt, crc32-tail) or null." },
+    "checksum": { "type": ["string", "null"], "description": "An opentune_checksum::get() id (edc15, edc15c6, edc16, edc17, pcr21, me7, dq250, dq250-02e, dq381, zf8hp, haldex, tcu-ccitt, crc32-tail) or null." },
     "ecudef": { "type": ["string", "null"], "description": "The id of a definition in ecudefs/, or null." },
     "vehicles": { "type": "array", "items": { "$ref": "#/$defs/vehicle" } },
     "part_number_examples": { "type": "array", "items": { "type": "string" } },
