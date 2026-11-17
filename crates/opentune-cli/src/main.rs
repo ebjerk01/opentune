@@ -350,6 +350,19 @@ enum Command {
         #[command(subcommand)]
         action: ServiceAction,
     },
+    /// Run the in-memory UDS conformance server offline and exchange raw
+    /// requests against it — no hardware, for testing and demos.
+    Simulate {
+        /// Seed a data identifier, e.g. `--did F190=0102` (repeatable).
+        #[arg(long = "did", value_name = "ID=HEX")]
+        dids: Vec<String>,
+        /// Require a SecurityAccess unlock before `0x2E` writes are accepted.
+        #[arg(long)]
+        require_security_write: bool,
+        /// One or more UDS requests as hex (e.g. `22F190`), handled in order.
+        #[arg(required = true, value_name = "HEX")]
+        requests: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1792,6 +1805,11 @@ fn main() -> Result<()> {
             timeout_ms,
             action,
         } => run_service(&reg, &script, &driver, store.as_deref(), timeout_ms, action)?,
+        Command::Simulate {
+            dids,
+            require_security_write,
+            requests,
+        } => run_simulate(&dids, require_security_write, &requests)?,
     }
     Ok(())
 }
@@ -1841,6 +1859,56 @@ fn open_diag_driver(
     }
     drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
     Ok(drv)
+}
+
+/// Parse a whitespace-tolerant hex-byte string (`"22 F1 90"` or `"22F190"`).
+fn parse_hex_vec(s: &str) -> Result<Vec<u8>> {
+    let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if clean.len() % 2 != 0 {
+        return Err(anyhow!("hex string '{s}' has an odd number of digits"));
+    }
+    (0..clean.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&clean[i..i + 2], 16)
+                .map_err(|_| anyhow!("invalid hex byte in '{s}'"))
+        })
+        .collect()
+}
+
+/// Dispatch the `simulate` subcommand: run the in-memory UDS server offline.
+fn run_simulate(dids: &[String], require_security_write: bool, requests: &[String]) -> Result<()> {
+    use opentune_udssim::server::{ServerConfig, UdsServer};
+
+    let config = ServerConfig {
+        require_security_for_write: require_security_write,
+        ..Default::default()
+    };
+    let mut server = UdsServer::with_config(config);
+
+    for d in dids {
+        let (id, hex) = d
+            .split_once('=')
+            .ok_or_else(|| anyhow!("--did expects ID=HEX, got '{d}'"))?;
+        let did = u16::from_str_radix(id.trim().trim_start_matches("0x"), 16)
+            .map_err(|_| anyhow!("invalid DID '{id}' (expected hex, e.g. F190)"))?;
+        server.set_did(did, parse_hex_vec(hex)?);
+    }
+
+    for r in requests {
+        let req = parse_hex_vec(r)?;
+        let resp = server.handle(&req);
+        println!("-> {:<20} <- {}", hex_bytes(&req), hex_bytes(&resp));
+    }
+    Ok(())
+}
+
+/// Format bytes as uppercase, space-separated hex.
+fn hex_bytes(b: &[u8]) -> String {
+    b.iter()
+        .map(|x| format!("{x:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Dispatch the `adaptation` subcommand.

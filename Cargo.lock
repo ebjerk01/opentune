@@ -704,6 +704,7 @@ dependencies = [
  "opentune-packs",
  "opentune-scan",
  "opentune-servicefn",
+ "opentune-udssim",
  "opentune-vin",
  "opentune-xdf",
  "serde_json",
