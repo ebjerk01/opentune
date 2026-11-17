@@ -21,7 +21,8 @@ fn load_def(def_path: &str) -> Result<CodingDef, String> {
     let text = std::fs::read_to_string(def_path)
         .map_err(|e| format!("read coding def '{def_path}': {e}"))?;
     let def = CodingDef::from_json(&text).map_err(|e| format!("parse coding def: {e}"))?;
-    def.validate().map_err(|e| format!("invalid coding def: {e}"))?;
+    def.validate()
+        .map_err(|e| format!("invalid coding def: {e}"))?;
     Ok(def)
 }
 
@@ -93,7 +94,8 @@ pub async fn coding_read(
 ) -> Result<Value, String> {
     let def = load_def(&def_path)?;
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
@@ -139,6 +141,7 @@ pub async fn coding_read(
 /// the value against the parameter's bit length and declared options), then runs
 /// the write engine in `dry_run` mode so nothing is written. Returns the planned
 /// byte- and parameter-level diff.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn coding_set_preview(
     driver: String,
@@ -152,7 +155,8 @@ pub async fn coding_set_preview(
 ) -> Result<Value, String> {
     let def = load_def(&def_path)?;
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
@@ -182,6 +186,7 @@ pub async fn coding_set_preview(
 /// affected block(s) and reads back to verify. Returns the outcome and the diff.
 /// Writing can immobilise a module; the caller must have unlocked SecurityAccess
 /// first when the def's `requiresSecurity` flag is set (surfaced in the report).
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn coding_write(
     driver: String,
@@ -195,7 +200,8 @@ pub async fn coding_write(
 ) -> Result<Value, String> {
     let def = load_def(&def_path)?;
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;

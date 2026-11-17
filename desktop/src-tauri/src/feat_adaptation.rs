@@ -17,7 +17,10 @@ use serde_json::{json, Value};
 
 /// Uppercase space-separated hex for response records.
 fn hexs(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02X}")).collect::<Vec<_>>().join(" ")
+    b.iter()
+        .map(|x| format!("{x:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Parse a whitespace-tolerant hex string; empty input yields an empty vector.
@@ -31,7 +34,9 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
     }
     (0..clean.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'")))
+        .map(|i| {
+            u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'"))
+        })
         .collect()
 }
 
@@ -55,7 +60,12 @@ pub fn adaptation_list(def_path: String) -> Result<Value, String> {
             use opentune_adaptation::ChannelKind as K;
             let mut o = json!({ "name": ch.name, "note": ch.note });
             match &ch.kind {
-                K::Value { did, field, min, max } => {
+                K::Value {
+                    did,
+                    field,
+                    min,
+                    max,
+                } => {
                     o["kind"] = json!("value");
                     o["did"] = json!(did);
                     o["unit"] = json!(field.scaling.unit);
@@ -95,10 +105,14 @@ pub async fn adaptation_read(
     timeout_ms: u64,
 ) -> Result<Value, String> {
     let def = load_def(&def_path)?;
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
-    let t = drv.diag().ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let t = drv
+        .diag()
+        .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
     let mut diag = opentune_core::CoreDiag::new(t, timeout_ms);
-    let r = opentune_adaptation::read_value(&mut diag, &def, &channel).map_err(|e| e.to_string())?;
+    let r =
+        opentune_adaptation::read_value(&mut diag, &def, &channel).map_err(|e| e.to_string())?;
     Ok(json!({
         "channel": r.channel,
         "raw": r.raw,
@@ -132,8 +146,11 @@ pub async fn adaptation_routine(
         other => return Err(format!("unknown routine op '{other}'")),
     };
     let extra = parse_hex(extra.as_deref().unwrap_or(""))?;
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
-    let t = drv.diag().ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let t = drv
+        .diag()
+        .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
     let mut diag = opentune_core::CoreDiag::new(t, timeout_ms);
     let r = opentune_adaptation::run_routine(&mut diag, &def, &channel, op, &extra)
         .map_err(|e| e.to_string())?;
@@ -165,15 +182,27 @@ pub async fn adaptation_actuator(
     state: Option<String>,
 ) -> Result<Value, String> {
     if !ack {
-        return Err("actuator test refused: confirm you understand it commands the ECU (ack required)".into());
+        return Err(
+            "actuator test refused: confirm you understand it commands the ECU (ack required)"
+                .into(),
+        );
     }
     let def = load_def(&def_path)?;
     let drive = parse_hex(state.as_deref().unwrap_or(""))?;
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
-    let t = drv.diag().ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let t = drv
+        .diag()
+        .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
     let mut diag = opentune_core::CoreDiag::new(t, timeout_ms);
-    let r = opentune_adaptation::run_actuator_test(&mut diag, &def, &channel, &drive, &WriteOptions::default())
-        .map_err(|e| e.to_string())?;
+    let r = opentune_adaptation::run_actuator_test(
+        &mut diag,
+        &def,
+        &channel,
+        &drive,
+        &WriteOptions::default(),
+    )
+    .map_err(|e| e.to_string())?;
     use opentune_adaptation::ActuatorOutcome as O;
     let (outcome, message, safe) = match &r.outcome {
         O::Planned => ("planned", String::new(), true),

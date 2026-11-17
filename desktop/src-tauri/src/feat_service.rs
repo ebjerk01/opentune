@@ -33,7 +33,10 @@ use serde_json::{json, Value};
 
 /// Uppercase space-separated hex, e.g. `"50 03"`.
 fn hexs(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02X}")).collect::<Vec<_>>().join(" ")
+    b.iter()
+        .map(|x| format!("{x:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Stable lowercase token for a step outcome.
@@ -150,7 +153,10 @@ pub fn service_plan(
     let mut noop = |_req: &[u8]| -> std::result::Result<Vec<u8>, String> {
         Err("dry-run: no request is sent while planning".to_string())
     };
-    let opts = RunOptions { dry_run: true, skip_waits: true };
+    let opts = RunOptions {
+        dry_run: true,
+        skip_waits: true,
+    };
 
     match run_script(&mut noop, &script, None, &opts) {
         Ok(rep) => {
@@ -193,13 +199,17 @@ pub async fn service_run(
     let script = load_script(&script_path)?;
     let driver = driver.unwrap_or_else(|| "elm327obd".to_string());
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
     let mut diag = opentune_core::CoreDiag::new(t, timeout_ms);
 
-    let opts = RunOptions { dry_run: false, skip_waits: false };
+    let opts = RunOptions {
+        dry_run: false,
+        skip_waits: false,
+    };
     let rep = run_script(&mut diag, &script, None, &opts).map_err(|e| e.to_string())?;
 
     let mut v = report_json(&rep);

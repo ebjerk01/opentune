@@ -49,7 +49,6 @@ opentune-autoscan = { path = "../../crates/opentune-autoscan" }
 opentune-servicefn = { path = "../../crates/opentune-servicefn" }
 opentune-logdef = { path = "../../crates/opentune-logdef" }
 opentune-udssim = { path = "../../crates/opentune-udssim" }
-opentune-attest = { path = "../../crates/opentune-attest" }
 
 [features]
 # Tauri's default behaviour for a release build.

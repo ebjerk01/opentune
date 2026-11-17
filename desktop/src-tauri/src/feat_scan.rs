@@ -76,7 +76,8 @@ pub async fn autoscan_run(
     let modules = opentune_autoscan::VehicleModules::from_json(&text)
         .map_err(|e| format!("parse module list: {e}"))?;
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
@@ -115,7 +116,8 @@ pub async fn autoscan_clear(
     let modules = opentune_autoscan::VehicleModules::from_json(&text)
         .map_err(|e| format!("parse module list: {e}"))?;
 
-    let mut drv = crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
+    let mut drv =
+        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let t = drv
         .diag()
         .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;

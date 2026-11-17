@@ -18,8 +18,7 @@ use serde_json::{json, Value};
 
 /// Read and parse the `logger.xml` at `path` into a [`opentune_logdef::LogDef`].
 fn load_def(path: &str) -> Result<opentune_logdef::LogDef, String> {
-    let xml =
-        std::fs::read_to_string(path).map_err(|e| format!("read '{path}': {e}"))?;
+    let xml = std::fs::read_to_string(path).map_err(|e| format!("read '{path}': {e}"))?;
     opentune_logdef::parse(&xml).map_err(|e| format!("parse '{path}': {e}"))
 }
 

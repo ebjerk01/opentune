@@ -196,12 +196,14 @@ fn hexs(b: &[u8]) -> String {
 /// Parse a whitespace-tolerant hex string.
 fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
     let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    if clean.len() % 2 != 0 {
+    if !clean.len().is_multiple_of(2) {
         return Err(format!("hex string '{s}' has an odd number of digits"));
     }
     (0..clean.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'")))
+        .map(|i| {
+            u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'"))
+        })
         .collect()
 }
 
@@ -473,7 +475,13 @@ fn hex_preview(path: String, offset: u64, rows: usize) -> Result<Value, String> 
         let hex: Vec<String> = row.iter().map(|b| format!("{:02X}", b)).collect();
         let ascii: String = row
             .iter()
-            .map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+            .map(|&b| {
+                if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
             .collect();
         lines.push(json!({ "addr": format!("0x{:08X}", a), "hex": hex, "ascii": ascii }));
         a += 16;
@@ -635,10 +643,10 @@ struct RegionHit {
 }
 
 fn stride_hint(len: usize) -> String {
-    if len >= 4 && len % 2 == 0 {
+    if len >= 4 && len.is_multiple_of(2) {
         let cells = len / 2;
         for &w in &[16usize, 12, 10, 8] {
-            if cells % w == 0 {
+            if cells.is_multiple_of(w) {
                 return format!("~{}x{} u16?", cells / w, w);
             }
         }
@@ -648,7 +656,12 @@ fn stride_hint(len: usize) -> String {
 }
 
 #[tauri::command]
-fn findmaps(stock: String, tuned: String, gap: usize, min_len: usize) -> Result<Vec<RegionHit>, String> {
+fn findmaps(
+    stock: String,
+    tuned: String,
+    gap: usize,
+    min_len: usize,
+) -> Result<Vec<RegionHit>, String> {
     let a = std::fs::read(&stock).map_err(|e| e.to_string())?;
     let b = std::fs::read(&tuned).map_err(|e| e.to_string())?;
     let n = a.len().min(b.len());
@@ -724,7 +737,10 @@ fn list_ecudefs(state: tauri::State<AppData>) -> Vec<DefInfo> {
 #[tauri::command]
 fn list_maps(ecudef_id: String, state: tauri::State<AppData>) -> Result<Vec<Value>, String> {
     let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
+    let def = defs
+        .iter()
+        .find(|d| d.id == ecudef_id)
+        .ok_or("ecudef not found")?;
     Ok(def
         .maps
         .iter()
@@ -759,24 +775,44 @@ fn read_elem(img: &[u8], off: usize, dt: DataType, en: Endian) -> Option<f64> {
         DataType::U8 => s[0] as f64,
         DataType::S8 => (s[0] as i8) as f64,
         DataType::U16 => {
-            let v = if le { u16::from_le_bytes([s[0], s[1]]) } else { u16::from_be_bytes([s[0], s[1]]) };
+            let v = if le {
+                u16::from_le_bytes([s[0], s[1]])
+            } else {
+                u16::from_be_bytes([s[0], s[1]])
+            };
             v as f64
         }
         DataType::S16 => {
-            let v = if le { i16::from_le_bytes([s[0], s[1]]) } else { i16::from_be_bytes([s[0], s[1]]) };
+            let v = if le {
+                i16::from_le_bytes([s[0], s[1]])
+            } else {
+                i16::from_be_bytes([s[0], s[1]])
+            };
             v as f64
         }
         DataType::U32 => {
             let a = [s[0], s[1], s[2], s[3]];
-            (if le { u32::from_le_bytes(a) } else { u32::from_be_bytes(a) }) as f64
+            (if le {
+                u32::from_le_bytes(a)
+            } else {
+                u32::from_be_bytes(a)
+            }) as f64
         }
         DataType::S32 => {
             let a = [s[0], s[1], s[2], s[3]];
-            (if le { i32::from_le_bytes(a) } else { i32::from_be_bytes(a) }) as f64
+            (if le {
+                i32::from_le_bytes(a)
+            } else {
+                i32::from_be_bytes(a)
+            }) as f64
         }
         DataType::F32 => {
             let a = [s[0], s[1], s[2], s[3]];
-            (if le { f32::from_le_bytes(a) } else { f32::from_be_bytes(a) }) as f64
+            (if le {
+                f32::from_le_bytes(a)
+            } else {
+                f32::from_be_bytes(a)
+            }) as f64
         }
     })
 }
@@ -880,8 +916,15 @@ fn decode_map(
     state: tauri::State<AppData>,
 ) -> Result<Value, String> {
     let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
-    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
+    let def = defs
+        .iter()
+        .find(|d| d.id == ecudef_id)
+        .ok_or("ecudef not found")?;
+    let map: &MapDef = def
+        .maps
+        .iter()
+        .find(|m| m.name == map_name)
+        .ok_or("map not found")?;
     let img = std::fs::read(&path).map_err(|e| e.to_string())?;
     decode_map_value(&img, map, Some(def.flash_size / 1024))
 }
@@ -1039,19 +1082,21 @@ fn write_map_core(
         .unwrap_or_else(|| Path::new("."))
         .join("opentune-vault");
     let whole = MemoryRegion::new(0, img.len() as u32);
-    let backup = opentune_flash::vault::save_backup(&vault_dir, &ecu, whole, &img).map_err(|e| {
-        format!(
-            "could not write the safety backup to {} — aborting before any edit: {e}",
-            vault_dir.display()
-        )
-    })?;
+    let backup =
+        opentune_flash::vault::save_backup(&vault_dir, &ecu, whole, &img).map_err(|e| {
+            format!(
+                "could not write the safety backup to {} — aborting before any edit: {e}",
+                vault_dir.display()
+            )
+        })?;
 
     // (5) Apply the edit: inverse scaling, clamp, write only the map's bytes.
     let mut cells_changed = 0usize;
-    for r in 0..rows {
-        for c in 0..cols {
+    // Dimensions were checked above: new_cells is exactly rows × cols.
+    for (r, row) in new_cells.iter().enumerate() {
+        for (c, &cell) in row.iter().enumerate() {
             let off = map.address as usize + (r * cols + c) * w;
-            let bytes = encode_elem(new_cells[r][c], map.data_type, map.endian, map.scaling);
+            let bytes = encode_elem(cell, map.data_type, map.endian, map.scaling);
             if img[off..off + w] != bytes[..] {
                 cells_changed += 1;
             }
@@ -1076,7 +1121,9 @@ fn write_map_core(
                 Ok(v) => v,
                 Err(e) => json!({ "algo": a, "error": e }),
             },
-            None => json!({ "error": "no checksum algorithm is set for this map — pick one on the Checksum panel and re-run it manually" }),
+            None => {
+                json!({ "error": "no checksum algorithm is set for this map — pick one on the Checksum panel and re-run it manually" })
+            }
         };
     }
 
@@ -1091,6 +1138,7 @@ fn write_map_core(
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn map_write(
     path: String,
@@ -1106,8 +1154,15 @@ fn map_write(
     // long-operation slot so a software update cannot land in the middle of it.
     let _op = guard.begin("map write-back")?;
     let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == ecudef_id).ok_or("ecudef not found")?;
-    let map: &MapDef = def.maps.iter().find(|m| m.name == map_name).ok_or("map not found")?;
+    let def = defs
+        .iter()
+        .find(|d| d.id == ecudef_id)
+        .ok_or("ecudef not found")?;
+    let map: &MapDef = def
+        .maps
+        .iter()
+        .find(|m| m.name == map_name)
+        .ok_or("map not found")?;
 
     let ecu = EcuId {
         ecu_name: Some(format!("{} [{}]", def.name, def.id)),
@@ -1176,7 +1231,10 @@ fn compare_maps(
     state: tauri::State<AppData>,
 ) -> Result<Value, String> {
     let defs = load_defs(&state.ecudefs);
-    let def = defs.iter().find(|d| d.id == def_id).ok_or("ecudef not found")?;
+    let def = defs
+        .iter()
+        .find(|d| d.id == def_id)
+        .ok_or("ecudef not found")?;
     if def.maps.is_empty() {
         return Err(format!("definition '{def_id}' has no maps to compare"));
     }
@@ -1218,7 +1276,11 @@ fn compare_maps(
         if changed > 0 {
             changed_maps += 1;
         }
-        let avg = if changed > 0 { sum_delta / changed as f64 } else { 0.0 };
+        let avg = if changed > 0 {
+            sum_delta / changed as f64
+        } else {
+            0.0
+        };
         let mut entry = json!({
             "name": m.name,
             "rows": m.rows,
@@ -1235,10 +1297,8 @@ fn compare_maps(
             let (y_vals, y_unit) = decode_axis(&a, &m.y_axis, m.rows);
             entry["stock"] = json!(pa);
             entry["tuned"] = json!(pb);
-            entry["x_axis"] =
-                json!({ "name": m.x_axis.as_ref().map(|ax| ax.name.clone()), "unit": x_unit, "values": x_vals });
-            entry["y_axis"] =
-                json!({ "name": m.y_axis.as_ref().map(|ax| ax.name.clone()), "unit": y_unit, "values": y_vals });
+            entry["x_axis"] = json!({ "name": m.x_axis.as_ref().map(|ax| ax.name.clone()), "unit": x_unit, "values": x_vals });
+            entry["y_axis"] = json!({ "name": m.y_axis.as_ref().map(|ax| ax.name.clone()), "unit": y_unit, "values": y_vals });
         }
         maps.push(entry);
     }
@@ -1315,7 +1375,12 @@ fn vault_list(dir: String) -> Result<Vec<Value>, String> {
             "meta": meta_txt,
         }));
     }
-    out.sort_by(|a, b| a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or("")));
+    out.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
+    });
     Ok(out)
 }
 
@@ -1325,7 +1390,7 @@ fn vault_list(dir: String) -> Result<Vec<Value>, String> {
 
 /// Pretty section title from a `NN-slug.md` filename: `01-hardware.md` -> "Hardware".
 fn guide_title(stem: &str) -> String {
-    let slug = stem.splitn(2, '-').nth(1).unwrap_or(stem);
+    let slug = stem.split_once('-').map(|x| x.1).unwrap_or(stem);
     let mut out = String::new();
     for (i, word) in slug.split(['-', '_']).enumerate() {
         if i > 0 {
@@ -1363,7 +1428,11 @@ fn guide_list(state: tauri::State<AppData>) -> Result<Vec<Value>, String> {
 fn guide_read(id: String, state: tauri::State<AppData>) -> Result<String, String> {
     let dir = state.guide.as_ref().ok_or("guide resources not found")?;
     // Guard against path traversal: only a bare NN-slug stem is accepted.
-    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err("invalid guide id".into());
     }
     let path = dir.join(format!("{id}.md"));
@@ -1418,8 +1487,12 @@ fn analyze_image(
     catalog_dir: Option<String>,
     state: tauri::State<AppData>,
 ) -> Result<Value, String> {
-    let ecudefs_dir = ecudefs_dir.map(PathBuf::from).or_else(|| state.ecudefs.clone());
-    let catalog_dir = catalog_dir.map(PathBuf::from).or_else(|| state.catalog.clone());
+    let ecudefs_dir = ecudefs_dir
+        .map(PathBuf::from)
+        .or_else(|| state.ecudefs.clone());
+    let catalog_dir = catalog_dir
+        .map(PathBuf::from)
+        .or_else(|| state.catalog.clone());
     let ecudefs = load_defs(&ecudefs_dir);
     let catalog = load_cat(&catalog_dir);
     let ctx = opentune_scan::ScanContext {
@@ -1522,7 +1595,9 @@ fn parse_data_type(s: &str) -> Result<DataType, String> {
         "u32" => Ok(DataType::U32),
         "s32" | "i32" => Ok(DataType::S32),
         "f32" | "float" => Ok(DataType::F32),
-        other => Err(format!("unknown data type '{other}' (use u8/s8/u16/s16/u32/s32/f32)")),
+        other => Err(format!(
+            "unknown data type '{other}' (use u8/s8/u16/s16/u32/s32/f32)"
+        )),
     }
 }
 
@@ -1542,7 +1617,11 @@ fn mapdef_summary(m: &MapDef) -> Value {
         o.insert("byte_len".into(), json!(m.byte_len()));
         o.insert(
             "shape".into(),
-            json!(if m.rows <= 1 || m.cols <= 1 { "1D/scalar" } else { "2D" }),
+            json!(if m.rows <= 1 || m.cols <= 1 {
+                "1D/scalar"
+            } else {
+                "2D"
+            }),
         );
     }
     v
@@ -1751,14 +1830,11 @@ fn seedkey_algos() -> Value {
 
 /// Parse a hex blob: ignores spaces, `0x`, `-`, `:`; errors on odd length / junk.
 fn parse_hex_bytes(s: &str) -> Result<Vec<u8>, String> {
-    let cleaned: String = s
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .collect();
+    let cleaned: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     if cleaned.is_empty() {
         return Err("empty seed".into());
     }
-    if cleaned.len() % 2 != 0 {
+    if !cleaned.len().is_multiple_of(2) {
         return Err("hex has an odd number of digits".into());
     }
     (0..cleaned.len())
@@ -1812,7 +1888,11 @@ fn seedkey_compute(
         }
     };
 
-    let hex = key.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
+    let hex = key
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ");
     Ok(json!({
         "key": hex,
         "algo": algo,
@@ -2257,16 +2337,28 @@ mod tests {
     #[test]
     fn encode_rounds_to_nearest() {
         let scaling = sc(1.0, 0.0);
-        assert_eq!(encode_elem(10.4, DataType::U8, Endian::Big, scaling), vec![10]);
-        assert_eq!(encode_elem(10.6, DataType::U8, Endian::Big, scaling), vec![11]);
+        assert_eq!(
+            encode_elem(10.4, DataType::U8, Endian::Big, scaling),
+            vec![10]
+        );
+        assert_eq!(
+            encode_elem(10.6, DataType::U8, Endian::Big, scaling),
+            vec![11]
+        );
     }
 
     #[test]
     fn encode_clamps_to_type_range() {
         let scaling = sc(1.0, 0.0);
         // Over max / under min must saturate, never wrap.
-        assert_eq!(encode_elem(999.0, DataType::U8, Endian::Big, scaling), vec![255]);
-        assert_eq!(encode_elem(-5.0, DataType::U8, Endian::Big, scaling), vec![0]);
+        assert_eq!(
+            encode_elem(999.0, DataType::U8, Endian::Big, scaling),
+            vec![255]
+        );
+        assert_eq!(
+            encode_elem(-5.0, DataType::U8, Endian::Big, scaling),
+            vec![0]
+        );
         assert_eq!(
             encode_elem(-200.0, DataType::S8, Endian::Big, scaling),
             vec![(-128i8) as u8]
@@ -2307,13 +2399,13 @@ mod tests {
             scaling: sc(0.1, 0.0),
             ..Default::default()
         };
-        let grid = vec![vec![1.0, 2.5], vec![3.0, 4.5]];
+        let grid = [vec![1.0, 2.5], vec![3.0, 4.5]];
         let w = map.data_type.byte_len() as usize;
         let mut img = vec![0u8; 2 * 2 * w];
-        for r in 0..2 {
-            for c in 0..2 {
+        for (r, row) in grid.iter().enumerate() {
+            for (c, &cell) in row.iter().enumerate() {
                 let off = (r * 2 + c) * w;
-                let b = encode_elem(grid[r][c], map.data_type, map.endian, map.scaling);
+                let b = encode_elem(cell, map.data_type, map.endian, map.scaling);
                 img[off..off + w].copy_from_slice(&b);
             }
         }
@@ -2367,7 +2459,10 @@ mod tests {
     #[test]
     fn hex_parsing() {
         assert_eq!(parse_hex_bytes("AA BB CC").unwrap(), vec![0xAA, 0xBB, 0xCC]);
-        assert_eq!(parse_hex_bytes("de:ad:be:ef").unwrap(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(
+            parse_hex_bytes("de:ad:be:ef").unwrap(),
+            vec![0xDE, 0xAD, 0xBE, 0xEF]
+        );
         assert!(parse_hex_bytes("ABC").is_err()); // odd
         assert!(parse_hex_bytes("").is_err());
     }
@@ -2387,7 +2482,13 @@ mod tests {
         let r = seedkey_compute("FE".into(), "add-const".into(), None, Some("3".into())).unwrap();
         assert_eq!(r["key"], "01");
         // xor-add
-        let r = seedkey_compute("0A".into(), "xor-add".into(), Some("0F".into()), Some("0x01".into())).unwrap();
+        let r = seedkey_compute(
+            "0A".into(),
+            "xor-add".into(),
+            Some("0F".into()),
+            Some("0x01".into()),
+        )
+        .unwrap();
         assert_eq!(r["key"], "06"); // (0x0A ^ 0x0F) + 1 = 0x05 + 1 = 0x06
     }
 
@@ -2557,7 +2658,10 @@ mod tests {
         // A software update must be refused while a flash holds the slot, and the
         // error must name what is running.
         let err = g.begin("software update").unwrap_err();
-        assert!(err.contains("flash"), "error should name the running op: {err}");
+        assert!(
+            err.contains("flash"),
+            "error should name the running op: {err}"
+        );
         drop(tok);
     }
 
