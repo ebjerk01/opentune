@@ -1,5 +1,5 @@
 // OpenTune — sidebar navigation registry.
-// Loaded right after ot-caps.js, before app.js and every feature script.
+// Loaded right after ot-caps.js, before the app-*.js scripts and every feature script.
 //
 // Panels register their sidebar entry with OTNav.register({ id, label, icon,
 // group, tier }). Groups are fixed containers in index.html, top to bottom:

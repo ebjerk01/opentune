@@ -2,7 +2,7 @@
 //
 // Self-contained: injects its own nav item and panel into the existing shell, so
 // index.html only needs a <script src="src/feat_adaptation.js"></script> after
-// app.js. Drives the backend adaptation_* commands over the shared adapter
+// the app-*.js scripts. Drives the backend adaptation_* commands over the shared adapter
 // connection (window.OT.connArgs) and gates its actions on the adapter having a
 // CAN bus (window.OT.gate). No bundler, no framework.
 "use strict";

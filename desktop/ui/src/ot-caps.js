@@ -1,5 +1,5 @@
 // OpenTune — global adapter connection + capability framework.
-// Loaded BEFORE app.js so window.OT exists at boot. Owns the current connection
+// Loaded BEFORE the app-*.js scripts so window.OT exists at boot. Owns the current connection
 // params, probes the adapter, updates the sidebar badge, and lets every panel
 // gate its actions on what the adapter can actually do (e.g. an ELM327 cannot
 // flash). Feature panels spread window.OT.connArgs() into their live invoke

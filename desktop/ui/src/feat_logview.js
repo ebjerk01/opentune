@@ -148,7 +148,7 @@
     return (+t).toFixed(Math.abs(V.view.t1 - V.view.t0) < 10 ? 3 : 2) + " s";
   }
   function heatColor(t) {
-    // Same ramp as the Maps panel (app.js) so both grids read alike.
+    // Same ramp as the Maps panel (OTUtil.heatColor) so both grids read alike.
     const stops = [[43, 108, 176], [56, 161, 105], [214, 158, 46], [221, 107, 32], [197, 48, 48]];
     const x = Math.max(0, Math.min(1, t)) * (stops.length - 1);
     const i = Math.floor(x), f = x - i, a = stops[i], b = stops[Math.min(i + 1, stops.length - 1)];
@@ -499,7 +499,7 @@
   }
   function imagePath() {
     if (V.imagePath) return V.imagePath;
-    // Fall back to the image opened in the Image panel (app.js global state).
+    // Fall back to the image opened in the Image panel (app-core.js global state).
     try { if (typeof state !== "undefined" && state && state.imagePath) return state.imagePath; } catch (e) {}
     return null;
   }
