@@ -2563,6 +2563,7 @@ name = "opentune-driver-mock"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "serde_json",
 ]
 
 [[package]]

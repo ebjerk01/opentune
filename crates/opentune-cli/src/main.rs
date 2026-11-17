@@ -1901,6 +1901,25 @@ fn main() -> Result<()> {
 
 /// Open the `conn`'s driver and borrow its diagnostic transport, erroring
 /// clearly when the driver cannot expose one.
+/// Apply serial-port overrides from the environment to a connect config, so a
+/// live serial driver (e.g. `elm327obd`) can be pointed at whatever device it
+/// enumerates as without a per-command flag:
+///   `OPENTUNE_PORT=/dev/ttyUSB1 OPENTUNE_BAUD=115200 opentune autoscan …`
+/// Unset variables leave the driver's own defaults (elm327obd: /dev/ttyUSB0
+/// @38400) untouched.
+fn apply_serial_env(cfg: &mut ConnectConfig) {
+    if let Ok(port) = std::env::var("OPENTUNE_PORT") {
+        if !port.trim().is_empty() {
+            cfg.options.insert("port".into(), port);
+        }
+    }
+    if let Ok(baud) = std::env::var("OPENTUNE_BAUD") {
+        if !baud.trim().is_empty() {
+            cfg.options.insert("baud".into(), baud);
+        }
+    }
+}
+
 fn open_coding_driver(reg: &Registry, conn: &CodingConn) -> Result<Box<dyn Interface>> {
     let mut drv = reg
         .make(&conn.driver)
@@ -1910,6 +1929,7 @@ fn open_coding_driver(reg: &Registry, conn: &CodingConn) -> Result<Box<dyn Inter
         cfg.options
             .insert("coding_store".into(), store.to_string_lossy().into_owned());
     }
+    apply_serial_env(&mut cfg);
     drv.open(&cfg)
         .map_err(|e| anyhow!("open {}: {e}", conn.driver))?;
     Ok(drv)
@@ -1942,6 +1962,7 @@ fn open_diag_driver(
         cfg.options
             .insert("coding_store".into(), store.to_string_lossy().into_owned());
     }
+    apply_serial_env(&mut cfg);
     drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
     Ok(drv)
 }
