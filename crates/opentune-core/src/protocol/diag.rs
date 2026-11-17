@@ -14,7 +14,24 @@ pub fn check_response(req_sid: u8, resp: &[u8]) -> Result<()> {
         return Err(Error::Protocol("empty response".into()));
     }
     if resp[0] == 0x7F {
-        let code = *resp.get(2).unwrap_or(&0);
+        // A well-formed negative response is `7F <echoed sid> <nrc>`.
+        // Anything shorter cannot carry the echoed service id and NRC, so it is
+        // malformed rather than a placeholder/out-of-range read (python-udsoncan
+        // treats a short 0x7F as an invalid response).
+        if resp.len() < 3 {
+            return Err(Error::Protocol("truncated negative response".into()));
+        }
+        // The second byte must echo the requested service id. A different id
+        // means the response is correlated to another request, not an NRC for
+        // this service, so surface it as a protocol error naming both ids.
+        let echoed_sid = resp[1];
+        if echoed_sid != req_sid {
+            return Err(Error::Protocol(format!(
+                "mis-correlated negative response: echoed service 0x{echoed_sid:02X} \
+                 does not match request service 0x{req_sid:02X}"
+            )));
+        }
+        let code = resp[2];
         return Err(Error::NegativeResponse {
             service: req_sid,
             code,
@@ -128,6 +145,45 @@ mod tests {
             }
             other => panic!("wrong error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn truncated_negative_response_is_protocol_error() {
+        // `7F` alone, and `7F <sid>` without an NRC byte, are both malformed:
+        // they must not read an out-of-range/placeholder NRC.
+        for resp in [&[0x7F][..], &[0x7F, 0x27][..]] {
+            match check_response(0x27, resp) {
+                Err(Error::Protocol(msg)) => {
+                    assert!(
+                        msg.contains("truncated negative response"),
+                        "unexpected message: {msg}"
+                    );
+                }
+                other => panic!("expected truncated protocol error, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn mis_correlated_negative_response_is_protocol_error() {
+        // 0x7F echoing a different service id (0x31) than requested (0x27) is a
+        // mis-correlated response, not an NRC for service 0x27.
+        match check_response(0x27, &[0x7F, 0x31, 0x35]) {
+            Err(Error::Protocol(msg)) => {
+                assert!(msg.contains("0x31"), "message should name echoed id: {msg}");
+                assert!(msg.contains("0x27"), "message should name request id: {msg}");
+            }
+            other => panic!("expected mis-correlation protocol error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wrong_positive_service_id_is_protocol_error() {
+        // Positive response whose SID is not `req_sid + 0x40`.
+        assert!(matches!(
+            check_response(0x22, &[0x63, 0x01, 0x02]),
+            Err(Error::Protocol(_))
+        ));
     }
 
     #[test]
