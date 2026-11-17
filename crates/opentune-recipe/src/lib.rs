@@ -437,12 +437,27 @@ fn maps_touching(maps: &[MapDef], s: usize, e: usize) -> Vec<String> {
     out
 }
 
+/// Resolves a checksum algorithm id to an implementation. [`create`] and
+/// [`apply`] use the public `opentune_checksum::get`; an embedding application
+/// with its own algorithms passes a lookup to [`create_with`] / [`apply_with`].
+pub type ChecksumLookup<'a> = &'a dyn Fn(&str) -> Option<Box<dyn opentune_checksum::ChecksumAlgo>>;
+
 /// Build a recipe from a stock image and its tuned version. Returns the recipe
 /// and any warnings (e.g. no checksum algorithm could be determined).
 pub fn create(
     stock: &[u8],
     tuned: &[u8],
     opts: &CreateOptions,
+) -> Result<(Recipe, Vec<String>), RecipeError> {
+    create_with(stock, tuned, opts, &opentune_checksum::get)
+}
+
+/// [`create`], resolving checksum algorithm ids through `lookup`.
+pub fn create_with(
+    stock: &[u8],
+    tuned: &[u8],
+    opts: &CreateOptions,
+    lookup: ChecksumLookup<'_>,
 ) -> Result<(Recipe, Vec<String>), RecipeError> {
     if stock.len() != tuned.len() {
         return Err(RecipeError::SizeMismatch(stock.len(), tuned.len()));
@@ -451,7 +466,7 @@ pub fn create(
     let id = identify(stock);
     let checksum = match &opts.checksum {
         Some(a) => {
-            if opentune_checksum::get(a).is_none() {
+            if lookup(a).is_none() {
                 return Err(RecipeError::UnknownChecksum(a.clone()));
             }
             Some(a.clone())
@@ -475,7 +490,7 @@ pub fn create(
     }
 
     // Which small changed regions are checksum fields? See `checksum_fields`.
-    let cs_fields = match checksum.as_deref().and_then(opentune_checksum::get) {
+    let cs_fields = match checksum.as_deref().and_then(lookup) {
         Some(algo) => checksum_fields(&*algo, stock, tuned, &regions),
         None => Vec::new(),
     };
@@ -726,6 +741,16 @@ fn list(v: &[String]) -> String {
 /// Apply `recipe` to `target`. Never panics on bad input; check
 /// [`ApplyReport::refusal`] / [`ApplyReport::output`].
 pub fn apply(recipe: &Recipe, target: &[u8], opts: &ApplyOptions) -> ApplyReport {
+    apply_with(recipe, target, opts, &opentune_checksum::get)
+}
+
+/// [`apply`], resolving checksum algorithm ids through `lookup`.
+pub fn apply_with(
+    recipe: &Recipe,
+    target: &[u8],
+    opts: &ApplyOptions,
+    lookup: ChecksumLookup<'_>,
+) -> ApplyReport {
     let strict = opts.mode == ApplyMode::Strict;
     let checksum = opts.checksum.clone().or_else(|| recipe.checksum.clone());
     let mut rep = ApplyReport {
@@ -895,7 +920,7 @@ pub fn apply(recipe: &Recipe, target: &[u8], opts: &ApplyOptions) -> ApplyReport
              algorithm if you know it (refusing to write an image with unverified checksums)",
         );
     };
-    let Some(algo) = opentune_checksum::get(&algo_id) else {
+    let Some(algo) = lookup(&algo_id) else {
         return rep.refuse(format!("unknown checksum algorithm '{algo_id}'"));
     };
 
@@ -923,7 +948,7 @@ pub fn apply(recipe: &Recipe, target: &[u8], opts: &ApplyOptions) -> ApplyReport
         }
         Err(e) => return rep.refuse(format!("checksum correction ({algo_id}) failed: {e}")),
     }
-    match opentune_attest::attest_image(&algo_id, &out) {
+    match opentune_attest::attest_image_with(&*algo, &algo_id, &out) {
         Ok(att) => {
             let ok = att.satisfied;
             let note = att.note.clone();
