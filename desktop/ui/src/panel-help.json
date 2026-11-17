@@ -104,6 +104,13 @@
     "risk": "read-only",
     "guide": "24-OBD-live"
   },
+  "inspection": {
+    "title": "Inspection",
+    "summary": "Emissions-inspection data over generic OBD-II: check-engine lamp, readiness monitors, stored / pending / permanent codes, freeze frame, and calibration IDs with their verification numbers (CVN). One module or every OBD module.",
+    "needs": ["Adapter: CAN", "Ignition on", "HS-CAN"],
+    "risk": "read-only",
+    "guide": "34-inspection"
+  },
   "logging": {
     "title": "Live log",
     "summary": "Stream ECU values from a RomRaider-style logger.xml into a live table and save them as CSV. Only UDS 0x22 parameters are read today.",
