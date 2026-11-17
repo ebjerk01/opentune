@@ -1,0 +1,29 @@
+# Virtual car: a whole multi-module vehicle simulated in memory, so every
+# OpenTune panel and engine can be exercised end to end with no hardware.
+# Each module is an `opentune-udssim` UDS server behind its own ISO-TP
+# endpoint on a virtual 11-bit CAN bus. Offline only; never touches a bus.
+[package]
+name = "opentune-driver-vcar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Virtual-car driver: a simulated multi-module vehicle (UDS servers on a virtual ISO-TP CAN bus, functional OBD-II, synthetic bus traffic) for offline testing and demos."
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+opentune-udssim = { path = "../../opentune-udssim" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# End-to-end tests drive the real engines over the virtual car.
+opentune-autoscan = { path = "../../opentune-autoscan" }
+opentune-coding = { path = "../../opentune-coding" }
+opentune-adaptation = { path = "../../opentune-adaptation" }
+opentune-servicefn = { path = "../../opentune-servicefn" }
+opentune-candump = { path = "../../opentune-candump" }
+opentune-packs = { path = "../../opentune-packs" }

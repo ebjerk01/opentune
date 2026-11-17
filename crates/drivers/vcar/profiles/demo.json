@@ -1,0 +1,166 @@
+{
+  "id": "demo",
+  "name": "OpenTune virtual car (demo)",
+  "description": "A fictional six-module vehicle for offline testing and demos. Every CAN id, DID value, part number, DTC and coding byte here belongs to the OpenTune virtual car only - none of it describes, or was taken from, any real vehicle or manufacturer.",
+  "vin": "TESTVCAR0D0000001",
+  "engine_running": true,
+  "security": {
+    "algorithm": "test-xor",
+    "xor_mask": "5A",
+    "note": "TEST-ONLY seed->key: key[i] = seed[i] XOR xor_mask. A deliberately trivial algorithm for exercising SecurityAccess (0x27) offline. It is not, and is not derived from, any manufacturer's algorithm."
+  },
+  "modules": [
+    {
+      "name": "Engine",
+      "addr": 1,
+      "req_id": "7E0",
+      "resp_id": "7E8",
+      "obd": true,
+      "seed": "11 22 33 44",
+      "dids": [
+        { "did": "F190", "ascii": "$VIN" },
+        { "did": "F187", "ascii": "VC-ENG-0100" },
+        { "did": "F188", "ascii": "VCE-SW-1001" },
+        { "did": "F189", "ascii": "1001" },
+        { "did": "F18A", "ascii": "VCAR-SUP-01" },
+        { "did": "F191", "ascii": "VCE-HW-01" },
+        { "did": "F195", "ascii": "E-2.4.1" },
+        { "did": "F197", "ascii": "ENGINE ECU" },
+        { "did": "0600", "hex": "03 03 00 00 00 00" },
+        { "did": "0610", "hex": "03 52" },
+        { "did": "0611", "hex": "3C" }
+      ],
+      "dtcs": [
+        { "code": "P0101", "status": "2F" },
+        { "code": "P0420", "status": "28" },
+        { "code": "P0171", "status": "04" }
+      ],
+      "routines": [ { "id": "0203", "name": "Throttle body adaptation", "result": "00" } ],
+      "io": [ { "did": "0500", "name": "Radiator fan", "default": "00" } ]
+    },
+    {
+      "name": "Gearbox",
+      "addr": 2,
+      "req_id": "7E1",
+      "resp_id": "7E9",
+      "seed": "21 32 43 54",
+      "dids": [
+        { "did": "F187", "ascii": "VC-TCU-0200" },
+        { "did": "F188", "ascii": "VCT-SW-2003" },
+        { "did": "F189", "ascii": "2003" },
+        { "did": "F18A", "ascii": "VCAR-SUP-02" },
+        { "did": "F191", "ascii": "VCT-HW-02" },
+        { "did": "F195", "ascii": "T-1.8.0" },
+        { "did": "F197", "ascii": "GEARBOX" },
+        { "did": "0600", "hex": "01 C8 00 00" },
+        { "did": "0610", "hex": "05" },
+        { "did": "0611", "hex": "5A" }
+      ],
+      "dtcs": [
+        { "code": "P0715", "status": "09" },
+        { "code": "P0730", "status": "28" }
+      ],
+      "routines": [ { "id": "0210", "name": "Reset clutch adaptation", "result": "00" } ],
+      "io": [ { "did": "0510", "name": "Shift-lock solenoid", "default": "00" } ]
+    },
+    {
+      "name": "ABS / ESC",
+      "addr": 3,
+      "req_id": "713",
+      "resp_id": "77D",
+      "seed": "31 42 53 64",
+      "dids": [
+        { "did": "F187", "ascii": "VC-ABS-0300" },
+        { "did": "F188", "ascii": "VCB-SW-3010" },
+        { "did": "F189", "ascii": "3010" },
+        { "did": "F18A", "ascii": "VCAR-SUP-03" },
+        { "did": "F191", "ascii": "VCB-HW-03" },
+        { "did": "F195", "ascii": "B-5.0.2" },
+        { "did": "F197", "ascii": "ABS ESC" },
+        { "did": "0600", "hex": "05 01 00" },
+        { "did": "0610", "hex": "03" },
+        { "did": "0611", "hex": "0A" }
+      ],
+      "dtcs": [
+        { "code": "C0035", "status": "2F" },
+        { "code": "U0100", "status": "08" }
+      ],
+      "routines": [ { "id": "0220", "name": "Brake bleed sequence", "result": "00" } ],
+      "io": [ { "did": "0520", "name": "Return pump motor", "default": "00" } ]
+    },
+    {
+      "name": "Airbag",
+      "addr": 4,
+      "req_id": "715",
+      "resp_id": "77F",
+      "seed": "41 52 63 74",
+      "require_security_for_write": true,
+      "dids": [
+        { "did": "F187", "ascii": "VC-SRS-0400" },
+        { "did": "F188", "ascii": "VCS-SW-4002" },
+        { "did": "F189", "ascii": "4002" },
+        { "did": "F18A", "ascii": "VCAR-SUP-04" },
+        { "did": "F191", "ascii": "VCS-HW-04" },
+        { "did": "F195", "ascii": "S-3.1.0" },
+        { "did": "F197", "ascii": "AIRBAG" },
+        { "did": "0600", "hex": "06 00" },
+        { "did": "0610", "hex": "02" },
+        { "did": "0611", "hex": "06" }
+      ],
+      "dtcs": [
+        { "code": "B0001", "status": "08" }
+      ],
+      "routines": [ { "id": "0225", "name": "Occupant sensor zero-point calibration", "result": "00" } ],
+      "io": [ { "did": "0530", "name": "Airbag warning lamp", "default": "00" } ]
+    },
+    {
+      "name": "Body / central",
+      "addr": 5,
+      "req_id": "70E",
+      "resp_id": "778",
+      "seed": "51 62 73 84",
+      "dids": [
+        { "did": "F187", "ascii": "VC-BCM-0500" },
+        { "did": "F188", "ascii": "VCM-SW-5020" },
+        { "did": "F189", "ascii": "5020" },
+        { "did": "F18A", "ascii": "VCAR-SUP-05" },
+        { "did": "F191", "ascii": "VCM-HW-05" },
+        { "did": "F195", "ascii": "M-7.2.0" },
+        { "did": "F197", "ascii": "BODY CTRL" },
+        { "did": "0600", "hex": "0B 01 00 00" },
+        { "did": "0610", "hex": "0F" },
+        { "did": "0611", "hex": "1E" }
+      ],
+      "dtcs": [
+        { "code": "U0155", "status": "08" },
+        { "code": "B1A00", "status": "2C" }
+      ],
+      "routines": [ { "id": "0230", "name": "Window position initialisation", "result": "00" } ],
+      "io": [ { "did": "0550", "name": "Interior light", "default": "00" } ]
+    },
+    {
+      "name": "Instrument cluster",
+      "addr": 6,
+      "req_id": "714",
+      "resp_id": "77E",
+      "seed": "61 72 83 94",
+      "dids": [
+        { "did": "F187", "ascii": "VC-IPC-0600" },
+        { "did": "F188", "ascii": "VCI-SW-6001" },
+        { "did": "F189", "ascii": "6001" },
+        { "did": "F18A", "ascii": "VCAR-SUP-06" },
+        { "did": "F191", "ascii": "VCI-HW-06" },
+        { "did": "F195", "ascii": "I-4.4.4" },
+        { "did": "F197", "ascii": "CLUSTER" },
+        { "did": "0600", "hex": "06 00 00" },
+        { "did": "0610", "hex": "B4" },
+        { "did": "0611", "hex": "0F" }
+      ],
+      "dtcs": [
+        { "code": "U0121", "status": "08" }
+      ],
+      "routines": [ { "id": "0240", "name": "Service interval reset", "result": "00" } ],
+      "io": [ { "did": "0540", "name": "Gauge sweep test", "default": "00" } ]
+    }
+  ]
+}
