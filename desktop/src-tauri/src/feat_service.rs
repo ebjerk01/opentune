@@ -13,14 +13,17 @@
 //!   planned steps and **sends nothing at all** (no writes, no actions, no I/O);
 //!   it does not even open the adapter. A script that needs UDS SecurityAccess
 //!   can still be planned.
-//! * [`service_run`] — the real thing. It **refuses** unless `ack` is `true`,
-//!   opens the adapter, wraps it in a [`opentune_core::CoreDiag`], and executes
-//!   the script. It returns the same step report.
+//! * [`service_run`] — the real thing. It **refuses** unless `ack` is `true`
+//!   and the target module's CAN address is known (UI `tx_id`/`rx_id` or the
+//!   script's optional top-level `req_id`/`resp_id` — never a silent default to
+//!   the engine ECU), then executes the script through the app-wide adapter hub
+//!   in one adapter binding. It returns the same step report.
 //!
 //! OpenTune ships **no OEM seed/key provider**, so `run_script` is always
 //! called with `key: None`. A script that needs SecurityAccess therefore errors
 //! with `MissingKeyProvider` when run here — surfaced honestly to the operator.
 
+use crate::adapter::{self, AdapterHub, ConnKey};
 use opentune_servicefn::{
     run_script, RunOptions, RunOutcome, RunReport, ServiceError, ServiceScript, StepReport,
     StepStatus,
@@ -120,10 +123,16 @@ fn manual_plan(script: &ServiceScript) -> Value {
 // Script loading
 // ---------------------------------------------------------------------------
 
-/// Read and parse a [`ServiceScript`] from a JSON file on disk.
-fn load_script(path: &str) -> Result<ServiceScript, String> {
+/// Read and parse a [`ServiceScript`] from a JSON file on disk, with its text.
+fn load_script_text(path: &str) -> Result<(ServiceScript, String), String> {
     let txt = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
-    ServiceScript::from_json(&txt).map_err(|e| format!("invalid service script JSON: {e}"))
+    let s =
+        ServiceScript::from_json(&txt).map_err(|e| format!("invalid service script JSON: {e}"))?;
+    Ok((s, txt))
+}
+
+fn load_script(path: &str) -> Result<ServiceScript, String> {
+    load_script_text(path).map(|(s, _)| s)
 }
 
 // ---------------------------------------------------------------------------
@@ -176,19 +185,24 @@ pub fn service_plan(
 }
 
 /// Execute a service script for real over the live adapter. **Refuses** unless
-/// `ack` is `true`. Opens the selected driver's diagnostic transport, runs the
-/// script step by step (`key: None` — no OEM seed/key provider ships, so a
+/// `ack` is `true` and the target module's address is known (UI `tx_id`/`rx_id`,
+/// else the script's `req_id`/`resp_id`). Runs the script step by step in one
+/// adapter binding (`key: None` — no OEM seed/key provider ships, so a
 /// SecurityAccess script errors with `MissingKeyProvider`), and returns the
 /// step-by-step report. A failed step stops the run safely and is reported.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn service_run(
     driver: Option<String>,
     port: Option<String>,
     baud: Option<String>,
     bus: Option<String>,
+    tx_id: Option<String>,
+    rx_id: Option<String>,
     script_path: String,
     timeout_ms: u64,
     ack: bool,
+    hub: tauri::State<'_, AdapterHub>,
 ) -> Result<Value, String> {
     if !ack {
         return Err(
@@ -196,25 +210,35 @@ pub async fn service_run(
                 .into(),
         );
     }
-    let script = load_script(&script_path)?;
+    let (script, text) = load_script_text(&script_path)?;
+    let addr = adapter::write_addr(
+        adapter::resolve(tx_id.as_deref(), rx_id.as_deref(), Some(&text))?,
+        "service run",
+    )?;
     let driver = driver.unwrap_or_else(|| "elm327obd".to_string());
-
-    let mut drv =
-        crate::debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
-    let t = drv
-        .diag()
-        .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
-    let mut diag = opentune_core::CoreDiag::new(t, timeout_ms);
+    let key = ConnKey::new(
+        &driver,
+        port.as_deref(),
+        baud.as_deref(),
+        bus.as_deref(),
+        addr,
+    );
 
     let opts = RunOptions {
         dry_run: false,
         skip_waits: false,
     };
-    let rep = run_script(&mut diag, &script, None, &opts).map_err(|e| e.to_string())?;
+    let sc = script.clone();
+    let rep = hub.run("service run", move |s| {
+        s.with_diag(&key, timeout_ms, |d| {
+            run_script(d, &sc, None, &opts).map_err(|e| e.to_string())
+        })
+    })?;
 
     let mut v = report_json(&rep);
     v["mode"] = json!("run");
     v["name"] = json!(script.name);
     v["description"] = json!(script.description);
+    v["target"] = addr.json(false);
     Ok(v)
 }

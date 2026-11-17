@@ -1,0 +1,170 @@
+{
+  "image": {
+    "title": "Image",
+    "summary": "Open a flash dump and inspect it as paged hex. The opened image is used by the other calibration panels.",
+    "needs": ["Flash image (.bin)"],
+    "risk": "read-only",
+    "guide": "10-image"
+  },
+  "analyze": {
+    "title": "Analyze bin",
+    "summary": "Work out ECU family, identity strings, catalog and definition matches, checksum status and known maps from a raw dump, with a graded confidence. Early alpha.",
+    "needs": ["Flash image (.bin)"],
+    "risk": "read-only",
+    "guide": "11-analyze-bin"
+  },
+  "identify": {
+    "title": "Identify",
+    "summary": "Read the ECU identity from a dump, or type a part/software number, and match it to a bundled definition and vehicle-catalog candidates.",
+    "needs": ["Flash image (.bin) or part number"],
+    "risk": "read-only",
+    "guide": "12-identify"
+  },
+  "checksum": {
+    "title": "Checksum",
+    "summary": "Verify the integrity fields an ECU checks before it runs an image, and recompute them after an edit.",
+    "needs": ["Flash image (.bin)", "Checksum family"],
+    "risk": "writes-file",
+    "guide": "13-checksum"
+  },
+  "maps": {
+    "title": "Maps",
+    "summary": "Diff two dumps to find changed regions, import XDF/A2L, and view or edit a map as a heat grid. Writes back with a full backup first.",
+    "needs": ["Flash image (.bin)", "Definition, XDF or A2L"],
+    "risk": "writes-file",
+    "guide": "14-maps"
+  },
+  "compare": {
+    "title": "Compare",
+    "summary": "Decode every map of a definition from two images and show per map how many cells changed and by how much, in physical units.",
+    "needs": ["Two flash images", "Definition"],
+    "risk": "read-only",
+    "guide": "15-compare"
+  },
+  "flash": {
+    "title": "Flash",
+    "summary": "Run the safety-gated write sequence (voltage gate, backup, write, read-back verify) through the offline file driver. It changes the target file on disk.",
+    "needs": ["Target image file", "Data file"],
+    "risk": "writes-file",
+    "guide": "16-flash"
+  },
+  "vault": {
+    "title": "Vault",
+    "summary": "Browse a backup folder of .bin files and their .meta sidecars with CRC-32.",
+    "needs": ["Backup folder"],
+    "risk": "read-only",
+    "guide": "17-vault"
+  },
+  "drivers": {
+    "title": "Drivers",
+    "summary": "List the interface drivers in this build. Use the id in the sidebar Adapter box.",
+    "needs": [],
+    "risk": "none",
+    "guide": "18-drivers"
+  },
+  "project": {
+    "title": "Project",
+    "summary": "Save map edits, the base image reference and its fingerprint as a small .otproj file, and reopen them later.",
+    "needs": ["Base image", "Map edits"],
+    "risk": "writes-file",
+    "guide": "19-project"
+  },
+  "utils": {
+    "title": "Utilities",
+    "summary": "Offline VIN, part-number and DTC decoders, and a calculator for generic (non-OEM) seed/key transforms.",
+    "needs": [],
+    "risk": "none",
+    "guide": "20-utilities"
+  },
+  "database": {
+    "title": "ECU database",
+    "summary": "Searchable reference of ECUs, TCUs and AWD units: CPU, flash size, how to read them, checksum family, vehicles and bench pinouts with a confidence level.",
+    "needs": [],
+    "risk": "none",
+    "guide": "21-ECU-database"
+  },
+  "scan": {
+    "title": "Auto-scan",
+    "summary": "Probe every module in a vehicle's module list for presence, identity and stored fault codes. Scanning is read-only; Clear all DTCs writes.",
+    "needs": ["Adapter: CAN", "Module list (.json)", "Ignition on", "HS/MS switch on module bus"],
+    "risk": "writes-ecu",
+    "guide": "22-auto-scan"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown.",
+    "needs": ["Adapter: CAN", "Ignition on", "Engine running", "HS-CAN"],
+    "risk": "read-only",
+    "guide": "23-dashboard"
+  },
+  "obd": {
+    "title": "OBD live",
+    "summary": "Four live readouts over generic OBD-II: RPM, coolant temperature, speed and battery voltage.",
+    "needs": ["Adapter: CAN", "Ignition on", "HS-CAN"],
+    "risk": "read-only",
+    "guide": "24-OBD-live"
+  },
+  "logging": {
+    "title": "Live log",
+    "summary": "Stream ECU values from a RomRaider-style logger.xml into a live table and save them as CSV. Only UDS 0x22 parameters are read today.",
+    "needs": ["Adapter: CAN", "logger.xml", "Ignition on"],
+    "risk": "read-only",
+    "guide": "25-live-log"
+  },
+  "candump": {
+    "title": "CAN dump",
+    "summary": "Capture all CAN bus traffic to a candump log, CSV or Vector ASC file with a live per-ID table. Listen-only where the adapter supports it.",
+    "needs": ["Adapter: CAN", "Ignition on", "Correct bus and speed"],
+    "risk": "read-only",
+    "guide": "26-CAN-dump"
+  },
+  "coding": {
+    "title": "Coding",
+    "summary": "Read and decode a module's coding, preview a change as a dry run, and write it with a backup and read-back verify.",
+    "needs": ["Adapter: CAN", "Coding definition (.json)", "Target module ids", "Ignition on", "Battery charger"],
+    "risk": "writes-ecu",
+    "guide": "27-coding"
+  },
+  "adaptation": {
+    "title": "Adaptation",
+    "summary": "Read adaptation values, run basic-settings routines and actuator tests from an adaptation definition. Tests move real parts.",
+    "needs": ["Adapter: CAN", "Adaptation definition (.json)", "Target module ids", "Ignition on", "Vehicle stationary"],
+    "risk": "writes-ecu",
+    "guide": "28-adaptation"
+  },
+  "service": {
+    "title": "Service functions",
+    "summary": "Plan (send nothing) or run a ServiceScript procedure such as DPF regeneration, service reset, SAS calibration or EPB service mode.",
+    "needs": ["Adapter: CAN", "Service script (.json)", "Target module ids", "Vehicle stationary"],
+    "risk": "writes-ecu",
+    "guide": "29-service-functions"
+  },
+  "autodebug": {
+    "title": "Auto-debug",
+    "summary": "Guided read-only self-test of the adapter and car, with prompts for actions in the car and a saveable JSON report. Alpha.",
+    "needs": ["Adapter", "Ignition on", "Engine start"],
+    "risk": "read-only",
+    "guide": "30-auto-debug"
+  },
+  "debug": {
+    "title": "Debug",
+    "summary": "Send raw UDS/OBD requests, run the offline UDS simulator and keep a session log. Alpha builds only; raw requests are sent unchecked.",
+    "needs": ["Alpha build", "Adapter (for raw requests)"],
+    "risk": "writes-ecu",
+    "guide": "31-debug"
+  },
+  "guide": {
+    "title": "Guide",
+    "summary": "This offline guide: general pages and one page per panel.",
+    "needs": [],
+    "risk": "none",
+    "guide": "32-guide"
+  },
+  "about": {
+    "title": "About & updates",
+    "summary": "Show the installed version and check for, download and install a signed update.",
+    "needs": ["Internet (to update)"],
+    "risk": "none",
+    "guide": "33-about"
+  }
+}

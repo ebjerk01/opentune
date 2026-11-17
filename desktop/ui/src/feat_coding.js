@@ -16,12 +16,7 @@
     );
 
   // --- Nav item --------------------------------------------------------------
-  const b = document.createElement("button");
-  b.className = "nav-item";
-  b.dataset.panel = "coding";
-  b.innerHTML = '<span class="ni-ico">⚙</span> Coding';
-  b.addEventListener("click", () => window.showPanel("coding"));
-  document.getElementById("nav").appendChild(b);
+  window.OTNav.register({ id: "coding", label: "Coding", icon: "⚙", group: "vehicle", tier: "bench" });
 
   // --- Panel -----------------------------------------------------------------
   const sec = document.createElement("section");
@@ -160,9 +155,23 @@
     const written = (rep.written || []).length
       ? `<div class="small muted" style="margin-top:6px">DIDs written: <span class="mono">${rep.written.map(esc).join(", ")}</span></div>`
       : "";
+    // Pre-write backup: what to restore if the write/verify went wrong.
+    const kind = rep.outcome && rep.outcome.kind;
+    const failed = kind === "verify_failed" || kind === "write_error";
+    const bk = (rep.backup || [])
+      .map((b) => `<tr><td class="mono">${esc(b.did)}</td><td class="mono">${esc(b.hex)}</td></tr>`)
+      .join("");
+    const backup = bk && kind !== "planned"
+      ? `<details ${failed ? "open" : ""} style="margin-top:6px"><summary class="small${failed ? "" : " muted"}">` +
+        `${failed ? "⚠ Backup before write — restore these bytes (2E) to recover the module" : "Backup before write"}</summary>` +
+        `<table style="width:100%;border-collapse:collapse"><tbody>${bk}</tbody></table></details>`
+      : "";
+    const target = rep.target && window.OT && window.OT.targetText
+      ? `<div class="small muted mono">module ${esc(window.OT.targetText(rep.target))}</div>`
+      : "";
     result().innerHTML =
       `<div><span class="chip">${esc(title)}</span> <b>${esc(outcomeLabel(rep.outcome))}</b></div>` +
-      sec + changes + bytes + written;
+      target + sec + changes + bytes + written + backup;
   }
 
   // --- Actions ---------------------------------------------------------------

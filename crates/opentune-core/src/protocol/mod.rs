@@ -4,12 +4,14 @@
 //! - [`canfd`]: CAN-FD frame abstraction + ISO 15765-2 in its CAN-FD mode.
 //! - [`vwtp20`]: VW TP2.0 (VAG) transport over a raw CAN link.
 //! - [`doip`]: ISO 13400 Diagnostics-over-IP transport (UDS over TCP).
+//! - [`elm`]: ELM327 reply parsing + read loop shared by the ELM drivers.
 //! - [`diag`]: the request/response [`DiagTransport`] trait + NRC helpers.
 //! - [`uds`] / [`kwp2000`]: service clients over a `DiagTransport`.
 //! - [`seedkey`]: the seed→key plugin interface for security access.
 pub mod canfd;
 pub mod diag;
 pub mod doip;
+pub mod elm;
 pub mod isotp;
 pub mod kwp2000;
 pub mod seedkey;

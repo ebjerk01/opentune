@@ -36,8 +36,7 @@ well-defined scheme useful as a reference and for custom layouts.
 
 ## Using the panel
 
-1. Pick the family that matches the ECU (Identify shows a definition's
-   `checksum` id).
+1. Pick the family that matches the ECU (Identify shows a definition's `checksum` id).
 2. **Verify** — read the block table; green **OK**, red **BAD**.
 3. **Fix & save** — recompute and write the correct values.
 4. **Verify again** — confirm every block is OK before the image goes near a car.

@@ -31,15 +31,7 @@
     const main = document.getElementById("main");
     if (!nav || !main || document.getElementById("panel-logging")) return;
 
-    const btn = document.createElement("button");
-    btn.className = "nav-item";
-    btn.dataset.panel = "logging";
-    btn.innerHTML = '<span class="ni-ico">📈</span> Live log';
-    btn.addEventListener("click", () => window.showPanel("logging"));
-    // Place it alongside the online tools (after the Drivers item when present).
-    const drivers = nav.querySelector('.nav-item[data-panel="drivers"]');
-    if (drivers && drivers.nextSibling) nav.insertBefore(btn, drivers.nextSibling);
-    else nav.appendChild(btn);
+    window.OTNav.register({ id: "logging", label: "Live log", icon: "📈", group: "vehicle", tier: "bench" });
 
     const sec = document.createElement("section");
     sec.className = "panel";

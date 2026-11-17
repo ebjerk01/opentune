@@ -91,12 +91,7 @@
   ];
 
   // --- UI shell -------------------------------------------------------------
-  const b = document.createElement("button");
-  b.className = "nav-item";
-  b.dataset.panel = "autodebug";
-  b.innerHTML = '<span class="ni-ico">🧪</span> Auto-debug';
-  b.addEventListener("click", () => window.showPanel("autodebug"));
-  document.getElementById("nav").appendChild(b);
+  window.OTNav.register({ id: "autodebug", label: "Auto-debug", icon: "🧪", group: "vehicle", tier: "bench" });
 
   const sec = document.createElement("section");
   sec.className = "panel";

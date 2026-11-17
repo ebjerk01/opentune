@@ -169,6 +169,13 @@ impl Interface for BridgeDriver {
         }
     }
 
+    /// Expose the K-line bridge's KWP2000 transport as a [`DiagTransport`] so the coding/adaptation/
+    /// auto-scan/service/logging engines (and the raw-request console) can
+    /// drive this adapter. `None` until `open()` succeeds.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.bridge.as_mut().map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let path = cfg
             .options
@@ -363,6 +370,22 @@ fn kwp_security_access(
 #[cfg(test)]
 mod seedkey_hook_tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn diag_exposes_bridge_after_connect() {
+        // A pseudo-terminal pair stands in for the adapter's serial port.
+        let (host, _adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let port: Box<dyn serialport::SerialPort> = Box::new(host);
+        let mut d = BridgeDriver::new();
+        assert!(d.diag().is_none(), "no transport before open");
+        d.bridge = Some(Bridge {
+            port,
+            target: 0x10,
+            source: 0xF1,
+        });
+        assert!(d.diag().is_some(), "diag() must expose the K-line bridge");
+    }
     use std::collections::VecDeque;
 
     /// A scripted diagnostic transport: returns queued responses and records

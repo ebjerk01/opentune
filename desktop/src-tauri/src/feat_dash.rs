@@ -8,40 +8,37 @@
 //! - [`obd_read`]: one poll of the requested PIDs (multi-PID requests, up to six
 //!   per request, with automatic fall-back to single PIDs).
 //!
-//! Like the live-log panel this is stateless per call (open adapter, read, drop),
-//! but the learned [`ObdSession`] (supported PIDs, whether the ECU accepts
-//! multi-PID requests, PIDs it never answers) is cached per
-//! `driver|port|baud|bus` so each poll tick does not re-learn ECU quirks.
-//! [`obd_supported`] resets that cache entry.
+//! All adapter I/O goes through the app-wide [`AdapterHub`] (op name
+//! `"Dashboard"`): the opened adapter is reused across poll ticks, and a tick is
+//! rejected with "adapter busy" (passed through unchanged) while another panel
+//! uses the adapter. Reads are addressed to the UI's `tx_id`/`rx_id`, else the
+//! engine ECU (7E0/7E8).
+//!
+//! The learned [`ObdSession`] (supported PIDs, whether the ECU accepts
+//! multi-PID requests, PIDs it never answers) is cached per connection key so a
+//! tick does not re-learn ECU quirks. [`obd_supported`] replaces that entry; a
+//! tick where nothing answered drops both it and the opened adapter.
 //!
 //! The pseudo driver `obdsim` serves a simulated turbo-diesel
-//! ([`opentune_core::obd::sim::SimEcu::demo`]) for UI work without hardware.
-//!
-//! All adapter commands are `async` so serial I/O never runs on the UI thread.
+//! ([`SimEcu::demo`]) for UI work without hardware; it never touches the hub.
 
-use opentune_core::obd::{self, sim::SimEcu, ObdSession};
-use opentune_core::RawDiag;
+use crate::adapter::{self, AdapterHub, ConnKey, Session};
+use opentune_core::obd::{self, sim::SimEcu, ObdSession, Readout};
+use opentune_core::Interface;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, OnceLock};
 
 /// Per-request timeout for mode-01 exchanges, milliseconds.
 const TIMEOUT_MS: u64 = 1000;
 /// Pseudo driver id for the built-in simulated ECU.
 const SIM_DRIVER: &str = "obdsim";
+/// Hub operation name (shown in "adapter busy" errors).
+const OP: &str = "Dashboard";
 
 fn sessions() -> &'static Mutex<HashMap<String, ObdSession>> {
     static S: OnceLock<Mutex<HashMap<String, ObdSession>>> = OnceLock::new();
     S.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn session_key(driver: &str, port: Option<&str>, baud: Option<&str>, bus: Option<&str>) -> String {
-    format!(
-        "{driver}|{}|{}|{}",
-        port.unwrap_or("").trim(),
-        baud.unwrap_or("").trim(),
-        bus.unwrap_or("").trim()
-    )
 }
 
 fn load_session(key: &str) -> ObdSession {
@@ -65,30 +62,132 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Run `f` against the chosen adapter's diagnostic seam, also returning the
-/// adapter battery voltage (read after `f`; `None` if unsupported).
-fn with_diag<T>(
-    driver: &str,
-    port: Option<&str>,
-    baud: Option<&str>,
-    bus: Option<&str>,
-    f: impl FnOnce(&mut dyn RawDiag) -> T,
-) -> Result<(T, Option<u32>), String> {
-    if driver == SIM_DRIVER {
-        let mut ecu = SimEcu::demo(now_ms() / 100);
-        let out = f(&mut ecu);
-        return Ok((out, Some(14_100)));
+/// Connection args as the UI sends them (`window.OT.connArgs()`).
+#[derive(Debug, Clone, Default)]
+struct Conn {
+    driver: String,
+    port: Option<String>,
+    baud: Option<String>,
+    bus: Option<String>,
+    tx_id: Option<String>,
+    rx_id: Option<String>,
+}
+
+impl Conn {
+    fn is_sim(&self) -> bool {
+        self.driver.trim() == SIM_DRIVER
     }
-    let mut drv = crate::debug_open_diag(driver, port, baud, bus)?;
-    let out = {
-        let t = drv
-            .diag()
-            .ok_or_else(|| "adapter has no diagnostic transport".to_string())?;
-        let mut diag = opentune_core::CoreDiag::new(t, TIMEOUT_MS);
-        f(&mut diag)
-    };
-    let battery = drv.battery_millivolts().ok().flatten();
-    Ok((out, battery))
+
+    /// Hub key: UI-entered module ids, else the engine ECU (read-only).
+    fn key(&self) -> Result<ConnKey, String> {
+        let (addr, _assumed) = adapter::read_addr(adapter::resolve(
+            self.tx_id.as_deref(),
+            self.rx_id.as_deref(),
+            None,
+        )?);
+        Ok(ConnKey::new(
+            &self.driver,
+            self.port.as_deref(),
+            self.baud.as_deref(),
+            self.bus.as_deref(),
+            addr,
+        ))
+    }
+
+    /// [`ObdSession`] cache key.
+    fn cache_key(&self) -> Result<String, String> {
+        if self.is_sim() {
+            return Ok(SIM_DRIVER.into());
+        }
+        Ok(format!("{:?}", self.key()?))
+    }
+}
+
+/// Battery voltage of the opened adapter, if it can measure it.
+fn battery(s: &mut Session, key: &ConnKey) -> Option<u32> {
+    s.interface(key)
+        .ok()
+        .and_then(|i: &mut dyn Interface| i.battery_millivolts().ok().flatten())
+}
+
+/// Discovery on the hub worker: `(session, pids, vin)`.
+fn supported_on(
+    s: &mut Session,
+    key: &ConnKey,
+) -> Result<(ObdSession, BTreeSet<u8>, Option<String>), String> {
+    let mut sess = ObdSession::new();
+    let (pids, vin) = s.with_diag(key, TIMEOUT_MS, |d| {
+        let pids = sess.discover(d)?;
+        Ok((pids, obd::read_vin(d)))
+    })?;
+    Ok((sess, pids, vin))
+}
+
+/// One poll on the hub worker: `(session, readout, battery_mv)`. When nothing
+/// answered at all, drops the opened adapter (next tick re-opens it) and
+/// returns a fresh session so an unplugged adapter cannot poison the cache.
+fn read_on(
+    s: &mut Session,
+    key: &ConnKey,
+    mut sess: ObdSession,
+    pids: &[u8],
+) -> Result<(ObdSession, Readout, Option<u32>), String> {
+    let ro = s.with_diag(key, TIMEOUT_MS, |d| Ok(sess.read(d, pids)))?;
+    let battery_mv = battery(s, key);
+    let nothing = ro.values.values().all(Option::is_none);
+    if !pids.is_empty() && nothing && battery_mv.is_none() {
+        s.invalidate();
+        sess = ObdSession::new();
+    }
+    Ok((sess, ro, battery_mv))
+}
+
+fn supported_json(pids: BTreeSet<u8>, vin: Option<String>) -> Value {
+    json!({
+        "pids": pids.into_iter().collect::<Vec<u8>>(),
+        "vin": vin,
+    })
+}
+
+fn read_json(ro: Readout, battery_mv: Option<u32>) -> Value {
+    json!({
+        "t_ms": now_ms(),
+        "battery_mv": battery_mv,
+        "values": ro.values,
+        "errors": ro.errors,
+    })
+}
+
+fn supported_impl(hub: &AdapterHub, conn: Conn) -> Result<Value, String> {
+    let cache = conn.cache_key()?;
+    if conn.is_sim() {
+        let mut ecu = SimEcu::demo(now_ms() / 100);
+        let mut sess = ObdSession::new();
+        let pids = sess.discover(&mut ecu)?;
+        let vin = obd::read_vin(&mut ecu);
+        store_session(cache, sess);
+        return Ok(supported_json(pids, vin));
+    }
+    let key = conn.key()?;
+    let (sess, pids, vin) = hub.run(OP, move |s| supported_on(s, &key))?;
+    store_session(cache, sess);
+    Ok(supported_json(pids, vin))
+}
+
+fn read_impl(hub: &AdapterHub, conn: Conn, pids: Vec<u8>) -> Result<Value, String> {
+    let cache = conn.cache_key()?;
+    let sess = load_session(&cache);
+    if conn.is_sim() {
+        let mut ecu = SimEcu::demo(now_ms() / 100);
+        let mut sess = sess;
+        let ro = sess.read(&mut ecu, &pids);
+        store_session(cache, sess);
+        return Ok(read_json(ro, Some(14_100)));
+    }
+    let key = conn.key()?;
+    let (sess, ro, battery_mv) = hub.run(OP, move |s| read_on(s, &key, sess, &pids))?;
+    store_session(cache, sess);
+    Ok(read_json(ro, battery_mv))
 }
 
 /// The OBD channel table (offline). One row per dashboard channel; a PID with
@@ -123,28 +222,27 @@ fn pid_table_rows() -> Vec<Value> {
 
 /// Discover the ECU's supported mode-01 PIDs (range markers excluded) and read
 /// the VIN (mode 09 PID 02, UDS `22 F190` fallback). Resets the cached session
-/// for this adapter. Returns `{pids: [u8], vin: string|null}`.
+/// for this connection. Returns `{pids: [u8], vin: string|null}`.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn obd_supported(
     driver: String,
     port: Option<String>,
     baud: Option<String>,
     bus: Option<String>,
+    tx_id: Option<String>,
+    rx_id: Option<String>,
+    hub: tauri::State<'_, AdapterHub>,
 ) -> Result<Value, String> {
-    let (port, baud, bus) = (port.as_deref(), baud.as_deref(), bus.as_deref());
-    let key = session_key(&driver, port, baud, bus);
-    let mut session = ObdSession::new();
-    let ((pids, vin), _) = with_diag(&driver, port, baud, bus, |d| {
-        let pids = session.discover(d);
-        let vin = obd::read_vin(d);
-        (pids, vin)
-    })?;
-    let pids = pids?;
-    store_session(key, session);
-    Ok(json!({
-        "pids": pids.into_iter().collect::<Vec<u8>>(),
-        "vin": vin,
-    }))
+    let conn = Conn {
+        driver,
+        port,
+        baud,
+        bus,
+        tx_id,
+        rx_id,
+    };
+    supported_impl(&hub, conn)
 }
 
 /// One poll of `pids`. Returns `{t_ms, battery_mv, values, errors}`: `values`
@@ -152,32 +250,144 @@ pub async fn obd_supported(
 /// multi-sensor PIDs like EGT, or `null`) plus derived `boost_kpa`/`boost_bar`
 /// when computable; `errors` explains each `null` (unknown PIDs as `pid_XX`).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn obd_read(
     driver: String,
     port: Option<String>,
     baud: Option<String>,
     bus: Option<String>,
+    tx_id: Option<String>,
+    rx_id: Option<String>,
     pids: Vec<u8>,
+    hub: tauri::State<'_, AdapterHub>,
 ) -> Result<Value, String> {
-    let (port, baud, bus) = (port.as_deref(), baud.as_deref(), bus.as_deref());
-    let key = session_key(&driver, port, baud, bus);
-    let mut session = load_session(&key);
-    let (readout, battery_mv) = with_diag(&driver, port, baud, bus, |d| session.read(d, &pids))?;
-    store_session(key, session);
-    Ok(json!({
-        "t_ms": now_ms(),
-        "battery_mv": battery_mv,
-        "values": readout.values,
-        "errors": readout.errors,
-    }))
+    let conn = Conn {
+        driver,
+        port,
+        baud,
+        bus,
+        tx_id,
+        rx_id,
+    };
+    read_impl(&hub, conn, pids)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::Opener;
+    use opentune_core::protocol::DiagTransport;
+    use opentune_core::RawDiag;
+    use opentune_core::{
+        Capabilities, ConnectConfig, EcuId, Error, InterfaceInfo, MemoryRegion, Progress,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{mpsc, Arc};
 
-    fn block_on<F: std::future::Future>(f: F) -> F::Output {
-        tauri::async_runtime::block_on(f)
+    /// A fake adapter whose transport is a [`SimEcu`] (or answers nothing).
+    struct ObdIface {
+        ecu: Option<SimEcu>,
+        requests: Arc<AtomicUsize>,
+    }
+
+    impl DiagTransport for ObdIface {
+        fn request(&mut self, req: &[u8], timeout_ms: u64) -> opentune_core::Result<Vec<u8>> {
+            self.requests.fetch_add(1, Ordering::SeqCst);
+            match self.ecu.as_mut() {
+                Some(e) => e.request(req).map_err(Error::Protocol),
+                None => Err(Error::Timeout(timeout_ms)),
+            }
+        }
+    }
+
+    impl Interface for ObdIface {
+        fn info(&self) -> InterfaceInfo {
+            InterfaceInfo {
+                id: "sim".into(),
+                display_name: "Simulated OBD".into(),
+                firmware: None,
+                serial: None,
+            }
+        }
+        fn capabilities(&self) -> Capabilities {
+            Capabilities::default()
+        }
+        fn open(&mut self, _cfg: &ConnectConfig) -> opentune_core::Result<()> {
+            Ok(())
+        }
+        fn close(&mut self) -> opentune_core::Result<()> {
+            Ok(())
+        }
+        fn battery_millivolts(&mut self) -> opentune_core::Result<Option<u32>> {
+            Ok(self.ecu.as_ref().map(|_| 12_600))
+        }
+        fn read_ecu_id(&mut self) -> opentune_core::Result<EcuId> {
+            Err(Error::Unsupported("sim".into()))
+        }
+        fn read_memory(
+            &mut self,
+            _region: MemoryRegion,
+            _progress: &mut dyn FnMut(Progress),
+        ) -> opentune_core::Result<Vec<u8>> {
+            Err(Error::Unsupported("sim".into()))
+        }
+        fn write_memory(
+            &mut self,
+            _region: MemoryRegion,
+            _data: &[u8],
+            _progress: &mut dyn FnMut(Progress),
+        ) -> opentune_core::Result<()> {
+            Err(Error::Unsupported("sim".into()))
+        }
+        fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+            Some(self)
+        }
+    }
+
+    /// A hub whose adapter is a simulated ECU (`alive`) or a dead bus. Counts
+    /// opens, requests, and records each open's tx id.
+    struct Rig {
+        hub: AdapterHub,
+        opens: Arc<AtomicUsize>,
+        requests: Arc<AtomicUsize>,
+        last_tx: Arc<AtomicUsize>,
+    }
+
+    fn rig(alive: bool) -> Rig {
+        let opens = Arc::new(AtomicUsize::new(0));
+        let requests = Arc::new(AtomicUsize::new(0));
+        let last_tx = Arc::new(AtomicUsize::new(0));
+        let (o, r, t) = (opens.clone(), requests.clone(), last_tx.clone());
+        let hub = AdapterHub::spawn(move || -> Opener {
+            Box::new(move |k: &ConnKey| {
+                o.fetch_add(1, Ordering::SeqCst);
+                t.store(k.addr.tx_id as usize, Ordering::SeqCst);
+                Ok(Box::new(ObdIface {
+                    ecu: alive.then(|| SimEcu::demo(0)),
+                    requests: r.clone(),
+                }) as Box<dyn Interface>)
+            })
+        });
+        Rig {
+            hub,
+            opens,
+            requests,
+            last_tx,
+        }
+    }
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    fn conn(driver: &str) -> Conn {
+        Conn {
+            driver: driver.into(),
+            // Unique per test so the global session cache does not leak.
+            port: Some(format!(
+                "/dev/test-{driver}-{}",
+                NEXT.fetch_add(1, Ordering::SeqCst)
+            )),
+            ..Conn::default()
+        }
     }
 
     #[test]
@@ -217,8 +427,10 @@ mod tests {
     }
 
     #[test]
-    fn sim_supported_and_read() {
-        let s = block_on(obd_supported("obdsim".into(), None, None, None)).unwrap();
+    fn obdsim_works_without_hardware() {
+        // A dead hub proves the sim never touches the adapter.
+        let r = rig(false);
+        let s = supported_impl(&r.hub, conn(SIM_DRIVER)).unwrap();
         assert_eq!(s["vin"], "WVWZZZ3CZ9E000000");
         let pids: Vec<u64> = s["pids"]
             .as_array()
@@ -227,27 +439,90 @@ mod tests {
             .map(|v| v.as_u64().unwrap())
             .collect();
         assert!(pids.contains(&0x0C) && !pids.contains(&0x79));
-
-        let r = block_on(obd_read(
-            "obdsim".into(),
-            None,
-            None,
-            None,
+        let v = read_impl(
+            &r.hub,
+            conn(SIM_DRIVER),
             vec![0x0C, 0x05, 0x0B, 0x78, 0x79, 0x02],
-        ))
+        )
         .unwrap();
-        assert!(r["t_ms"].as_u64().unwrap() > 0);
-        assert_eq!(r["battery_mv"], 14_100);
-        assert!(r["values"]["rpm"].is_number());
-        assert!(r["values"]["boost_kpa"].is_number());
-        assert!(r["values"]["egt_b1"].is_array());
-        assert!(r["values"]["egt_b2"].is_null());
-        assert!(r["errors"]["egt_b2"].is_string());
-        assert!(r["errors"]["pid_02"].is_string());
+        assert!(v["t_ms"].as_u64().unwrap() > 0);
+        assert_eq!(v["battery_mv"], 14_100);
+        assert!(v["values"]["rpm"].is_number());
+        assert!(v["values"]["boost_kpa"].is_number());
+        assert!(v["values"]["egt_b1"].is_array());
+        assert!(v["values"]["egt_b2"].is_null());
+        assert!(v["errors"]["egt_b2"].is_string());
+        assert!(v["errors"]["pid_02"].is_string());
+        assert_eq!(r.opens.load(Ordering::SeqCst), 0);
     }
 
     #[test]
-    fn unknown_driver_is_an_error() {
-        assert!(block_on(obd_read("nope".into(), None, None, None, vec![0x0C])).is_err());
+    fn hub_reads_reuse_adapter_and_cached_session() {
+        let r = rig(true);
+        let c = conn("elm327obd");
+        let s = supported_impl(&r.hub, c.clone()).unwrap();
+        assert_eq!(s["vin"], "WVWZZZ3CZ9E000000");
+        assert_eq!(r.last_tx.load(Ordering::SeqCst), 0x7E0, "engine default");
+
+        r.requests.store(0, Ordering::SeqCst);
+        let pids = vec![0x0C, 0x05, 0x0D, 0x79];
+        let v = read_impl(&r.hub, c.clone(), pids.clone()).unwrap();
+        assert_eq!(v["battery_mv"], 12_600);
+        assert!(v["values"]["rpm"].is_number());
+        // 0x79 filtered by the cached supported set: one 3-PID request.
+        assert_eq!(v["errors"]["egt_b2"], "not supported by ECU");
+        assert_eq!(r.requests.load(Ordering::SeqCst), 1);
+        read_impl(&r.hub, c, pids).unwrap();
+        assert_eq!(r.opens.load(Ordering::SeqCst), 1, "ticks reuse one open");
+    }
+
+    #[test]
+    fn tx_rx_ids_select_the_module() {
+        let r = rig(true);
+        let mut c = conn("elm327obd");
+        c.tx_id = Some("7E1".into());
+        c.rx_id = Some("7E9".into());
+        read_impl(&r.hub, c.clone(), vec![0x0C]).unwrap();
+        assert_eq!(r.last_tx.load(Ordering::SeqCst), 0x7E1);
+        c.rx_id = None;
+        assert!(read_impl(&r.hub, c, vec![0x0C]).is_err());
+    }
+
+    #[test]
+    fn silent_tick_reopens_adapter() {
+        let r = rig(false);
+        let c = conn("elm327obd");
+        let v = read_impl(&r.hub, c.clone(), vec![0x0C, 0x05]).unwrap();
+        assert!(v["values"]["rpm"].is_null());
+        assert!(v["errors"]["rpm"].is_string());
+        read_impl(&r.hub, c, vec![0x0C, 0x05]).unwrap();
+        assert_eq!(
+            r.opens.load(Ordering::SeqCst),
+            2,
+            "invalidated after silence"
+        );
+    }
+
+    #[test]
+    fn adapter_busy_passes_through() {
+        let r = Arc::new(rig(true));
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let (started_tx, started_rx) = mpsc::channel::<()>();
+        let r2 = r.clone();
+        let t = std::thread::spawn(move || {
+            r2.hub.run("long scan", move |_s| {
+                started_tx.send(()).unwrap();
+                go_rx.recv().unwrap();
+                Ok(())
+            })
+        });
+        started_rx.recv().unwrap();
+        let e = read_impl(&r.hub, conn("elm327obd"), vec![0x0C]).unwrap_err();
+        assert!(
+            e.starts_with("adapter busy") && e.contains("long scan"),
+            "{e}"
+        );
+        go_tx.send(()).unwrap();
+        t.join().unwrap().unwrap();
     }
 }
