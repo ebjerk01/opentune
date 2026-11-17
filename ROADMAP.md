@@ -220,10 +220,10 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Frontends (all local — no server)
 - [x] **Plugin host** — desktop is a library (`opentune_desktop`) + thin binary; embedders add commands that share the adapter lock, extra checksum algorithms, a build channel, and UI overlay panels (`extensions.js` + `OTNav.register`). See `docs/PLUGINS.md`.
-- [~] **Plugin hooks for unlock + CLI reuse** (OEM-free extension points; the embedder owns every algorithm, core ships none):
+- [x] **Plugin hooks for unlock + CLI reuse** (OEM-free extension points; the embedder owns every algorithm, core ships none):
   - [x] `Interface::set_seed_key` — any registry-opened driver takes a caller-supplied `SeedKey` (10 drivers with an unlock step accept it; the rest return `false`).
-  - [~] `DesktopConfig.seedkeys` resolver — plugin read/flash panels, service scripts (optional `seedkey` id) and the seed/key calculator unlock through it. *(in progress)*
-  - [~] **CLI host API** — `opentune-cli` as a library: `run_with(CliConfig { seedkeys, checksums, drivers, extra commands })`, `--seedkey <id>` on read/identify, name collisions refused. *(in progress)*
+  - [x] `DesktopConfig.seedkeys` resolver — plugin read/flash panels (`adapter::apply_seed_key`), service scripts (optional `seedkey` id) and the seed/key calculator (`source: "plugin"`) unlock through it.
+  - [x] **CLI host API** — `opentune-cli` is a library (`opentune_cli`) + thin binary: `run_with(CliConfig { seedkeys, checksums, drivers, extra commands })`, a `CliContext` for extra commands, `--seedkey <id>` on `info/read/flash/dump/identify/service`, collisions refused at startup. See `docs/PLUGINS.md`.
 - [~] **Desktop code split** — `lib.rs` / `app.js` into modules, `node --test` UI tests, a compile-time plugin-API test that pins every path plugins use. *(in progress, after the unlock hook)*
 - [x] **Sidebar groups + tiers** — Calibration · Vehicle · Reference · Help · Bench. Car-facing tools start in the Bench section (alpha/bench builds only) and move up once tested on a real car.
 - [x] **In-app help** — a guide page per panel plus a help strip on every panel (risk, what you need, three steps, open full guide). Guide renderer handles wrapped lists and links.
@@ -246,16 +246,17 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 
 **Offline — buildable now**
 *(Done since the last revision: ME7 checksum, FRF/ODX/SGO decode, TCU checksums, definition-format breadth, DoIP over a loopback entity, EDC15C6 checksum, map finder, tune recipes, log viewer, OBD inspection, virtual car, starter packs.)*
-1. **Plugin hooks + CLI host API + desktop split** — in progress (see Frontends); unblocks the private Bench read/flash tools without forking.
-2. **Recipes on EDC17** — every EDC17 stock/tuned pair is refused today (the corrected output fails attestation); find out why before recipes are trusted beyond EDC16/EDC15.
-3. **Relocate maps by content signature** — apply a definition built for one software version to a sibling version's read (PCR2.1 CASM2K30 → CASM2L95 is the first case).
-4. **Logger text/BCD decode** — identification DIDs (part numbers, serials) currently show as numbers in the live logger.
-5. **ELM327 USB block read/write** — `read_memory`/`write_memory` over UDS 0x35/0x36 for the `elm327` driver (bench/OBD reads without a J2534 box).
-6. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening of what already ships.
-7. **Validate the UDS state machine vs `python-udsoncan`** — conformance of the protocol layer (udssim server done).
-8. **Generalized controller-def schema → drivetrain defs** — the data model for TCU/AWD units, then VAG DSG / Haldex / Mercedes 722.6 defs (flashing is 🔒).
-9. **SA2 seed/key plugin set** — user-supplied, never auto-applied (sensitive; careful scoping).
-10. **Small UI follow-ups** — Dashboard "Record", "open in Maps" from the log overlay, pack picker in the panels, UI preview fixtures for the new panels.
+1. **Desktop split** — in progress (see Frontends). **ELM327 USB block read/write** (`elm327obd`: 0x23 / 0x35-0x36 upload, guarded 0x34-0x36 download, seed-key hook) — in progress.
+2. **Fast logging via UDS 0x2C** (DynamicallyDefineDataIdentifier) — the logger bundles the selected channels (by DID and/or memory address) into one dynamic DID and polls that, falling back to plain 0x22/0x23 polling when the ECU refuses 0x2C. Tested on udssim. Ref: VW_Flash `simos_hsl` (approach).
+3. **Open aftermarket ECUs — Speeduino / rusEFI / MegaSquirt (TunerStudio-compatible)** — parse the INI + `.msq` definitions, read/write tables over their serial protocols, log realtime data; clean-room from the open specs (LibreTune as a reference). Serves engine swaps / standalone setups.
+4. **Recipes on EDC17** — every EDC17 stock/tuned pair is refused today (the corrected output fails attestation); find out why before recipes are trusted beyond EDC16/EDC15.
+5. **Relocate maps by content signature** — apply a definition built for one software version to a sibling version's read (PCR2.1 CASM2K30 → CASM2L95 is the first case).
+6. **Logger text/BCD decode** — identification DIDs (part numbers, serials) currently show as numbers in the live logger.
+7. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening of what already ships.
+8. **Validate the UDS state machine vs `python-udsoncan`** — conformance of the protocol layer (udssim server done).
+9. **Generalized controller-def schema → drivetrain defs** — the data model for TCU/AWD units, then VAG DSG / Haldex / Mercedes 722.6 defs (flashing is 🔒).
+10. **SA2 seed/key plugin set** — user-supplied, never auto-applied (sensitive; careful scoping).
+11. **Small UI follow-ups** — Dashboard "Record", "open in Maps" from the log overlay, pack picker in the panels, UI preview fixtures for the new panels.
 
 **Waiting on data**
 - **EDC17CP14 maps** (Passat CC) — need a VAG CP14 stock read, ideally with a tune of it.
