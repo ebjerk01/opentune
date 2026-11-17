@@ -15,7 +15,9 @@
 //!   ordered UDS flow: open a diagnostic session (0x10), optional SecurityAccess
 //!   (0x27), then RoutineControl (0x31), I/O control (0x2F), read / write by
 //!   identifier (0x22 / 0x2E), tester-present keep-alive (0x3E), fixed waits, and
-//!   `ExpectPositive` / `Verify` guards.
+//!   `ExpectPositive` / `Verify` guards. Legacy SAE J1979 OBD-II requests
+//!   (modes 01/03/04/07/09/0A, see [`OBD_MODES`]) are available as
+//!   [`Step::ObdRequest`]; mode 04 (clear DTCs) counts as a write.
 //! * The executor talks UDS over a tiny [`RawDiag`] request abstraction (one
 //!   `request(&[u8]) -> Vec<u8>`), re-exported from `opentune-core` and shared
 //!   with the coding, adaptation and auto-scan engines; an app wraps a driver's
@@ -197,7 +199,33 @@ pub enum Step {
         /// The exact data bytes expected (must be non-empty).
         equals: Vec<u8>,
     },
+    /// A legacy SAE J1979 / ISO 15031-5 OBD-II service request. Only the
+    /// standardised modes in [`OBD_MODES`] are accepted: `0x01` / `0x09` take a
+    /// `pid` (current data / vehicle information, the positive response must
+    /// echo it), `0x03` / `0x07` / `0x0A` take none (stored / pending /
+    /// permanent DTCs) and `0x04` (clear emission-related diagnostic
+    /// information) takes none and counts as a **write** ([`Step::is_write`]).
+    ObdRequest {
+        /// The OBD service (mode) byte.
+        mode: u8,
+        /// The PID / InfoType byte, required for modes `0x01` and `0x09` and
+        /// forbidden otherwise.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pid: Option<u8>,
+    },
 }
+
+/// The SAE J1979 / ISO 15031-5 OBD-II services a [`Step::ObdRequest`] may use,
+/// as `(mode, takes_pid)`. Freeze-frame (`0x02`), test results (`0x06`) and
+/// on-board actuator control (`0x08`) are deliberately not offered.
+pub const OBD_MODES: &[(u8, bool)] = &[
+    (0x01, true),  // show current data
+    (0x03, false), // show stored DTCs
+    (0x04, false), // clear DTCs + stored values (a write)
+    (0x07, false), // show pending DTCs
+    (0x09, true),  // request vehicle information
+    (0x0A, false), // show permanent DTCs
+];
 
 impl Step {
     /// Whether this step changes vehicle state (a write or an actuator/routine
@@ -208,6 +236,7 @@ impl Step {
         match self {
             Step::WriteDataByIdentifier { .. } | Step::IoControl { .. } => true,
             Step::RoutineControl { control_type, .. } => *control_type != 0x03,
+            Step::ObdRequest { mode, .. } => *mode == 0x04,
             _ => false,
         }
     }
@@ -246,6 +275,12 @@ impl Step {
             Step::Wait { ms } => format!("wait({ms} ms)"),
             Step::ExpectPositive => "expect_positive".to_string(),
             Step::Verify { did, .. } => format!("verify(0x{did:04X})"),
+            Step::ObdRequest { mode: 0x04, .. } => "obd_clear_dtcs(mode 0x04)".to_string(),
+            Step::ObdRequest {
+                mode,
+                pid: Some(pid),
+            } => format!("obd_request(mode 0x{mode:02X} pid 0x{pid:02X})"),
+            Step::ObdRequest { mode, pid: None } => format!("obd_request(mode 0x{mode:02X})"),
         }
     }
 }
@@ -358,6 +393,19 @@ impl ServiceScript {
                     if *ms > MAX_WAIT_MS {
                         return Err(ServiceError::InvalidScript(format!(
                             "step {i}: wait {ms} ms exceeds {MAX_WAIT_MS} ms"
+                        )));
+                    }
+                }
+                Step::ObdRequest { mode, pid } => {
+                    let problem = match OBD_MODES.iter().find(|(m, _)| m == mode) {
+                        None => Some("is not a supported J1979 mode"),
+                        Some((_, true)) if pid.is_none() => Some("needs a pid"),
+                        Some((_, false)) if pid.is_some() => Some("takes no pid"),
+                        Some(_) => None,
+                    };
+                    if let Some(p) = problem {
+                        return Err(ServiceError::InvalidScript(format!(
+                            "step {i}: OBD mode 0x{mode:02X} {p}"
                         )));
                     }
                 }
@@ -729,6 +777,21 @@ fn execute_one(
                         "verify mismatch for 0x{did:04X}: got {got:02X?}, want {equals:02X?}"
                     ))
                 }
+            })
+        }
+        Step::ObdRequest { mode, pid } => {
+            // OBD-II positive response = mode + 0x40, echoing the PID when one
+            // was sent; a 0x7F negative response has the same shape as UDS.
+            let mut req = vec![*mode];
+            req.extend(pid.iter());
+            let echo: Vec<u8> = pid.iter().copied().collect();
+            exchange(diag, &mut sr, req, *mode, &echo).map(|resp| {
+                sr.detail = if *mode == 0x04 {
+                    "diagnostic information cleared".into()
+                } else {
+                    format!("data = {:02X?}", &resp[1 + echo.len()..])
+                };
+                *last_response = Some(resp);
             })
         }
     };
@@ -1254,6 +1317,58 @@ mod tests {
         let mut io = Script::new().with_did(0x2800, &[0xFF]);
         let rep = run_script(&mut io, &examples::oil_service_reset(), None, &opts()).unwrap();
         assert!(rep.succeeded(), "report = {rep:#?}");
+    }
+
+    #[test]
+    fn obd_request_steps_run_and_validate() {
+        let script = ServiceScript::from_json(
+            r#"{"id":"obd","name":"OBD","steps":[
+              {"op":"obd_request","mode":1,"pid":1},
+              {"op":"obd_request","mode":3},
+              {"op":"obd_request","mode":4}]}"#,
+        )
+        .unwrap();
+        script.validate().unwrap();
+        assert!(!script.steps[0].is_write() && !script.steps[1].is_write());
+        assert!(script.steps[2].is_write());
+        assert_eq!(script.steps[2].label(), "obd_clear_dtcs(mode 0x04)");
+
+        let mut sent = Vec::new();
+        let mut diag = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            sent.push(req.to_vec());
+            Ok(match req {
+                [0x01, 0x01] => vec![0x41, 0x01, 0x00, 0x07, 0x65, 0x00],
+                [0x03] => vec![0x43, 0x00],
+                [0x04] => vec![0x44],
+                _ => return Err("unexpected".into()),
+            })
+        };
+        let rep = run_script(&mut diag, &script, None, &opts()).unwrap();
+        assert!(rep.succeeded(), "{rep:?}");
+        assert_eq!(rep.steps[0].detail, "data = [00, 07, 65, 00]");
+        assert_eq!(sent, vec![vec![0x01, 0x01], vec![0x03], vec![0x04]]);
+
+        // A PID echo mismatch and a negative response both stop the run.
+        let mut bad = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            Ok(match req {
+                [0x01, _] => vec![0x41, 0x0C, 0x00],
+                _ => vec![0x7F, req[0], 0x22],
+            })
+        };
+        let rep = run_script(&mut bad, &script, None, &opts()).unwrap();
+        assert_eq!(rep.failed_at(), Some(0));
+
+        // Validation: unsupported mode, missing pid, stray pid.
+        for steps in [
+            r#"[{"op":"obd_request","mode":8}]"#,
+            r#"[{"op":"obd_request","mode":1}]"#,
+            r#"[{"op":"obd_request","mode":4,"pid":0}]"#,
+        ] {
+            let s =
+                ServiceScript::from_json(&format!(r#"{{"id":"x","name":"X","steps":{steps}}}"#))
+                    .unwrap();
+            assert!(s.validate().is_err(), "{steps} should be rejected");
+        }
     }
 
     #[test]
