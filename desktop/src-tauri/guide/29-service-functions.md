@@ -26,7 +26,7 @@ steps.
 - The outcome pill: **planned**, **completed**, or **failed @ step N**.
 - Each step shows its number, operation, status (ok, failed, planned, skipped), a detail line and the request/response bytes.
 - Run **stops at the first failed step**. Later steps are not sent.
-- **This script needs UDS SecurityAccess** — OpenTune ships no OEM seed/key, so such a script can be planned but not run.
+- **This script needs UDS SecurityAccess** — OpenTune ships no OEM seed/key, so such a script can be planned but not run. A plugin build can supply the algorithm: the script then names it in a `seedkey` field, and the plan says which plugin-supplied algorithm will answer the SecurityAccess step. If the named algorithm is not available, the note gives its id.
 
 ## Common errors
 

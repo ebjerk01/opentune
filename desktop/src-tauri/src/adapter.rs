@@ -25,6 +25,7 @@
 //! Driver objects are not `Send`, which is why they never leave the worker
 //! thread: commands send it a closure and wait for the result.
 
+use crate::seedkeys::SeedKeys;
 use opentune_core::{ConnectConfig, CoreDiag, Interface, RawDiag};
 use serde_json::{json, Value};
 use std::sync::{mpsc, Arc, Mutex};
@@ -301,6 +302,25 @@ pub fn enter_extended_session(diag: &mut dyn RawDiag) -> Result<(), String> {
 /// Best-effort return to the default session (`10 01`) after a mutating flow.
 pub fn leave_session(diag: &mut dyn RawDiag) {
     let _ = diag.request(&[0x10, 0x01]);
+}
+
+// ---------------------------------------------------------------------------
+// Seed/key (plugin-supplied)
+// ---------------------------------------------------------------------------
+
+/// Attach the seed/key handler `id`, resolved through the plugin [`SeedKeys`],
+/// to an opened driver (typically `session.interface(&key)?` inside
+/// [`AdapterHub::run`]) so the driver's own unlock step (a read or flash) can
+/// use it.
+///
+/// `Err` when no resolver knows `id` (OpenTune ships no algorithm). `Ok(false)`
+/// when the driver has no unlock step of its own and ignored the handler; the
+/// caller then runs SecurityAccess itself or refuses. The handler lives as long
+/// as the opened driver: the hub re-opens the driver after an error or a key
+/// change, so attach it inside every operation that needs it.
+pub fn apply_seed_key(drv: &mut dyn Interface, keys: &SeedKeys, id: &str) -> Result<bool, String> {
+    let handler = keys.require(id)?;
+    Ok(drv.set_seed_key(handler))
 }
 
 // ---------------------------------------------------------------------------
@@ -671,6 +691,24 @@ mod tests {
             .unwrap_err();
         assert!(e.contains("boom"));
         assert_eq!(hub.run("after", |_s| Ok(3)).unwrap(), 3);
+    }
+
+    #[test]
+    fn apply_seed_key_resolves_and_reports_acceptance() {
+        use crate::seedkeys::testkeys::{first, vcar};
+        let keys = SeedKeys::new(vec![vcar, first]);
+        // A driver with an unlock step accepts the handler.
+        let mut slcan = opentune_driver_slcan::SlcanDriver::new();
+        assert_eq!(apply_seed_key(&mut slcan, &keys, "vcar-test"), Ok(true));
+        // A driver without one reports that it ignored it.
+        let bus = SimBus::default();
+        let mut s = bus.session();
+        let drv = s.interface(&key(Addr::ENGINE)).unwrap();
+        assert_eq!(apply_seed_key(drv, &keys, "shared"), Ok(false));
+        // Unknown ids (and the public app, which has no resolvers) refuse.
+        let e = apply_seed_key(&mut slcan, &keys, "oem-x").unwrap_err();
+        assert!(e.contains("'oem-x'"), "{e}");
+        assert!(apply_seed_key(&mut slcan, &SeedKeys::default(), "vcar-test").is_err());
     }
 
     #[test]

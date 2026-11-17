@@ -63,7 +63,7 @@
     let html = outcomeLine(rep, isRun);
     if (rep.description) html += `<p class="muted small">${esc(rep.description)}</p>`;
     if (rep.note) html += `<p class="muted small">${esc(rep.note)}</p>`;
-    else if (rep.needs_key_provider) html += `<p class="muted small">This script needs UDS SecurityAccess — it can be planned but not executed here (no OEM seed/key provider shipped).</p>`;
+    else if (rep.needs_key_provider && !rep.seedkey_available) html += `<p class="muted small">This script needs UDS SecurityAccess — it can be planned but not executed here (no OEM seed/key provider shipped).</p>`;
     html += stepsTable(rep.steps);
     return html;
   }

@@ -33,6 +33,8 @@ set: identity, XOR mask, add constant, XOR then add, and reverse byte order.
 This edition ships **no OEM or vehicle-specific** seed/key routines. These
 transforms will not unlock a real ECU unless its algorithm happens to be one of
 them. They exist for learning and for testing against the offline simulator.
+A plugin build may add its own algorithms to the list; their results are
+marked **plugin algorithm** because they do not come from OpenTune.
 
 ## Safety
 
