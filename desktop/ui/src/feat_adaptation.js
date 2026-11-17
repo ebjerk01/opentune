@@ -124,6 +124,10 @@
     };
     const errBanner = (e) => `<div class="banner bad">${esc(typeof e === "string" ? e : (e && e.message) || e)}</div>`;
     const kindChip = { value: "value", routine: "routine", actuator: "actuator" };
+    const targetLine = (r) =>
+      r && r.target && window.OT && window.OT.targetText
+        ? `<div class="muted small mono">module ${esc(window.OT.targetText(r.target))}</div>`
+        : "";
 
     function selectedChannel() {
       const name = $("adpChan").value;
@@ -187,9 +191,12 @@
           sel.appendChild(opt);
         });
         const sec = def.requires_security ? ` · <span class="chip">SecurityAccess required</span>` : "";
+        const tgt = def.target
+          ? ` · module <span class="mono">${esc(def.target.tx)}/${esc(def.target.rx)}</span>`
+          : ` · <span class="chip">no module address — set Target ids before running</span>`;
         $("adpDefInfo").innerHTML =
           `<div><b>${esc(def.name || def.id)}</b> <span class="muted small">${esc(def.module || "")}</span></div>` +
-          `<div class="muted small">${(def.channels || []).length} channel(s)${sec}</div>`;
+          `<div class="muted small">${(def.channels || []).length} channel(s)${sec}${tgt}</div>`;
         refreshForChannel();
       } catch (e) {
         $("adpDefInfo").innerHTML = errBanner(e);
@@ -217,7 +224,7 @@
           `<span class="pill">raw ${esc(r.raw)}</span>` +
           `<span class="pill">eng ${esc(eng)}${r.unit ? " " + esc(r.unit) : ""}</span>` +
           (r.requires_security ? `<span class="chip">SecurityAccess required</span>` : "") +
-          `</div>`;
+          `</div>` + targetLine(r);
       } catch (e) {
         $("adpReadResult").innerHTML = errBanner(e);
       }
@@ -234,21 +241,30 @@
         out.innerHTML = errBanner("Tick the confirmation — this commands the ECU.");
         return;
       }
+      // Each run that commands the ECU needs a fresh confirmation.
+      $("adpAck").checked = false;
       try {
         if (ch.kind === "routine") {
+          const op = $("adpOp").value;
+          if (op !== "request_results" &&
+              !window.confirm(`Really ${op} routine “${ch.name}” on the module? A routine can start a regeneration / relearn on the ECU.`)) {
+            out.innerHTML = errBanner("Cancelled — nothing was sent.");
+            return;
+          }
           const r = await invoke("adaptation_routine", {
             ...connArgs(),
             defPath: stAdp.defPath,
             channel: ch.name,
             timeoutMs: timeoutMs(),
-            op: $("adpOp").value,
+            op,
             extra: $("adpExtra").value || null,
+            ack: true,
           });
           const val = r.value != null ? `<span class="pill">result ${esc(r.value)}${r.unit ? " " + esc(r.unit) : ""}</span>` : "";
           out.innerHTML =
             `<div class="row tight"><span class="pill">routine ok</span>${val}` +
             (r.security_required ? `<span class="chip">SecurityAccess required</span>` : "") + `</div>` +
-            `<div class="muted small mono">data: ${esc(r.data || "—")}</div>`;
+            `<div class="muted small mono">data: ${esc(r.data || "—")}</div>` + targetLine(r);
         } else if (ch.kind === "actuator") {
           const r = await invoke("adaptation_actuator", {
             ...connArgs(),
@@ -268,7 +284,7 @@
             status + `</div>` +
             (r.message ? `<div class="muted small">${esc(r.message)}</div>` : "") +
             (!r.control_returned ? `<div class="banner bad">⚠ Control was NOT returned to the ECU — an output may be left forced. Recover the module before driving.</div>` : "") +
-            `<div class="muted small mono">response: ${esc(r.response || "—")}</div>`;
+            `<div class="muted small mono">response: ${esc(r.response || "—")}</div>` + targetLine(r);
         } else {
           out.innerHTML = errBanner("This channel is a value channel — use Read above.");
         }

@@ -10,7 +10,10 @@
 
   const OT = {
     // Current connection (shared by every panel). driver defaults to elm327obd.
-    conn: { driver: "elm327obd", port: "", baud: "", bus: "hs" },
+    // txId/rxId: target module CAN ids (hex). Blank = the definition's own
+    // req_id/resp_id; reads then fall back to the engine (7E0/7E8), while the
+    // backend REFUSES writes/routines/service runs with no known target.
+    conn: { driver: "elm327obd", port: "", baud: "", bus: "hs", txId: "", rxId: "" },
     adapter: null, // last probe_adapter result
     caps: null, // adapter.capabilities when connected, else null
     _subs: [],
@@ -30,7 +33,20 @@
   OT.connArgs = function () {
     const c = OT.conn;
     const nz = (s) => (s && String(s).trim() ? String(s) : null);
-    return { driver: c.driver || "elm327obd", port: nz(c.port), baud: nz(c.baud), bus: nz(c.bus) };
+    return {
+      driver: c.driver || "elm327obd",
+      port: nz(c.port),
+      baud: nz(c.baud),
+      bus: nz(c.bus),
+      txId: nz(c.txId),
+      rxId: nz(c.rxId),
+    };
+  };
+
+  // "7E0/7E8" (or "7E0/7E8 — assumed engine") for a backend `target` object.
+  OT.targetText = function (t) {
+    if (!t) return "";
+    return `${t.tx}/${t.rx}` + (t.assumed ? " — no target set, assumed engine ECU" : "");
   };
 
   OT.setConn = function (patch) {
@@ -50,6 +66,9 @@
     const badge = document.getElementById("adapterBadge");
     try {
       const st = await invoke("probe_adapter", OT.connArgs());
+      // Another operation holds the adapter: it is in use, not absent — keep
+      // the last known state instead of flipping the badge to "no adapter".
+      if (st && st.busy) return OT.adapter;
       OT.adapter = st || null;
       OT.caps = st && st.connected ? st.capabilities || {} : null;
       if (badge) {
