@@ -9,6 +9,8 @@ use opentune_container::{BlockCipher, Keys, SgoCipher};
 use opentune_core::{ConnectConfig, Interface, MemoryRegion, Progress, Registry};
 use std::path::PathBuf;
 
+mod candump;
+
 #[derive(Parser)]
 #[command(
     name = "opentune",
@@ -381,6 +383,10 @@ enum Command {
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
     },
+    /// Capture every frame on a CAN bus to a log file (candump / CSV / ASC),
+    /// listen-only where the adapter allows. Runs until `--duration` or Ctrl-C.
+    /// With `--driver mock` it records synthetic traffic offline.
+    Candump(candump::CandumpArgs),
     /// Run the in-memory UDS conformance server offline and exchange raw
     /// requests against it — no hardware, for testing and demos.
     Simulate {
@@ -1918,6 +1924,7 @@ fn main() -> Result<()> {
             out.as_deref(),
             &params,
         )?,
+        Command::Candump(args) => candump::run(&reg, args)?,
     }
     Ok(())
 }
