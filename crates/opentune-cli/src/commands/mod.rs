@@ -161,18 +161,27 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             rounds,
             interval_ms,
             out,
+            fast,
+            dynamic_did,
+            max_record,
+            fast_session,
             params,
-        } => engines::run_log(
-            reg,
-            &def,
-            &driver,
-            store.as_deref(),
-            timeout_ms,
-            rounds,
-            interval_ms,
-            out.as_deref(),
-            &params,
-        ),
+        } => {
+            let fast =
+                engines::fast_log_config(fast, &dynamic_did, max_record, fast_session.as_deref())?;
+            engines::run_log(
+                reg,
+                &def,
+                &driver,
+                store.as_deref(),
+                timeout_ms,
+                rounds,
+                interval_ms,
+                out.as_deref(),
+                &params,
+                fast,
+            )
+        }
         Command::Candump(args) => candump::run(reg, args),
         Command::Recipe { action } => recipe_cmd::run(ctx, action),
     }

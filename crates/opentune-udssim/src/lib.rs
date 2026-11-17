@@ -23,9 +23,13 @@
 //! - [`server::UdsServer`] — the simulated ECU. [`UdsServer::handle`] turns one
 //!   UDS request into one UDS response. It implements DiagnosticSessionControl
 //!   (0x10), ECUReset (0x11), ClearDiagnosticInformation (0x14),
-//!   ReadDTCInformation (0x19), ReadDataByIdentifier (0x22), SecurityAccess
-//!   (0x27, with an injected [`security::SecurityChecker`]),
-//!   WriteDataByIdentifier (0x2E), InputOutputControlByIdentifier (0x2F),
+//!   ReadDTCInformation (0x19), ReadDataByIdentifier (0x22),
+//!   ReadMemoryByAddress (0x23, over regions mapped with
+//!   [`UdsServer::set_memory`]), SecurityAccess (0x27, with an injected
+//!   [`security::SecurityChecker`]), DynamicallyDefineDataIdentifier (0x2C:
+//!   define by identifier / by memory address, clear; dynamic DIDs in
+//!   `0xF200..=0xF3FF`, cleared on session change and reset — periodic
+//!   `0x2A` is not modelled), WriteDataByIdentifier (0x2E), InputOutputControlByIdentifier (0x2F),
 //!   RoutineControl (0x31), RequestDownload /
 //!   RequestUpload (0x34 / 0x35), TransferData (0x36, with block-counter
 //!   tracking), RequestTransferExit (0x37) and TesterPresent (0x3E).
@@ -43,6 +47,7 @@
 //!
 //! [`UdsClient`]: opentune_core::protocol::UdsClient
 //! [`UdsServer::handle`]: server::UdsServer::handle
+//! [`UdsServer::set_memory`]: server::UdsServer::set_memory
 //! [`DiagTransport`]: opentune_core::protocol::DiagTransport
 //! [`DoIpTransport`]: opentune_core::protocol::DoIpTransport
 //! [`pylessard/python-udsoncan`]: https://github.com/pylessard/python-udsoncan
@@ -61,6 +66,6 @@ pub mod transport;
 pub use doip::DoIpSimStream;
 pub use fault::{Fault, FaultPlan};
 pub use security::{AlwaysReject, SecurityChecker, XorSecurity};
-pub use server::{DtcRecord, ServerConfig, UdsServer};
+pub use server::{DddidConfig, DtcRecord, ServerConfig, UdsServer, DYNAMIC_DID_RANGE};
 pub use trace::{Direction, Trace, TraceEntry};
 pub use transport::SimTransport;

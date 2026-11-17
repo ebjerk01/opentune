@@ -394,6 +394,23 @@ pub enum Command {
         /// Write the CSV here (otherwise to stdout).
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Fast logging: pack UDS DID and memory channels into dynamically
+        /// defined DIDs (UDS 0x2C) and read each record with one request.
+        /// Falls back to per-channel polling (and says why) if the ECU refuses.
+        #[arg(long)]
+        fast: bool,
+        /// First dynamic DID used by --fast (0xF200..=0xF3FF); further records
+        /// use the following DIDs.
+        #[arg(long, value_name = "DID", default_value = "0xF200")]
+        dynamic_did: String,
+        /// Largest record per dynamic DID in bytes (--fast); channels beyond it
+        /// split across consecutive dynamic DIDs.
+        #[arg(long, default_value_t = 32)]
+        max_record: usize,
+        /// Diagnostic session to enter (and re-enter after a drop) before
+        /// defining, e.g. 0x03 (--fast). Default: leave the session alone.
+        #[arg(long, value_name = "SESSION")]
+        fast_session: Option<String>,
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
     },

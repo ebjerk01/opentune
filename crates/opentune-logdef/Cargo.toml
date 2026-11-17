@@ -2,7 +2,8 @@
 # OpenTune live-data parameter model. Part of the workspace. Mirrors
 # opentune-xdf / opentune-ecuflash and reuses the XDF linear-equation fitter
 # (opentune_xdf::math) so logger `<conversion>` expressions import the same way
-# as XDF/EcuFlash scalings. DEF PARSER ONLY - no transport/logging execution.
+# as XDF/EcuFlash scalings. The live loop (src/live.rs, src/fast.rs) runs over
+# opentune-core's RawDiag seam: per-channel polling or UDS 0x2C dynamic DIDs.
 [package]
 name = "opentune-logdef"
 version.workspace = true
