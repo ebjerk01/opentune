@@ -53,7 +53,7 @@ jobs:
   # validation error (warnings are advisory and do not fail). See
   # `opentune ecudefs validate` and crates/opentune-core/src/validate.rs.
   ecudefs:
-    name: validate ecudefs
+    name: validate ecudefs · db
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -70,3 +70,82 @@ jobs:
 
       - name: Validate ECU definitions
         run: cargo run -p opentune-cli --quiet -- ecudefs validate ecudefs
+
+      - name: Validate the control-unit database
+        run: cargo run -p opentune-cli --quiet -- db validate
+
+  # The Tauri desktop crate (desktop/src-tauri) opts out of the workspace, so the
+  # `check` job never sees it. Gate it here: fmt, clippy with the default and
+  # the `alpha` feature set (the engine panels), and the tests. Same order as
+  # scripts/check.sh. ubuntu-22.04 matches the release/portable glibc baseline.
+  desktop:
+    name: desktop · fmt · clippy · test
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # WebKitGTK and friends are required to compile Tauri 2 on Linux.
+      - name: Install system dependencies (Tauri 2 + libudev)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libudev-dev \
+            pkg-config
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: desktop-ci
+
+      - name: Format check
+        run: cargo fmt -- --check
+
+      - name: Clippy (default features)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Clippy (--features alpha)
+        run: cargo clippy --all-targets --features alpha -- -D warnings
+
+      - name: Test (--features alpha)
+        run: cargo test --features alpha
+
+  # The UI is plain JS with no bundler, so nothing else would notice a syntax
+  # error before a user opens the panel. Cheap: no Rust, no npm install.
+  ui:
+    name: ui · node --check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax-check the desktop UI and preview scripts
+        run: |
+          rc=0
+          for f in desktop/ui/src/*.js desktop/preview/*.js; do
+            node --check "$f" || { echo "::error file=$f::syntax error"; rc=1; }
+          done
+          exit $rc
+
+      - name: UI unit tests (node --test)
+        if: hashFiles('desktop/ui/tests/**') != ''
+        # Pass files explicitly: Node's directory/glob handling differs by version.
+        run: find desktop/ui/tests -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | sort -z | xargs -0 -r node --test
