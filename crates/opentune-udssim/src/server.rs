@@ -26,7 +26,9 @@ mod sid {
     pub const CLEAR_DTC: u8 = 0x14;
     pub const READ_DTC_INFORMATION: u8 = 0x19;
     pub const READ_DATA_BY_ID: u8 = 0x22;
+    pub const READ_MEMORY_BY_ADDRESS: u8 = 0x23;
     pub const SECURITY_ACCESS: u8 = 0x27;
+    pub const DYNAMICALLY_DEFINE_DID: u8 = 0x2C;
     pub const WRITE_DATA_BY_ID: u8 = 0x2E;
     pub const IO_CONTROL: u8 = 0x2F;
     pub const ROUTINE_CONTROL: u8 = 0x31;
@@ -107,6 +109,60 @@ pub struct ServerConfig {
     pub require_security_for_write: bool,
     /// Require an unlocked SecurityAccess before request(Download|Upload).
     pub require_security_for_transfer: bool,
+    /// DynamicallyDefineDataIdentifier (0x2C) policy.
+    pub dddid: DddidConfig,
+}
+
+/// Policy for DynamicallyDefineDataIdentifier (0x2C, ISO 14229-1 §10.6).
+#[derive(Debug, Clone)]
+pub struct DddidConfig {
+    /// Whether the ECU implements 0x2C at all (`false` → serviceNotSupported).
+    pub supported: bool,
+    /// Sessions in which 0x2C is accepted; any other session answers
+    /// conditionsNotCorrect (0x22).
+    pub allowed_sessions: Vec<u8>,
+    /// Require an unlocked SecurityAccess before a define (0x01 / 0x02);
+    /// answered with securityAccessDenied (0x33).
+    pub require_security: bool,
+    /// Largest record (bytes) one dynamic DID may hold; a define that would
+    /// grow a record past it is requestOutOfRange (0x31).
+    pub max_record_len: usize,
+    /// How many dynamic DIDs may be defined at once (requestOutOfRange past it).
+    pub max_defined: usize,
+}
+
+impl Default for DddidConfig {
+    fn default() -> Self {
+        Self {
+            supported: true,
+            allowed_sessions: vec![0x01, 0x02, 0x03],
+            require_security: false,
+            max_record_len: 64,
+            max_defined: 16,
+        }
+    }
+}
+
+/// The ISO 14229-1 range reserved for dynamically defined data identifiers.
+pub const DYNAMIC_DID_RANGE: std::ops::RangeInclusive<u16> = 0xF200..=0xF3FF;
+
+/// One source element of a dynamically defined data identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DddidSource {
+    /// `memorySize` bytes of `source`'s record, starting at the 1-based
+    /// `position` (defineByIdentifier).
+    Did { source: u16, position: u8, size: u8 },
+    /// `size` bytes of simulated memory at `address` (defineByMemoryAddress).
+    Memory { address: u64, size: usize },
+}
+
+impl DddidSource {
+    fn len(&self) -> usize {
+        match self {
+            DddidSource::Did { size, .. } => usize::from(*size),
+            DddidSource::Memory { size, .. } => *size,
+        }
+    }
 }
 
 impl Default for ServerConfig {
@@ -118,6 +174,7 @@ impl Default for ServerConfig {
             seed: vec![0x11, 0x22, 0x33, 0x44],
             require_security_for_write: false,
             require_security_for_transfer: false,
+            dddid: DddidConfig::default(),
         }
     }
 }
@@ -149,6 +206,10 @@ pub struct UdsServer {
     sec_attempts_left: u32,
     checker: Box<dyn SecurityChecker + Send>,
     transfer: Option<TransferState>,
+    /// Readable simulated memory regions: base address → bytes.
+    memory: BTreeMap<u64, Vec<u8>>,
+    /// Dynamically defined DIDs (0x2C): DID → ordered source elements.
+    dynamic: BTreeMap<u16, Vec<DddidSource>>,
 }
 
 impl Default for UdsServer {
@@ -179,6 +240,8 @@ impl UdsServer {
             sec_attempts_left: max,
             checker: Box::new(XorSecurity::new(0xA5)),
             transfer: None,
+            memory: BTreeMap::new(),
+            dynamic: BTreeMap::new(),
         }
     }
 
@@ -244,6 +307,34 @@ impl UdsServer {
         self.io.get(&did).is_some_and(|c| c.overridden)
     }
 
+    /// Map a readable memory region: `bytes` live at `base` onward, for
+    /// ReadMemoryByAddress (0x23) and defineByMemoryAddress (0x2C 02). A read
+    /// must fall entirely inside one region.
+    pub fn set_memory(&mut self, base: u64, bytes: impl Into<Vec<u8>>) {
+        self.memory.insert(base, bytes.into());
+    }
+
+    /// Overwrite bytes inside an already-mapped region (e.g. to make a logged
+    /// value change between samples). Returns `false` if the span is unmapped.
+    pub fn write_memory(&mut self, address: u64, bytes: &[u8]) -> bool {
+        let Some((base, region)) = self.memory.range_mut(..=address).next_back() else {
+            return false;
+        };
+        let off = (address - base) as usize;
+        match region.get_mut(off..off + bytes.len()) {
+            Some(dst) => {
+                dst.copy_from_slice(bytes);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The dynamically defined DIDs currently in force (ascending).
+    pub fn dynamic_dids(&self) -> Vec<u16> {
+        self.dynamic.keys().copied().collect()
+    }
+
     /// The active diagnostic session.
     pub fn session(&self) -> u8 {
         self.session
@@ -272,6 +363,8 @@ impl UdsServer {
             sid::CLEAR_DTC => self.clear_dtc(req),
             sid::READ_DTC_INFORMATION => self.read_dtc(req),
             sid::READ_DATA_BY_ID => self.read_data_by_id(req),
+            sid::READ_MEMORY_BY_ADDRESS => self.read_memory_by_address(req),
+            sid::DYNAMICALLY_DEFINE_DID => self.dynamically_define(req),
             sid::SECURITY_ACCESS => self.security_access(req),
             sid::WRITE_DATA_BY_ID => self.write_data_by_id(req),
             sid::IO_CONTROL => self.io_control(req),
@@ -297,6 +390,11 @@ impl UdsServer {
         // Changing session relocks security (ISO 14229-1 §9.4.1).
         self.security_unlocked = false;
         self.current_seed = None;
+        // Dynamically defined DIDs do not survive a session transition. ISO
+        // 14229-1 requires at least the return to the default session to clear
+        // them; this server is strict and clears on every 0x10, so a client
+        // must be ready to re-define after any session change.
+        self.dynamic.clear();
         // 50 <session> P2(2) P2*(2): the 2013+ timing record (50 ms / 5000 ms).
         vec![0x50, session, 0x00, 0x32, 0x01, 0xF4]
     }
@@ -311,6 +409,7 @@ impl UdsServer {
         self.security_unlocked = false;
         self.current_seed = None;
         self.transfer = None;
+        self.dynamic.clear();
         // 51 <resetType> [powerDownTime]. Add the powerDownTime byte only for
         // enableRapidPowerShutDown (0x04).
         if kind == 0x04 {
@@ -333,6 +432,20 @@ impl UdsServer {
             return neg(sid::READ_DATA_BY_ID, nrc::INCORRECT_LENGTH);
         }
         let did = u16::from_be_bytes([req[1], req[2]]);
+        // A dynamically defined DID is assembled at read time from the current
+        // values of its sources, in definition order.
+        if let Some(sources) = self.dynamic.get(&did) {
+            let mut out = vec![0x62, req[1], req[2]];
+            for src in sources {
+                match self.read_source(src) {
+                    Some(bytes) => out.extend_from_slice(&bytes),
+                    // A source vanished since the define (e.g. its DID was
+                    // removed): the record can no longer be built.
+                    None => return neg(sid::READ_DATA_BY_ID, nrc::CONDITIONS_NOT_CORRECT),
+                }
+            }
+            return out;
+        }
         match self.dids.get(&did) {
             Some(value) => {
                 let mut out = vec![0x62, req[1], req[2]];
@@ -341,6 +454,182 @@ impl UdsServer {
             }
             None => neg(sid::READ_DATA_BY_ID, nrc::REQUEST_OUT_OF_RANGE),
         }
+    }
+
+    /// `size` bytes of mapped memory at `address`, if the span lies wholly
+    /// inside one region.
+    fn read_memory(&self, address: u64, size: usize) -> Option<Vec<u8>> {
+        let (base, region) = self.memory.range(..=address).next_back()?;
+        let off = usize::try_from(address - base).ok()?;
+        region.get(off..off.checked_add(size)?).map(<[u8]>::to_vec)
+    }
+
+    /// The current bytes of one dynamic-DID source element.
+    fn read_source(&self, src: &DddidSource) -> Option<Vec<u8>> {
+        match *src {
+            DddidSource::Did {
+                source,
+                position,
+                size,
+            } => {
+                let rec = self.dids.get(&source)?;
+                let start = usize::from(position).checked_sub(1)?;
+                rec.get(start..start + usize::from(size))
+                    .map(<[u8]>::to_vec)
+            }
+            DddidSource::Memory { address, size } => self.read_memory(address, size),
+        }
+    }
+
+    /// Split `addressAndLengthFormatIdentifier` into (address bytes, size
+    /// bytes), rejecting the zero/oversized widths this server cannot hold.
+    fn alfid_widths(alfid: u8) -> Option<(usize, usize)> {
+        let addr = usize::from(alfid & 0x0F);
+        let size = usize::from(alfid >> 4);
+        ((1..=8).contains(&addr) && (1..=4).contains(&size)).then_some((addr, size))
+    }
+
+    fn read_memory_by_address(&mut self, req: &[u8]) -> Vec<u8> {
+        // 23 <ALFID> <memoryAddress…> <memorySize…>.
+        if req.len() < 2 {
+            return neg(sid::READ_MEMORY_BY_ADDRESS, nrc::INCORRECT_LENGTH);
+        }
+        let Some((addr_len, size_len)) = Self::alfid_widths(req[1]) else {
+            return neg(sid::READ_MEMORY_BY_ADDRESS, nrc::REQUEST_OUT_OF_RANGE);
+        };
+        if req.len() != 2 + addr_len + size_len {
+            return neg(sid::READ_MEMORY_BY_ADDRESS, nrc::INCORRECT_LENGTH);
+        }
+        let address = be_to_u64(&req[2..2 + addr_len]);
+        let size = be_to_usize(&req[2 + addr_len..]);
+        let data = if size == 0 {
+            None
+        } else {
+            self.read_memory(address, size)
+        };
+        match data {
+            Some(bytes) => {
+                let mut out = vec![0x63];
+                out.extend_from_slice(&bytes);
+                out
+            }
+            None => neg(sid::READ_MEMORY_BY_ADDRESS, nrc::REQUEST_OUT_OF_RANGE),
+        }
+    }
+
+    /// DynamicallyDefineDataIdentifier (0x2C, ISO 14229-1 §10.6).
+    ///
+    /// * `2C 01 <DDDID:2> {<sourceDID:2> <position:1> <memorySize:1>}…` —
+    ///   defineByIdentifier (`position` is 1-based in the source record).
+    /// * `2C 02 <DDDID:2> <ALFID> {<memoryAddress> <memorySize>}…` —
+    ///   defineByMemoryAddress.
+    /// * `2C 03 [<DDDID:2>]` — clear one dynamic DID, or all of them.
+    ///
+    /// A define **appends** to an existing definition of the same DDDID, so a
+    /// record can mix identifier and memory sources across several requests.
+    /// A request with any invalid element is rejected whole: the definition is
+    /// left exactly as it was.
+    fn dynamically_define(&mut self, req: &[u8]) -> Vec<u8> {
+        const SID: u8 = sid::DYNAMICALLY_DEFINE_DID;
+        let cfg = self.config.dddid.clone();
+        if !cfg.supported {
+            return neg(SID, nrc::SERVICE_NOT_SUPPORTED);
+        }
+        if req.len() < 2 {
+            return neg(SID, nrc::INCORRECT_LENGTH);
+        }
+        let subfn = req[1] & 0x7F;
+        if !(0x01..=0x03).contains(&subfn) {
+            return neg(SID, nrc::SUB_FUNCTION_NOT_SUPPORTED);
+        }
+        // Minimum length per sub-function: a define carries the DDDID plus at
+        // least one element; a clear carries nothing or exactly the DDDID.
+        let len_ok = match subfn {
+            0x01 => req.len() >= 8 && (req.len() - 4) % 4 == 0,
+            0x02 => req.len() >= 5,
+            _ => req.len() == 2 || req.len() == 4,
+        };
+        if !len_ok {
+            return neg(SID, nrc::INCORRECT_LENGTH);
+        }
+        if !cfg.allowed_sessions.contains(&self.session) {
+            return neg(SID, nrc::CONDITIONS_NOT_CORRECT);
+        }
+
+        if subfn == 0x03 {
+            if req.len() == 2 {
+                self.dynamic.clear();
+                return vec![0x6C, 0x03];
+            }
+            let dddid = u16::from_be_bytes([req[2], req[3]]);
+            if !DYNAMIC_DID_RANGE.contains(&dddid) {
+                return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+            }
+            // Clearing a DDDID that is not defined is not an error.
+            self.dynamic.remove(&dddid);
+            return vec![0x6C, 0x03, req[2], req[3]];
+        }
+
+        let dddid = u16::from_be_bytes([req[2], req[3]]);
+        if !DYNAMIC_DID_RANGE.contains(&dddid) {
+            return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+        }
+        if cfg.require_security && !self.security_unlocked {
+            return neg(SID, nrc::SECURITY_ACCESS_DENIED);
+        }
+
+        let mut elements = Vec::new();
+        if subfn == 0x01 {
+            for e in req[4..].chunks_exact(4) {
+                let source = u16::from_be_bytes([e[0], e[1]]);
+                let (position, size) = (e[2], e[3]);
+                // The source must be a known (static) DID — a dynamic DID
+                // cannot nest — and the slice must lie inside its record.
+                let fits = self.dids.get(&source).is_some_and(|rec| {
+                    position >= 1
+                        && size >= 1
+                        && usize::from(position) - 1 + usize::from(size) <= rec.len()
+                });
+                if !fits {
+                    return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+                }
+                elements.push(DddidSource::Did {
+                    source,
+                    position,
+                    size,
+                });
+            }
+        } else {
+            let Some((addr_len, size_len)) = Self::alfid_widths(req[4]) else {
+                return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+            };
+            let body = &req[5..];
+            let entry = addr_len + size_len;
+            if body.is_empty() || body.len() % entry != 0 {
+                return neg(SID, nrc::INCORRECT_LENGTH);
+            }
+            for e in body.chunks_exact(entry) {
+                let address = be_to_u64(&e[..addr_len]);
+                let size = be_to_usize(&e[addr_len..]);
+                if size == 0 || self.read_memory(address, size).is_none() {
+                    return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+                }
+                elements.push(DddidSource::Memory { address, size });
+            }
+        }
+
+        let existing = self.dynamic.get(&dddid);
+        if existing.is_none() && self.dynamic.len() >= cfg.max_defined {
+            return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+        }
+        let old_len: usize = existing.map_or(0, |v| v.iter().map(DddidSource::len).sum());
+        let add_len: usize = elements.iter().map(DddidSource::len).sum();
+        if old_len + add_len > cfg.max_record_len {
+            return neg(SID, nrc::REQUEST_OUT_OF_RANGE);
+        }
+        self.dynamic.entry(dddid).or_default().extend(elements);
+        // 6C <subFunction> <DDDID:2>.
+        vec![0x6C, subfn, req[2], req[3]]
     }
 
     fn write_data_by_id(&mut self, req: &[u8]) -> Vec<u8> {
@@ -624,6 +913,11 @@ fn be_to_usize(bytes: &[u8]) -> usize {
     bytes.iter().fold(0usize, |v, b| (v << 8) | *b as usize)
 }
 
+/// Big-endian byte slice (≤ 8 bytes) → u64.
+fn be_to_u64(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0u64, |v, b| (v << 8) | u64::from(*b))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -830,6 +1124,296 @@ mod tests {
         assert_eq!(
             s.handle(&[0x2E, 0xF1, 0x90, 0xAA]),
             vec![0x7F, 0x2E, nrc::SECURITY_ACCESS_DENIED]
+        );
+    }
+
+    // ---- 0x23 ReadMemoryByAddress / 0x2C DynamicallyDefineDataIdentifier ----
+
+    /// A server with two source DIDs and one mapped memory region.
+    fn dddid_server() -> UdsServer {
+        let mut s = UdsServer::new();
+        s.set_did(0x1000, vec![0xAA, 0xBB, 0xCC, 0xDD]);
+        s.set_did(0x2000, vec![0x01, 0x02]);
+        s.set_memory(0x0010_0000, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15]);
+        s
+    }
+
+    #[test]
+    fn read_memory_by_address_reads_mapped_bytes() {
+        let mut s = dddid_server();
+        // ALFID 0x14: 4-byte address, 1-byte size.
+        assert_eq!(
+            s.handle(&[0x23, 0x14, 0x00, 0x10, 0x00, 0x02, 0x03]),
+            vec![0x63, 0x12, 0x13, 0x14]
+        );
+        // Span crossing the end of the region.
+        assert_eq!(
+            s.handle(&[0x23, 0x14, 0x00, 0x10, 0x00, 0x05, 0x02]),
+            vec![0x7F, 0x23, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        // Wrong length for the ALFID.
+        assert_eq!(
+            s.handle(&[0x23, 0x14, 0x00, 0x10, 0x00]),
+            vec![0x7F, 0x23, nrc::INCORRECT_LENGTH]
+        );
+        // Invalid ALFID (zero-width address).
+        assert_eq!(
+            s.handle(&[0x23, 0x10, 0x01]),
+            vec![0x7F, 0x23, nrc::REQUEST_OUT_OF_RANGE]
+        );
+    }
+
+    #[test]
+    fn dddid_define_by_identifier_then_read() {
+        let mut s = dddid_server();
+        // F200 = 0x1000[pos 2, 2 bytes] ++ 0x2000[pos 1, 2 bytes].
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x10, 0x00, 0x02, 0x02, 0x20, 0x00, 0x01, 0x02]),
+            vec![0x6C, 0x01, 0xF2, 0x00]
+        );
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x62, 0xF2, 0x00, 0xBB, 0xCC, 0x01, 0x02]
+        );
+        // The record is assembled at read time: a changed source shows up.
+        s.set_did(0x2000, vec![0x07, 0x08]);
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x62, 0xF2, 0x00, 0xBB, 0xCC, 0x07, 0x08]
+        );
+    }
+
+    #[test]
+    fn dddid_define_by_memory_appends_to_identifier_sources() {
+        let mut s = dddid_server();
+        s.handle(&[0x2C, 0x01, 0xF2, 0x01, 0x20, 0x00, 0x01, 0x01]);
+        // Two memory elements, ALFID 0x14.
+        assert_eq!(
+            s.handle(&[
+                0x2C, 0x02, 0xF2, 0x01, 0x14, 0x00, 0x10, 0x00, 0x00, 0x02, 0x00, 0x10, 0x00, 0x04,
+                0x01,
+            ]),
+            vec![0x6C, 0x02, 0xF2, 0x01]
+        );
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x01]),
+            vec![0x62, 0xF2, 0x01, 0x01, 0x10, 0x11, 0x14]
+        );
+        assert!(s.write_memory(0x0010_0001, &[0x99]));
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x01]),
+            vec![0x62, 0xF2, 0x01, 0x01, 0x10, 0x99, 0x14]
+        );
+    }
+
+    #[test]
+    fn dddid_clear_one_and_all() {
+        let mut s = dddid_server();
+        s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x01, 0x01]);
+        s.handle(&[0x2C, 0x01, 0xF2, 0x10, 0x20, 0x00, 0x01, 0x01]);
+        assert_eq!(s.dynamic_dids(), vec![0xF200, 0xF210]);
+        assert_eq!(
+            s.handle(&[0x2C, 0x03, 0xF2, 0x00]),
+            vec![0x6C, 0x03, 0xF2, 0x00]
+        );
+        assert_eq!(s.dynamic_dids(), vec![0xF210]);
+        // A cleared DDDID reads as unknown.
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x7F, 0x22, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        // Clearing an undefined DDDID in range is fine.
+        assert_eq!(
+            s.handle(&[0x2C, 0x03, 0xF3, 0xFF]),
+            vec![0x6C, 0x03, 0xF3, 0xFF]
+        );
+        // Clear all.
+        assert_eq!(s.handle(&[0x2C, 0x03]), vec![0x6C, 0x03]);
+        assert!(s.dynamic_dids().is_empty());
+    }
+
+    #[test]
+    fn dddid_length_and_subfunction_nrcs() {
+        let mut s = dddid_server();
+        assert_eq!(s.handle(&[0x2C]), vec![0x7F, 0x2C, nrc::INCORRECT_LENGTH]);
+        assert_eq!(
+            s.handle(&[0x2C, 0x04, 0xF2, 0x00]),
+            vec![0x7F, 0x2C, nrc::SUB_FUNCTION_NOT_SUPPORTED]
+        );
+        // defineByIdentifier with a truncated element.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x01]),
+            vec![0x7F, 0x2C, nrc::INCORRECT_LENGTH]
+        );
+        // defineByMemoryAddress with no element after the ALFID.
+        assert_eq!(
+            s.handle(&[0x2C, 0x02, 0xF2, 0x00, 0x14]),
+            vec![0x7F, 0x2C, nrc::INCORRECT_LENGTH]
+        );
+        // ... and with a partial element.
+        assert_eq!(
+            s.handle(&[0x2C, 0x02, 0xF2, 0x00, 0x14, 0x00, 0x10, 0x00]),
+            vec![0x7F, 0x2C, nrc::INCORRECT_LENGTH]
+        );
+        // Clear with a 1-byte DDDID.
+        assert_eq!(
+            s.handle(&[0x2C, 0x03, 0xF2]),
+            vec![0x7F, 0x2C, nrc::INCORRECT_LENGTH]
+        );
+    }
+
+    #[test]
+    fn dddid_out_of_range_nrcs_leave_definition_untouched() {
+        let mut s = dddid_server();
+        let oor = vec![0x7F, 0x2C, nrc::REQUEST_OUT_OF_RANGE];
+        // DDDID outside 0xF200..=0xF3FF.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0x10, 0x00, 0x20, 0x00, 0x01, 0x01]),
+            oor
+        );
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF4, 0x00, 0x20, 0x00, 0x01, 0x01]),
+            oor
+        );
+        assert_eq!(s.handle(&[0x2C, 0x03, 0xF1, 0xFF]), oor);
+        // Unknown source DID.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x30, 0x00, 0x01, 0x01]),
+            oor
+        );
+        // Position 0 (positions are 1-based) and a slice past the record end.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x00, 0x01]),
+            oor
+        );
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x02, 0x02]),
+            oor
+        );
+        // Unmapped memory and an invalid ALFID.
+        assert_eq!(
+            s.handle(&[0x2C, 0x02, 0xF2, 0x00, 0x14, 0x00, 0x20, 0x00, 0x00, 0x01]),
+            oor
+        );
+        assert_eq!(
+            s.handle(&[0x2C, 0x02, 0xF2, 0x00, 0x04, 0x00, 0x10, 0x00, 0x00]),
+            oor
+        );
+        // A valid define, then one whose *second* element is bad: rejected
+        // whole, the first definition stays as it was.
+        s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x01, 0x02]);
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x10, 0x00, 0x01, 0x01, 0x30, 0x00, 0x01, 0x01]),
+            oor
+        );
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x62, 0xF2, 0x00, 0x01, 0x02]
+        );
+    }
+
+    #[test]
+    fn dddid_record_and_count_limits_are_out_of_range() {
+        let mut s = UdsServer::with_config(ServerConfig {
+            dddid: DddidConfig {
+                max_record_len: 4,
+                max_defined: 1,
+                ..DddidConfig::default()
+            },
+            ..ServerConfig::default()
+        });
+        s.set_did(0x1000, vec![0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x10, 0x00, 0x01, 0x03]),
+            vec![0x6C, 0x01, 0xF2, 0x00]
+        );
+        // Appending 2 more bytes would make the record 5 > 4.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x10, 0x00, 0x01, 0x02]),
+            vec![0x7F, 0x2C, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        // A second DDDID exceeds max_defined.
+        assert_eq!(
+            s.handle(&[0x2C, 0x01, 0xF2, 0x01, 0x10, 0x00, 0x01, 0x01]),
+            vec![0x7F, 0x2C, nrc::REQUEST_OUT_OF_RANGE]
+        );
+    }
+
+    #[test]
+    fn dddid_conditions_security_and_support_nrcs() {
+        let define = [0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x01, 0x01];
+        // Only the extended session allows 0x2C.
+        let mut s = UdsServer::with_config(ServerConfig {
+            dddid: DddidConfig {
+                allowed_sessions: vec![0x03],
+                ..DddidConfig::default()
+            },
+            ..ServerConfig::default()
+        });
+        s.set_did(0x2000, vec![0x01]);
+        assert_eq!(
+            s.handle(&define),
+            vec![0x7F, 0x2C, nrc::CONDITIONS_NOT_CORRECT]
+        );
+        s.handle(&[0x10, 0x03]);
+        assert_eq!(s.handle(&define), vec![0x6C, 0x01, 0xF2, 0x00]);
+
+        // Security required for a define.
+        let mut s = UdsServer::with_config(ServerConfig {
+            dddid: DddidConfig {
+                require_security: true,
+                ..DddidConfig::default()
+            },
+            ..ServerConfig::default()
+        });
+        s.set_did(0x2000, vec![0x01]);
+        assert_eq!(
+            s.handle(&define),
+            vec![0x7F, 0x2C, nrc::SECURITY_ACCESS_DENIED]
+        );
+        s.security_unlocked = true;
+        assert_eq!(s.handle(&define), vec![0x6C, 0x01, 0xF2, 0x00]);
+
+        // An ECU without 0x2C.
+        let mut s = UdsServer::with_config(ServerConfig {
+            dddid: DddidConfig {
+                supported: false,
+                ..DddidConfig::default()
+            },
+            ..ServerConfig::default()
+        });
+        assert_eq!(
+            s.handle(&define),
+            vec![0x7F, 0x2C, nrc::SERVICE_NOT_SUPPORTED]
+        );
+    }
+
+    #[test]
+    fn dddid_cleared_by_session_change_and_reset() {
+        let mut s = dddid_server();
+        let define = [0x2C, 0x01, 0xF2, 0x00, 0x20, 0x00, 0x01, 0x01];
+        s.handle(&define);
+        assert_eq!(s.dynamic_dids(), vec![0xF200]);
+        s.handle(&[0x10, 0x03]);
+        assert!(s.dynamic_dids().is_empty(), "session change clears DDDIDs");
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x7F, 0x22, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        s.handle(&define);
+        s.handle(&[0x11, 0x01]);
+        assert!(s.dynamic_dids().is_empty(), "ECU reset clears DDDIDs");
+    }
+
+    #[test]
+    fn dddid_read_fails_when_a_source_disappears() {
+        let mut s = dddid_server();
+        s.handle(&[0x2C, 0x01, 0xF2, 0x00, 0x10, 0x00, 0x03, 0x02]);
+        // The source record shrank below the defined slice.
+        s.set_did(0x1000, vec![0xAA]);
+        assert_eq!(
+            s.handle(&[0x22, 0xF2, 0x00]),
+            vec![0x7F, 0x22, nrc::CONDITIONS_NOT_CORRECT]
         );
     }
 }
