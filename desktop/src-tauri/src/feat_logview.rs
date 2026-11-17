@@ -191,8 +191,9 @@ fn find_def(
         .filter(|i| !i.is_empty())
         .ok_or("choose a definition")?;
     crate::load_defs(&state.ecudefs)
-        .into_iter()
+        .iter()
         .find(|d| d.id == id)
+        .cloned()
         .ok_or_else(|| format!("definition '{id}' not found"))
 }
 
