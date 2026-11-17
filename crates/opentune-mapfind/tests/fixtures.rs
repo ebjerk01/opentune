@@ -124,12 +124,16 @@ fn diff_coverage_on_stock_tuned_pairs() {
     eprintln!(
         "pair                                         regions covered  cands  touched  top40"
     );
-    for (a, b) in &pairs {
+    // One pair per worker: each scan is independent, so spread them over the
+    // available cores instead of walking ~50 images one by one.
+    // Per pair: (changed regions, covered, candidates, candidates touching a change, top-40 hits).
+    type Row = Option<(usize, usize, usize, usize, usize)>;
+    let measure = |(a, b): &(PathBuf, PathBuf)| -> Row {
         let (Ok(sa), Ok(sb)) = (std::fs::read(a), std::fs::read(b)) else {
-            continue;
+            return None;
         };
         if sa.len() != sb.len() {
-            continue;
+            return None;
         }
         let regs = changed_regions(&sa, &sb);
         let cands = find_maps(&sa, &FindOptions::default());
@@ -146,20 +150,45 @@ fn diff_coverage_on_stock_tuned_pairs() {
             .take(40)
             .filter(|c| regs.iter().any(|r| overlaps(c, *r)))
             .count();
+        Some((regs.len(), cov, cands.len(), hit, top))
+    };
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(pairs.len());
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let rows: Vec<Row> = {
+        let slots: Vec<std::sync::Mutex<Row>> =
+            pairs.iter().map(|_| std::sync::Mutex::new(None)).collect();
+        std::thread::scope(|s| {
+            for _ in 0..workers {
+                s.spawn(|| loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(pair) = pairs.get(i) else { break };
+                    *slots[i].lock().unwrap() = measure(pair);
+                });
+            }
+        });
+        slots.into_iter().map(|m| m.into_inner().unwrap()).collect()
+    };
+    for ((a, _), row) in pairs.iter().zip(rows) {
+        let Some((n_regs, cov, n_cands, hit, top)) = row else {
+            continue;
+        };
         eprintln!(
             "{:<44} {:>7} {:>7} {:>6} {:>8} {:>6}",
             a.strip_prefix(&root).unwrap_or(a).display(),
-            regs.len(),
+            n_regs,
             cov,
-            cands.len(),
+            n_cands,
             hit,
             top
         );
-        regions += regs.len();
+        regions += n_regs;
         covered += cov;
-        cands_total += cands.len();
+        cands_total += n_cands;
         cands_hit += hit;
-        top_regions += 40.min(cands.len());
+        top_regions += 40.min(n_cands);
         top_hit += top;
     }
     let pct = |a: usize, b: usize| 100.0 * a as f64 / b.max(1) as f64;

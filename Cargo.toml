@@ -62,6 +62,15 @@ clap = { version = "4", features = ["derive"] }
 serialport = "4"
 socketcan = "3"
 
+# The image scanners walk whole multi-MiB dumps; unoptimised they make the
+# fixture tests crawl. Optimise just these crates in dev/test builds.
+[profile.dev.package.opentune-mapfind]
+opt-level = 3
+[profile.dev.package.opentune-recipe]
+opt-level = 3
+[profile.dev.package.opentune-scan]
+opt-level = 3
+
 # Keep debug builds quick; optimise release for a small shippable binary.
 [profile.release]
 opt-level = "z"
