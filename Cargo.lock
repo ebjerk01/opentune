@@ -843,6 +843,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-logdef"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-xdf",
+ "roxmltree",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-scan"
 version = "0.1.0"
 dependencies = [

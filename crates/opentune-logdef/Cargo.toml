@@ -1,0 +1,31 @@
+# Importer crate: RomRaider-style `logger.xml` live-data definitions ->
+# OpenTune live-data parameter model. Part of the workspace. Mirrors
+# opentune-xdf / opentune-ecuflash and reuses the XDF linear-equation fitter
+# (opentune_xdf::math) so logger `<conversion>` expressions import the same way
+# as XDF/EcuFlash scalings. DEF PARSER ONLY - no transport/logging execution.
+[package]
+name = "opentune-logdef"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Parse RomRaider-style logger.xml live-data definitions into an OpenTune live-data parameter model."
+
+[dependencies]
+# roxmltree 0.20.0 (2023-12-29): small, pull-free DOM reader with no external
+# runtime dependencies - already a workspace dep via opentune-xdf (no new
+# external version introduced).
+roxmltree = "0.20.0"
+# serde for the (de)serializable live-data model (workspace-pinned).
+serde = { workspace = true }
+opentune-core = { path = "../opentune-core" }
+opentune-xdf = { path = "../opentune-xdf" }
+
+[dev-dependencies]
+# float_roundtrip makes the deserializer parse f64 back to the exact bits serde
+# serialized, so the model's strict round-trip test holds for scaling factors
+# like 100/255 that are otherwise off by one ULP on parse.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
