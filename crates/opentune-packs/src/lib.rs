@@ -342,7 +342,9 @@ fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Option<String> {
 }
 
 /// Find every pack directory (one that contains a `pack.json`) under `root`,
-/// recursively. `root` itself is included if it is a pack.
+/// recursively. `root` itself is included if it is a pack. Sub-directories
+/// whose name starts with `_` or `.` (e.g. the `_template/` scaffold) are
+/// skipped, mirroring [`is_scaffolding_file`] for definition files.
 pub fn discover(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
@@ -355,6 +357,10 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
                 .flatten()
                 .map(|e| e.path())
                 .filter(|p| p.is_dir())
+                .filter(|p| {
+                    let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    !(name.starts_with('_') || name.starts_with('.'))
+                })
                 .collect();
             subs.sort();
             for s in subs {
@@ -523,8 +529,21 @@ mod tests {
             "pack.json",
             r#"{"id":"b","name":"B"}"#,
         );
+        // scaffolding directories are not packs
+        write(
+            &root.join("_template"),
+            "pack.json",
+            r#"{"id":"t","name":"T"}"#,
+        );
+        write(
+            &root.join(".hidden"),
+            "pack.json",
+            r#"{"id":"h","name":"H"}"#,
+        );
         let found = discover(&root);
         assert_eq!(found.len(), 2);
+        // ...but a scaffold can still be opened directly
+        assert_eq!(discover(&root.join("_template")).len(), 1);
         let lib = PackLibrary::load_all(&root);
         assert_eq!(lib.packs.len(), 2);
         assert_eq!(lib.coding().count(), 1);

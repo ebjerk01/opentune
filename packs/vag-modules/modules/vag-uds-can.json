@@ -1,0 +1,62 @@
+{
+  "vehicle": "VAG — UDS on CAN (MQB / MEB / late PQ), open-source-sourced subset",
+  "addr_note": "addr = low byte of the 11-bit request id. It is NOT the VAG address word.",
+  "modules": [
+    {
+      "name": "Engine",
+      "addr": 224,
+      "req_id": 2016,
+      "resp_id": 2024,
+      "protocol": "uds",
+      "source": "opendbc (Ecu.engine 0x7e0, OBD rx offset +8); VW_Flash lib/constants.py ecu_control_module_identifier(0x7E8, 0x7E0)"
+    },
+    {
+      "name": "Transmission (DSG DQ250-MQB / DQ381)",
+      "addr": 225,
+      "req_id": 2017,
+      "resp_id": 2025,
+      "protocol": "uds",
+      "source": "opendbc (Ecu.transmission 0x7e1); VW_Flash lib/modules/dq250mqb.py + dq381.py dsg_control_module_identifier(0x7E9, 0x7E1)"
+    },
+    {
+      "name": "Airbag / SRS",
+      "addr": 21,
+      "req_id": 1813,
+      "resp_id": 1919,
+      "protocol": "uds",
+      "source": "opendbc (Ecu.srs 0x715, rx offset 0x6A)"
+    },
+    {
+      "name": "Electric power steering",
+      "addr": 18,
+      "req_id": 1810,
+      "resp_id": 1916,
+      "protocol": "uds",
+      "source": "opendbc (Ecu.eps 0x712, rx offset 0x6A)"
+    },
+    {
+      "name": "Forward radar (ACC)",
+      "addr": 87,
+      "req_id": 1879,
+      "resp_id": 1985,
+      "protocol": "uds",
+      "source": "opendbc (Ecu.fwdRadar 0x757, rx offset 0x6A)"
+    },
+    {
+      "name": "Forward camera",
+      "addr": 79,
+      "req_id": 1871,
+      "resp_id": 1977,
+      "protocol": "uds",
+      "source": "opendbc values.py extra_ecus (Ecu.fwdCamera 0x74f, rx offset 0x6A)"
+    },
+    {
+      "name": "AWD coupling (Haldex, 4Motion)",
+      "addr": 15,
+      "req_id": 1807,
+      "resp_id": 1913,
+      "protocol": "uds",
+      "source": "VW_Flash lib/modules/haldex4motion.py haldex_control_module_identifier(0x779, 0x70F)"
+    }
+  ]
+}

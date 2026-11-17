@@ -1,0 +1,15 @@
+{
+  "id": "obd2-read-vin",
+  "name": "OBD: read VIN (mode 09 InfoType 02)",
+  "description": "Read-only. Vehicle identification number; on CAN the response is `49 02 01` followed by 17 ASCII characters. Defaults to OBD ECU #1 (0x7E0/0x7E8, ISO 15765-4); enter another ECU's ids in the Target fields to address it instead.",
+  "requires_security": false,
+  "req_id": "0x7E0",
+  "resp_id": "0x7E8",
+  "steps": [
+    {
+      "op": "obd_request",
+      "mode": 9,
+      "pid": 2
+    }
+  ]
+}

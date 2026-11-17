@@ -1,0 +1,17 @@
+{
+  "id": "iso14229-identification",
+  "name": "ISO 14229-1 identification DIDs",
+  "version": "1.0.0",
+  "maker": "Any",
+  "platform": "UDS (ISO 14229-1)",
+  "vehicles": [
+    "Any ECU that speaks UDS"
+  ],
+  "author": "OpenTune contributors",
+  "license": "GPL-3.0-or-later",
+  "description": "The standardised UDS identification data identifiers 0xF180-0xF19F (ISO 14229-1 Annex C) as a logger definition, plus read-only service scripts for the most common ones. DID numbers and names are the standard's; the name list was cross-checked against opendbc's opendbc/car/uds.py (MIT). Contents/encoding of each DID are manufacturer-defined.",
+  "sources": [
+    "ISO 14229-1:2013 Annex C.1",
+    "commaai/opendbc opendbc/car/uds.py DATA_IDENTIFIER_TYPE (MIT) — name cross-check"
+  ]
+}

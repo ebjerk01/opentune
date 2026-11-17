@@ -1,0 +1,826 @@
+{
+  "format": "rom_raider_logger",
+  "version": "1.0.0",
+  "source": "SAE J1979 / ISO 15031-5 service 01 PID definitions (formulas as published in the standard; also tabulated at https://en.wikipedia.org/wiki/OBD-II_PIDs)",
+  "protocols": [
+    {
+      "id": "OBD",
+      "kind": {
+        "kind": "obd2_mode01"
+      },
+      "ecus": [
+        {
+          "params": [
+            {
+              "id": "obd01_01_monitor_status",
+              "name": "Monitor status since DTCs cleared",
+              "description": "Raw 4-byte bitfield: A7 = MIL on, A0-A6 = number of emission-related DTCs, B-D = readiness (monitor supported / incomplete) bits. Decode the bits; the numeric value itself is not a quantity.",
+              "units": "bitfield",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 1
+              },
+              "storagetype": "u32",
+              "endian": "big"
+            },
+            {
+              "id": "obd01_04_calc_load",
+              "name": "Calculated engine load",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x04.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 4
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_05_coolant_temp",
+              "name": "Engine coolant temperature",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x05.",
+              "units": "°C",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 5
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "°C",
+                "expr": "X-40",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": -40.0
+                }
+              }
+            },
+            {
+              "id": "obd01_06_stft_b1",
+              "name": "Short-term fuel trim — bank 1",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x06.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 6
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/128-100",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.78125,
+                  "offset": -100.0
+                }
+              }
+            },
+            {
+              "id": "obd01_07_ltft_b1",
+              "name": "Long-term fuel trim — bank 1",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x07.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 7
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/128-100",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.78125,
+                  "offset": -100.0
+                }
+              }
+            },
+            {
+              "id": "obd01_08_stft_b2",
+              "name": "Short-term fuel trim — bank 2",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x08.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 8
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/128-100",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.78125,
+                  "offset": -100.0
+                }
+              }
+            },
+            {
+              "id": "obd01_09_ltft_b2",
+              "name": "Long-term fuel trim — bank 2",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x09.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 9
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/128-100",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.78125,
+                  "offset": -100.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0a_fuel_pressure",
+              "name": "Fuel pressure (gauge)",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0A.",
+              "units": "kPa",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 10
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "kPa",
+                "expr": "X*3",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 3.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0b_map",
+              "name": "Intake manifold absolute pressure",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0B.",
+              "units": "kPa",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 11
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "kPa",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0c_rpm",
+              "name": "Engine speed",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0C.",
+              "units": "rpm",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 12
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "rpm",
+                "expr": "X/4",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.25,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0d_speed",
+              "name": "Vehicle speed",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0D.",
+              "units": "km/h",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 13
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "km/h",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0e_timing_advance",
+              "name": "Timing advance (cylinder 1)",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0E.",
+              "units": "° BTDC",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 14
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "° BTDC",
+                "expr": "X/2-64",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.5,
+                  "offset": -64.0
+                }
+              }
+            },
+            {
+              "id": "obd01_0f_iat",
+              "name": "Intake air temperature",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x0F.",
+              "units": "°C",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 15
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "°C",
+                "expr": "X-40",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": -40.0
+                }
+              }
+            },
+            {
+              "id": "obd01_10_maf",
+              "name": "Mass air flow rate",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x10.",
+              "units": "g/s",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 16
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "g/s",
+                "expr": "X/100",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.01,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_11_throttle",
+              "name": "Throttle position",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x11.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 17
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_1f_run_time",
+              "name": "Run time since engine start",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x1F.",
+              "units": "s",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 31
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "s",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_21_dist_mil_on",
+              "name": "Distance travelled with MIL on",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x21.",
+              "units": "km",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 33
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "km",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_2f_fuel_level",
+              "name": "Fuel tank level input",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x2F.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 47
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_30_warmups_since_clear",
+              "name": "Warm-ups since DTCs cleared",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x30.",
+              "units": "count",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 48
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "count",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_31_dist_since_clear",
+              "name": "Distance travelled since DTCs cleared",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x31.",
+              "units": "km",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 49
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "km",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_33_baro",
+              "name": "Absolute barometric pressure",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x33.",
+              "units": "kPa",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 51
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "kPa",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_42_module_voltage",
+              "name": "Control module voltage",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x42.",
+              "units": "V",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 66
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "V",
+                "expr": "X/1000",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.001,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_43_abs_load",
+              "name": "Absolute load value",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x43.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 67
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_44_lambda_cmd",
+              "name": "Commanded air-fuel equivalence ratio (lambda)",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x44.",
+              "units": "ratio",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 68
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "ratio",
+                "expr": "X/32768",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 3.0517578125e-05,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_45_rel_throttle",
+              "name": "Relative throttle position",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x45.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 69
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_46_ambient_temp",
+              "name": "Ambient air temperature",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x46.",
+              "units": "°C",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 70
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "°C",
+                "expr": "X-40",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": -40.0
+                }
+              }
+            },
+            {
+              "id": "obd01_47_abs_throttle_b",
+              "name": "Absolute throttle position B",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x47.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 71
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_49_pedal_d",
+              "name": "Accelerator pedal position D",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x49.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 73
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_4a_pedal_e",
+              "name": "Accelerator pedal position E",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x4A.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 74
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_4c_throttle_cmd",
+              "name": "Commanded throttle actuator",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x4C.",
+              "units": "%",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 76
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "%",
+                "expr": "X*100/255",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.39215686274509803,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_4d_time_mil_on",
+              "name": "Time run with MIL on",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x4D.",
+              "units": "min",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 77
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "min",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_4e_time_since_clear",
+              "name": "Time since DTCs cleared",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x4E.",
+              "units": "min",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 78
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "min",
+                "expr": "X",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": 0.0
+                }
+              }
+            },
+            {
+              "id": "obd01_5c_oil_temp",
+              "name": "Engine oil temperature",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x5C.",
+              "units": "°C",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 92
+              },
+              "storagetype": "u8",
+              "endian": "big",
+              "conversion": {
+                "units": "°C",
+                "expr": "X-40",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 1.0,
+                  "offset": -40.0
+                }
+              }
+            },
+            {
+              "id": "obd01_5e_fuel_rate",
+              "name": "Engine fuel rate",
+              "description": "SAE J1979 / ISO 15031-5 service 01 PID 0x5E.",
+              "units": "L/h",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 94
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "L/h",
+                "expr": "X/20",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.05,
+                  "offset": 0.0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

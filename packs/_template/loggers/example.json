@@ -1,0 +1,41 @@
+{
+  "format": "rom_raider_logger",
+  "protocols": [
+    {
+      "id": "OBD",
+      "kind": {
+        "kind": "obd2_mode01"
+      },
+      "ecus": [
+        {
+          "params": [
+            {
+              "id": "rpm",
+              "name": "Engine speed",
+              "description": "SAE J1979 PID 0x0C",
+              "units": "rpm",
+              "protocol": {
+                "kind": "obd2_mode01"
+              },
+              "addressing": {
+                "addressing": "obd_pid",
+                "pid": 12
+              },
+              "storagetype": "u16",
+              "endian": "big",
+              "conversion": {
+                "units": "rpm",
+                "expr": "X/4",
+                "fit": {
+                  "fit": "linear",
+                  "factor": 0.25,
+                  "offset": 0.0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

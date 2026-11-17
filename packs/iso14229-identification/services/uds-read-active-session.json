@@ -1,0 +1,12 @@
+{
+  "id": "uds-read-active-session",
+  "name": "UDS: read active diagnostic session (DID F186)",
+  "description": "Read-only: one ReadDataByIdentifier (0x22) of ISO 14229-1 DID 0xF186 in the current session. Works on any UDS ECU that implements the DID (a negative response means it does not). Enter the module's request/response CAN ids in the Target fields.",
+  "requires_security": false,
+  "steps": [
+    {
+      "op": "read_data_by_identifier",
+      "did": 61830
+    }
+  ]
+}

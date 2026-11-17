@@ -1,0 +1,14 @@
+{
+  "id": "obd2-read-pending-dtcs",
+  "name": "OBD: read pending DTCs (mode 07)",
+  "description": "Read-only. Pending (current / last drive cycle) emission-related DTCs. Defaults to OBD ECU #1 (0x7E0/0x7E8, ISO 15765-4); enter another ECU's ids in the Target fields to address it instead.",
+  "requires_security": false,
+  "req_id": "0x7E0",
+  "resp_id": "0x7E8",
+  "steps": [
+    {
+      "op": "obd_request",
+      "mode": 7
+    }
+  ]
+}
