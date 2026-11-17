@@ -662,6 +662,7 @@ version = "0.1.0"
 dependencies = [
  "opentune-core",
  "opentune-dtc",
+ "opentune-udssim",
  "serde",
  "serde_json",
 ]

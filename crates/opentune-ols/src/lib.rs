@@ -505,4 +505,48 @@ mod tests {
         let p = OlsProject::parse(&file).expect("parse");
         assert!(p.warnings.iter().any(|w| w.contains("checksum-region")));
     }
+
+    // ---- coverage: malformed / minimal / edge inputs ------------------------
+
+    #[test]
+    fn truncated_container_errors_without_panicking() {
+        // A real container cut off partway through: the parser must return an
+        // error (not a valid project, and above all not a panic / slice OOB).
+        let rom = vec![0u8; 256];
+        let file = build("EDC15P", "0 (Original)", &[], &rom);
+        for cut in [8usize, 24, file.len() / 2, file.len() - 1] {
+            let r = OlsProject::parse(&file[..cut]);
+            assert!(r.is_err(), "truncation to {cut} bytes should error, got {r:?}");
+        }
+    }
+
+    #[test]
+    fn minimal_single_byte_rom_parses() {
+        // The smallest useful container: one saved version holding a single ROM
+        // byte. It must parse, recover that exact byte, and report one version.
+        let file = build("MINI", "0 (Original)", &[], &[0x42]);
+        let p = OlsProject::parse(&file).expect("parse minimal");
+        assert_eq!(p.rom.bytes, vec![0x42]);
+        assert_eq!(p.rom.size(), 1);
+        assert_eq!(p.versions.len(), 1);
+        assert_eq!(p.versions[0].size, 1);
+    }
+
+    #[test]
+    fn unrepresentable_64bit_cell_type_is_skipped_with_warning() {
+        // Cell type code 10 is a 64-bit cell, which OpenTune cannot store. The
+        // map must be skipped with an explanatory warning (never emitted with a
+        // wrong width), while the ROM image is still recovered intact.
+        let rom = vec![0u8; 0x400];
+        let rec = record("Wide Map", "", "mg", 2, 2, 0x100, 0x200, 10, 1.0, false);
+        let file = build("EDC17", "0 (Original)", &[rec], &rom);
+        let p = OlsProject::parse(&file).expect("parse");
+        assert!(p.maps.is_empty(), "64-bit map must not be emitted");
+        assert!(
+            p.warnings.iter().any(|w| w.contains("no OpenTune equivalent")),
+            "warnings: {:?}",
+            p.warnings
+        );
+        assert_eq!(p.rom.bytes.len(), 0x400);
+    }
 }

@@ -16,3 +16,8 @@ serde_json = { workspace = true }
 # DTC decode/database is reused, not reimplemented. This is the only OpenTune
 # dependency: the scan engine stays independent of opentune-coding/adaptation.
 opentune-dtc = { path = "../opentune-dtc" }
+
+[dev-dependencies]
+# Integration test drives `scan` against the real UDS conformance server (via
+# CoreDiag over SimTransport), not a hand-rolled fake.
+opentune-udssim = { path = "../opentune-udssim" }

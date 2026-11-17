@@ -262,6 +262,74 @@ mod tests {
         assert_eq!(from_hex, img);
     }
 
+    // ---- coverage: malformed / minimal / edge inputs ------------------------
+
+    #[test]
+    fn hex_garbage_input_errors_not_panics() {
+        // A line that is not a HEX record at all must be rejected, not panic.
+        assert!(matches!(
+            hex::read("this is not intel hex\n"),
+            Err(ImageError::Record { line: 1, .. })
+        ));
+        // Non-hex characters inside an otherwise record-shaped line.
+        assert!(matches!(hex::read(":00ZZ0001FF\n"), Err(ImageError::Record { .. })));
+    }
+
+    #[test]
+    fn hex_minimal_eof_only_is_an_empty_image() {
+        // Just the mandatory end-of-file record: a valid, empty HEX file.
+        let f = hex::read(":00000001FF\n").expect("EOF-only HEX parses");
+        assert_eq!(f.image.segment_count(), 0);
+        assert_eq!(f.image.span(), None);
+        assert!(f.start.is_none());
+    }
+
+    #[test]
+    fn hex_data_after_eof_is_rejected() {
+        // Anything following the type-01 EOF record is a malformed file.
+        let r = hex::read(":00000001FF\n:00000001FF\n");
+        assert!(matches!(r, Err(ImageError::Record { line: 2, .. })), "got {r:?}");
+    }
+
+    #[test]
+    fn hex_byte_count_mismatch_is_rejected() {
+        // The length field claims two data bytes but the record carries none.
+        let r = hex::read(":0200000000FF\n");
+        assert!(matches!(r, Err(ImageError::Record { line: 1, .. })), "got {r:?}");
+    }
+
+    #[test]
+    fn srec_garbage_and_minimal_terminator() {
+        // Not an SREC line → rejected.
+        assert!(matches!(
+            srec::read("garbage\n"),
+            Err(ImageError::Record { line: 1, .. })
+        ));
+        // A lone S9 termination record is a valid, empty SREC file.
+        let f = srec::read("S9030000FC\n").expect("S9-only SREC parses");
+        assert_eq!(f.image.segment_count(), 0);
+        assert_eq!(f.start, Some(0x0000));
+    }
+
+    #[test]
+    fn srec_missing_checksum_byte_is_rejected() {
+        // Take a valid SREC and strip the checksum byte off its S1 data record:
+        // the declared count no longer matches the record length.
+        let file = srec::SRecFile {
+            header: None,
+            image: img_from(&[(0x1000, &[0xDE, 0xAD, 0xBE, 0xEF])]),
+            start: Some(0x1000),
+        };
+        let text = srec::write(&file, srec::WriteOptions::default()).unwrap();
+        let mut lines: Vec<String> = text.lines().map(String::from).collect();
+        let idx = lines.iter().position(|l| l.starts_with("S1")).unwrap();
+        // Drop the final two hex digits (the checksum byte) of the data record.
+        let new_len = lines[idx].len() - 2;
+        lines[idx].truncate(new_len);
+        let r = srec::read(&lines.join("\n"));
+        assert!(matches!(r, Err(ImageError::Record { .. })), "got {r:?}");
+    }
+
     #[test]
     fn srec_width_override_too_narrow_errors() {
         let file = srec::SRecFile {

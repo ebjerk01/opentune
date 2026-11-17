@@ -1170,6 +1170,45 @@ mod tests {
         assert!(matches!(parse_ecuflash("<<<"), Err(Error::Xml(_))));
     }
 
+    // ---- coverage: malformed / minimal / edge inputs ------------------------
+
+    #[test]
+    fn truncated_xml_is_an_error_not_a_panic() {
+        // An unclosed element: the XML parser must surface Error::Xml, never
+        // panic or return a half-built import.
+        let r = parse_ecuflash(r#"<rom><table name="T" type="1D" address="0x10""#);
+        assert!(matches!(r, Err(Error::Xml(_))), "got {r:?}");
+        // Garbage that is not XML at all.
+        assert!(matches!(parse_ecuflash("\u{0}\u{1}\u{2}not xml"), Err(Error::Xml(_))));
+    }
+
+    #[test]
+    fn minimal_rom_parses_to_zero_maps() {
+        // A well-formed but table-less <rom>: valid input, parses cleanly with an
+        // empty map list and no inherited-base warning.
+        let imp = parse_ecuflash("<rom><romid><xmlid>min</xmlid></romid></rom>").unwrap();
+        assert_eq!(imp.rom_id.xmlid, "min");
+        assert!(imp.maps.is_empty());
+        assert!(imp.includes.is_empty());
+    }
+
+    #[test]
+    fn unknown_storagetype_defaults_to_u8_and_warns() {
+        // An EcuFlash inline scaling with a storage type the importer does not
+        // know must default to uint8 and record a warning, never drop the map or
+        // fabricate a width.
+        let src = r#"<rom><romid><xmlid>t</xmlid></romid>
+          <table name="M" type="1D" address="0x100" storagetype="weird64" toexpr="x"/></rom>"#;
+        let imp = parse_ecuflash(src).unwrap();
+        let m = imp.maps.iter().find(|m| m.name == "M").expect("map M imported");
+        assert_eq!(m.data_type, DataType::U8);
+        assert!(
+            imp.warnings.iter().any(|w| w.contains("unknown storagetype")),
+            "warnings: {:?}",
+            imp.warnings
+        );
+    }
+
     #[test]
     fn detects_ecuflash_dialect() {
         let doc = Document::parse(SAMPLE).unwrap();
