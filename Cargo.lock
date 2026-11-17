@@ -854,6 +854,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-image"
+version = "0.1.0"
+
+[[package]]
 name = "opentune-logdef"
 version = "0.1.0"
 dependencies = [

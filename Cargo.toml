@@ -30,6 +30,7 @@ members = [
     "crates/opentune-ecuflash",
     "crates/opentune-logdef",
     "crates/opentune-servicefn",
+    "crates/opentune-image",
 ]
 
 [workspace.package]
