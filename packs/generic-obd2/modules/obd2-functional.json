@@ -1,0 +1,14 @@
+{
+  "vehicle": "Generic OBD-II — ISO 15765-4 functional broadcast (0x7DF, first reply on 0x7E8)",
+  "source": "ISO 15765-4 (11-bit OBD-on-CAN identifiers); SAE J1979 / ISO 15031-5",
+  "addr_note": "A functional request reaches every OBD ECU; this entry listens only on 0x7E8 (ECU #1). Use obd2-physical.json to see each ECU separately.",
+  "modules": [
+    {
+      "name": "OBD functional broadcast (0x7DF -> 0x7E8)",
+      "addr": 223,
+      "req_id": 2015,
+      "resp_id": 2024,
+      "protocol": "obd"
+    }
+  ]
+}

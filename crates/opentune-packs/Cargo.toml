@@ -18,3 +18,8 @@ opentune-adaptation = { path = "../opentune-adaptation" }
 opentune-servicefn = { path = "../opentune-servicefn" }
 opentune-logdef = { path = "../opentune-logdef" }
 opentune-autoscan = { path = "../opentune-autoscan" }
+
+[dev-dependencies]
+# tests/repo_packs.rs re-fits every shipped logger conversion with the same
+# fitter the importers use, so a hand-edited factor/offset cannot drift.
+opentune-xdf = { path = "../opentune-xdf" }

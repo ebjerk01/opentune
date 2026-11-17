@@ -1,0 +1,15 @@
+{
+  "id": "obd2-read-readiness",
+  "name": "OBD: read readiness / MIL status (mode 01 PID 01)",
+  "description": "Read-only. Monitor status since DTCs cleared: byte A bit 7 = MIL on, bits 0-6 = DTC count; bytes B-D = which readiness monitors are supported and which are still incomplete. Defaults to OBD ECU #1 (0x7E0/0x7E8, ISO 15765-4); enter another ECU's ids in the Target fields to address it instead.",
+  "requires_security": false,
+  "req_id": "0x7E0",
+  "resp_id": "0x7E8",
+  "steps": [
+    {
+      "op": "obd_request",
+      "mode": 1,
+      "pid": 1
+    }
+  ]
+}

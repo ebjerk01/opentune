@@ -1,0 +1,453 @@
+{
+  "format": "rom_raider_logger",
+  "version": "1.0.0",
+  "source": "ISO 14229-1 Annex C.1 identification DIDs 0xF180-0xF19F (0xF18F is reserved and omitted); names cross-checked with commaai/opendbc opendbc/car/uds.py (MIT)",
+  "protocols": [
+    {
+      "id": "UDS",
+      "kind": {
+        "kind": "uds_mode22"
+      },
+      "ecus": [
+        {
+          "params": [
+            {
+              "id": "uds_f180_boot_sw_id",
+              "name": "Boot software identification",
+              "description": "ISO 14229-1 identification DID 0xF180. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61824
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f181_app_sw_id",
+              "name": "Application software identification",
+              "description": "ISO 14229-1 identification DID 0xF181. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61825
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f182_app_data_id",
+              "name": "Application data identification",
+              "description": "ISO 14229-1 identification DID 0xF182. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61826
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f183_boot_sw_fingerprint",
+              "name": "Boot software fingerprint",
+              "description": "ISO 14229-1 identification DID 0xF183. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61827
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f184_app_sw_fingerprint",
+              "name": "Application software fingerprint",
+              "description": "ISO 14229-1 identification DID 0xF184. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61828
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f185_app_data_fingerprint",
+              "name": "Application data fingerprint",
+              "description": "ISO 14229-1 identification DID 0xF185. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61829
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f186_active_session",
+              "name": "Active diagnostic session",
+              "description": "ISO 14229-1 identification DID 0xF186. 1 byte: the active diagnostic session (0x01 default, 0x02 programming, 0x03 extended, …).",
+              "units": "",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61830
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f187_spare_part_number",
+              "name": "Vehicle manufacturer spare part number",
+              "description": "ISO 14229-1 identification DID 0xF187. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61831
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f188_vm_ecu_sw_number",
+              "name": "Vehicle manufacturer ECU software number",
+              "description": "ISO 14229-1 identification DID 0xF188. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61832
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f189_vm_ecu_sw_version",
+              "name": "Vehicle manufacturer ECU software version number",
+              "description": "ISO 14229-1 identification DID 0xF189. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61833
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f18a_supplier_id",
+              "name": "System supplier identifier",
+              "description": "ISO 14229-1 identification DID 0xF18A. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61834
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f18b_ecu_mfg_date",
+              "name": "ECU manufacturing date",
+              "description": "ISO 14229-1 identification DID 0xF18B. Date, typically BCD-encoded (e.g. YY MM DD); the exact layout is manufacturer-defined.",
+              "units": "date",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61835
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f18c_ecu_serial",
+              "name": "ECU serial number",
+              "description": "ISO 14229-1 identification DID 0xF18C. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61836
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f18d_supported_functional_units",
+              "name": "Supported functional units",
+              "description": "ISO 14229-1 identification DID 0xF18D. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61837
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f18e_kit_assembly_part_number",
+              "name": "Vehicle manufacturer kit assembly part number",
+              "description": "ISO 14229-1 identification DID 0xF18E. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61838
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f190_vin",
+              "name": "VIN (vehicle identification number)",
+              "description": "ISO 14229-1 identification DID 0xF190. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61840
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f191_vm_ecu_hw_number",
+              "name": "Vehicle manufacturer ECU hardware number",
+              "description": "ISO 14229-1 identification DID 0xF191. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61841
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f192_supplier_ecu_hw_number",
+              "name": "System supplier ECU hardware number",
+              "description": "ISO 14229-1 identification DID 0xF192. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61842
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f193_supplier_ecu_hw_version",
+              "name": "System supplier ECU hardware version number",
+              "description": "ISO 14229-1 identification DID 0xF193. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61843
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f194_supplier_ecu_sw_number",
+              "name": "System supplier ECU software number",
+              "description": "ISO 14229-1 identification DID 0xF194. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61844
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f195_supplier_ecu_sw_version",
+              "name": "System supplier ECU software version number",
+              "description": "ISO 14229-1 identification DID 0xF195. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61845
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f196_type_approval_number",
+              "name": "Exhaust regulation or type approval number",
+              "description": "ISO 14229-1 identification DID 0xF196. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61846
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f197_system_name",
+              "name": "System name or engine type",
+              "description": "ISO 14229-1 identification DID 0xF197. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61847
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f198_repair_shop_code",
+              "name": "Repair shop code or tester serial number",
+              "description": "ISO 14229-1 identification DID 0xF198. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61848
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f199_programming_date",
+              "name": "Programming date",
+              "description": "ISO 14229-1 identification DID 0xF199. Date, typically BCD-encoded (e.g. YY MM DD); the exact layout is manufacturer-defined.",
+              "units": "date",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61849
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19a_cal_repair_shop_code",
+              "name": "Calibration repair shop code or calibration equipment serial number",
+              "description": "ISO 14229-1 identification DID 0xF19A. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61850
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19b_calibration_date",
+              "name": "Calibration date",
+              "description": "ISO 14229-1 identification DID 0xF19B. Date, typically BCD-encoded (e.g. YY MM DD); the exact layout is manufacturer-defined.",
+              "units": "date",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61851
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19c_cal_equipment_sw_number",
+              "name": "Calibration equipment software number",
+              "description": "ISO 14229-1 identification DID 0xF19C. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61852
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19d_ecu_install_date",
+              "name": "ECU installation date",
+              "description": "ISO 14229-1 identification DID 0xF19D. Date, typically BCD-encoded (e.g. YY MM DD); the exact layout is manufacturer-defined.",
+              "units": "date",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61853
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19e_odx_file",
+              "name": "ODX file identifier",
+              "description": "ISO 14229-1 identification DID 0xF19E. Usually an ASCII string. The live logger shows only the first 8 bytes as a number — read it with Auto-scan (identity) or the service scripts for the full text.",
+              "units": "ascii",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61854
+              },
+              "endian": "big"
+            },
+            {
+              "id": "uds_f19f_entity",
+              "name": "Entity identifier",
+              "description": "ISO 14229-1 identification DID 0xF19F. Manufacturer-defined byte record; shown as a raw number of its first 8 bytes.",
+              "units": "bytes",
+              "protocol": {
+                "kind": "uds_mode22"
+              },
+              "addressing": {
+                "addressing": "uds_did",
+                "did": 61855
+              },
+              "endian": "big"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

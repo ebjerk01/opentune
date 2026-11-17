@@ -1,0 +1,12 @@
+{
+  "id": "my-pack-read-vin",
+  "name": "Example: read VIN (DID F190)",
+  "description": "Read-only example. Writes/actions need requires_security + a security_access step only when the module demands it; OpenTune ships no seed/key algorithms.",
+  "requires_security": false,
+  "steps": [
+    {
+      "op": "read_data_by_identifier",
+      "did": 61840
+    }
+  ]
+}

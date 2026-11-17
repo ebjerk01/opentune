@@ -1,0 +1,43 @@
+# Definition packs
+
+Data that the coding / adaptation / service / auto-scan / live-log engines run
+on. Each sub-folder with a `pack.json` is one pack; see
+[`docs/DEFINITION-PACKS.md`](../docs/DEFINITION-PACKS.md) for the format and a
+"writing a pack" walkthrough. Inspect them with `opentune packs packs`. The
+desktop app bundles this folder and opens its file pickers here.
+
+| Pack | Contents | License | Sources |
+|------|----------|---------|---------|
+| [`generic-obd2`](generic-obd2/) | Auto-scan module lists (ISO 15765-4 physical `0x7E0`-`0x7E7` and functional `0x7DF`), a mode-01 logger for 34 common PIDs, 6 service scripts (readiness, stored / pending / permanent DTCs, VIN, **mode-04 clear = write**) | GPL-3.0-or-later | SAE J1979 / ISO 15031-5, ISO 15765-4 |
+| [`iso14229-identification`](iso14229-identification/) | Logger def of the identification DIDs `0xF180`-`0xF19F`, 4 read-only DID scripts (VIN, active session, spare part number, ECU serial) | GPL-3.0-or-later | ISO 14229-1 Annex C; names cross-checked with [opendbc `uds.py`](https://github.com/commaai/opendbc/blob/master/opendbc/car/uds.py) (MIT) |
+| [`vag-modules`](vag-modules/) | Auto-scan list of 7 VAG modules on UDS/CAN (engine, DSG, airbag, EPS, ACC radar, front camera, Haldex) | GPL-3.0-or-later | [opendbc](https://github.com/commaai/opendbc/tree/master/opendbc/car/volkswagen) (MIT, © comma.ai), [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) (BSD-2-Clause, © Brian Ledbetter and contributors) — cited per entry |
+| [`_template`](_template/) | Copy-me scaffold (not loaded: `_`-prefixed folders are skipped) | GPL-3.0-or-later | — |
+
+## Provenance rules
+
+- Standards (ISO 14229, ISO 15031 / SAE J1979, ISO 15765-4) are used by their
+  published identifiers and formulas only.
+- Every non-standard fact (a module's CAN id, a DID's meaning) carries a
+  `source` naming an open, license-compatible project and the file it came
+  from. If there is no such source, the entry is left out — the VAG pack has
+  no VAG "address words" for that reason.
+- Nothing from commercial / OEM tools (their label and coding data is
+  copyrighted or encrypted), no seed/key algorithms, no VINs or other personal
+  data.
+
+## Notes on the shipped data
+
+- `addr` in the module lists is the low byte of the 11-bit request id (11-bit
+  normal addressing has no separate logical address). It is **not** a VAG
+  address word.
+- `vag-modules` is UDS on CAN only. opendbc's fingerprints show these ids
+  answering UDS on MQB, MEB and late PQ cars; older modules that speak
+  KWP2000 over VW TP2.0 are not listed because the auto-scan engine only
+  speaks UDS and OBD.
+- The generic OBD service scripts default to OBD ECU #1 (`req_id` `0x7E0` /
+  `resp_id` `0x7E8`); the panel's Target fields override that. Mode 04 sent
+  physically clears only the addressed ECU. Auto-scan → Clear with
+  `obd2-physical.json` clears every OBD ECU.
+- The identification logger reads each DID as a number (first 8 bytes). ASCII
+  DIDs are easier to read through Auto-scan's identity block or the read-only
+  service scripts, whose step report shows the response bytes.

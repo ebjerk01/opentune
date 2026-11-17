@@ -1,0 +1,13 @@
+{
+  "vehicle": "Example vehicle",
+  "modules": [
+    {
+      "name": "Engine",
+      "addr": 224,
+      "req_id": 2016,
+      "resp_id": 2024,
+      "protocol": "uds",
+      "source": "ISO 15765-4"
+    }
+  ]
+}

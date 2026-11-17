@@ -104,7 +104,8 @@
       const r = await T().dialog.open({
         multiple: false,
         directory: false,
-        filters: [{ name: "logger.xml", extensions: ["xml"] }],
+        filters: [{ name: "Logger definition", extensions: ["xml", "json"] }],
+        defaultPath: (window.OT && window.OT.packsDir) || undefined,
       });
       const path = Array.isArray(r) ? r[0] : r;
       if (!path) return;

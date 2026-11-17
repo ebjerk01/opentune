@@ -1,0 +1,14 @@
+{
+  "id": "obd2-clear-dtcs",
+  "name": "OBD: clear DTCs and stored values (mode 04) — WRITE",
+  "description": "WRITES TO THE ECU. Clears emission-related DTCs, freeze-frame data and test results, turns the MIL off and RESETS ALL READINESS MONITORS to 'incomplete' (the car may fail an inspection until they complete again). Engine off, ignition on. Only runs after the operator ticks the confirmation box. Mode 04 sent physically clears only the addressed ECU; use Auto-scan → Clear with obd2-physical.json to clear every OBD ECU. Defaults to OBD ECU #1 (0x7E0/0x7E8, ISO 15765-4); enter another ECU's ids in the Target fields to address it instead.",
+  "requires_security": false,
+  "req_id": "0x7E0",
+  "resp_id": "0x7E8",
+  "steps": [
+    {
+      "op": "obd_request",
+      "mode": 4
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "vehicle": "Generic OBD-II — ISO 15765-4 11-bit physical addresses (0x7E0-0x7E7 / 0x7E8-0x7EF)",
+  "source": "ISO 15765-4 (11-bit OBD-on-CAN identifiers); SAE J1979 / ISO 15031-5",
+  "addr_note": "addr = low byte of the 11-bit request id (11-bit normal addressing has no separate logical address).",
+  "modules": [
+    {
+      "name": "OBD ECU #1 (0x7E0) — usually the engine",
+      "addr": 224,
+      "req_id": 2016,
+      "resp_id": 2024,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #2 (0x7E1) — usually the transmission",
+      "addr": 225,
+      "req_id": 2017,
+      "resp_id": 2025,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #3 (0x7E2)",
+      "addr": 226,
+      "req_id": 2018,
+      "resp_id": 2026,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #4 (0x7E3)",
+      "addr": 227,
+      "req_id": 2019,
+      "resp_id": 2027,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #5 (0x7E4)",
+      "addr": 228,
+      "req_id": 2020,
+      "resp_id": 2028,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #6 (0x7E5)",
+      "addr": 229,
+      "req_id": 2021,
+      "resp_id": 2029,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #7 (0x7E6)",
+      "addr": 230,
+      "req_id": 2022,
+      "resp_id": 2030,
+      "protocol": "obd"
+    },
+    {
+      "name": "OBD ECU #8 (0x7E7)",
+      "addr": 231,
+      "req_id": 2023,
+      "resp_id": 2031,
+      "protocol": "obd"
+    }
+  ]
+}

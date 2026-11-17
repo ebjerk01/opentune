@@ -1,0 +1,15 @@
+{
+  "id": "my-pack",
+  "name": "My pack (template)",
+  "version": "0.1.0",
+  "maker": "",
+  "platform": "",
+  "vehicles": [],
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "description": "Copy this folder to packs/<your-pack-id>/, rename, and replace the examples. Record where every non-standard fact comes from in 'sources'.",
+  "sources": [
+    "ISO 14229-1 (example DID 0xF190)",
+    "ISO 15765-4 (example ids 0x7E0/0x7E8)"
+  ]
+}

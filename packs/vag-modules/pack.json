@@ -1,0 +1,17 @@
+{
+  "id": "vag-modules",
+  "name": "VAG module addresses (UDS on CAN)",
+  "version": "1.0.0",
+  "maker": "VAG",
+  "platform": "MQB / MEB / late PQ (UDS on CAN)",
+  "vehicles": [
+    "VW/Audi/SEAT/Škoda models whose modules answer UDS on CAN — see opendbc's supported list"
+  ],
+  "author": "OpenTune contributors",
+  "license": "GPL-3.0-or-later",
+  "description": "A deliberately small Auto-scan list of VAG diagnostic CAN ids taken ONLY from open, license-compatible projects (opendbc, MIT; VW_Flash, BSD-2-Clause), each entry citing its source. UDS on 11-bit CAN only: the KWP2000 / VW TP2.0 modules of older PQ-era cars are not listed because the Auto-scan engine speaks UDS and OBD only. VAG 'address words' (01, 15, 44, …) are not recorded — no license-compatible source.",
+  "sources": [
+    "commaai/opendbc opendbc/car/volkswagen/fingerprints.py + values.py (MIT; fingerprints @ d714bb4, values @ b3bd79a): FW query over UDS 0x22, VOLKSWAGEN_RX_OFFSET = 0x6A for non-OBD modules",
+    "bri3d/VW_Flash lib/ (BSD-2-Clause; @ 293f46d)"
+  ]
+}

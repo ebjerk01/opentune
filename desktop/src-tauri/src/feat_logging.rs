@@ -7,17 +7,24 @@
 //! rejects the tick with "adapter busy" while another panel owns the adapter.
 //!
 //! Parameter definitions are RomRaider-style `logger.xml` files parsed by
-//! [`opentune_logdef`]. Only UDS `0x22` (ReadDataByIdentifier) parameters are
-//! actually driven today (see [`opentune_logdef::poll_once`]); OBD-II PID and
-//! raw-memory/SSM reads come back with an explanatory `note` rather than a value,
-//! which the UI shows verbatim.
+//! [`opentune_logdef`], or a definition pack's `loggers/*.json` (the same
+//! [`opentune_logdef::LogDef`] model, serialised as JSON). UDS `0x22` DIDs,
+//! OBD-II mode-01 PIDs and UDS `0x23` memory reads are driven (see
+//! [`opentune_logdef::poll_once`]); anything else comes back with an
+//! explanatory `note` rather than a value, which the UI shows verbatim.
 
 use serde_json::{json, Value};
 
-/// Read and parse the `logger.xml` at `path` into a [`opentune_logdef::LogDef`].
+/// Read and parse the logger definition at `path` into a
+/// [`opentune_logdef::LogDef`]: a pack's JSON `LogDef` when the text is a JSON
+/// object, otherwise a RomRaider-style `logger.xml`.
 fn load_def(path: &str) -> Result<opentune_logdef::LogDef, String> {
-    let xml = std::fs::read_to_string(path).map_err(|e| format!("read '{path}': {e}"))?;
-    opentune_logdef::parse(&xml).map_err(|e| format!("parse '{path}': {e}"))
+    let text = std::fs::read_to_string(path).map_err(|e| format!("read '{path}': {e}"))?;
+    if text.trim_start().starts_with('{') {
+        return serde_json::from_str(&text)
+            .map_err(|e| format!("parse '{path}' (JSON LogDef): {e}"));
+    }
+    opentune_logdef::parse(&text).map_err(|e| format!("parse '{path}': {e}"))
 }
 
 /// Parse a `logger.xml` definition and return the list of available parameters.
@@ -127,4 +134,23 @@ fn chrono_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A definition pack's JSON logger loads through the same path as an XML
+    /// `logger.xml`, so the Live log panel can open `packs/*/loggers/*.json`.
+    #[test]
+    fn loads_a_pack_json_logger() {
+        let p = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packs/generic-obd2/loggers/obd2-mode01.json"
+        );
+        let def = load_def(p).unwrap();
+        assert!(def.param_count() > 20);
+        let v = log_params(p.to_string()).unwrap();
+        assert!(v.to_string().contains("obd01_0c_rpm"));
+    }
 }
