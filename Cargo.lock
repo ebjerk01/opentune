@@ -668,6 +668,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-candump"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-driver-mock",
+ "serde",
+]
+
+[[package]]
 name = "opentune-cbf"
 version = "0.1.0"
 dependencies = [

@@ -17,6 +17,8 @@ use opentune_core::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub mod monitor;
+
 #[derive(Default)]
 pub struct MockDriver {
     path: Option<PathBuf>,
@@ -26,6 +28,7 @@ pub struct MockDriver {
     data: Vec<u8>,
     open: bool,
     diag: Option<MockDiag>,
+    monitor: monitor::MockMonitor,
 }
 
 /// An offline UDS [`DiagTransport`] backed by a file of DID → bytes, so module
@@ -296,5 +299,10 @@ impl Interface for MockDriver {
 
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
         self.diag.as_mut().map(|d| d as &mut dyn DiagTransport)
+    }
+
+    /// Synthetic bus traffic for offline CAN-dump work (see [`monitor`]).
+    fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+        Some(&mut self.monitor)
     }
 }
