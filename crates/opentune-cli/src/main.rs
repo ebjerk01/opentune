@@ -390,7 +390,8 @@ enum Command {
         params: Vec<String>,
     },
     /// Generic OBD-II mode-01 live data: channel table, supported PIDs, reads
-    /// (multi-PID batched). `--driver obdsim` runs against a simulated ECU.
+    /// (multi-PID batched); inspection data: readiness, freeze frame, vehicle
+    /// info (CALID/CVN), DTCs. `--driver obdsim` runs against a simulated ECU.
     Obd {
         #[command(subcommand)]
         action: obd_cmd::ObdAction,
