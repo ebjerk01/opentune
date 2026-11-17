@@ -30,6 +30,7 @@ use tauri_plugin_updater::UpdaterExt;
 // Auto-debug wizard is UI-only (it orchestrates these commands from the browser).
 mod feat_adaptation;
 mod feat_coding;
+mod feat_dash;
 mod feat_logging;
 mod feat_obd;
 mod feat_scan;
@@ -2273,6 +2274,9 @@ fn main() {
             feat_logging::log_params,
             feat_logging::log_poll_once,
             feat_obd::obd_live,
+            feat_dash::obd_pid_table,
+            feat_dash::obd_supported,
+            feat_dash::obd_read,
             list_drivers,
             data_paths,
             image_info,
