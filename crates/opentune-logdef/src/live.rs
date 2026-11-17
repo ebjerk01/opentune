@@ -4,15 +4,34 @@
 //! module actually reads it: for each selected parameter it issues the read its
 //! addressing implies over a [`RawDiag`] transport, decodes the raw integer, and
 //! applies the parameter's linear conversion. It is deliberately conservative —
-//! only UDS `0x22` (ReadDataByIdentifier) reads are driven today; OBD-II PID and
-//! raw-memory/SSM reads are reported as not-yet-supported rather than guessed,
-//! and a non-linear conversion yields the raw value with a note instead of an
-//! approximation.
+//! three addressing kinds are driven today:
+//!
+//! * [`Addressing::UdsDid`] — UDS `0x22` (ReadDataByIdentifier), expecting a
+//!   `62 <did-hi> <did-lo> <data…>` positive response.
+//! * [`Addressing::ObdPid`] — OBD-II service `0x01` (show current data),
+//!   expecting a `41 <pid> <data…>` positive response.
+//! * [`Addressing::Memory`] — UDS `0x23` (ReadMemoryByAddress) with the fixed
+//!   `addressAndLengthFormatIdentifier` [`MEM_ALFID`] (4-byte address, 1-byte
+//!   length), expecting a `63 <data…>` positive response; a param with a `bit`
+//!   index surfaces that single bit.
+//!
+//! [`Addressing::Unknown`] is reported as undetermined rather than guessed. A
+//! negative (`0x7F …`) or short response is likewise recorded in the sample's
+//! note, never guessed, and a non-linear conversion yields the raw value with a
+//! note instead of an approximation.
 
 use crate::model::{Addressing, ConversionFit, LogDef, LogParam};
 use opentune_core::ecudef::Endian;
 use opentune_core::RawDiag;
 use std::io::Write;
+
+/// `addressAndLengthFormatIdentifier` used for every [`Addressing::Memory`]
+/// read: the high nibble is the byte count of the `memorySize` field (1) and the
+/// low nibble is the byte count of the `memoryAddress` field (4), i.e. a 4-byte
+/// big-endian address followed by a 1-byte length. This matches the `u32`
+/// address / `u8` length the model carries, so no address or length that fits
+/// the model can overflow the request.
+const MEM_ALFID: u8 = 0x14;
 
 /// One sampled parameter at one point in time.
 #[derive(Debug, Clone, PartialEq)]
@@ -112,11 +131,81 @@ pub fn poll_once(diag: &mut dyn RawDiag, def: &LogDef, ids: &[&str]) -> Vec<Samp
                     Err(e) => s.note = e,
                 }
             }
-            Addressing::ObdPid { .. } => {
-                s.note = "OBD-II PID polling not implemented yet".into();
+            Addressing::ObdPid { pid } => {
+                // OBD-II service 0x01 "show current data": request is the service
+                // byte followed by the single PID byte; a positive response
+                // echoes `41 <pid>` and then the data bytes.
+                let req = [0x01u8, *pid];
+                match diag.request(&req) {
+                    Ok(resp) => {
+                        if resp.len() >= 3 && resp[0] == 0x41 && resp[1] == *pid {
+                            let raw = decode_uint(&resp[2..], p.endian);
+                            s.raw = Some(raw);
+                            apply_conversion(&mut s, p, raw);
+                        } else if resp.first() == Some(&0x7F) {
+                            s.note = format!("negative response {resp:02X?}");
+                        } else if resp.len() < 3
+                            && resp.first() == Some(&0x41)
+                            && resp.get(1) == Some(pid)
+                        {
+                            s.note = format!("short response, no PID data: {resp:02X?}");
+                        } else {
+                            s.note = format!("unexpected response {resp:02X?}");
+                        }
+                    }
+                    Err(e) => s.note = e,
+                }
             }
-            Addressing::Memory { .. } => {
-                s.note = "raw memory / SSM read not implemented yet".into();
+            Addressing::Memory {
+                address,
+                length,
+                bit,
+            } => {
+                // UDS 0x23 ReadMemoryByAddress with the fixed MEM_ALFID: ALFID,
+                // 4-byte big-endian address, 1-byte length. A positive response
+                // is `63 <data…>` with no echo of the address.
+                let req = [
+                    0x23u8,
+                    MEM_ALFID,
+                    (address >> 24) as u8,
+                    (address >> 16) as u8,
+                    (address >> 8) as u8,
+                    *address as u8,
+                    *length,
+                ];
+                match diag.request(&req) {
+                    Ok(resp) => {
+                        if resp.first() == Some(&0x63) {
+                            let data = &resp[1..];
+                            if data.len() < usize::from(*length) {
+                                s.note = format!(
+                                    "short response, expected {length} data byte(s), got {}: {resp:02X?}",
+                                    data.len()
+                                );
+                            } else {
+                                let word = decode_uint(data, p.endian);
+                                match bit {
+                                    Some(b) => {
+                                        // Surface the single requested bit (0/1).
+                                        let value = (word >> u64::from(*b)) & 1;
+                                        s.raw = Some(value);
+                                        apply_conversion(&mut s, p, value);
+                                        s.note = format!("bit {b}");
+                                    }
+                                    None => {
+                                        s.raw = Some(word);
+                                        apply_conversion(&mut s, p, word);
+                                    }
+                                }
+                            }
+                        } else if resp.first() == Some(&0x7F) {
+                            s.note = format!("negative response {resp:02X?}");
+                        } else {
+                            s.note = format!("unexpected response {resp:02X?}");
+                        }
+                    }
+                    Err(e) => s.note = e,
+                }
             }
             Addressing::Unknown => {
                 s.note = "addressing could not be determined from the definition".into();
