@@ -9,8 +9,12 @@
 //!   an automatic, remembered fall-back to single-PID requests for ECUs that
 //!   reject or mis-handle multi-PID requests.
 //! - [`read_vin`]: VIN via mode `0x09` PID `0x02` (UDS `22 F190` fallback).
-//! - [`sim::SimEcu`]: a small offline mode-01 ECU used by the tests, the CLI
-//!   `--driver obdsim` and the desktop demo driver.
+//! - [`inspect`]: inspection data — readiness monitors (PID `01`/`41`), freeze
+//!   frame (mode `02`), vehicle information (mode `09`: CALID, CVN, ECU name)
+//!   and stored / pending / permanent DTCs (modes `03`/`07`/`0A`).
+//! - [`sim::SimEcu`]: a small offline OBD ECU (modes 01/02/03/07/09/0A) used by
+//!   the tests, the CLI `--driver obdsim` and the desktop demo driver;
+//!   [`sim::SimVehicle`] puts several of them on their OBD addresses.
 //!
 //! Everything runs over the [`RawDiag`] request→response seam, so any driver
 //! that exposes a diagnostic transport (wrapped in [`CoreDiag`](crate::CoreDiag))
@@ -23,6 +27,13 @@
 //! and are `None` where no single upper limit is meaningful (trims, voltage, …).
 use crate::diag::RawDiag;
 use std::collections::{BTreeMap, BTreeSet};
+
+pub mod inspect;
+pub use inspect::{
+    inspect, read_all_dtcs, read_dtcs, read_freeze_frame, read_readiness, read_vehicle_info,
+    DtcEntry, DtcMode, DtcReport, FreezeFrame, Inspection, Readiness, Sections, VehicleInfo,
+    OBD_ECU_IDS,
+};
 
 /// Maximum PIDs in one mode-01 request on CAN (ISO 15765-4).
 pub const MAX_PIDS_PER_REQUEST: usize = 6;
@@ -608,11 +619,9 @@ pub fn read_vin<D: RawDiag + ?Sized>(diag: &mut D) -> Option<String> {
         (ascii.len() >= 17).then(|| ascii[ascii.len() - 17..].to_string())
     };
     if let Ok(r) = diag.request(&[0x09, 0x02]) {
-        if r.len() > 2 && r[0] == 0x49 && r[1] == 0x02 {
-            // CAN: `49 02 01 <17 bytes>`; skip the data-item count byte.
-            if let Some(v) = pick(&r[3.min(r.len())..]) {
-                return Some(v);
-            }
+        // CAN `49 02 01 <17 bytes>` or the legacy 5-message form.
+        if let Some(v) = inspect::parse_vin(&r) {
+            return Some(v);
         }
     }
     if let Ok(r) = diag.request(&[0x22, 0xF1, 0x90]) {
@@ -638,14 +647,224 @@ pub mod sim {
         FirstOnly,
     }
 
-    /// Simulated ECU answering mode `01` (incl. support bitmaps) and `09 02`.
+    /// Simulated ECU answering mode `01` (incl. support bitmaps; PIDs `01`/`41`
+    /// are ordinary entries of `pids`) and, through [`SimInspect`], modes
+    /// `02`, `03`, `07`, `09` and `0A`.
     #[derive(Debug, Clone)]
     pub struct SimEcu {
         pub pids: BTreeMap<u8, Vec<u8>>,
         pub multi: MultiMode,
         pub vin: Option<String>,
+        /// Inspection data (freeze frame, DTC lists, mode-09 items).
+        pub inspect: SimInspect,
         /// Every request received, in order.
         pub log: Vec<Vec<u8>>,
+    }
+
+    /// A stored freeze frame (frame 0 only).
+    #[derive(Debug, Clone, Default)]
+    pub struct SimFreeze {
+        /// PID `02`: the DTC that stored the frame (`[0, 0]` = none stored).
+        pub dtc: [u8; 2],
+        /// Mode-02 PIDs and their data bytes.
+        pub pids: BTreeMap<u8, Vec<u8>>,
+    }
+
+    /// Inspection modes of a [`SimEcu`]. `None` lists / freeze frame make the
+    /// mode answer NRC `11` (service not supported).
+    #[derive(Debug, Clone, Default)]
+    pub struct SimInspect {
+        /// Mode `03` (stored / confirmed DTCs), `07` (pending), `0A` (permanent).
+        pub stored: Option<Vec<[u8; 2]>>,
+        pub pending: Option<Vec<[u8; 2]>>,
+        pub permanent: Option<Vec<[u8; 2]>>,
+        /// Mode `02` freeze frame 0.
+        pub freeze: Option<SimFreeze>,
+        /// Mode `09` infotype `04` (each padded / cut to 16 bytes).
+        pub calids: Vec<String>,
+        /// Mode `09` infotype `06`.
+        pub cvns: Vec<[u8; 4]>,
+        /// Mode `09` infotype `0A`: `(acronym, name)`, encoded as
+        /// `acronym[4] '-' name[15]`, NUL-padded.
+        pub ecu_name: Option<(String, String)>,
+        /// Answer modes `03`/`07`/`0A` and `09` in the legacy (K-line / J1850)
+        /// multi-message form instead of the ISO 15765-4 single message.
+        pub legacy: bool,
+    }
+
+    fn padded(s: &[u8], n: usize) -> Vec<u8> {
+        let mut v: Vec<u8> = s.iter().copied().take(n).collect();
+        v.resize(n, 0);
+        v
+    }
+
+    impl SimInspect {
+        fn dtc_list(&self, sid: u8) -> Option<&Vec<[u8; 2]>> {
+            match sid {
+                0x03 => self.stored.as_ref(),
+                0x07 => self.pending.as_ref(),
+                _ => self.permanent.as_ref(),
+            }
+        }
+
+        fn dtcs(&self, sid: u8) -> Vec<u8> {
+            let pos = sid + 0x40;
+            let Some(list) = self.dtc_list(sid) else {
+                return vec![0x7F, sid, 0x11];
+            };
+            if !self.legacy {
+                let mut r = vec![pos, list.len() as u8];
+                list.iter().for_each(|d| r.extend(d));
+                return r;
+            }
+            // Three DTCs per message, zero-padded, at least one message.
+            let mut r = Vec::new();
+            let flat: Vec<u8> = list.iter().flatten().copied().collect();
+            for chunk in flat.chunks(6).chain(flat.is_empty().then_some(&[][..])) {
+                r.push(pos);
+                r.extend(padded(chunk, 6));
+            }
+            r
+        }
+
+        fn freeze(&self, req: &[u8]) -> Result<Vec<u8>, String> {
+            let Some(ff) = &self.freeze else {
+                return Ok(vec![0x7F, 0x02, 0x11]);
+            };
+            let [pid, frame] = req[1..] else {
+                return Ok(vec![0x7F, 0x02, 0x13]);
+            };
+            if frame != 0 {
+                return Ok(vec![0x7F, 0x02, 0x31]);
+            }
+            let mut keys: BTreeSet<u8> = ff.pids.keys().copied().collect();
+            keys.insert(0x02);
+            let data = if pid % 0x20 == 0 {
+                let mut bits = 0u32;
+                for &p in keys
+                    .iter()
+                    .filter(|&&p| p > pid && p as u16 <= pid as u16 + 0x20)
+                {
+                    bits |= 1 << (32 - (p - pid) as u32);
+                }
+                if keys.iter().any(|&p| p as u16 > pid as u16 + 0x20) {
+                    bits |= 1;
+                }
+                bits.to_be_bytes().to_vec()
+            } else if pid == 0x02 {
+                ff.dtc.to_vec()
+            } else {
+                match ff.pids.get(&pid) {
+                    Some(d) => d.clone(),
+                    None => return Err("NO DATA".into()),
+                }
+            };
+            let mut r = vec![0x42, pid, frame];
+            r.extend(data);
+            Ok(r)
+        }
+
+        /// Data items of mode-09 `infotype`, or `None` when not supported.
+        fn info_items(&self, it: u8, vin: Option<&str>) -> Option<Vec<Vec<u8>>> {
+            let items: Vec<Vec<u8>> = match it {
+                0x02 => vec![vin?.as_bytes().to_vec()],
+                0x04 => self
+                    .calids
+                    .iter()
+                    .map(|c| padded(c.as_bytes(), 16))
+                    .collect(),
+                0x06 => self.cvns.iter().map(|c| c.to_vec()).collect(),
+                0x0A => {
+                    let (a, n) = self.ecu_name.as_ref()?;
+                    let mut v = padded(a.as_bytes(), 4);
+                    v.push(b'-');
+                    v.extend(padded(n.as_bytes(), 15));
+                    vec![v]
+                }
+                _ => return None,
+            };
+            (!items.is_empty()).then_some(items)
+        }
+
+        fn info(&self, it: u8, vin: Option<&str>) -> Vec<u8> {
+            if it == 0x00 {
+                let mut bits = 0u32;
+                for p in [0x02u8, 0x04, 0x06, 0x0A] {
+                    if self.info_items(p, vin).is_some() {
+                        bits |= 1 << (32 - p as u32);
+                    }
+                }
+                if bits == 0 {
+                    return vec![0x7F, 0x09, 0x11];
+                }
+                let mut r = vec![0x49, 0x00];
+                if self.legacy {
+                    r.push(0x01);
+                }
+                r.extend(bits.to_be_bytes());
+                return r;
+            }
+            let Some(items) = self.info_items(it, vin) else {
+                return vec![0x7F, 0x09, 0x12];
+            };
+            if !self.legacy {
+                let mut r = vec![0x49, it, items.len() as u8];
+                items.iter().for_each(|i| r.extend(i));
+                return r;
+            }
+            // VIN: 3 leading pad bytes to 20; every item in 4-byte messages.
+            let mut data: Vec<u8> = if it == 0x02 { vec![0; 3] } else { Vec::new() };
+            items.iter().for_each(|i| data.extend(i));
+            let mut r = Vec::new();
+            for (seq, chunk) in data.chunks(4).enumerate() {
+                r.extend([0x49, it, seq as u8 + 1]);
+                r.extend(padded(chunk, 4));
+            }
+            r
+        }
+
+        /// Answer an inspection-mode request.
+        fn answer(&self, req: &[u8], vin: Option<&str>) -> Result<Vec<u8>, String> {
+            match req {
+                [0x02, ..] => self.freeze(req),
+                [sid @ (0x03 | 0x07 | 0x0A)] => Ok(self.dtcs(*sid)),
+                [0x09, it] => Ok(self.info(*it, vin)),
+                [sid, ..] => Ok(vec![0x7F, *sid, 0x13]),
+                [] => Err("empty request".into()),
+            }
+        }
+    }
+
+    /// Several [`SimEcu`]s on their OBD request ids (e.g. `0x7E0`).
+    #[derive(Debug, Clone, Default)]
+    pub struct SimVehicle {
+        pub ecus: BTreeMap<u32, SimEcu>,
+    }
+
+    impl SimVehicle {
+        /// The [`SimEcu::demo`] engine on `7E0` plus a transmission module on
+        /// `7E1` (readiness, ECU name, CALID/CVN, no DTCs or freeze frame).
+        pub fn demo(phase: u64) -> Self {
+            let mut tcm = SimEcu::new(MultiMode::Full);
+            tcm.set(0x01, &[0x00, 0x0C, 0x00, 0x00]).set(
+                0x0D,
+                &[(80.0 + 10.0 * ((phase % 6283) as f64 / 10.0).sin()) as u8],
+            );
+            tcm.inspect = SimInspect {
+                stored: Some(vec![]),
+                pending: Some(vec![]),
+                permanent: Some(vec![]),
+                freeze: Some(SimFreeze::default()),
+                calids: vec!["OT-DEMO-TCU-0001".into()],
+                cvns: vec![[0x5E, 0x6F, 0x70, 0x81]],
+                ecu_name: Some(("TCM".into(), "TransmissionCtl".into())),
+                legacy: false,
+            };
+            let mut ecus = BTreeMap::new();
+            ecus.insert(0x7E0, SimEcu::demo(phase));
+            ecus.insert(0x7E1, tcm);
+            SimVehicle { ecus }
+        }
     }
 
     impl SimEcu {
@@ -654,6 +873,7 @@ pub mod sim {
                 pids: BTreeMap::new(),
                 multi,
                 vin: None,
+                inspect: SimInspect::default(),
                 log: Vec::new(),
             }
         }
@@ -666,6 +886,10 @@ pub mod sim {
 
         /// A plausible turbo-diesel at `phase` (any counter; values wobble with
         /// it so a polling UI looks alive). Single bank: no `0x79`/`0x7B`.
+        /// Inspection data: MIL on with stored P0401 + P2002, pending P0299,
+        /// permanent P0401, NOx/SCR and DPF monitors incomplete, a freeze frame
+        /// stored by P0401, two CALIDs with CVNs and an ECU name. All IDs are
+        /// made-up placeholders.
         pub fn demo(phase: u64) -> Self {
             let f = ((phase % 6283) as f64 / 10.0).sin();
             let u16b = |v: f64| (v.round().clamp(0.0, 65535.0) as u16).to_be_bytes();
@@ -679,7 +903,8 @@ pub mod sim {
             let [p0, p1] = u16b(map * 32.0);
             let [c0, c1] = u16b((map + 3.0) * 32.0);
             let [e0, e1] = u16b((egt + 40.0) * 10.0);
-            s.set(0x04, &[(115.0 + 35.0 * f) as u8])
+            s.set(0x01, &[0x82, 0x0F, 0xEB, 0x42])
+                .set(0x04, &[(115.0 + 35.0 * f) as u8])
                 .set(0x05, &[128])
                 .set(0x06, &[130])
                 .set(0x07, &[124])
@@ -697,6 +922,7 @@ pub mod sim {
                 .set(0x2F, &[158])
                 .set(0x31, &[0x04, 0xD2])
                 .set(0x33, &[101])
+                .set(0x41, &[0x00, 0x0F, 0xEB, 0x4A])
                 .set(0x42, &[0x37, 0x14])
                 .set(0x43, &[0x00, 128])
                 .set(0x44, &[0xC0, 0x00])
@@ -715,6 +941,33 @@ pub mod sim {
                 .set(0x7A, &[0x01, 0x03, 0x52, 0, 0, 0, 0])
                 .set(0x7C, &[0x03, 0x0E, 0x10, 0x0D, 0x48, 0, 0, 0, 0])
                 .set(0x87, &[0x01, p0, p1, 0, 0]);
+            let ff: BTreeMap<u8, Vec<u8>> = [
+                (0x03, vec![0x02, 0x00]),
+                (0x04, vec![0x80]),
+                (0x05, vec![0x7B]),
+                (0x0B, vec![0x96]),
+                (0x0C, vec![0x1A, 0xF8]),
+                (0x0D, vec![0x50]),
+                (0x0F, vec![0x46]),
+                (0x11, vec![0x33]),
+                (0x33, vec![0x65]),
+                (0x42, vec![0x36, 0xB0]),
+            ]
+            .into_iter()
+            .collect();
+            s.inspect = SimInspect {
+                stored: Some(vec![[0x04, 0x01], [0x20, 0x02]]),
+                pending: Some(vec![[0x02, 0x99]]),
+                permanent: Some(vec![[0x04, 0x01]]),
+                freeze: Some(SimFreeze {
+                    dtc: [0x04, 0x01],
+                    pids: ff,
+                }),
+                calids: vec!["OT-DEMO-CAL-0001".into(), "OT-DEMO-DPF-0001".into()],
+                cvns: vec![[0x1A, 0x2B, 0x3C, 0x4D], [0x00, 0x00, 0xBE, 0xEF]],
+                ecu_name: Some(("ECM".into(), "EngineControl".into())),
+                legacy: false,
+            };
             s
         }
 
@@ -772,14 +1025,9 @@ pub mod sim {
                         Ok(resp)
                     }
                 }
-                [0x09, 0x02] => match &self.vin {
-                    Some(v) => {
-                        let mut r = vec![0x49, 0x02, 0x01];
-                        r.extend(v.bytes());
-                        Ok(r)
-                    }
-                    None => Ok(vec![0x7F, 0x09, 0x12]),
-                },
+                [0x02 | 0x03 | 0x07 | 0x09 | 0x0A, ..] => {
+                    self.inspect.answer(req, self.vin.as_deref())
+                }
                 [sid, ..] => Ok(vec![0x7F, *sid, 0x11]),
                 [] => Err("empty request".into()),
             }
