@@ -648,6 +648,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-attest"
+version = "0.1.0"
+dependencies = [
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-flash",
+]
+
+[[package]]
 name = "opentune-autoscan"
 version = "0.1.0"
 dependencies = [
@@ -681,6 +690,7 @@ dependencies = [
  "clap",
  "opentune-a2l",
  "opentune-adaptation",
+ "opentune-attest",
  "opentune-autoscan",
  "opentune-cbf",
  "opentune-checksum",

@@ -539,6 +539,19 @@ enum ChecksumAction {
     },
     /// List the available checksum algorithms.
     Algos,
+    /// Verify an image and emit a flash **checksum attestation** bound to its
+    /// bytes. `satisfied` reflects the real per-block result, so the flash
+    /// policy refuses an internally inconsistent image. Does not modify the file.
+    Attest {
+        /// Algorithm id (e.g. edc16, pcr21).
+        #[arg(long)]
+        algo: String,
+        /// Full ECU image to verify and attest.
+        file: PathBuf,
+        /// Write the attestation JSON here (otherwise printed to stdout).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(clap::Args)]
@@ -823,6 +836,28 @@ fn main() -> Result<()> {
                     if !a.notes.is_empty() {
                         println!("               {}", a.notes);
                     }
+                }
+            }
+            ChecksumAction::Attest { algo, file, out } => {
+                let img = std::fs::read(&file)
+                    .map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+                let att = opentune_attest::attest_image(&algo, &img)
+                    .map_err(|e| anyhow!("{e}"))?;
+                let json = serde_json::to_string_pretty(&att)?;
+                if let Some(out) = out {
+                    std::fs::write(&out, &json)
+                        .map_err(|e| anyhow!("write {}: {e}", out.display()))?;
+                    println!(
+                        "Attestation ({}) written to {} — satisfied={}",
+                        att.algorithm,
+                        out.display(),
+                        att.satisfied
+                    );
+                } else {
+                    println!("{json}");
+                }
+                if !att.satisfied {
+                    println!("! {}", att.note);
                 }
             }
         },

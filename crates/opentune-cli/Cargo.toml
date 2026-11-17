@@ -41,6 +41,7 @@ opentune-autoscan = { path = "../opentune-autoscan" }
 opentune-servicefn = { path = "../opentune-servicefn" }
 opentune-ols = { path = "../opentune-ols" }
 opentune-udssim = { path = "../opentune-udssim" }
+opentune-attest = { path = "../opentune-attest" }
 
 [dev-dependencies]
 # Re-import the generated XDF in the a2l2xdf round-trip integration test.

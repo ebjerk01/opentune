@@ -1,0 +1,10 @@
+[package]
+name = "opentune-attest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+opentune-checksum = { path = "../opentune-checksum" }
+opentune-flash = { path = "../opentune-flash" }
