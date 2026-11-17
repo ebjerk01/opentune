@@ -199,6 +199,25 @@ $("btnCsVerify").onclick = async () => {
   try { renderChecksum(await invoke("checksum_verify", { path: state.imagePath, algo: $("csAlgo").value })); }
   catch (e) { $("csResult").innerHTML = errBanner(e); }
 };
+// The algorithm selector lists every algorithm the core knows. The static
+// options in index.html stay as a fallback; options a plugin overlay added
+// (ids the core doesn't know) are kept after the core list.
+async function initChecksumAlgos() {
+  const sel = $("csAlgo");
+  if (!sel) return;
+  let algos;
+  try { algos = await invoke("checksum_algos"); } catch (e) { return; }
+  if (!Array.isArray(algos) || !algos.length) return;
+  const keep = sel.value;
+  const known = new Set(algos.map((a) => a.id));
+  const extra = [...sel.options].filter((o) => !known.has(o.value) && !STATIC_CS_ALGOS.has(o.value));
+  sel.innerHTML = algos.map((a) =>
+    `<option value="${esc(a.id)}" title="${esc(a.notes)}">${esc(a.id)} — ${esc(a.name)}${a.needs_reference ? " (needs stock reference)" : ""}</option>`).join("");
+  extra.forEach((o) => sel.appendChild(o));
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+const STATIC_CS_ALGOS = new Set(["edc16", "edc17", "pcr21", "crc32-tail"]);
+
 // Fix writes a NEW file by default; overwriting archives the original first.
 async function doFix(outPath) {
   if (!state.imagePath) return toast("Open an image first", true);
@@ -1644,7 +1663,7 @@ async function boot() {
     // App-wide adapter probe (fire-and-forget so it never delays the UI).
     refreshAdapterStatus();
   })();
-  await Promise.allSettled([dataPaths, initDrivers(), initSeedKey(), initUpdates(), conn]);
+  await Promise.allSettled([dataPaths, initDrivers(), initSeedKey(), initUpdates(), initChecksumAlgos(), conn]);
   startupMark("boot done");
   try {
     // For the startup trace: the slowest page resources (scripts, CSS).

@@ -720,6 +720,31 @@ impl Checksums {
     }
 }
 
+/// One entry of the Checksum panel's algorithm list.
+#[derive(Serialize)]
+struct AlgoRow {
+    id: String,
+    name: String,
+    needs_reference: bool,
+    notes: String,
+}
+
+/// The checksum algorithms the core library knows, for the Checksum panel's
+/// selector. Plugins that register extra resolvers add their own options from
+/// their UI overlay.
+#[tauri::command]
+fn checksum_algos() -> Vec<AlgoRow> {
+    opentune_checksum::algorithms()
+        .into_iter()
+        .map(|a| AlgoRow {
+            id: a.id.into(),
+            name: a.name.into(),
+            needs_reference: a.needs_reference,
+            notes: a.notes.into(),
+        })
+        .collect()
+}
+
 #[tauri::command]
 fn checksum_verify(
     path: String,
@@ -2682,6 +2707,7 @@ macro_rules! core_command_list {
             hex_preview,
             identify,
             match_identity,
+            checksum_algos,
             checksum_verify,
             checksum_fix,
             findmaps,
@@ -3008,6 +3034,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r["key"], "06"); // (0x0A ^ 0x0F) + 1 = 0x05 + 1 = 0x06
+    }
+
+    #[test]
+    fn checksum_algos_lists_every_core_algorithm() {
+        let ids: Vec<String> = checksum_algos().into_iter().map(|a| a.id).collect();
+        for id in ["edc16", "edc17", "pcr21", "edc15c6", "me7", "crc32-tail"] {
+            assert!(ids.iter().any(|x| x == id), "{id} missing from {ids:?}");
+        }
+        // Every listed id resolves through the same path the panel uses.
+        let cs = Checksums(Vec::new());
+        assert!(ids.iter().all(|id| cs.get(id).is_some()));
     }
 
     #[test]

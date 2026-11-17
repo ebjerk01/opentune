@@ -238,10 +238,12 @@ fn capture_job(
 ) {
     // Release any cached diagnostic session: the monitor opens the port itself.
     session.invalidate();
+    // Mark the capture finished BEFORE reporting the error, so a status read
+    // right after `candump_start` fails never still says "running".
     let fail = |msg: String| {
         let _ = std::fs::remove_file(&cap.path);
-        let _ = started.send(Err(msg.clone()));
-        cap.finish(Some(msg));
+        cap.finish(Some(msg.clone()));
+        let _ = started.send(Err(msg));
     };
     let Some(mut drv) = make(&req.driver) else {
         drop(file);

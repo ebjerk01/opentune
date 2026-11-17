@@ -39,6 +39,11 @@
   // Each fixture: (args) => value | Promise. Shapes mirror desktop/src-tauri.
   const FIXTURES = {
     build_channel: () => "alpha",
+    checksum_algos: () => [
+      ["edc16", "Bosch EDC16 (MPC56x)"], ["edc17", "Bosch EDC17 (TriCore)"], ["pcr21", "Continental Simos PCR2.1"],
+      ["edc15c6", "Bosch EDC15 (VAG) / EDC15C6 (Mercedes CR1)"], ["me7", "Bosch ME7"], ["dq381", "VAG DQ381 TCU"],
+      ["crc32-tail", "Generic CRC32 tail"],
+    ].map(([id, name]) => ({ id, name, needs_reference: id === "edc17", notes: "preview" })),
     list_drivers: () => [
       { id: "mock", name: "Mock / file driver" },
       { id: "elm327obd", name: "ELM327 serial (OBD read diagnostics)" },
