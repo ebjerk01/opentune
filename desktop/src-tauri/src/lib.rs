@@ -44,6 +44,9 @@ mod feat_logging;
 mod feat_obd;
 mod feat_scan;
 mod feat_service;
+// Startup trace (`OPENTUNE_TRACE_STARTUP=1`), WebKitGTK env defaults and the
+// parsed-data cache. Public so an embedder can add its own trace marks.
+pub mod startup;
 
 // ---------------------------------------------------------------------------
 // Long-operation guard
@@ -466,15 +469,14 @@ fn open_file(path: &str) -> Result<Box<dyn Interface>, String> {
     Ok(drv)
 }
 
-fn load_defs(dir: &Option<PathBuf>) -> Vec<EcuDef> {
-    dir.as_ref()
-        .and_then(|d| ecudef::load_dir(d).ok())
-        .unwrap_or_default()
+/// The ECU definitions in `dir`: parsed once, shared, and re-parsed only when a
+/// file there changes (see [`startup::defs`]).
+fn load_defs(dir: &Option<PathBuf>) -> Arc<Vec<EcuDef>> {
+    startup::defs(dir)
 }
-fn load_cat(dir: &Option<PathBuf>) -> Vec<CatalogEntry> {
-    dir.as_ref()
-        .and_then(|d| catalog::load_catalog(d).ok())
-        .unwrap_or_default()
+/// The vehicle catalog in `dir`, cached like [`load_defs`].
+fn load_cat(dir: &Option<PathBuf>) -> Arc<Vec<CatalogEntry>> {
+    startup::catalog(dir)
 }
 
 fn parse_u32(s: &str) -> Result<u32, String> {
@@ -909,10 +911,11 @@ struct DefInfo {
     notes: String,
 }
 
+// Async (off the UI thread): the first call may parse every definition.
 #[tauri::command]
-fn list_ecudefs(state: tauri::State<AppData>) -> Vec<DefInfo> {
-    load_defs(&state.ecudefs)
-        .into_iter()
+async fn list_ecudefs(state: tauri::State<'_, AppData>) -> Result<Vec<DefInfo>, String> {
+    Ok(load_defs(&state.ecudefs)
+        .iter()
         .map(|d| DefInfo {
             protocol: format!("{:?}", d.protocol),
             flash_kib: d.flash_size / 1024,
@@ -925,11 +928,14 @@ fn list_ecudefs(state: tauri::State<AppData>) -> Vec<DefInfo> {
             name: d.name.clone(),
             id: d.id.clone(),
         })
-        .collect()
+        .collect())
 }
 
 #[tauri::command]
-fn list_maps(ecudef_id: String, state: tauri::State<AppData>) -> Result<Vec<Value>, String> {
+async fn list_maps(
+    ecudef_id: String,
+    state: tauri::State<'_, AppData>,
+) -> Result<Vec<Value>, String> {
     let defs = load_defs(&state.ecudefs);
     let def = defs
         .iter()
@@ -1420,7 +1426,7 @@ fn mapdef_write(
         let p = Path::new(&path);
         let ctx = opentune_scan::ScanContext {
             catalog: Vec::new(),
-            ecudefs: defs.clone(),
+            ecudefs: defs.to_vec(),
         };
         let rec = opentune_scan::scan_file(&ctx, p.parent().unwrap_or(Path::new(".")), p, &bytes);
         rec.ecudef_match
@@ -1659,7 +1665,7 @@ fn guide_title(stem: &str) -> String {
 }
 
 #[tauri::command]
-fn guide_list(state: tauri::State<AppData>) -> Result<Vec<Value>, String> {
+async fn guide_list(state: tauri::State<'_, AppData>) -> Result<Vec<Value>, String> {
     let dir = state.guide.as_ref().ok_or("guide resources not found")?;
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| e.to_string())?
@@ -1678,7 +1684,7 @@ fn guide_list(state: tauri::State<AppData>) -> Result<Vec<Value>, String> {
 }
 
 #[tauri::command]
-fn guide_read(id: String, state: tauri::State<AppData>) -> Result<String, String> {
+async fn guide_read(id: String, state: tauri::State<'_, AppData>) -> Result<String, String> {
     let dir = state.guide.as_ref().ok_or("guide resources not found")?;
     // Guard against path traversal: only a bare NN-slug stem is accepted.
     if id.is_empty()
@@ -1750,8 +1756,8 @@ fn analyze_image(
     let ecudefs = load_defs(&ecudefs_dir);
     let catalog = load_cat(&catalog_dir);
     let ctx = opentune_scan::ScanContext {
-        catalog,
-        ecudefs: ecudefs.clone(),
+        catalog: catalog.to_vec(),
+        ecudefs: ecudefs.to_vec(),
     };
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -2558,6 +2564,11 @@ pub fn builder_with(
     builder: tauri::Builder<tauri::Wry>,
     config: DesktopConfig,
 ) -> tauri::Builder<tauri::Wry> {
+    // Before anything touches GTK/WebKit: start the startup clock and apply the
+    // WebKitGTK environment defaults (see startup.rs and
+    // docs/TROUBLESHOOTING-STARTUP.md).
+    startup::begin();
+    startup::apply_platform_env();
     let DesktopConfig {
         channel,
         data_roots,
@@ -2566,14 +2577,32 @@ pub fn builder_with(
     } = config;
     let core = tauri::plugin::Builder::<tauri::Wry>::new("opentune-core")
         .setup(move |app, _api| {
-            app.manage(resolve_data(app, &data_roots));
+            startup::mark("setup plugin: start");
+            let data = startup::timed("setup: data roots resolved", || {
+                resolve_data(app, &data_roots)
+            });
+            // Nothing is parsed here: the definitions and the catalog warm up
+            // on a background thread and every command reads the cache.
+            startup::warm(data.ecudefs.clone(), data.catalog.clone());
+            app.manage(data);
             app.manage(channel);
             app.manage(Checksums(checksums));
             app.manage(OpGuard::default());
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());
             app.manage(feat_candump::CandumpState::default());
+            startup::mark("setup plugin: done (state managed)");
             Ok(())
+        })
+        .on_window_ready(|w| startup::mark(&format!("window '{}' created", w.label())))
+        .on_webview_ready(|w| startup::mark(&format!("webview '{}' created", w.label())))
+        .on_page_load(|_w, p| startup::mark(&format!("page load {:?}: {}", p.event(), p.url())))
+        .on_event(|_app, ev| match ev {
+            tauri::RunEvent::Ready => startup::mark("event loop ready"),
+            tauri::RunEvent::WindowEvent { event, .. } => {
+                startup::window_event(&format!("{event:?}"))
+            }
+            _ => {}
         })
         .build();
     let builder = builder.plugin(tauri_plugin_dialog::init());
@@ -2654,6 +2683,7 @@ macro_rules! core_command_list {
             update_check,
             update_install,
             update_relaunch,
+            startup::startup_mark,
         }
     };
 }
@@ -2672,7 +2702,23 @@ macro_rules! emit_names {
 
 /// The invoke handler for every core command (see [`public_commands`]).
 pub fn public_handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
-    core_command_list!(emit_handler)
+    // (`typed` pins the closure's argument type for `generate_handler!`.)
+    fn typed<F>(f: F) -> F
+    where
+        F: Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+    {
+        f
+    }
+    let handler = typed(core_command_list!(emit_handler));
+    // With OPENTUNE_TRACE_STARTUP=1 the first IPC calls are timed (a sync
+    // command runs inside this dispatch, on the UI thread).
+    move |invoke| {
+        if !startup::enabled() {
+            return handler(invoke);
+        }
+        let cmd = invoke.message.command().to_string();
+        startup::ipc(&cmd, || handler(invoke))
+    }
 }
 
 /// The names of every core command, as the frontend invokes them.
@@ -2749,6 +2795,7 @@ macro_rules! extension_handler {
 /// `tauri::generate_context!()` in the binary, so an embedder never compiles
 /// the public app's assets into its own binary.
 pub fn run(context: tauri::Context<tauri::Wry>) {
+    startup::begin();
     builder_with(tauri::Builder::default(), DesktopConfig::default())
         .invoke_handler(public_handler())
         .run(context)
