@@ -780,6 +780,7 @@ dependencies = [
  "opentune-driver-openport2",
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
+ "opentune-driver-vcar",
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
