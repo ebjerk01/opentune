@@ -1107,7 +1107,8 @@ function skReflect() {
 $("btnSeedKey").onclick = async () => {
   try {
     const r = await invoke("seedkey_compute", { seed: $("skSeed").value, algo: $("skAlgo").value, mask: $("skMask").value || null, add: $("skAdd").value || null });
-    $("skResult").innerHTML = `<div class="banner ok">key: <b class="mono">${esc(r.key)}</b></div><div class="note">${esc(r.note)}</div>`;
+    const src = r.source === "plugin" ? ` <span class="pill accent">plugin algorithm</span>` : "";
+    $("skResult").innerHTML = `<div class="banner ok">key: <b class="mono">${esc(r.key)}</b>${src}</div><div class="note">${esc(r.note)}</div>`;
   } catch (e) { $("skResult").innerHTML = errBanner(e); }
 };
 

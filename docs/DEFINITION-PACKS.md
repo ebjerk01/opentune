@@ -119,7 +119,9 @@ is `packs`, so `opentune packs` from the repository root lists the shipped packs
      `req_id`/`resp_id` gives the default target. Every real run needs the
      operator's confirmation tick; writes/actions additionally need
      `requires_security` + a `security_access` step when the module demands it,
-     and OpenTune ships no seed/key algorithms.
+     and OpenTune ships no seed/key algorithms. An optional `seedkey` id names
+     the algorithm a host application (e.g. a desktop plugin) must supply for
+     that step; without one, a secured script can be planned but not run.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
      `opentune-adaptation` and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
      ships them yet: open, license-compatible coding data is rare, and vendor

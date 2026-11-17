@@ -301,6 +301,14 @@ pub struct ServiceScript {
     /// refuses a write/action until the module is unlocked.
     #[serde(default)]
     pub requires_security: bool,
+    /// Optional id of the seed/key algorithm that answers this script's
+    /// `SecurityAccess` step(s). OpenTune ships **no** algorithm and this crate
+    /// never interprets the id: the host application resolves it at run time to
+    /// a caller-supplied [`KeyProvider`] (the desktop app asks its plugin
+    /// `SeedKeys` resolvers). When the id is absent or the host cannot resolve
+    /// it, a secured script can only be planned. Must not be blank when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seedkey: Option<String>,
     /// The ordered steps.
     pub steps: Vec<Step>,
 }
@@ -326,6 +334,7 @@ impl ServiceScript {
     /// called by [`run_script`] before anything is sent:
     ///
     /// * non-empty `id`, `name`, and at least one step;
+    /// * a `seedkey` id, when present, is not blank;
     /// * `DiagnosticSession` sub-function in `0x01..=0x7F`;
     /// * `SecurityAccess` `level` odd and in `0x01..=0x7D` (so send-key
     ///   `level + 1` stays a valid `0x02..=0x7E` sub-function);
@@ -344,6 +353,11 @@ impl ServiceScript {
         }
         if self.steps.is_empty() {
             return Err(ServiceError::InvalidScript("no steps".into()));
+        }
+        if self.seedkey.as_deref().is_some_and(|k| k.trim().is_empty()) {
+            return Err(ServiceError::InvalidScript(
+                "empty seedkey id (omit the field when no algorithm is named)".into(),
+            ));
         }
         for (i, step) in self.steps.iter().enumerate() {
             match step {
@@ -871,6 +885,7 @@ pub mod examples {
                  Placeholder DID 0x2800 — not a real vehicle calibration."
                     .into(),
             requires_security: false,
+            seedkey: None,
             steps: vec![
                 Step::DiagnosticSession { subfunction: 0x03 },
                 Step::TesterPresent,
@@ -899,6 +914,7 @@ pub mod examples {
                  routine 0x1234 — not a real vehicle calibration."
                     .into(),
             requires_security: true,
+            seedkey: None,
             steps: vec![
                 Step::DiagnosticSession { subfunction: 0x03 },
                 Step::SecurityAccess { level: 0x11 },
@@ -1026,6 +1042,7 @@ mod tests {
             name: "Full flow".into(),
             description: String::new(),
             requires_security: true,
+            seedkey: None,
             steps: vec![
                 Step::DiagnosticSession { subfunction: 0x03 },
                 Step::SecurityAccess { level: 0x11 },
@@ -1118,6 +1135,7 @@ mod tests {
             name: "Write before security".into(),
             description: String::new(),
             requires_security: true,
+            seedkey: None,
             steps: vec![
                 Step::DiagnosticSession { subfunction: 0x03 },
                 Step::WriteDataByIdentifier {
@@ -1153,6 +1171,7 @@ mod tests {
             name: "Security denied".into(),
             description: String::new(),
             requires_security: true,
+            seedkey: None,
             steps: vec![
                 Step::SecurityAccess { level: 0x11 },
                 Step::RoutineControl {
@@ -1241,6 +1260,7 @@ mod tests {
             name: "n".into(),
             description: String::new(),
             requires_security: false,
+            seedkey: None,
             steps: vec![Step::DiagnosticSession { subfunction: 0x03 }],
         };
         let rep = run_script(&mut io, &script, None, &opts()).unwrap();
@@ -1261,6 +1281,7 @@ mod tests {
             name: "n".into(),
             description: String::new(),
             requires_security: false,
+            seedkey: None,
             steps: vec![Step::RoutineControl {
                 control_type: 0x01,
                 routine_id: 0x1234,
@@ -1284,6 +1305,7 @@ mod tests {
             name: "sa".into(),
             description: String::new(),
             requires_security: true,
+            seedkey: None,
             steps: vec![
                 Step::SecurityAccess { level: 0x11 },
                 Step::WriteDataByIdentifier {
@@ -1386,6 +1408,30 @@ mod tests {
         let s = ServiceScript::from_json(js).unwrap();
         assert_eq!(s.steps.len(), 4);
         assert!(s.requires_security);
+        assert_eq!(s.seedkey, None);
         s.validate().unwrap();
+    }
+
+    #[test]
+    fn seedkey_id_is_optional_but_never_blank() {
+        let with = |sk: &str| {
+            ServiceScript::from_json(&format!(
+                r#"{{"id":"x","name":"X",{sk}"steps":[{{"op":"tester_present"}}]}}"#
+            ))
+            .unwrap()
+        };
+        let s = with(r#""seedkey":"plugin-level1","#);
+        assert_eq!(s.seedkey.as_deref(), Some("plugin-level1"));
+        s.validate().unwrap();
+        // Round-trips; omitted again when absent.
+        assert!(s
+            .to_json()
+            .unwrap()
+            .contains("\"seedkey\": \"plugin-level1\""));
+        assert!(!with("").to_json().unwrap().contains("seedkey"));
+        for blank in [r#""seedkey":"","#, r#""seedkey":"  ","#] {
+            let e = with(blank).validate().unwrap_err().to_string();
+            assert!(e.contains("seedkey"), "{e}");
+        }
     }
 }

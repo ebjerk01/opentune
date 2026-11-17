@@ -18,6 +18,7 @@ fn runs_unsecured_script_against_the_conformance_server() {
         name: "Read identity".into(),
         description: String::new(),
         requires_security: false,
+        seedkey: None,
         steps: vec![
             Step::DiagnosticSession { subfunction: 0x03 },
             Step::ReadDataByIdentifier { did: 0xF190 },
@@ -52,6 +53,7 @@ fn verify_mismatch_fails_the_script() {
         name: "Verify".into(),
         description: String::new(),
         requires_security: false,
+        seedkey: None,
         steps: vec![Step::Verify {
             did: 0xF190,
             equals: vec![0xABu8, 0xCD], // does not match the seeded 00 00

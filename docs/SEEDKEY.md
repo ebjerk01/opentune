@@ -111,6 +111,12 @@ The driver reads these keys from `ConnectConfig.options`
 So an ECU definition that sets `seedkey` already signals that a handler must be
 present.
 
+In the desktop app, handlers come only from a plugin build: its
+`DesktopConfig::seedkeys` resolvers are asked by id for service scripts that
+name a `seedkey`, for the Utilities calculator and, through
+`adapter::apply_seed_key`, for the plugin's own commands. See
+[`PLUGINS.md`](PLUGINS.md#seedkey-algorithms).
+
 ### The handshake, inside `write_memory` (and the read path)
 
 Each driver has a private `security_access()` step called from `write_memory`

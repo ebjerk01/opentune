@@ -35,6 +35,7 @@ fn main() {
         channel: BuildChannel::new(BuildChannel::BENCH),
         data_roots: vec![/* e.g. the plugin's own data dir in dev */],
         checksums: vec![/* extra fn(&str) -> Option<Box<dyn ChecksumAlgo>> */],
+        seedkeys: vec![/* fn(&str) -> Option<Box<dyn SeedKey>>, see "Seed/key algorithms" */],
         updater: false, // true only with a plugins.updater section in tauri.conf.json
     };
     opentune_desktop::builder_with(tauri::Builder::default(), config)
@@ -53,13 +54,15 @@ What the library provides:
 | Item | Purpose |
 |---|---|
 | `builder_with(builder, DesktopConfig)` | Registers the dialog (and optionally updater) plugin and a setup plugin that manages all core state. Leaves `Builder::setup` and the invoke handler to you. Do not register dialog/updater yourself. |
-| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `updater` on/off. `Default` = the public app's settings. |
+| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `seedkeys` resolvers (see below; empty in the public app), `updater` on/off. `Default` = the public app's settings. |
 | `BuildChannel` | Managed state behind the `build_channel` command. `STABLE`, `ALPHA` (public `--features alpha`), `BENCH`, or any name. Every channel except `stable` enables the debug commands. |
 | `public_handler()` / `public_commands()` | The core invoke handler and the names of every core command. |
-| `extension_handler![..]` / `with_extra_commands(names, handler)` | An invoke handler that sends your command names to your `generate_handler!` and everything else to the core. A name that collides with a core command (or repeats) panics at startup; `check_extra_commands` reports the same check as a `Result`. |
-| `adapter` module | `AdapterHub` (managed), `ConnKey`, `Addr`, `resolve`, `read_addr`, `write_addr`, `enter_extended_session`, `leave_session`. |
+| `extension_handler![..]` / `with_extra_commands(names, handler)` | An invoke handler that sends your command names to your `generate_handler!` and everything else to the core. A name that collides with a core command (or repeats) panics at startup. |
+| `command_names(list)` | Splits a stringified `generate_handler!`-style list (`"a, m::b"`) into the command names the frontend invokes (`["a", "b"]`, the last path segment of each entry). `extension_handler!` uses it; call it yourself to build the `names` for `with_extra_commands`. |
+| `check_extra_commands(&names)` | The collision check `with_extra_commands` runs, as a `Result` instead of a panic: `Err` names the first command that repeats or shadows a core command. Useful in a plugin test. |
+| `adapter` module | `AdapterHub` (managed; `run`, `start_op`), `Session` (`with_diag`, `interface`), `ConnKey`, `Addr`, `resolve`, `read_addr`, `write_addr`, `enter_extended_session`, `leave_session`, `apply_seed_key`. `Addr::json(assumed)` gives the UI's `{ tx, rx, assumed }` target object (hex strings; `assumed` = the engine ECU was assumed for a read). |
 | `open_registry_driver(&ConnKey)` | Opens a registry driver bound to a key (the hub's opener). |
-| `AppData`, `DebugLog`, `Checksums` | Managed state your commands can take as `tauri::State`. |
+| `AppData`, `DebugLog`, `Checksums`, `SeedKeys` | Managed state your commands can take as `tauri::State`. |
 
 ## Adapter access and writes
 
@@ -111,6 +114,82 @@ Rules for plugin commands:
 - Return "adapter busy" errors as-is; the UI retries after a short wait.
 - Long destructive operations should not overlap a software update: the core
   update flow and flash/write-back share one long-operation guard.
+
+## Seed/key algorithms
+
+OpenTune ships **no** seed/key (SecurityAccess) algorithm, and the core never
+will. A plugin that has one supplies it through `DesktopConfig::seedkeys`: a
+list of `SeedKeyResolver = fn(&str) -> Option<Box<dyn SeedKey>>`, asked in
+order by id. The core manages them as `SeedKeys` and uses them in three places:
+
+- **Service scripts** whose JSON names a `"seedkey": "<id>"` run their
+  `security_access` steps with a key provider wrapping the resolved algorithm.
+  Without the field, or with an id no resolver knows, the script stays
+  plan-only and the plan and the refused run name the missing id.
+- The **Utilities seed/key calculator**: an algorithm id that is not one of
+  the generic transforms is resolved through `SeedKeys` (pass `level` for the
+  access level, default `0x01`). The result carries `source: "plugin"` and a
+  note saying a plugin computed it. Add the option to the `#skAlgo` selector
+  from your UI overlay; the public list does not change.
+- **Your own read/flash commands**: attach a handler to the hub-opened driver
+  with `adapter::apply_seed_key` so the driver's unlock step uses it.
+
+```rust
+use opentune_core::protocol::seedkey::SeedKey;
+
+struct MyAlgo; // your algorithm; its provenance is your responsibility
+impl SeedKey for MyAlgo {
+    fn id(&self) -> &str { "my-ecu-level1" }
+    fn compute(&self, seed: &[u8], _level: u8) -> opentune_core::Result<Vec<u8>> {
+        Ok(seed.to_vec() /* ... */)
+    }
+}
+
+fn my_seedkeys(id: &str) -> Option<Box<dyn SeedKey>> {
+    match id {
+        "my-ecu-level1" => Some(Box::new(MyAlgo)),
+        _ => None, // unknown ids fall through to the next resolver
+    }
+}
+
+// DesktopConfig { seedkeys: vec![my_seedkeys], .. }
+
+#[tauri::command]
+async fn my_read(
+    driver: String, port: Option<String>, tx_id: Option<String>, rx_id: Option<String>,
+    ack: bool,
+    hub: tauri::State<'_, opentune_desktop::adapter::AdapterHub>,
+    keys: tauri::State<'_, opentune_desktop::SeedKeys>,
+) -> Result<serde_json::Value, String> {
+    use opentune_desktop::adapter::{self, ConnKey};
+    if !ack { return Err("my read needs an explicit acknowledgement".into()); }
+    let addr = adapter::write_addr(
+        adapter::resolve(tx_id.as_deref(), rx_id.as_deref(), None)?,
+        "my read",
+    )?;
+    let key = ConnKey::new(&driver, port.as_deref(), None, None, addr);
+    let keys = keys.inner().clone();
+    hub.run("my read", move |s| {
+        let drv = s.interface(&key)?;
+        // Ok(false) = this driver has no unlock step of its own.
+        adapter::apply_seed_key(drv, &keys, "my-ecu-level1")?;
+        /* drv.read_memory(..) */
+        Ok(serde_json::json!({}))
+    })
+}
+```
+
+Expectations:
+
+- The **plugin owns the algorithm**: where it came from, that it may be
+  distributed, and that it is correct. Never contribute one to this repo.
+- A wrong key counts against the module's attempt counter. Every command that
+  can make a security-access attempt takes an explicit `ack`.
+- Resolve on the adapter worker (inside `hub.run`), as above: a
+  `Box<dyn SeedKey>` need not be `Send`, but `SeedKeys` is `Clone + Send`.
+- The attached handler lives as long as the opened driver. The hub re-opens
+  it after an error or a connection change, so attach it in every operation.
+- Return `None` for ids you do not know; never return a guess.
 
 ## Frontend: overlay scripts
 

@@ -46,6 +46,9 @@ mod feat_obd;
 mod feat_obdinfo;
 mod feat_scan;
 mod feat_service;
+// Plugin-supplied seed/key algorithms (OpenTune ships none).
+pub mod seedkeys;
+pub use seedkeys::{SeedKeyResolver, SeedKeys};
 // Startup trace (`OPENTUNE_TRACE_STARTUP=1`), WebKitGTK env defaults and the
 // parsed-data cache. Public so an embedder can add its own trace marks.
 pub mod startup;
@@ -2115,7 +2118,9 @@ fn dtc_lookup(code: String) -> Result<Value, String> {
 /// Generic, fully-transparent seed→key transforms. The public edition ships NO
 /// OEM / vehicle-specific seed/key routines (those are not open), so this is a
 /// calculator the user drives: they pick a transform and supply its parameters.
-/// It never pretends to compute a real ECU's key from a bundled secret.
+/// It never pretends to compute a real ECU's key from a bundled secret. (A
+/// plugin build may add options for its own [`SeedKeys`] ids from its UI
+/// overlay; [`seedkey_compute`] resolves those through the plugin.)
 #[tauri::command]
 fn seedkey_algos() -> Value {
     json!([
@@ -2147,17 +2152,34 @@ fn parse_hex_bytes(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// Compute a key from a seed with a user-selected generic transform. Honest by
-/// construction: no OEM algorithm is bundled, so an unknown/empty algo id is a
-/// hard error rather than a fabricated key.
+/// Compute a key from a seed with a user-selected generic transform, or with a
+/// plugin-supplied algorithm ([`SeedKeys`]) when `algo` is not one of the
+/// generic ids. Honest by construction: no OEM algorithm is bundled, so an id
+/// no plugin knows is a hard error rather than a fabricated key, and a plugin
+/// result is labelled as such (`source: "plugin"`). `level` is the
+/// request-seed access level passed to a plugin algorithm (default `0x01`).
 #[tauri::command]
 fn seedkey_compute(
     seed: String,
     algo: String,
     mask: Option<String>,
     add: Option<String>,
+    level: Option<u8>,
+    seedkeys: tauri::State<'_, SeedKeys>,
 ) -> Result<Value, String> {
-    let s = parse_hex_bytes(&seed)?;
+    compute_seedkey(&seed, &algo, mask, add, level, &seedkeys)
+}
+
+/// [`seedkey_compute`] without the Tauri state wrapper.
+fn compute_seedkey(
+    seed: &str,
+    algo: &str,
+    mask: Option<String>,
+    add: Option<String>,
+    level: Option<u8>,
+    seedkeys: &SeedKeys,
+) -> Result<Value, String> {
+    let s = parse_hex_bytes(seed)?;
     let add_val: u8 = match add.as_deref().map(str::trim).filter(|x| !x.is_empty()) {
         Some(x) => parse_u32(x)? as u8,
         None => 0,
@@ -2167,7 +2189,7 @@ fn seedkey_compute(
         None => Vec::new(),
     };
 
-    let key: Vec<u8> = match algo.as_str() {
+    let key: Vec<u8> = match algo {
         "identity" => s.clone(),
         "byteswap" => s.iter().rev().copied().collect(),
         "add-const" => s.iter().map(|&b| b.wrapping_add(add_val)).collect(),
@@ -2186,20 +2208,30 @@ fn seedkey_compute(
         }
         "" => return Err("pick a transform first".into()),
         other => {
-            return Err(format!(
-                "no seed/key algorithm '{other}' is available — the public edition ships no OEM routines; pick a generic transform or supply one"
-            ))
+            let Some(handler) = seedkeys.get(other) else {
+                return Err(format!(
+                    "no seed/key algorithm '{other}' is available — the public edition ships no OEM routines; pick a generic transform or supply one"
+                ));
+            };
+            let level = level.unwrap_or(0x01);
+            let key = seedkeys::compute(handler.as_ref(), &s, level)?;
+            return Ok(json!({
+                "key": hexs(&key),
+                "algo": other,
+                "level": level,
+                "source": "plugin",
+                "note": format!(
+                    "Computed by a plugin-supplied algorithm ('{}'), not by OpenTune. The plugin owns this algorithm and its correctness; OpenTune bundles no vehicle-specific seed/key routines.",
+                    handler.id()
+                ),
+            }));
         }
     };
 
-    let hex = key
-        .iter()
-        .map(|b| format!("{b:02X}"))
-        .collect::<Vec<_>>()
-        .join(" ");
     Ok(json!({
-        "key": hex,
+        "key": hexs(&key),
         "algo": algo,
+        "source": "generic",
         "note": "Generic transform — NOT an OEM algorithm. The public edition bundles no vehicle-specific seed/key routines.",
     }))
 }
@@ -2580,6 +2612,10 @@ pub struct DesktopConfig {
     pub data_roots: Vec<PathBuf>,
     /// Extra checksum algorithm resolvers, consulted before the public set.
     pub checksums: Vec<ChecksumResolver>,
+    /// Seed/key algorithm resolvers (managed as [`SeedKeys`]), consulted in
+    /// order by id. The public app has none: OpenTune ships no seed/key
+    /// algorithm, so without a plugin every secured path stays plan-only.
+    pub seedkeys: Vec<SeedKeyResolver>,
     /// Register the self-updater plugin. Needs a `plugins.updater` section
     /// (endpoint + pubkey) in the embedding app's `tauri.conf.json`; when off,
     /// the update commands report "updater unavailable".
@@ -2592,6 +2628,7 @@ impl Default for DesktopConfig {
             channel: BuildChannel::compiled(),
             data_roots: Vec::new(),
             checksums: Vec::new(),
+            seedkeys: Vec::new(),
             updater: true,
         }
     }
@@ -2599,7 +2636,7 @@ impl Default for DesktopConfig {
 
 /// Add the public desktop backend to `builder`: the dialog (and optionally the
 /// updater) plugin, plus a small setup plugin that manages every piece of core
-/// state — [`AppData`], [`BuildChannel`], [`Checksums`], [`DebugLog`], the
+/// state — [`AppData`], [`BuildChannel`], [`Checksums`], [`SeedKeys`], [`DebugLog`], the
 /// long-operation guard and the shared [`adapter::AdapterHub`].
 ///
 /// It does not call `Builder::setup` (that slot stays free for the embedder)
@@ -2619,6 +2656,7 @@ pub fn builder_with(
         channel,
         data_roots,
         checksums,
+        seedkeys,
         updater,
     } = config;
     let core = tauri::plugin::Builder::<tauri::Wry>::new("opentune-core")
@@ -2633,6 +2671,7 @@ pub fn builder_with(
             app.manage(data);
             app.manage(channel);
             app.manage(Checksums(checksums));
+            app.manage(SeedKeys::new(seedkeys));
             app.manage(OpGuard::default());
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());
@@ -3011,22 +3050,32 @@ mod tests {
         assert!(parse_hex_bytes("").is_err());
     }
 
+    /// The calculator as the public app runs it (no plugin resolvers).
+    fn sk(
+        seed: String,
+        algo: String,
+        mask: Option<String>,
+        add: Option<String>,
+    ) -> Result<Value, String> {
+        compute_seedkey(&seed, &algo, mask, add, None, &SeedKeys::default())
+    }
+
     #[test]
     fn seedkey_transforms() {
         // identity
-        let r = seedkey_compute("0102".into(), "identity".into(), None, None).unwrap();
+        let r = sk("0102".into(), "identity".into(), None, None).unwrap();
         assert_eq!(r["key"], "01 02");
         // byteswap
-        let r = seedkey_compute("0102".into(), "byteswap".into(), None, None).unwrap();
+        let r = sk("0102".into(), "byteswap".into(), None, None).unwrap();
         assert_eq!(r["key"], "02 01");
         // xor-mask (mask repeats)
-        let r = seedkey_compute("F0F0".into(), "xor-mask".into(), Some("FF".into()), None).unwrap();
+        let r = sk("F0F0".into(), "xor-mask".into(), Some("FF".into()), None).unwrap();
         assert_eq!(r["key"], "0F 0F");
         // add-const mod 256 wraps
-        let r = seedkey_compute("FE".into(), "add-const".into(), None, Some("3".into())).unwrap();
+        let r = sk("FE".into(), "add-const".into(), None, Some("3".into())).unwrap();
         assert_eq!(r["key"], "01");
         // xor-add
-        let r = seedkey_compute(
+        let r = sk(
             "0A".into(),
             "xor-add".into(),
             Some("0F".into()),
@@ -3034,6 +3083,34 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r["key"], "06"); // (0x0A ^ 0x0F) + 1 = 0x05 + 1 = 0x06
+    }
+
+    #[test]
+    fn seedkey_calculator_uses_a_plugin_resolver_and_labels_it() {
+        use crate::seedkeys::testkeys::{first, second, vcar};
+        let keys = SeedKeys::new(vec![first, second, vcar]);
+        // A plugin id resolves (first resolver wins) and is labelled as such.
+        let r = compute_seedkey("0001", "shared", None, None, Some(0x03), &keys).unwrap();
+        assert_eq!(r["key"], "13 12"); // seed ^ 0x10 ^ level 0x03
+        assert_eq!(r["source"], "plugin");
+        assert_eq!(r["level"], 3);
+        let note = r["note"].as_str().unwrap();
+        assert!(
+            note.contains("plugin-supplied") && note.contains("'first'"),
+            "{note}"
+        );
+        // The virtual car's test key, default level 0x01.
+        let r = compute_seedkey("1234", "vcar-test", None, None, None, &keys).unwrap();
+        assert_eq!(r["key"], "48 6E"); // XOR 0x5A
+                                       // Generic ids are never routed to a plugin, and are labelled generic.
+        let r = compute_seedkey("0102", "identity", None, None, None, &keys).unwrap();
+        assert_eq!(
+            (r["key"].as_str(), r["source"].as_str()),
+            (Some("01 02"), Some("generic"))
+        );
+        // An id no plugin knows stays an honest error.
+        let e = compute_seedkey("00", "oem-x", None, None, None, &keys).unwrap_err();
+        assert!(e.contains("'oem-x'"), "{e}");
     }
 
     #[test]
@@ -3049,10 +3126,10 @@ mod tests {
 
     #[test]
     fn seedkey_unknown_algo_is_honest_error() {
-        assert!(seedkey_compute("00".into(), "vag-edc17".into(), None, None).is_err());
-        assert!(seedkey_compute("00".into(), "".into(), None, None).is_err());
+        assert!(sk("00".into(), "vag-edc17".into(), None, None).is_err());
+        assert!(sk("00".into(), "".into(), None, None).is_err());
         // xor-mask without a mask must error, not fabricate.
-        assert!(seedkey_compute("00".into(), "xor-mask".into(), None, None).is_err());
+        assert!(sk("00".into(), "xor-mask".into(), None, None).is_err());
     }
 
     // --- tuning project (.otproj) save/open ------------------------------
