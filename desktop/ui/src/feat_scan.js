@@ -22,21 +22,7 @@
   const state = { modulesPath: null };
 
   // ---- inject nav button ---------------------------------------------------
-  const nav = document.getElementById("nav");
-  const navBtn = document.createElement("button");
-  navBtn.className = "nav-item";
-  navBtn.dataset.panel = "scan";
-  navBtn.innerHTML = '<span class="ni-ico">🔎</span> Auto-scan';
-  navBtn.addEventListener("click", () => window.showPanel("scan"));
-  if (nav) {
-    // Place it just before the Help group when present, else append.
-    const helpLabel = Array.from(nav.querySelectorAll(".nav-group-label")).find(
-      (el) => /help/i.test(el.textContent || ""),
-    );
-    const anchor = helpLabel ? helpLabel.previousElementSibling || helpLabel : null;
-    if (anchor) nav.insertBefore(navBtn, anchor);
-    else nav.appendChild(navBtn);
-  }
+  window.OTNav.register({ id: "scan", label: "Auto-scan", icon: "🔎", group: "vehicle", tier: "bench" });
 
   // ---- inject panel --------------------------------------------------------
   const sec = document.createElement("section");

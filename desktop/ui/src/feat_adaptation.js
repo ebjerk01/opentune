@@ -21,28 +21,7 @@
     if ($("panel-adaptation")) return; // already injected
 
     // ---- nav item ----------------------------------------------------------
-    const divider = document.createElement("div");
-    divider.className = "nav-divider";
-    const label = document.createElement("div");
-    label.className = "nav-group-label";
-    label.textContent = "Diagnostics";
-    const btn = document.createElement("button");
-    btn.className = "nav-item";
-    btn.dataset.panel = "adaptation";
-    btn.innerHTML = '<span class="ni-ico">⟳</span> Adaptation';
-    btn.addEventListener("click", () => {
-      if (typeof window.showPanel === "function") window.showPanel("adaptation");
-    });
-    const anchor = $("debugNavDiv");
-    if (anchor) {
-      nav.insertBefore(divider, anchor);
-      nav.insertBefore(label, anchor);
-      nav.insertBefore(btn, anchor);
-    } else {
-      nav.appendChild(divider);
-      nav.appendChild(label);
-      nav.appendChild(btn);
-    }
+    window.OTNav.register({ id: "adaptation", label: "Adaptation", icon: "⟳", group: "vehicle", tier: "bench" });
 
     // ---- panel -------------------------------------------------------------
     const sec = document.createElement("section");

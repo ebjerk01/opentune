@@ -1396,8 +1396,8 @@ async function dbgRefreshLog() {
 async function initDebug() {
   let channel = "stable";
   try { channel = await invoke("build_channel"); } catch (e) {}
-  if (channel !== "alpha") return; // keep the Debug tab hidden on stable builds
-  ["debugNavDiv", "debugNavLabel", "debugNavBtn"].forEach((id) => { const n = $(id); if (n) n.hidden = false; });
+  // The Debug tab is a Bench-tier entry: nav.js shows it only on alpha/bench builds.
+  if (channel !== "alpha" && channel !== "bench") return;
 
   // Populate the driver dropdown.
   try {

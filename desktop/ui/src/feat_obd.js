@@ -21,10 +21,7 @@
     if (!nav || !main || document.getElementById("panel-obd")) return;
 
     // --- sidebar nav item ---
-    const navBtn = el("button", "nav-item", '<span class="ni-ico">📟</span> OBD live');
-    navBtn.dataset.panel = "obd";
-    navBtn.addEventListener("click", () => window.showPanel("obd"));
-    nav.appendChild(navBtn);
+    window.OTNav.register({ id: "obd", label: "OBD live", icon: "📟", group: "vehicle", tier: "bench" });
 
     // --- panel ---
     const panel = el("section", "panel");

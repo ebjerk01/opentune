@@ -16,12 +16,7 @@
     );
 
   // --- Nav item --------------------------------------------------------------
-  const b = document.createElement("button");
-  b.className = "nav-item";
-  b.dataset.panel = "coding";
-  b.innerHTML = '<span class="ni-ico">⚙</span> Coding';
-  b.addEventListener("click", () => window.showPanel("coding"));
-  document.getElementById("nav").appendChild(b);
+  window.OTNav.register({ id: "coding", label: "Coding", icon: "⚙", group: "vehicle", tier: "bench" });
 
   // --- Panel -----------------------------------------------------------------
   const sec = document.createElement("section");

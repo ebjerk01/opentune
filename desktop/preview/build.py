@@ -6,7 +6,7 @@ plus preview/mock.js, which stands in for the Tauri backend with demo data. The
 real UI files are used unchanged, so what the preview shows is what the app
 ships. Output has no <html>/<head>/<body> wrapper (the artifact host adds one).
 
-    python3 -I desktop/preview/build.py OUT.html [DESKTOP_DIR]
+    python3 -I desktop/preview/build.py OUT.html [DESKTOP_DIR] [--guides DIR] [--help-json FILE]
 
 DESKTOP_DIR defaults to this repo's desktop/; pass another app's desktop/ dir
 (same ui/ layout) to preview it. Guide pages come from DESKTOP_DIR/src-tauri/guide
@@ -60,7 +60,7 @@ PREVIEW_CSS = """
 
 def guides():
     out = []
-    gdir = DESKTOP / "src-tauri" / "guide"
+    gdir = GUIDES or DESKTOP / "src-tauri" / "guide"
     if not gdir.is_dir():
         gdir = OWN_DESKTOP / "src-tauri" / "guide"
     for p in sorted(gdir.glob("*.md")):
@@ -100,13 +100,17 @@ def main(out_path: str) -> None:
     css = theme_aware((UI / "src" / "styles.css").read_text())
 
     data = {"guides": guides(), "ecudefs": ecudefs()}
+    hj = HELP_JSON or UI / "src" / "panel-help.json"
+    help_data = json.loads(hj.read_text()) if hj.is_file() else None
     parts = [
         f"<title>{title}</title>",
         '<meta name="claude:viewport-fit-sides" content="cover">',
         "<style>\n" + css + PREVIEW_CSS + "</style>",
         body.strip(),
         '<div class="preview-ribbon">Preview · demo data</div>',
-        "<script>window.__PREVIEW__ = " + safe_script(json.dumps(data)) + ";</script>",
+        "<script>window.__PREVIEW__ = " + safe_script(json.dumps(data)) + ";"
+        + ("window.__PANEL_HELP__ = " + safe_script(json.dumps(help_data)) + ";" if help_data else "")
+        + "</script>",
         "<script>\n" + safe_script((HERE / "mock.js").read_text()) + "\n</script>",
     ]
     for extra in sorted(HERE.glob("fixtures*.js")):
@@ -117,8 +121,21 @@ def main(out_path: str) -> None:
     print(f"wrote {out_path}: {len(scripts)} app scripts, {len(data['guides'])} guide pages, {len(data['ecudefs'])} ecudefs")
 
 
+GUIDES = None
+HELP_JSON = None
+
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        DESKTOP = Path(sys.argv[2]).resolve()
+    args = sys.argv[1:]
+    for flag in ("--guides", "--help-json"):
+        if flag in args:
+            i = args.index(flag)
+            val = Path(args[i + 1]).resolve()
+            del args[i:i + 2]
+            if flag == "--guides":
+                GUIDES = val
+            else:
+                HELP_JSON = val
+    if len(args) > 1:
+        DESKTOP = Path(args[1]).resolve()
         UI = DESKTOP / "ui"
-    main(sys.argv[1] if len(sys.argv) > 1 else "opentune-ui-preview.html")
+    main(args[0] if args else "opentune-ui-preview.html")
