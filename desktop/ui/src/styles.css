@@ -439,5 +439,7 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
 .sig-can_h, .sig-can_l { background: var(--accent-soft); color: var(--accent); }
 .sig-kline { background: var(--good-bg); color: var(--good); }
 .sig-boot { background: transparent; color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+tr.pin-unv td { color: var(--muted); }
+tr.pin-unv .pill { margin-left: 4px; }
 .db-src { margin: 0; padding-left: 18px; line-height: 1.7; word-break: break-all; }
 .db-src a { color: var(--accent); }

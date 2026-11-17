@@ -43,7 +43,9 @@
   window.OTNav.register({ id: "database", label: "ECU database", icon: "▤", group: "reference", tier: "public" });
 
   const $ = (id) => panel.querySelector("#" + id);
-  const yes = (v) => v === true || (typeof v === "string" && v !== "none" && v !== "");
+  // "unknown" means no source says either way: show it, but never as available.
+  const yes = (v) => v === true || (typeof v === "string" && v !== "none" && v !== "unknown" && v !== "");
+  const word = (v) => (v === "unknown" ? "unknown" : yes(v) ? (typeof v === "string" ? v : "yes") : "no");
 
   function methods(m) {
     m = m || {};
@@ -84,12 +86,12 @@
       .filter(([, v]) => v && (!Array.isArray(v) || v.length))
       .map(([k, v]) => `<div class="k">${k}</div><div class="v">${esc([].concat(v).join(", "))}</div>`).join("");
     return `<div class="card">${head}
-      <div class="banner bad">Check every pin with a multimeter before applying power. Use a current-limited bench supply (about 1 A) and 120 Ω between CAN high and low if the unit is alone on the bus.</div>
+      <div class="banner bad">Check every pin with a multimeter before applying power. Use a current-limited bench supply (about 1 A) and 120 Ω between CAN high and low if the unit is alone on the bus.${u.safety_note ? "<br>" + esc(u.safety_note) : ""}</div>
       ${sum ? `<div class="meta-grid db-bench">${sum}</div>` : ""}
       ${conns.map((c) => `
-        <h3 class="db-conn">${esc(c.name)}</h3>
+        <h3 class="db-conn">${esc(c.name)}</h3>${c.description ? `<p class="small muted">${esc(c.description)}</p>` : ""}
         <div class="db-tw"><table class="tbl"><thead><tr><th class="mono">Pin</th><th>Function</th><th>Signal</th><th>Note</th></tr></thead><tbody>
-        ${c.pins.map((p) => `<tr><td class="mono">${esc(p.pin)}</td><td>${esc(p.function)}</td><td><span class="sig sig-${esc(p.signal)}">${esc(SIG[p.signal] || p.signal)}</span></td><td class="small muted">${esc(p.note || "")}</td></tr>`).join("")}
+        ${c.pins.map((p) => `<tr${p.confidence === "unverified" ? ' class="pin-unv"' : ""}><td class="mono">${esc(p.pin)}</td><td>${esc(p.function)}${p.confidence === "unverified" ? ' <span class="pill bad">disputed — do not wire</span>' : ""}</td><td><span class="sig sig-${esc(p.signal)}">${esc(SIG[p.signal] || p.signal)}</span></td><td class="small muted">${esc(p.note || "")}</td></tr>`).join("")}
         </tbody></table></div>`).join("")}
       ${b.notes ? `<p class="note">${esc(b.notes)}</p>` : ""}
     </div>`;
@@ -101,7 +103,7 @@
     let u;
     try { u = await invoke("db_get", { id }); } catch (e) { $("dbDetail").innerHTML = `<div class="banner bad">${esc(e)}</div>`; return; }
     const m = u.read_methods || {};
-    const vehicles = (u.vehicles || []).map((v) => `<span class="ph-need">${esc(typeof v === "string" ? v : [v.make, v.model, v.engine].filter(Boolean).join(" "))}</span>`).join("");
+    const vehicles = (u.vehicles || []).map((v) => `<span class="ph-need">${esc(typeof v === "string" ? v : [v.make, v.model, v.engine, v.years ? "(" + v.years + ")" : ""].filter(Boolean).join(" "))}</span>`).join("");
     const sources = (u.sources || []).map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("");
     $("dbDetail").innerHTML = `
       <div class="card">
@@ -117,7 +119,7 @@
       <div class="card"><h2>How to read it</h2>
         <div class="db-methods">
           ${[["OBD port", m.obd], ["Bench", m.bench], ["Boot mode", m.boot]].map(([k, v]) => `
-            <div class="dbm${yes(v) ? " on" : ""}"><div class="s-k">${k}</div><div class="dbm-v">${yes(v) ? esc(typeof v === "string" ? v : "yes") : "no"}</div></div>`).join("")}
+            <div class="dbm${yes(v) ? " on" : ""}"><div class="s-k">${k}</div><div class="dbm-v">${esc(word(v))}</div></div>`).join("")}
         </div>
         ${m.notes ? `<p class="small muted">${esc(m.notes)}</p>` : ""}
       </div>
