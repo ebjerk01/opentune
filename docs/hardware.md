@@ -6,8 +6,9 @@ a small, cheap, fully documented board that any of those can't quite do on its
 own — timing-critical K-line init, TP2.0, and a raw UART path for boot mode —
 while presenting a simple USB serial port to the host.
 
-> **Status: design target.** This is the reference board described in roadmap
-> M8. Schematics and PCB (KiCad) are added under `hardware/` as they are drawn.
+> **Status: design target.** This is the reference board of roadmap Phase 3
+> ("Open hardware interface"). Schematics and PCB (KiCad) are added under
+> `hardware/` as they are drawn.
 
 ## Why a dedicated device
 
@@ -44,7 +45,8 @@ Android driver talks to it as a simple serial device.
 
 ### Host interface
 - **USB-C**, enumerating as **USB-CDC** (virtual serial). The matching OpenTune
-  driver (roadmap M8) speaks a simple line protocol to the device.
+  driver (`crates/drivers/esp32-opentune`) speaks a simple line protocol to
+  the device.
 - Optional **BLE / WiFi** bridge via the ESP32-S3 for a wireless link (e.g. to
   the Android app), carrying the same protocol.
 
@@ -82,9 +84,10 @@ frames, Block Size / STmin flow control, WAIT/OVERFLOW handling, `0xF→0x0`
 sequence-number wrap) so device- and host-side ISO-TP behave identically.
 
 > **Build status (honest):** the firmware is written to the documented ESP-IDF
-> 5.x APIs and structured to build with `idf.py`, but it was developed offline
-> with **no ESP-IDF toolchain and no board**, so it has **not been compiled or
-> run**. Nothing is tested against a real ECU or car. The init timings, ADC
+> 5.x APIs and structured to build with `idf.py`. It was developed offline with
+> no board; it is now covered by a **compile-only** CI job (pinned ESP-IDF
+> v5.3.2, `.github/workflows/firmware-android.yml`) but has **never been flashed
+> or bench-tested**. Nothing is tested against a real ECU or car. The init timings, ADC
 > divider scaling and pin map are starting points to verify on the bench.
 
 ## USB-CDC wire protocol

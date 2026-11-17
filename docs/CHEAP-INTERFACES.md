@@ -4,7 +4,8 @@ This note surveys the cheap AliExpress / eBay diagnostic interfaces a hobbyist i
 likely to already own or to buy for a few dollars, and maps each one onto an
 OpenTune driver — either an existing one or a driver that does not exist yet.
 
-OpenTune today ships four interface drivers (`crates/drivers/*`):
+OpenTune today registers twelve interface drivers (`crates/drivers/*`,
+`opentune drivers`):
 
 | Driver | Transport | Buses |
 | --- | --- | --- |
@@ -12,10 +13,19 @@ OpenTune today ships four interface drivers (`crates/drivers/*`):
 | `openport2` (`j2534-openport`) | Tactrix OP2 CDC-ACM, `at…` ASCII protocol | CAN (raw/ISO-TP) |
 | `socketcan` | Linux SocketCAN (`can0`) | CAN (ISO-TP / TP2.0) |
 | `elm327` (`kline-elm327`) | serial AT commands | CAN **and** K-line (ISO9141 / ISO14230) |
+| `elm327obd` (`elm327`) | serial AT commands, OBD/UDS diagnostics | CAN (HS / MS) |
+| `elm327net` | ELM327 AT over TCP (WiFi) or Bluetooth RFCOMM | CAN + K-line |
+| `kkl` | raw serial, software K-line init + framing | K-line |
+| `kline-bridge` | Arduino bridge running OpenTune firmware | K-line |
+| `slcan` | LAWICEL/slcan ASCII over serial | CAN |
+| `gsusb` | gs_usb / candleLight (via kernel SocketCAN) | CAN |
+| `j2534` | vendor PassThru DLL (Windows) | CAN (+ whatever the VCI offers) |
 
 Buses OpenTune targets: **K-line** (ISO 9141 / ISO 14230 KWP2000) and **CAN**
-(ISO 15765 / VW TP2.0). There is **no CAN-FD and no DoIP** support yet, which
-rules out the newer "VCI" clones for anything beyond their legacy CAN channel.
+(ISO 15765 / VW TP2.0). **CAN-FD** (ISO-TP-FD) and **DoIP** (ISO 13400) are
+implemented in `opentune-core` and tested against mock/loopback peers, but no
+registered driver exposes them on real hardware yet — so the newer "VCI" clones
+are still limited to their legacy CAN channel in practice.
 
 A note on terms: *reading* here means reading ECU identity and dumping flash via
 the OBD diagnostic services (UDS / KWP2000). *Flashing* means the full
@@ -30,14 +40,14 @@ not the second.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Tactrix OpenPort 2.0 clone** | LPC2364 (+ clone MCU) | $12–25 | CAN (K-line on genuine) | OP2 `at…` ASCII over CDC-ACM | `openport2` (existing) | Yes | **Yes** (CAN) | Firmware update can brick a clone (serial-number blacklist wipes flash); clone K-line path unreliable; USB id usually `0403:cc4d`. Best cheap flasher. |
 | **ELM327 clone (USB)** | fake "v1.5/2.1" PIC/ARM clone, or genuine STN11xx | $3–10 fake / $20–40 STN | CAN + K-line | ELM AT commands over serial | `elm327` (existing) | Yes (often partial) | **No** in practice | Most "v1.5" are fakes (ELM never shipped 1.5); missing/garbled commands; too slow and command-limited to flash reliably. |
-| **ELM327 (Bluetooth / WiFi)** | same clones | $5–15 | CAN + K-line | ELM AT over RFCOMM / TCP socket | `elm327` **needs BT/WiFi transport** (NEW) | Yes (read/log) | No | OpenTune's `elm327` driver currently opens a **serial port** only; BT-SPP and WiFi (TCP 35000) framing is a transport add-on. |
+| **ELM327 (Bluetooth / WiFi)** | same clones | $5–15 | CAN + K-line | ELM AT over RFCOMM / TCP socket | `elm327net` (existing) | Yes (read/log) | No | Same AT dialect as the USB `elm327` driver, over WiFi (TCP 35000) or a Bluetooth RFCOMM serial device. |
 | **OBDLink SX / EX / MX+** | genuine STN1110 / STN2120 | $25–60 | CAN + K-line | ELM AT (STN superset) over serial/BT | `elm327` (existing) | Yes (reliable) | Marginal | Genuine STN silicon = full command set, fastest ELM-class option; still an ELM-class pipe, not a J2534 flasher. Good "known-good ELM". |
-| **KKL 409.1 / "VAG-COM" cable** | FTDI FT232 **or** CH340/CH341 + K-line transceiver (e.g. L9637) | $3–8 | **K-line only** | Raw bytes over serial; init + ISO14230/9141 framing in software | **NEW "KKL raw K-line" driver** | Yes (with new driver) | Yes (K-line ECUs) | **Not an ELM327** — it is a dumb serial↔K-line level shifter. Needs bit-level 5-baud/fast init done by OpenTune. CH340 vs FT232 affects which host driver/VID:PID. 1996–~2005 K-line cars only. |
-| **CANable / CANable 2.0** | STM32 + candleLight (gs_usb) **or** slcan fw | $10–20 | CAN | SocketCAN (`can0`) | `socketcan` (existing) | Yes | **Yes** (CAN) | With **candleLight/gs_usb** it is a native SocketCAN device, no extra driver. With stock **slcan** firmware it is a serial device you bridge via `slcand`. Best cheap Linux CAN option. |
+| **KKL 409.1 / "VAG-COM" cable** | FTDI FT232 **or** CH340/CH341 + K-line transceiver (e.g. L9637) | $3–8 | **K-line only** | Raw bytes over serial; init + ISO14230/9141 framing in software | `kkl` (existing) | Yes | Yes (K-line ECUs) | **Not an ELM327** — it is a dumb serial↔K-line level shifter. Needs bit-level 5-baud/fast init done by OpenTune. CH340 vs FT232 affects which host driver/VID:PID. 1996–~2005 K-line cars only. |
+| **CANable / CANable 2.0** | STM32 + candleLight (gs_usb) **or** slcan fw | $10–20 | CAN | SocketCAN (`can0`) or slcan serial | `socketcan` / `gsusb` / `slcan` (existing) | Yes | **Yes** (CAN) | With **candleLight/gs_usb** it is a native SocketCAN device, no extra driver. With stock **slcan** firmware use the `slcan` driver directly (no `slcand` bridge needed). Best cheap Linux CAN option. |
 | **CANtact / CANtact Pro** | STM32, slcan/candleLight | $20–60 | CAN (Pro adds CAN-FD/SWCAN) | SocketCAN | `socketcan` (existing) | Yes | Yes (CAN) | Same lineage as CANable; Pro's CAN-FD is unused by OpenTune today. |
-| **"USB-CAN Analyzer"** | CH340 (HL-340) + MCP2515 | $8–15 | CAN | **Proprietary serial** framing | **NEW slcan/serial-CAN driver** or out-of-tree kernel module | Yes (with work) | Yes (CAN) | Does **not** present as SocketCAN out of the box; uses a closed vendor protocol. Community `usb-can` kernel module (slcan-based) or a userspace driver is required. Avoid unless you already own one. |
+| **"USB-CAN Analyzer"** | CH340 (HL-340) + MCP2515 | $8–15 | CAN | **Proprietary serial** framing | `slcan` (existing) if it speaks slcan ASCII; otherwise an out-of-tree kernel module | Yes (with work) | Yes (CAN) | Does **not** present as SocketCAN out of the box; uses a closed vendor protocol. Community `usb-can` kernel module (slcan-based) or a userspace driver is required. Avoid unless you already own one. |
 | **Korlan USB2CAN (8devices)** | 8devices USB2CAN | $45–60 | CAN | SocketCAN (`can0`) | `socketcan` (existing) | Yes | Yes (CAN) | Mainline Linux `usb_8dev` kernel driver → native SocketCAN. Pricier but genuinely plug-and-play on Linux. |
-| **J2534 passthru clone** (Mongoose/-Pro, VNCI, SVCI, Scanmatik, generic VCI) | various (FTDI + MCU, STM32…) | $20–120 | CAN (+ CAN-FD/DoIP on newer) | SAE J2534 PassThru API | **NEW generic J2534 driver** (Windows), unusable on Linux today | Yes | Yes | J2534 is a **Windows 32-bit DLL** API; no official Linux support. A Linux shim exists only as community hacks. On Windows a generic J2534 driver could drive many of these; on Linux, skip. |
+| **J2534 passthru clone** (Mongoose/-Pro, VNCI, SVCI, Scanmatik, generic VCI) | various (FTDI + MCU, STM32…) | $20–120 | CAN (+ CAN-FD/DoIP on newer) | SAE J2534 PassThru API | `j2534` (existing, Windows-only) | Yes | Yes | J2534 is a **Windows 32-bit DLL** API; no official Linux support. A Linux shim exists only as community hacks. On Windows the generic `j2534` driver loads the vendor DLL; on Linux, skip. |
 | **VCDS "HEX" clone** (HEX-V2 / HEX+CAN) | ATmega162 (+ CAN MCU) running cloned Ross-Tech fw | $15–40 | CAN + K-line | **None exposed** — speaks only to VCDS | **not driveable** | No | No | Runs cloned Ross-Tech firmware locked to the VCDS application; no open/generic command interface. Not a general interface for OpenTune. |
 | **Bench / boot tools** (BDM frames, "ECU bench" cables, breakout boxes e.g. Godiag GT100/GT101) | passive wiring / BDM probe | $10–90 | n/a (bench) | n/a | **out of scope** | n/a | n/a | These are for **bench** reads (BDM/boot mode) or pin breakout, not OBD-port diagnostics. GT100/GT101 is a passive breakout box + bench power, not a VCI. Outside OpenTune's OBD scope. |
 
@@ -61,9 +71,9 @@ pre-CAN-FD CAN ECUs — a cheap, well-supported kit under ~$50 is:
    - Covers 1996–~2005 K-line ECUs the OpenPort clone's K-line path handles
      poorly. These cars are exactly where a hobbyist open-source tool is most
      useful (no cheap alternative exists).
-   - **Requires the new "KKL raw K-line" driver** (see gaps below). This is the
-     single highest-value driver to add, because it unlocks a whole class of
-     cheap hardware that nothing else in the ecosystem drives openly.
+   - Uses the **`kkl` raw K-line driver** (added after this survey — see
+     section 3). It unlocks a whole class of cheap hardware that nothing else in
+     the ecosystem drives openly.
    - Prefer an **FTDI FT232** unit over CH340 if you can — genuine FTDI has the
      most robust Linux `ftdi_sio` support; CH340 works via `ch341` but counterfeit
      FTDI chips have historically been bricked by vendor "driver" updates.
@@ -81,29 +91,31 @@ device, buy a **genuine STN-based OBDLink SX** rather than a $4 clone.
 
 ---
 
-## 3. Driver gaps this implies (roadmap input)
+## 3. Driver gaps this implied (roadmap input — now all done)
 
-These are the new drivers / transports the survey surfaces, in rough priority
-order:
+These are the new drivers / transports the survey surfaced, in rough priority
+order. All four have since been implemented (`kkl`, `slcan`, `elm327net`,
+`j2534`); they are unit-tested but not yet validated on real hardware. The
+original rationale is kept below for history.
 
-1. **KKL raw K-line driver** (high value).
+1. ✅ **KKL raw K-line driver** (high value) — `kkl`.
    A dumb-serial driver for FT232/CH340 + K-line-transceiver cables: own the
    5-baud and fast (ISO 14230) init, the half-duplex byte timing, and the L-line
    wakeup, then run the existing `Kwp2000Client`/K-line service stack on top.
    Unlocks the cheapest hardware class, which nothing else drives openly.
 
-2. **slcan / serial-CAN driver** (medium value).
+2. ✅ **slcan / serial-CAN driver** (medium value) — `slcan`.
    A driver that speaks the LAWICEL/slcan ASCII protocol (and/or the cheap
    "USB-CAN Analyzer" binary framing) directly in OpenTune, so a CAN adapter
    works without relying on the host `slcand` bridge or an out-of-tree kernel
    module. Lets non-SocketCAN / non-Linux hosts use cheap CAN dongles.
 
-3. **ELM327 Bluetooth / WiFi transport** (low/medium value).
+3. ✅ **ELM327 Bluetooth / WiFi transport** (low/medium value) — `elm327net`.
    The `elm327` driver already speaks the AT dialect; it just opens a serial
    port. Add a BT-SPP (RFCOMM) and a WiFi (TCP, typically `192.168.0.10:35000`)
    transport so the ubiquitous wireless clones work for read/log.
 
-4. **Generic J2534 driver** (Windows-only, lower priority).
+4. ✅ **Generic J2534 driver** (Windows-only, lower priority) — `j2534`.
    A driver that loads a vendor J2534 PassThru DLL would reach Mongoose/VNCI/SVCI
    /Scanmatik/generic VCI clones — but only on Windows, since J2534 has no
    official Linux API. Treat as a Windows-host feature, not a Linux path.

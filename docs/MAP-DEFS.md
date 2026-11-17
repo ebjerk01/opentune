@@ -118,8 +118,9 @@ established models:
 
 **Why this subset.** OpenTune targets reflashing and calibration edits, not a
 full OEM measurement/calibration (MC) stack. A flat, linear, JSON-native model is
-easy to hand-author, safe to parse (no embedded expressions), and friendly to a
-future importer that can *lower* an A2L or XDF into `MapDef`s. Anything the linear
+easy to hand-author, safe to parse (no embedded expressions), and friendly to
+importers that *lower* other formats into `MapDef`s — the A2L, XDF, EcuFlash /
+RomRaider XML and WinOLS `.ols` importers all do exactly that. Anything the linear
 model cannot express is captured as a pre-scaled map plus a note, not by growing
 the schema.
 

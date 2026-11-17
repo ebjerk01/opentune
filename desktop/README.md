@@ -1,13 +1,19 @@
 # OpenTune Desktop
 
-The open-source, **calibration-only** OpenTune app — a [Tauri 2](https://tauri.app)
-desktop UI over the shared OpenTune Rust core. It runs the whole workflow
-**offline** on a flash-image file through the mock/file driver: open a dump,
-identify it, verify/fix checksums, diff for maps, decode a defined map into a
-heat grid, run a safety-gated (mock) flash, and browse a backup vault.
+The open-source OpenTune app — a [Tauri 2](https://tauri.app) desktop UI over
+the shared OpenTune Rust core. The calibration workflow runs **offline** on a
+flash-image file through the mock/file driver: open a dump, identify it,
+verify/fix checksums, diff for maps, view/edit a defined map as a heat grid, run
+a safety-gated (mock) flash, and browse a backup vault.
 
-It is deliberately calibration-only — there is **no** immobiliser / EEPROM /
-standalone / bench tooling here (that lives in a separate private app).
+It also talks to a **live adapter**: a sidebar adapter bar picks the driver /
+port and probes what the adapter can do, and the diagnostics panels (coding,
+auto-scan + DTCs, adaptation, service functions, live logging, OBD dashboard)
+run over its diagnostic transport, with each action gated on the adapter's
+reported capabilities. These live paths are **not yet validated on a vehicle**.
+
+There is deliberately **no** immobiliser / EEPROM / standalone / bench tooling
+here (that lives in a separate private app).
 
 > This crate is **not** part of the root Cargo workspace. It builds on its own so
 > the workspace stays lean and the desktop-only dependencies (Tauri) don't leak
@@ -19,13 +25,36 @@ standalone / bench tooling here (that lives in a separate private app).
 map viewer/editor) · `Compare` · `Flash` · `Vault` · `Drivers` · `Project` ·
 `Utilities` · `Guide` (bundled offline markdown) · `About & updates`.
 
+Diagnostics (live, capability-gated): `Coding` · `Auto-scan` (modules + DTCs) ·
+`Adaptation` · `Service fn` · `Live log` · `OBD live` (dashboard) ·
+`Auto-debug` (a guided adapter self-test; its raw-request steps need an alpha
+build).
+
+**Alpha builds** (`--features alpha`) add only the `Debug` panel: raw UDS/OBD
+requests to the adapter, the offline UDS simulator, and a session log. Every
+other panel is in the default build.
+
 ## Backend commands
 
-`list_drivers`, `data_paths`, `image_info`, `hex_preview`, `identify`,
-`match_identity`, `checksum_verify`, `checksum_fix` (with a Save-As fallback),
-`findmaps`, `list_ecudefs`, `list_maps`, `decode_map`, `flash`, `vault_list`,
-`guide_list`, `guide_read` — each calls straight into `opentune-core`,
-`opentune-checksum` and `opentune-flash`.
+Grouped by area (see the `generate_handler!` list in `src-tauri/src/main.rs`
+for the full set); each calls straight into the OpenTune crates.
+
+- **Image & calibration** — `image_info`, `hex_preview`, `analyze_image`,
+  `identify`, `match_identity`, `checksum_verify`, `checksum_fix` (with a
+  Save-As fallback), `findmaps`, `list_ecudefs`, `list_maps`, `decode_map`,
+  `decode_mapdef`, `map_write`, `mapdef_write`, `compare_maps`,
+  `import_definitions`, `promote_region`, `project_save` / `project_open`.
+- **Flash & vault** — `flash`, `vault_list`.
+- **Adapter** — `list_drivers`, `probe_adapter`, `build_channel`.
+- **Diagnostics engines** (`feat_*.rs`) — `coding_read` / `_set_preview` /
+  `_write`, `autoscan_run` / `_clear`, `adaptation_list` / `_read` /
+  `_actuator` / `_routine`, `service_plan` / `_run`, `log_params` /
+  `log_poll_once`, `obd_live`.
+- **Utilities** — `vin_decode`, `part_decode`, `dtc_lookup`, `seedkey_algos`,
+  `seedkey_compute`, `data_paths`, `guide_list`, `guide_read`.
+- **Debug** — `debug_raw_request` and `debug_simulate` (refuse to run unless
+  built with the `alpha` feature), plus `debug_log_dump` / `debug_log_clear`
+  for the session log.
 
 Self-update is driven by `update_status`, `update_check`, `update_install`
 (emits an `update://progress` event) and `update_relaunch`. A shared
@@ -39,7 +68,7 @@ destructive write. See [`UPDATER.md`](UPDATER.md).
 desktop/
 ├── ui/                     # frontend (build.frontendDist = "../ui")
 │   ├── index.html
-│   └── src/{app.js,styles.css}
+│   └── src/{app.js,ot-caps.js,feat_*.js,styles.css}
 ├── package.json            # Tauri CLI wrapper scripts
 └── src-tauri/
     ├── Cargo.toml          # core + driver crates by relative path
@@ -48,7 +77,7 @@ desktop/
     ├── guide/*.md          # bundled in-app guide sections
     ├── icons/              # app icons
     ├── build.rs
-    └── src/main.rs         # #[tauri::command]s that call the core
+    └── src/{main.rs,feat_*.rs}   # #[tauri::command]s that call the core
 ```
 
 The ECU definitions (`ecudefs/`), vehicle catalog (`catalog/`) and the guide

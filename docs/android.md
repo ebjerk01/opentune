@@ -5,8 +5,11 @@ The Android app does **not** reimplement any ECU logic. It reuses the exact same
 safety orchestrator) as the CLI and desktop app, exposed to Kotlin through
 **UniFFI**, with a thin **Kotlin/Compose** shell on top.
 
-> **Status: planned** (roadmap M7). This document is the design, not a shipped
-> app.
+> **Status: built.** The app lives in [`android/`](../android/) over the
+> `crates/opentune-ffi` UniFFI binding; a debug APK has been built and run on a
+> real device (offline workflow only), and CI compiles it (`assembleDebug`).
+> USB-OTG / BLE transports are still to do. This document is the original
+> design; see [`android/README.md`](../android/README.md) for the shipped app.
 
 ## Why UniFFI
 
@@ -24,7 +27,7 @@ one set of safety rules, one ECU-definition library — on desktop and on Androi
   └───────────────────────┬──────────────────────┘
                           │  generated Kotlin bindings (UniFFI)
   ┌───────────────────────┴──────────────────────┐
-  │  opentune-mobile  (Rust cdylib, UniFFI)        │
+  │  opentune-ffi  (Rust cdylib, UniFFI)           │
   │   wraps opentune-core / -checksum / -flash     │
   └───────────────────────┬──────────────────────┘
                           │  Interface trait
@@ -36,7 +39,7 @@ one set of safety rules, one ECU-definition library — on desktop and on Androi
 
 ## Pieces
 
-1. **`opentune-mobile` crate** (added under `android/` or `crates/`): a UniFFI
+1. **`opentune-ffi` crate** (`crates/opentune-ffi`): a UniFFI
    wrapper that re-exports the core operations across the FFI boundary —
    enumerate drivers, open a connection, read ECU id, read/backup a region, and
    run `flash_calibration` with progress callbacks. Built as a `cdylib` for the
@@ -64,7 +67,7 @@ one set of safety rules, one ECU-definition library — on desktop and on Androi
 ## Build outline
 
 ```sh
-# in the mobile crate
+# see android/build-rust.sh for the exact invocation
 cargo install cargo-ndk uniffi-bindgen
 cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 build --release
 uniffi-bindgen generate <udl-or-library> --language kotlin --out-dir <android-src>

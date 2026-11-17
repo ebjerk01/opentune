@@ -147,13 +147,3 @@ block boundary and after the last frame, then strip and length-check the telegra
 `2,0,2,1` with `BS=2`), `multiframe_receive_acks_blocks` (mid-stream + final
 ACKs), `setup_rejection_is_error` (`0xD6`), `response_pending_is_retried`
 (`0x78` loop), `timing_byte_roundtrips`.
-
-## What was *not* changed
-
-Per the task scope, only files under `protocol/` were edited (`mod.rs` to
-register `vwtp20`), and `docs/PROTOCOL-NOTES.md` was created. `lib.rs`,
-`ecudef.rs`, other crates, the root `Cargo.toml`, `README` and `ROADMAP` were
-left untouched. The existing driver crates (`socketcan`, `j2534-openport`,
-`kline-elm327`) build unchanged against the preserved `IsoTp` API; wiring the
-`Protocol::Vwtp20` variant into those drivers (constructing a `VwTp20` from a
-driver `CanLink`) is a follow-up in the driver crates, outside this layer.

@@ -23,10 +23,12 @@ the next **even** level sends the key.
    ECUs send more).
 2. **Compute key** — the tester transforms the seed into a key using the ECU's
    algorithm. The algorithm is specific to the ECU family/supplier and is the
-   secret part. Examples of *forms* it can take (OpenTune implements none of
-   them): a fixed XOR/add/rotate scheme, a lookup against a secret constant, a
-   small bytecode program shipped in the car's ODX (VAG "SA2"), or an
-   AES/HMAC-based challenge.
+   secret part. Examples of *forms* it can take (OpenTune ships no OEM
+   algorithm for any of them): a fixed XOR/add/rotate scheme, a lookup against a
+   secret constant, a small bytecode program shipped in the car's ODX (VAG
+   "SA2"), or an AES/HMAC-based challenge. For the SA2 form, `opentune-sa2`
+   provides a generic bytecode VM that runs a **caller-supplied** program —
+   the per-ECU bytecode itself is never bundled.
 3. **Send key** — tester sends `0x27 <level+1> <key…>` (even). The ECU replies:
    - `0x67 <level+1>` — **unlocked**; protected services are now available.
    - `0x7F 0x27 0x35` — **invalidKey** (`Error::SecurityDenied`).
@@ -69,7 +71,9 @@ pub trait SeedKey {
 - `compute(seed, level)` is the user's algorithm. It receives the raw seed and
   the request level (so one implementation can serve several levels) and returns
   the key bytes. The trait carries **no** data and OpenTune provides **no**
-  production implementation of it.
+  OEM implementation of it. The one generic implementation, `opentune-sa2`'s
+  `Sa2SeedKey` (id `"sa2"`), is an interpreter: it computes nothing until the
+  caller supplies the SA2 program for their ECU.
 
 Because it is a trait object (`Box<dyn SeedKey>`), the algorithm can live in a
 closed plugin, be loaded from the user's own file, or be compiled into a private

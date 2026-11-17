@@ -1,4 +1,4 @@
-# OpenTune for Android (roadmap M7)
+# OpenTune for Android
 
 A Jetpack Compose (Material3) front-end over the OpenTune Rust core, running the
 whole **offline** calibration workflow on a local flash-image `.bin` — no
@@ -59,9 +59,10 @@ to a newer Gradle, re-run that with the new version and commit the result.
 
 - `crates/opentune-ffi` **compiles, tests and generates Kotlin bindings** on a
   plain Rust toolchain — that is verified.
-- The Android/Gradle/Compose side here is **written but unbuilt**: the machine
-  it was authored on has the Rust toolchain but **no Android SDK/NDK and no
-  `cargo-ndk`**. To produce an APK you need those installed (see above). The
-  Gradle wrapper jar is now committed, so only the native `.so` files
-  (`app/src/main/jniLibs/<abi>/libopentune_ffi.so`, produced by `build-rust.sh`)
-  remain to be built locally.
+- The Android/Gradle/Compose side **builds**: a debug APK (with the native
+  lib) has been built and run on real hardware — it installs, launches, and the
+  UniFFI native library loads and round-trips into the Rust core. CI compiles
+  the app with `assembleDebug` (without the native `.so`, and without running
+  it on a device). To produce a working APK yourself you need the Android
+  SDK/NDK and `cargo-ndk` (see above) so `build-rust.sh` can produce
+  `app/src/main/jniLibs/<abi>/libopentune_ffi.so`.

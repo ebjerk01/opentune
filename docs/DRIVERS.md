@@ -48,6 +48,8 @@ pub trait Interface {
                    progress: &mut dyn FnMut(Progress)) -> Result<Vec<u8>>;
     fn write_memory(&mut self, region: MemoryRegion, data: &[u8],
                     progress: &mut dyn FnMut(Progress)) -> Result<()>;
+
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> { None }
 }
 ```
 
@@ -64,6 +66,13 @@ Contract:
 - **`read_memory` / `write_memory`** — call `progress` at least at start and end
   with `Progress { phase, done, total }`; report real progress for long reads.
   Validate lengths; return `Error::NotConnected` if used before `open`.
+- **`diag`** — if the driver owns a request/response `DiagTransport` (an
+  `IsoTp` over its `CanLink`, a KWP2000/OBD session, …), **override this** to
+  return it once `open` has succeeded. The default `None` means "no generic
+  transport", and every service engine (coding, adaptation, service functions,
+  auto-scan, logging) then refuses with "no diagnostic transport". Leave the
+  default only for drivers that genuinely offer just the block read/write
+  pipeline.
 - Surface protocol failures as the structured error types
   (`Error::NegativeResponse`, `Error::Timeout`, `Error::Protocol`) rather than
   ad-hoc strings, so apps can react.
@@ -131,6 +140,10 @@ reg.register("mock", "Mock / file driver", || Box::new(MockDriver::new()));
 - [ ] New crate under `crates/drivers/`, added to workspace `members`.
 - [ ] `Interface` implemented; `capabilities` honest; `bench_boot` only if true.
 - [ ] CAN driver reuses `IsoTp` + `UdsClient` rather than re-rolling transport.
+- [ ] `diag()` overridden if the driver owns a `DiagTransport`.
+- [ ] Registered in the CLI registry (`crates/opentune-cli/src/main.rs`) and,
+      for a user-facing adapter, the desktop registry
+      (`desktop/src-tauri/src/main.rs`).
 - [ ] Progress reported; errors use the structured `Error` variants.
 - [ ] No safety logic in the driver.
 - [ ] Tests, ideally hardware-free. `cargo fmt` + `clippy` clean.
