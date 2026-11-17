@@ -172,8 +172,11 @@ All `[ ]` = planned.
 ### Drivetrain control units — TCU + AWD/4WD (new target class)
 See `docs/IDEAS.md` "Drivetrain control units" for the per-brand target list. Each needs its own
 defs + checksum; the flash/UDS transport is shared.
-- [ ] **VAG DSG/TCU** (Temic DQ250/DQ200/DQ381/DL382) defs + checksum + bench flash. Refs: VW_Flash, DQ250-MQB-Bench-Flash, vag-tcu-tools.
-- [ ] **Haldex AWD** controller defs + checksum (Gen4/5 BorgWarner).
+- [~] **Haldex Gen4** (BorgWarner, e.g. VW Passat CC 4Motion) — definitions + checksum + ECU-database entry, read-only first; validation = a real Gen4 read on the owner's car (joins the first car session). *(in progress)*
+- [~] **OpenHaldex** support — a backend + CLI (panel after the desktop split) that talks to an OpenHaldex unit: lock modes, status, CAN log; clean-room from its docs and CAN behaviour (licence reported as custom: checked before reusing anything). Longer term: a Haldex controller mode on the OpenTune ESP32 interface (dual CAN, passthrough or modified lock request). Refs: openhaldex.pages.dev, Forbes-Automotive/OpenHaldex-C6, ABangingDonk/OpenHaldexDue + OpenHaldexT4. *(in progress)*
+- [ ] **Haldex Gen5** word-sum — validate on a real dump when one appears (synthetic-only today).
+- [~] **VAG DSG** definitions + map layouts — **DQ250 PQ `02E` first** (the owner's Passat CC 4Motion, if DSG), then DQ250 MQB, DQ200 (`0AM`), DL382; flash over the UDS module-flash path once that is validated. Refs: dspl1236/vag-tcu-tools (MIT), TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3), bri3d/VW_Flash, bri3d/mqb-flash-rs. *(in progress)*
+- [ ] **DQ250 JAMCRC** — validate on a real dump (synthetic-only today). DQ381 boot reads + TCU seed/key research stay in the private Bench plugin.
 - [ ] **Mercedes 722.6 (NAG1) TCU** — control logic + maps (shift profiles, clutch-fill adaptation, per-gear TCC pressure) from **rnd-ash/ultimate-nag52-fw** (GPL-3, C++ — mine the logic/maps); reusable **Rust** crates (`egs_can`, `diag_common`, `flasher`, KWP2000-over-CAN `bootloader`) from **ultimate-nag52-fw-rs** / **-config-app** (GPL-3 — directly liftable).
 - [ ] Generalize the controller-def schema so BMW ZF 8HP, Ford, Mitsubishi, Volvo TCUs/AWD drop in.
 
