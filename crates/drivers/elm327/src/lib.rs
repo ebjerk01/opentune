@@ -660,6 +660,15 @@ impl Interface for Elm327Obd {
         }
     }
 
+    /// Expose the UDS/OBD diagnostic transport so the coding/adaptation/auto-scan/
+    /// service/logging engines (and the raw-request console) can drive this
+    /// adapter. Available once `open()` has brought the ELM327 up.
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        self.transport
+            .as_mut()
+            .map(|t| t as &mut dyn DiagTransport)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let bus = CanBus::from_option(cfg.options.get("bus").map(String::as_str));
         let stream = self.connect_stream(cfg)?;
