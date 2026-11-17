@@ -136,6 +136,26 @@ Implemented today: `mock` (synthetic traffic), `socketcan` and `gsusb` (kernel
 `elm327obd` (`ATMA` with `ATCSM1` silent monitoring; clones that refuse it are
 NotGuaranteed). The log writers and stats live in `opentune-candump`.
 
+## 3c. The virtual car (`vcar`) — a test peer for everything above
+
+`crates/drivers/vcar` simulates a whole six-module vehicle. Each module is an
+`opentune-udssim` UDS server behind a server-side ISO-TP endpoint on a virtual
+11-bit CAN bus. The engine also answers functional OBD-II on `0x7DF`. The
+driver is a good reference for the patterns above:
+
+- `diag()` returns the core `IsoTp` over a `CanLink` (`VcarLink`). It is bound
+  to `ConnectConfig::tx_id` / `rx_id` (the engine by default), and a request to
+  an id with no module behind it times out, as on a real bus.
+- `can_monitor()` produces synthetic traffic (`ListenOnly::Simulated`).
+- `capabilities()` is honest: CAN and battery voltage, but no memory
+  read/write.
+- The vehicle lives in a process-wide table keyed by the profile spec. Apps
+  re-open a driver for every module (the per-module auto-scan, the desktop
+  hub), and the table means the car keeps its state across those re-opens.
+
+Use it to test an engine or a panel end to end without hardware. See
+[`VIRTUAL-CAR.md`](VIRTUAL-CAR.md).
+
 ## 4. Registration
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build
