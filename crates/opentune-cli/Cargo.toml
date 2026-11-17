@@ -46,6 +46,7 @@ opentune-logdef = { path = "../opentune-logdef" }
 opentune-db = { path = "../opentune-db" }
 opentune-candump = { path = "../opentune-candump" }
 opentune-mapfind = { path = "../opentune-mapfind" }
+opentune-recipe = { path = "../opentune-recipe" }
 # Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
 ctrlc = "3"
 

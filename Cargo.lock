@@ -787,6 +787,7 @@ dependencies = [
  "opentune-mapfind",
  "opentune-ols",
  "opentune-packs",
+ "opentune-recipe",
  "opentune-scan",
  "opentune-servicefn",
  "opentune-udssim",
@@ -1009,6 +1010,19 @@ dependencies = [
  "opentune-core",
  "opentune-logdef",
  "opentune-servicefn",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-recipe"
+version = "0.1.0"
+dependencies = [
+ "opentune-attest",
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-flash",
+ "opentune-scan",
  "serde",
  "serde_json",
 ]

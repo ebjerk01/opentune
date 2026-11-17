@@ -40,6 +40,7 @@ members = [
     "crates/opentune-db",
     "crates/opentune-candump",
     "crates/opentune-mapfind",
+    "crates/opentune-recipe",
 ]
 
 [workspace.package]

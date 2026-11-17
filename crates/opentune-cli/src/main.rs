@@ -12,6 +12,7 @@ use std::path::PathBuf;
 mod candump;
 mod mapfind_cmd;
 mod obd_cmd;
+mod recipe_cmd;
 
 #[derive(Parser)]
 #[command(
@@ -112,6 +113,12 @@ enum Command {
         /// Optionally write the candidate regions as JSON.
         #[arg(long)]
         emit: Option<PathBuf>,
+    },
+    /// Portable tune recipes: create from a stock/tuned pair, apply to a
+    /// matching image (checksum-fixed + attested), show.
+    Recipe {
+        #[command(subcommand)]
+        action: recipe_cmd::RecipeAction,
     },
     /// Work with ECU-definition files (list, validate).
     Ecudefs {
@@ -2012,6 +2019,7 @@ fn main() -> Result<()> {
             &params,
         )?,
         Command::Candump(args) => candump::run(&reg, args)?,
+        Command::Recipe { action } => recipe_cmd::run(action)?,
     }
     Ok(())
 }
