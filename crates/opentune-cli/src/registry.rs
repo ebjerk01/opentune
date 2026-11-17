@@ -34,9 +34,11 @@ pub fn public_registry() -> Registry {
     r.register("elm327net", "ELM327 over WiFi / Bluetooth", || {
         Box::new(opentune_driver_elm327net::Elm327NetDriver::new())
     });
-    r.register("elm327obd", "ELM327 serial (OBD read diagnostics)", || {
-        Box::new(opentune_driver_elm327_obd::Elm327Obd::new())
-    });
+    r.register(
+        "elm327obd",
+        "ELM327 serial (OBD diagnostics + CAN memory read)",
+        || Box::new(opentune_driver_elm327_obd::Elm327Obd::new()),
+    );
     r.register(
         "vcar",
         "Virtual car (offline multi-module simulator)",

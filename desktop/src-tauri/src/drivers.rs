@@ -29,9 +29,11 @@ pub(crate) fn registry() -> Registry {
     r.register("kkl", "K-line (KKL 409.1 raw)", || {
         Box::new(opentune_driver_kkl::KklDriver::new())
     });
-    r.register("elm327obd", "ELM327 serial (OBD diagnostics)", || {
-        Box::new(opentune_driver_elm327_obd::Elm327Obd::new())
-    });
+    r.register(
+        "elm327obd",
+        "ELM327 serial (OBD diagnostics + CAN memory read)",
+        || Box::new(opentune_driver_elm327_obd::Elm327Obd::new()),
+    );
     r.register("elm327net", "ELM327 over WiFi / Bluetooth", || {
         Box::new(opentune_driver_elm327net::Elm327NetDriver::new())
     });
