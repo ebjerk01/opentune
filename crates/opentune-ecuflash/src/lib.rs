@@ -36,13 +36,24 @@
 //! first). A non-linear equation imports **pre-scaled** (factor 1) with a note,
 //! never a silent wrong scale.
 //!
-//! ## What it does not do (v1, reported, never silent)
+//! ## Base-definition inheritance
 //!
-//! * EcuFlash `<include>` and RomRaider `<rom base=>` / `<table base=>`
-//!   inheritance is **not merged** (the base lives in a separate document or
-//!   another `<rom>`); the referenced base id is recorded in
-//!   [`EcuflashImport::warnings`] so the maintainer can merge it, and an
-//!   inherited table (no body of its own) is skipped rather than emitted broken.
+//! The single-document [`parse_ecuflash`] does **not** resolve inheritance: the
+//! base lives in a separate document or another `<rom>`, so it only records the
+//! referenced base id and warns. When a base-def store is available, use
+//! [`parse_ecuflash_with_bases`] (or the in-memory convenience
+//! [`parse_ecuflash_with_base_map`]) instead: it resolves EcuFlash `<include>`
+//! and RomRaider `<rom base=>` **recursively** (base-of-base first) and merges
+//! **base first, child overrides** by scaling `name`, table `name`, and romid
+//! xmlid, and inherits a RomRaider `<table base="name">`'s missing fields from
+//! the named base table. Missing bases and inheritance cycles are surfaced as
+//! warnings, never looped.
+//!
+//! ## What it does not do (reported, never silent)
+//!
+//! * In the single-document [`parse_ecuflash`], an inherited table (no body of
+//!   its own) is skipped rather than emitted broken, and the referenced base id
+//!   is recorded in [`EcuflashImport::warnings`].
 //! * Non-linear equations, unknown `storagetype`, a missing `scaling` /
 //!   `scalingbase` reference, or more than one `<rom>` in the file are each
 //!   surfaced as a warning rather than dropped quietly.
@@ -455,32 +466,17 @@ fn parse_axis(
     }
 }
 
-/// Parse one top-level `<table>` into a [`MapDef`].
-fn parse_table(
+/// Build the X/Y [`AxisDef`]s from a table's axis sub-tables. `size_x`/`size_y`
+/// carry a RomRaider parent `sizex`/`sizey` used as the forced axis count
+/// (EcuFlash passes `None`, so each axis counts via its own `elements`).
+fn build_axes(
     dialect: Dialect,
     table: Node,
     scalings: &HashMap<String, ScalingDef>,
     warnings: &mut Vec<String>,
-) -> Option<MapDef> {
-    let name = table.attribute("name")?.to_string();
-    let ty = table.attribute("type").unwrap_or("").to_string();
-
-    // RomRaider `<table base="Other Table">` inherits a sibling table's body; we
-    // do not merge it, so skip rather than emit a broken 1x1 map.
-    if let Some(base) = table.attribute("base") {
-        warnings.push(format!(
-            "table `{name}` inherits from base table `{base}` (not merged); skipped"
-        ));
-        return None;
-    }
-
-    let cell = resolve_scaling(dialect, table, scalings, warnings);
-
-    // RomRaider dimensions live on the table; EcuFlash reads them off the axes.
-    let size_x = table.attribute("sizex").and_then(|v| v.trim().parse::<u32>().ok());
-    let size_y = table.attribute("sizey").and_then(|v| v.trim().parse::<u32>().ok());
-
-    // Axis sub-tables.
+    size_x: Option<u32>,
+    size_y: Option<u32>,
+) -> (Option<AxisDef>, Option<AxisDef>) {
     let axis_nodes: Vec<Node> = table
         .children()
         .filter(|c| {
@@ -506,6 +502,27 @@ fn parse_table(
             y_axis = Some(built);
         }
     }
+    (x_axis, y_axis)
+}
+
+/// Build a [`MapDef`] from a `<table>` that carries its own body (no `base=`
+/// inheritance). Shared by the single-document and base-merging paths.
+fn build_plain_map(
+    dialect: Dialect,
+    table: Node,
+    scalings: &HashMap<String, ScalingDef>,
+    warnings: &mut Vec<String>,
+) -> Option<MapDef> {
+    let name = table.attribute("name")?.to_string();
+    let ty = table.attribute("type").unwrap_or("").to_string();
+
+    let cell = resolve_scaling(dialect, table, scalings, warnings);
+
+    // RomRaider dimensions live on the table; EcuFlash reads them off the axes.
+    let size_x = table.attribute("sizex").and_then(|v| v.trim().parse::<u32>().ok());
+    let size_y = table.attribute("sizey").and_then(|v| v.trim().parse::<u32>().ok());
+
+    let (x_axis, y_axis) = build_axes(dialect, table, scalings, warnings, size_x, size_y);
 
     // Dimensions. 3D = X*Y map, 2D = 1-axis curve, 1D = scalar. RomRaider trusts
     // sizex/sizey (falling back to an axis count); EcuFlash uses axis counts.
@@ -553,6 +570,26 @@ fn parse_table(
         min: cell.min,
         max: cell.max,
     })
+}
+
+/// Parse one top-level `<table>` into a [`MapDef`] in the single-document path.
+/// A RomRaider `<table base="Other Table">` has no body of its own here (the base
+/// is not resolved), so it is reported and skipped rather than emitted broken —
+/// use [`parse_ecuflash_with_bases`] to merge it.
+fn parse_table(
+    dialect: Dialect,
+    table: Node,
+    scalings: &HashMap<String, ScalingDef>,
+    warnings: &mut Vec<String>,
+) -> Option<MapDef> {
+    if let Some(base) = table.attribute("base") {
+        let name = table.attribute("name").unwrap_or("?");
+        warnings.push(format!(
+            "table `{name}` inherits from base table `{base}` (not merged); skipped"
+        ));
+        return None;
+    }
+    build_plain_map(dialect, table, scalings, warnings)
 }
 
 /// Parse an EcuFlash / RomRaider XML definition into an [`EcuflashImport`].
@@ -628,6 +665,403 @@ pub fn parse_ecuflash(src: &str) -> Result<EcuflashImport> {
         maps,
         warnings,
     })
+}
+
+// ---- Base-definition merging --------------------------------------------------
+
+/// The xmlid of a `<rom>`'s `<romid>` (empty if absent).
+fn rom_xmlid(rom: Node) -> String {
+    rom.children()
+        .find(|c| c.is_element() && c.tag_name().name() == "romid")
+        .map(|r| child_text(r, "xmlid"))
+        .unwrap_or_default()
+}
+
+/// The base ids a `<rom>` inherits: EcuFlash `<include>` text + RomRaider `base=`.
+fn rom_base_ids(rom: Node) -> Vec<String> {
+    let mut ids: Vec<String> = rom
+        .children()
+        .filter(|c| c.is_element() && c.tag_name().name() == "include")
+        .filter_map(|c| c.text())
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if let Some(base) = rom.attribute("base") {
+        let b = base.trim();
+        if !b.is_empty() {
+            ids.push(b.to_string());
+        }
+    }
+    ids
+}
+
+/// Pick the `<rom>` matching `want` (by xmlid, falling back to the first), or the
+/// first `<rom>` when `want` is `None`.
+fn find_rom<'a, 'i>(doc: &'a Document<'i>, want: Option<&str>) -> Option<Node<'a, 'i>> {
+    let roms: Vec<Node> = doc
+        .descendants()
+        .filter(|n| n.is_element() && n.tag_name().name() == "rom")
+        .collect();
+    match want {
+        Some(id) => roms
+            .iter()
+            .copied()
+            .find(|r| rom_xmlid(*r) == id)
+            .or_else(|| roms.first().copied()),
+        None => roms.first().copied(),
+    }
+}
+
+/// Collect named scalings from a document into `scalings`. Later inserts override
+/// earlier, so call it base-first then for the child.
+fn collect_scalings(
+    doc: &Document,
+    scalings: &mut HashMap<String, ScalingDef>,
+    warnings: &mut Vec<String>,
+) {
+    for s in doc.descendants().filter(|n| {
+        n.is_element()
+            && matches!(n.tag_name().name(), "scaling" | "scalingbase")
+            && n.has_attribute("name")
+    }) {
+        if let Some(name) = s.attribute("name") {
+            scalings.insert(name.to_string(), parse_scaling_node(s, warnings));
+        }
+    }
+}
+
+/// Does this node define its own axis sub-tables?
+fn has_axis_children(node: Node) -> bool {
+    node.children().any(|c| {
+        c.is_element()
+            && c.tag_name().name() == "table"
+            && is_axis(c.attribute("type").unwrap_or(""))
+    })
+}
+
+/// Overlay a child `<table base="…">`'s explicitly-specified fields onto the
+/// [`MapDef`] built from its base table. Fields the child does not specify are
+/// inherited from the base (storage, dims, cell scaling, axes).
+fn overlay_child_fields(
+    mut base_map: MapDef,
+    dialect: Dialect,
+    node: Node,
+    scalings: &HashMap<String, ScalingDef>,
+    warnings: &mut Vec<String>,
+) -> MapDef {
+    if let Some(n) = node.attribute("name") {
+        base_map.name = n.to_string();
+    }
+    if let Some(a) = node_address(node) {
+        base_map.address = a;
+    }
+    if let Some(s) = node.attribute("storagetype") {
+        match storage_to_type(s) {
+            Some(t) => base_map.data_type = t,
+            None => {
+                warnings.push(format!(
+                    "table `{}`: unknown storagetype `{s}`, defaulting to uint8",
+                    base_map.name
+                ));
+                base_map.data_type = DataType::U8;
+            }
+        }
+    }
+    if let Some(e) = node.attribute("endian") {
+        base_map.endian = endian_of(Some(e));
+    }
+    if let Some(sx) = node.attribute("sizex").and_then(|v| v.trim().parse::<u32>().ok()) {
+        base_map.cols = sx;
+    }
+    if let Some(sy) = node.attribute("sizey").and_then(|v| v.trim().parse::<u32>().ok()) {
+        base_map.rows = sy;
+    }
+
+    // Cell scaling: only override when the child provides its own (a `<scaling>`
+    // child or a `scaling="name"` ref). Storage/endian were handled above, so we
+    // take only the equation-derived fields from the resolved scaling here.
+    let has_scaling = node.attribute("scaling").is_some()
+        || node
+            .children()
+            .any(|c| c.is_element() && c.tag_name().name() == "scaling");
+    if has_scaling {
+        let cell = resolve_scaling(dialect, node, scalings, warnings);
+        base_map.scaling = cell.scaling;
+        base_map.unit = cell.unit.clone();
+        base_map.min = cell.min;
+        base_map.max = cell.max;
+        if cell.toexpr_nonlinear && !base_map.notes.contains("non-linear") {
+            if !base_map.notes.is_empty() {
+                base_map.notes.push_str("; ");
+            }
+            base_map
+                .notes
+                .push_str("non-linear scaling imported pre-scaled (factor 1) — verify");
+        }
+    }
+
+    if has_axis_children(node) {
+        let size_x = node
+            .attribute("sizex")
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .or(Some(base_map.cols));
+        let size_y = node
+            .attribute("sizey")
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .or(Some(base_map.rows));
+        let (x, y) = build_axes(dialect, node, scalings, warnings, size_x, size_y);
+        if x.is_some() {
+            base_map.x_axis = x;
+        }
+        if y.is_some() {
+            base_map.y_axis = y;
+        }
+    }
+
+    if let Some(cat) = node.attribute("category") {
+        let note = format!("category: {cat}");
+        if !base_map.notes.contains(&note) {
+            if !base_map.notes.is_empty() {
+                base_map.notes.push_str("; ");
+            }
+            base_map.notes.push_str(&note);
+        }
+    }
+    base_map
+}
+
+/// Build a [`MapDef`] in the base-merging path, resolving a RomRaider
+/// `<table base="name">` by inheriting the named base table's fields from `scope`
+/// (the merged, possibly-inherited table set) and overlaying the child's own
+/// fields. Cycles and missing bases are reported, never looped.
+fn build_merged_map<'a, 'i>(
+    dialect: Dialect,
+    node: Node<'a, 'i>,
+    scalings: &HashMap<String, ScalingDef>,
+    scope: &HashMap<String, Node<'a, 'i>>,
+    warnings: &mut Vec<String>,
+    visiting: &mut Vec<String>,
+) -> Option<MapDef> {
+    let name = node.attribute("name")?.to_string();
+    let Some(base_name) = node.attribute("base") else {
+        return build_plain_map(dialect, node, scalings, warnings);
+    };
+
+    if visiting.iter().any(|v| v == base_name) {
+        warnings.push(format!(
+            "table `{name}`: base-table cycle via `{base_name}`; emitted from own fields only"
+        ));
+        return build_plain_map(dialect, node, scalings, warnings);
+    }
+    match scope.get(base_name) {
+        None => {
+            warnings.push(format!(
+                "table `{name}`: base table `{base_name}` not found in merged scope; emitted from own fields only"
+            ));
+            build_plain_map(dialect, node, scalings, warnings)
+        }
+        Some(base_node) => {
+            visiting.push(base_name.to_string());
+            let base_map = build_merged_map(dialect, *base_node, scalings, scope, warnings, visiting);
+            visiting.pop();
+            match base_map {
+                Some(bm) => Some(overlay_child_fields(bm, dialect, node, scalings, warnings)),
+                None => {
+                    warnings.push(format!(
+                        "table `{name}`: base table `{base_name}` could not be built; emitted from own fields only"
+                    ));
+                    build_plain_map(dialect, node, scalings, warnings)
+                }
+            }
+        }
+    }
+}
+
+/// Walk the base-definition chain depth-first (post-order, so base-most first),
+/// appending each resolved base's `(xmlid, source)` to `ordered`. Missing bases,
+/// unparsable bases, and inheritance cycles are recorded as warnings and skipped.
+fn resolve_base_chain<F: Fn(&str) -> Option<String>>(
+    base_ids: &[String],
+    resolve: &F,
+    visiting: &mut Vec<String>,
+    done: &mut std::collections::HashSet<String>,
+    ordered: &mut Vec<(String, String)>,
+    warnings: &mut Vec<String>,
+) {
+    for id in base_ids {
+        if done.contains(id) {
+            continue;
+        }
+        if visiting.iter().any(|v| v == id) {
+            warnings.push(format!(
+                "base def `{id}`: inheritance cycle detected; not merged"
+            ));
+            continue;
+        }
+        let Some(src) = resolve(id) else {
+            warnings.push(format!("base def `{id}` not found via resolver; not merged"));
+            continue;
+        };
+        // Parse transiently to find this base's own base ids (the Document is
+        // dropped before `src` is moved into `ordered`).
+        let child_ids: Vec<String> = match Document::parse(&src) {
+            Err(e) => {
+                warnings.push(format!("base def `{id}`: XML parse error: {e}; not merged"));
+                continue;
+            }
+            Ok(doc) => match find_rom(&doc, Some(id)) {
+                Some(rom) => rom_base_ids(rom),
+                None => {
+                    warnings.push(format!("base def `{id}`: no <rom> element; not merged"));
+                    continue;
+                }
+            },
+        };
+        visiting.push(id.clone());
+        resolve_base_chain(&child_ids, resolve, visiting, done, ordered, warnings);
+        visiting.pop();
+        done.insert(id.clone());
+        ordered.push((id.clone(), src));
+    }
+}
+
+/// Parse an EcuFlash / RomRaider definition, **merging its base definitions**.
+///
+/// `resolve(xmlid)` returns the XML source of a base def (the target of an
+/// EcuFlash `<include>xmlid</include>` or a RomRaider `<rom base="xmlid">`),
+/// letting the caller supply the base-def store (a `--base-dir`, a bundled
+/// library, …). The chain is resolved recursively (base-of-base first) and merged
+/// **base first, child overrides** by scaling `name`, table `name`, and romid
+/// xmlid; a RomRaider `<table base="name">` inherits the named base table's
+/// missing fields from the (possibly inherited) merged scope. Missing bases and
+/// inheritance cycles are surfaced as warnings, never looped.
+///
+/// The single-document [`parse_ecuflash`] is unchanged; prefer this entry when a
+/// base-def store is available.
+pub fn parse_ecuflash_with_bases<F>(src: &str, resolve: F) -> Result<EcuflashImport>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let main_doc = Document::parse(src).map_err(|e| Error::Xml(e.to_string()))?;
+
+    let main_roms: Vec<Node> = main_doc
+        .descendants()
+        .filter(|n| n.is_element() && n.tag_name().name() == "rom")
+        .collect();
+    let main_rom = *main_roms.first().ok_or(Error::NoRom)?;
+
+    let mut warnings = Vec::new();
+    if main_roms.len() > 1 {
+        warnings.push(format!(
+            "{} <rom> blocks in file; imported the first (`{}`)",
+            main_roms.len(),
+            rom_xmlid(main_rom)
+        ));
+    }
+
+    let main_base_ids = rom_base_ids(main_rom);
+
+    // Resolve the base-def chain, base-most first.
+    let mut ordered: Vec<(String, String)> = Vec::new();
+    let mut visiting: Vec<String> = Vec::new();
+    let mut done = std::collections::HashSet::new();
+    let main_id = rom_xmlid(main_rom);
+    if !main_id.is_empty() {
+        // Seed so a base that re-includes this ROM is caught as a cycle.
+        visiting.push(main_id);
+    }
+    resolve_base_chain(
+        &main_base_ids,
+        &resolve,
+        &mut visiting,
+        &mut done,
+        &mut ordered,
+        &mut warnings,
+    );
+
+    // Parse every resolved base document (base-first); each parsed cleanly during
+    // chain resolution, so they are kept alive here for borrowing.
+    let base_docs: Vec<Document> = ordered
+        .iter()
+        .filter_map(|(_, s)| Document::parse(s).ok())
+        .collect();
+
+    // Dialect: RomRaider if the main doc or any base looks RomRaider.
+    let dialect = if detect_dialect(&main_doc) == Dialect::RomRaider
+        || base_docs.iter().any(|d| detect_dialect(d) == Dialect::RomRaider)
+    {
+        Dialect::RomRaider
+    } else {
+        Dialect::EcuFlash
+    };
+
+    // Combined scalings: base-first, child (main) overrides by name.
+    let mut scalings: HashMap<String, ScalingDef> = HashMap::new();
+    for d in &base_docs {
+        collect_scalings(d, &mut scalings, &mut warnings);
+    }
+    collect_scalings(&main_doc, &mut scalings, &mut warnings);
+
+    // The selected `<rom>` per document (base-first), then the main rom last.
+    let mut selected: Vec<Node> = Vec::new();
+    for (i, (id, _)) in ordered.iter().enumerate() {
+        if let Some(d) = base_docs.get(i) {
+            if let Some(r) = find_rom(d, Some(id)) {
+                selected.push(r);
+            }
+        }
+    }
+    selected.push(main_rom);
+
+    // Merge top-level `<table>`s by name: base-first, child overrides, order kept.
+    let mut table_order: Vec<String> = Vec::new();
+    let mut table_node: HashMap<String, Node> = HashMap::new();
+    for rom in &selected {
+        for t in rom
+            .children()
+            .filter(|c| c.is_element() && c.tag_name().name() == "table")
+        {
+            if let Some(name) = t.attribute("name") {
+                if !table_node.contains_key(name) {
+                    table_order.push(name.to_string());
+                }
+                table_node.insert(name.to_string(), t);
+            }
+        }
+    }
+
+    let mut maps = Vec::new();
+    for name in &table_order {
+        if let Some(node) = table_node.get(name) {
+            let mut visiting_tables: Vec<String> = Vec::new();
+            if let Some(m) = build_merged_map(
+                dialect,
+                *node,
+                &scalings,
+                &table_node,
+                &mut warnings,
+                &mut visiting_tables,
+            ) {
+                maps.push(m);
+            }
+        }
+    }
+
+    Ok(EcuflashImport {
+        rom_id: parse_romid(main_rom),
+        includes: main_base_ids,
+        maps,
+        warnings,
+    })
+}
+
+/// Convenience over [`parse_ecuflash_with_bases`]: resolve base defs from an
+/// in-memory `xmlid → XML source` map (the merge over a `HashMap`).
+pub fn parse_ecuflash_with_base_map(
+    src: &str,
+    bases: &HashMap<String, String>,
+) -> Result<EcuflashImport> {
+    parse_ecuflash_with_bases(src, |id| bases.get(id).cloned())
 }
 
 #[cfg(test)]
@@ -913,6 +1347,206 @@ mod tests {
         assert_eq!(x.values, vec![-40.0, 0.0, 40.0, 80.0]);
         // sizex absent -> cols fall back to the static axis count.
         assert_eq!(m.cols, 4);
+    }
+
+    // ---- Base-definition merging --------------------------------------------
+
+    // An EcuFlash base def: it supplies the RPM/Load scalings and a table of its
+    // own. A child `<include>`s it and references those base scalings.
+    const BASE_32BIT: &str = r#"<rom>
+      <romid><xmlid>32BITBASE</xmlid></romid>
+      <scaling name="RPM"  units="rpm"   toexpr="x*0.25"      storagetype="uint16" endian="big"/>
+      <scaling name="Load" units="g/rev" toexpr="x*0.0078125" storagetype="uint16" endian="big"/>
+      <table name="Base Rev Limit" type="1D" category="Limits" address="0x31000" scaling="RPM"/>
+    </rom>"#;
+
+    const CHILD_INCLUDE: &str = r#"<rom>
+      <romid><xmlid>CHILD</xmlid></romid>
+      <include>32BITBASE</include>
+      <table name="Child Map" type="3D" category="Fueling" address="0x30000" scaling="Load">
+        <table name="RPM"  type="X Axis" address="0x30100" elements="4" scaling="RPM"/>
+        <table name="Load" type="Y Axis" address="0x30200" elements="3" scaling="Load"/>
+      </table>
+    </rom>"#;
+
+    #[test]
+    fn merges_base_scalings_and_tables() {
+        let mut bases = HashMap::new();
+        bases.insert("32BITBASE".to_string(), BASE_32BIT.to_string());
+        let imp = parse_ecuflash_with_base_map(CHILD_INCLUDE, &bases).unwrap();
+
+        assert_eq!(imp.rom_id.xmlid, "CHILD");
+        assert_eq!(imp.includes, vec!["32BITBASE".to_string()]);
+
+        // A table that lives ONLY in the base def is merged in.
+        let base_tbl = imp.maps.iter().find(|m| m.name == "Base Rev Limit").unwrap();
+        assert_eq!(base_tbl.data_type, DataType::U16);
+        assert!((base_tbl.scaling.factor - 0.25).abs() < 1e-9);
+
+        // The child's own table resolves scalings that live only in the base.
+        let cm = imp.maps.iter().find(|m| m.name == "Child Map").unwrap();
+        assert_eq!(cm.unit, "g/rev");
+        assert!((cm.scaling.factor - 0.0078125).abs() < 1e-12);
+        assert_eq!((cm.cols, cm.rows), (4, 3));
+        let x = cm.x_axis.as_ref().unwrap();
+        assert!((x.scaling.factor - 0.25).abs() < 1e-9); // RPM, from the base
+
+        // Nothing went unresolved.
+        assert!(!imp.warnings.iter().any(|w| w.contains("not defined")));
+        assert!(!imp.warnings.iter().any(|w| w.contains("not found")));
+    }
+
+    #[test]
+    fn child_override_wins_over_base() {
+        // Child redefines the RPM scaling and the Base Rev Limit table; both of
+        // its versions must win over the base's.
+        let child = r#"<rom>
+          <romid><xmlid>CHILD</xmlid></romid>
+          <include>32BITBASE</include>
+          <scaling name="RPM" units="rpm" toexpr="x*0.5" storagetype="uint16" endian="big"/>
+          <table name="Base Rev Limit" type="1D" category="Limits" address="0x39000" scaling="RPM"/>
+          <table name="Child Map" type="2D" address="0x30000" scaling="RPM">
+            <table name="RPM" type="X Axis" address="0x30100" elements="4" scaling="RPM"/>
+          </table>
+        </rom>"#;
+        let mut bases = HashMap::new();
+        bases.insert("32BITBASE".to_string(), BASE_32BIT.to_string());
+        let imp = parse_ecuflash_with_base_map(child, &bases).unwrap();
+
+        // Table override by name: the child's address, not the base's 0x31000.
+        let rl = imp.maps.iter().find(|m| m.name == "Base Rev Limit").unwrap();
+        assert_eq!(rl.address, 0x39000);
+        // Exactly one map with that name (base version was overridden, not kept).
+        assert_eq!(imp.maps.iter().filter(|m| m.name == "Base Rev Limit").count(), 1);
+        // Scaling override by name: child RPM factor 0.5, not the base's 0.25.
+        assert!((rl.scaling.factor - 0.5).abs() < 1e-9);
+        let cm = imp.maps.iter().find(|m| m.name == "Child Map").unwrap();
+        assert!((cm.x_axis.as_ref().unwrap().scaling.factor - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn three_level_base_chain_is_resolved() {
+        // C defines a scaling + a table; B includes C; the child A includes B and
+        // uses C's scaling. Base-of-base must resolve (post-order, base-most first).
+        let c = r#"<rom>
+          <romid><xmlid>C</xmlid></romid>
+          <scaling name="TEMP" units="C" toexpr="x*0.1-40" storagetype="uint8" endian="big"/>
+          <table name="C Only" type="1D" address="0xC000" scaling="TEMP"/>
+        </rom>"#;
+        let b = r#"<rom>
+          <romid><xmlid>B</xmlid></romid>
+          <include>C</include>
+          <scaling name="PRES" units="kPa" toexpr="x*0.75" storagetype="uint16" endian="big"/>
+        </rom>"#;
+        let a = r#"<rom>
+          <romid><xmlid>A</xmlid></romid>
+          <include>B</include>
+          <table name="A Map" type="3D" address="0xA000" scaling="PRES">
+            <table name="T" type="X Axis" address="0xA100" elements="2" scaling="TEMP"/>
+            <table name="P" type="Y Axis" address="0xA200" elements="2" scaling="PRES"/>
+          </table>
+        </rom>"#;
+        let mut bases = HashMap::new();
+        bases.insert("B".to_string(), b.to_string());
+        bases.insert("C".to_string(), c.to_string());
+        let imp = parse_ecuflash_with_base_map(a, &bases).unwrap();
+
+        // Table from the deepest base (C) appears.
+        assert!(imp.maps.iter().any(|m| m.name == "C Only"));
+        let am = imp.maps.iter().find(|m| m.name == "A Map").unwrap();
+        assert_eq!(am.unit, "kPa"); // PRES, from B
+        assert!((am.scaling.factor - 0.75).abs() < 1e-9);
+        let x = am.x_axis.as_ref().unwrap();
+        assert!((x.scaling.factor - 0.1).abs() < 1e-9); // TEMP, from C
+        assert!(!imp.warnings.iter().any(|w| w.contains("not defined")));
+        assert!(!imp.warnings.iter().any(|w| w.contains("not found")));
+    }
+
+    #[test]
+    fn missing_base_still_warns_and_does_not_fail() {
+        let child = r#"<rom>
+          <romid><xmlid>CHILD</xmlid></romid>
+          <include>NOPE</include>
+          <table name="Local" type="1D" address="0x1000"/>
+        </rom>"#;
+        // Empty store -> the base cannot be resolved.
+        let imp = parse_ecuflash_with_base_map(child, &HashMap::new()).unwrap();
+        assert!(imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("NOPE") && w.contains("not found via resolver")));
+        // The child's own content still imports.
+        assert!(imp.maps.iter().any(|m| m.name == "Local"));
+        assert_eq!(imp.includes, vec!["NOPE".to_string()]);
+    }
+
+    #[test]
+    fn inheritance_cycle_is_detected_not_looped() {
+        // X includes Y, Y includes X; the child includes X.
+        let x = r#"<rom><romid><xmlid>X</xmlid></romid><include>Y</include></rom>"#;
+        let y = r#"<rom><romid><xmlid>Y</xmlid></romid><include>X</include></rom>"#;
+        let child = r#"<rom><romid><xmlid>CH</xmlid></romid><include>X</include>
+          <table name="Local" type="1D" address="0x1000"/></rom>"#;
+        let mut bases = HashMap::new();
+        bases.insert("X".to_string(), x.to_string());
+        bases.insert("Y".to_string(), y.to_string());
+        // Must terminate (no stack overflow) and warn.
+        let imp = parse_ecuflash_with_base_map(child, &bases).unwrap();
+        assert!(imp.warnings.iter().any(|w| w.contains("cycle")));
+        assert!(imp.maps.iter().any(|m| m.name == "Local"));
+    }
+
+    #[test]
+    fn romraider_table_base_inherits_missing_fields() {
+        // RomRaider `<table base="name">`: the child overrides only the address
+        // and must inherit storage, dims, cell scaling and axes from the base.
+        let rr = r##"<roms>
+          <scalingbase name="boost" units="bar" expression="x*0.001333224" to_byte="x" format="0.000" min="0" max="3"/>
+          <scalingbase name="rpm" units="RPM" expression="x" to_byte="x"/>
+          <rom>
+            <romid><xmlid>T</xmlid></romid>
+            <table type="3D" name="Target Boost" storagetype="uint16" endian="big" sizex="3" sizey="2" storageaddress="0xC11D4">
+              <scaling base="boost"/>
+              <table type="X Axis" name="X" storagetype="float" endian="little" storageaddress="0xC1184"><scaling base="rpm"/></table>
+              <table type="Y Axis" name="Y" storagetype="float" endian="little" storageaddress="0xC11A4"><scaling base="rpm"/></table>
+            </table>
+            <table base="Target Boost" name="Target Boost B" storageaddress="0xBEEF">
+              <description>Inherited</description>
+            </table>
+          </rom>
+        </roms>"##;
+        let imp = parse_ecuflash_with_base_map(rr, &HashMap::new()).unwrap();
+
+        // The inherited table is emitted (not skipped) with merged fields.
+        let b = imp.maps.iter().find(|m| m.name == "Target Boost B").unwrap();
+        assert_eq!(b.address, 0xBEEF); // child override
+        assert_eq!(b.data_type, DataType::U16); // inherited storage
+        assert_eq!(b.endian, Endian::Big);
+        assert_eq!((b.cols, b.rows), (3, 2)); // inherited dims
+        assert_eq!(b.unit, "bar"); // inherited cell scaling
+        assert!((b.scaling.factor - 0.001333224).abs() < 1e-12);
+        assert!(b.x_axis.is_some() && b.y_axis.is_some()); // inherited axes
+        assert_eq!(b.x_axis.as_ref().unwrap().count, 3);
+
+        // The base itself is still present, and no "skipped" warning was emitted.
+        assert!(imp.maps.iter().any(|m| m.name == "Target Boost"));
+        assert!(!imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("Target Boost B") && w.contains("skipped")));
+    }
+
+    #[test]
+    fn with_bases_matches_single_doc_when_no_includes() {
+        // With no inheritance, the merging entry yields the same maps as the
+        // single-document parser (same count, names, addresses).
+        let single = parse_ecuflash(SAMPLE).unwrap();
+        let merged = parse_ecuflash_with_base_map(SAMPLE, &HashMap::new()).unwrap();
+        assert_eq!(single.maps.len(), merged.maps.len());
+        for m in &single.maps {
+            let n = merged.maps.iter().find(|x| x.name == m.name).unwrap();
+            assert_eq!((n.address, n.cols, n.rows), (m.address, m.cols, m.rows));
+        }
     }
 
     /// Real EcuFlash/RomRaider defs, when available via
