@@ -418,6 +418,11 @@ impl Elm327NetDriver {
 }
 
 impl Interface for Elm327NetDriver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        Elm327NetDriver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "elm327net".into(),

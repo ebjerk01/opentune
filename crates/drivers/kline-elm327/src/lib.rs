@@ -345,6 +345,11 @@ impl Elm327Driver {
 }
 
 impl Interface for Elm327Driver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        Elm327Driver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "elm327".into(),

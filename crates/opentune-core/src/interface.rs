@@ -1,5 +1,6 @@
 //! The interface-driver abstraction. Every reader/flasher implements [`Interface`].
 use crate::monitor::CanMonitor;
+use crate::protocol::seedkey::SeedKey;
 use crate::protocol::DiagTransport;
 use crate::{Capabilities, ConnectConfig, EcuId, MemoryRegion, Progress, Result};
 
@@ -68,5 +69,74 @@ pub trait Interface {
     /// transmit on the bus.
     fn can_monitor(&mut self) -> Option<&mut dyn CanMonitor> {
         None
+    }
+
+    /// Hand this driver a [`SeedKey`] handler for its security-access unlock
+    /// (block read/write behind 0x27 / KWP security). OpenTune ships no OEM
+    /// algorithm; the caller (a plugin or the user) supplies it.
+    ///
+    /// Returns `true` when the driver accepted the handler. The default
+    /// returns `false`: the driver has no unlock step, so the handler is
+    /// dropped. Lets a registry-opened `Box<dyn Interface>` take a handler
+    /// without knowing the concrete driver type.
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        let _ = seed_key;
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Bare;
+    impl Interface for Bare {
+        fn info(&self) -> InterfaceInfo {
+            InterfaceInfo {
+                id: "bare".into(),
+                display_name: "bare".into(),
+                firmware: None,
+                serial: None,
+            }
+        }
+        fn capabilities(&self) -> Capabilities {
+            Capabilities::default()
+        }
+        fn open(&mut self, _: &ConnectConfig) -> Result<()> {
+            Ok(())
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+        fn read_ecu_id(&mut self) -> Result<EcuId> {
+            Ok(EcuId::default())
+        }
+        fn read_memory(&mut self, _: MemoryRegion, _: &mut dyn FnMut(Progress)) -> Result<Vec<u8>> {
+            Ok(Vec::new())
+        }
+        fn write_memory(
+            &mut self,
+            _: MemoryRegion,
+            _: &[u8],
+            _: &mut dyn FnMut(Progress),
+        ) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    struct Echo;
+    impl SeedKey for Echo {
+        fn id(&self) -> &str {
+            "echo"
+        }
+        fn compute(&self, seed: &[u8], _level: u8) -> Result<Vec<u8>> {
+            Ok(seed.to_vec())
+        }
+    }
+
+    #[test]
+    fn drivers_without_an_unlock_step_refuse_a_seed_key() {
+        let mut d: Box<dyn Interface> = Box::new(Bare);
+        assert!(!d.set_seed_key(Box::new(Echo)));
     }
 }

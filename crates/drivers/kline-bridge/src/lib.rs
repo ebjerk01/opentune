@@ -151,6 +151,11 @@ impl BridgeDriver {
 }
 
 impl Interface for BridgeDriver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        BridgeDriver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "kline-bridge".into(),

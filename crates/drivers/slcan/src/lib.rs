@@ -154,6 +154,11 @@ impl SlcanDriver {
 }
 
 impl Interface for SlcanDriver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        SlcanDriver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "slcan".into(),

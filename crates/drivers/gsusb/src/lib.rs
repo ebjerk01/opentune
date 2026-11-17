@@ -93,6 +93,11 @@ impl GsUsbDriver {
 }
 
 impl Interface for GsUsbDriver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        GsUsbDriver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "gsusb".into(),

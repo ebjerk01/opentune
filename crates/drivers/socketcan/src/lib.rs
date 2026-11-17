@@ -129,6 +129,11 @@ mod imp {
     }
 
     impl Interface for SocketCanDriver {
+        fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+            SocketCanDriver::set_seed_key(self, seed_key);
+            true
+        }
+
         fn info(&self) -> InterfaceInfo {
             InterfaceInfo {
                 id: "socketcan".into(),
@@ -553,6 +558,12 @@ mod stub {
     }
 
     impl Interface for SocketCanDriver {
+        fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+            // The stub never unlocks anything: report the handler as unused.
+            SocketCanDriver::set_seed_key(self, seed_key);
+            false
+        }
+
         fn info(&self) -> InterfaceInfo {
             InterfaceInfo {
                 id: "socketcan".into(),

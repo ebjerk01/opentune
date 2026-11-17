@@ -240,6 +240,11 @@ fn clamp_timeout(ms: u64) -> u16 {
 }
 
 impl Interface for Esp32Driver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        Esp32Driver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "esp32-opentune".into(),

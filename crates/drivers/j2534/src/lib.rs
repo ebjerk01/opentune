@@ -176,6 +176,11 @@ impl J2534Driver {
 }
 
 impl Interface for J2534Driver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        J2534Driver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "j2534".into(),

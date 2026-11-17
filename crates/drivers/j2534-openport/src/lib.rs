@@ -347,6 +347,11 @@ impl OpenPort2Driver {
 }
 
 impl Interface for OpenPort2Driver {
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        OpenPort2Driver::set_seed_key(self, seed_key);
+        true
+    }
+
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
             id: "openport2".into(),
