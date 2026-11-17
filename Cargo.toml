@@ -39,6 +39,7 @@ members = [
     "crates/opentune-attest",
     "crates/opentune-db",
     "crates/opentune-candump",
+    "crates/opentune-logview",
 ]
 
 [workspace.package]

@@ -65,6 +65,8 @@ opentune-udssim = { path = "../../crates/opentune-udssim" }
 opentune-db = { path = "../../crates/opentune-db" }
 # Full CAN bus capture (CAN capture panel).
 opentune-candump = { path = "../../crates/opentune-candump" }
+# Offline log viewer + map overlay (Log viewer panel).
+opentune-logview = { path = "../../crates/opentune-logview" }
 
 [features]
 # Tauri's default behaviour for a release build.

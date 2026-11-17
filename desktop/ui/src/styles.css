@@ -443,3 +443,51 @@ tr.pin-unv td { color: var(--muted); }
 tr.pin-unv .pill { margin-left: 4px; }
 .db-src { margin: 0; padding-left: 18px; line-height: 1.7; word-break: break-all; }
 .db-src a { color: var(--accent); }
+
+/* ---- Log viewer (feat_logview.js) -------------------------------------- */
+/* Channel palette: built from the theme tokens where they fit, plus three
+   hues tuned per scheme so every series reads on light and dark cards. */
+#panel-logview {
+  --lv-1: var(--accent); --lv-2: #2f6fc4; --lv-3: var(--good); --lv-4: var(--bad);
+  --lv-5: #7b4cc2; --lv-6: var(--warn); --lv-7: #128a8a; --lv-8: var(--ink-soft);
+}
+@media (prefers-color-scheme: dark) {
+  #panel-logview { --lv-2: #6aa5f0; --lv-5: #b08cf0; --lv-7: #3cc4c4; }
+}
+.lv-c1 { background: var(--lv-1); } .lv-c2 { background: var(--lv-2); } .lv-c3 { background: var(--lv-3); } .lv-c4 { background: var(--lv-4); }
+.lv-c5 { background: var(--lv-5); } .lv-c6 { background: var(--lv-6); } .lv-c7 { background: var(--lv-7); } .lv-c8 { background: var(--lv-8); }
+.lv-s1 { stroke: var(--lv-1); } .lv-s2 { stroke: var(--lv-2); } .lv-s3 { stroke: var(--lv-3); } .lv-s4 { stroke: var(--lv-4); }
+.lv-s5 { stroke: var(--lv-5); } .lv-s6 { stroke: var(--lv-6); } .lv-s7 { stroke: var(--lv-7); } .lv-s8 { stroke: var(--lv-8); }
+.lv-f1 { fill: var(--lv-1); } .lv-f2 { fill: var(--lv-2); } .lv-f3 { fill: var(--lv-3); } .lv-f4 { fill: var(--lv-4); }
+.lv-f5 { fill: var(--lv-5); } .lv-f6 { fill: var(--lv-6); } .lv-f7 { fill: var(--lv-7); } .lv-f8 { fill: var(--lv-8); }
+.lv-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; vertical-align: -1px; }
+.lv-picker { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; max-height: 140px; overflow-y: auto; }
+.lv-pick { font-weight: 500; }
+.lv-plotwrap { width: 100%; border: 1px solid var(--card-border); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.lv-svg { display: block; cursor: crosshair; user-select: none; touch-action: none; }
+.lv-svg.dragging { cursor: grabbing; }
+.lv-svg .lv-line { fill: none; stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.lv-svg .lv-grid { stroke: var(--line); stroke-width: 1; }
+.lv-svg .lv-lane { stroke: var(--card-border); stroke-width: 1; stroke-dasharray: 3 3; }
+.lv-svg .lv-frame { fill: none; stroke: var(--card-border); }
+.lv-svg .lv-cursor { stroke: var(--ink); stroke-width: 1; opacity: .55; pointer-events: none; }
+.lv-svg .lv-tick { fill: var(--muted); font: 10.5px var(--mono); }
+.lv-svg .lv-lbl { font: 600 11.5px system-ui, sans-serif; }
+.lv-status { margin-top: 6px; }
+.lv-err, .lv-warn { color: var(--warn); }
+.lv-readout { margin-top: 10px; min-height: 26px; }
+.lv-ro-t { margin-bottom: 4px; }
+.lv-ro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 16px; }
+.lv-ro { display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; align-items: center; font-size: 12.5px; padding: 2px 0; color: var(--ink-soft); }
+.lv-ro.on { color: var(--ink); }
+.lv-ro-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-ro-v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.lv-tw { overflow-x: auto; }
+table.lv-stats td.num, table.lv-stats th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.lv-ovsum { margin-top: 6px; color: var(--ink-soft); line-height: 1.6; }
+.lv-u { margin-right: 14px; }
+.lv-u.match { color: var(--good); }
+.lv-u.mismatch { color: var(--bad); font-weight: 700; }
+.lv-u.unknown { color: var(--warn); }
+table.heat.lv-heat td.cell { cursor: default; }
+table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted); font-weight: 400; }

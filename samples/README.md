@@ -60,3 +60,20 @@ python3 samples/generate.py samples/opentune-demo-edc16.bin
 
 If you change the geometry, keep the `.json` addresses in sync with the script,
 then re-run `checksum verify` to confirm the block still sums to `0xD01FE500`.
+
+## `opentune-demo-log.csv`
+
+A 60-second **synthetic** datalog at 20 Hz (idle, two full-load pulls, cruise,
+overrun, idle) computed from simple formulas — not recorded from any car. Its
+`air mass [mg/stroke]` and `engine speed [rpm]` channels match the demo map's
+axes, so the desktop **Log viewer** can overlay it on
+`opentune-demo-edc16.json` + `opentune-demo-edc16.bin` (choose the definition
+with *Definition file…* and the image with *Image…*). The second pull runs past
+the 4400 rpm end of the rpm axis on purpose, to show the "outside the axes"
+count.
+
+Regenerate it with:
+
+```sh
+python3 samples/generate_log.py samples/opentune-demo-log.csv
+```

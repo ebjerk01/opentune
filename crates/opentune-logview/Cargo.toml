@@ -1,0 +1,21 @@
+# Offline log viewer: CSV datalog parsing (OpenTune Live log, generic wide CSV),
+# channel statistics, min/max decimation for plotting, and the map overlay
+# (per-cell hit counts / time-in-cell over a calibration map's axes). Pure
+# logic, no I/O beyond reading the log file; part of the workspace.
+[package]
+name = "opentune-logview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Open CSV datalogs, decimate them for plotting and overlay them on a calibration map's axes."
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

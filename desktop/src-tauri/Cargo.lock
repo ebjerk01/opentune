@@ -2587,6 +2587,7 @@ dependencies = [
  "opentune-dtc",
  "opentune-flash",
  "opentune-logdef",
+ "opentune-logview",
  "opentune-scan",
  "opentune-servicefn",
  "opentune-udssim",
@@ -2702,6 +2703,14 @@ dependencies = [
  "opentune-xdf",
  "roxmltree",
  "serde",
+]
+
+[[package]]
+name = "opentune-logview"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

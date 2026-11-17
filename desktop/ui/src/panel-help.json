@@ -90,6 +90,13 @@
     "risk": "writes-ecu",
     "guide": "22-auto-scan"
   },
+  "logview": {
+    "title": "Log viewer",
+    "summary": "Open a CSV datalog, plot and zoom its channels, and overlay it on a map to see which cells were used, for how long and with which values. Units are compared, never converted.",
+    "needs": ["CSV log", "Definition + image for the map overlay"],
+    "risk": "none",
+    "guide": "35-log-viewer"
+  },
   "dashboard": {
     "title": "Dashboard",
     "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown.",
