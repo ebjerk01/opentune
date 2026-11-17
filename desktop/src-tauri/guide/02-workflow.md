@@ -16,8 +16,7 @@ only a name and size, so use **Match a part / software number** to type a real
 HW or SW number. OpenTune matches it against:
 
 - the bundled **ecudef** definitions (the detailed, supported ECUs), and
-- the **opendbc vehicle catalog** (a wide net of ~1000 vehicles) for candidate
-  make / model / family even when there is no full definition yet.
+- the **opendbc vehicle catalog** (a wide net of ~1000 vehicles) for candidate make / model / family even when there is no full definition yet.
 
 ## 3. Verify (and fix) checksums
 
@@ -31,12 +30,8 @@ you own. Always re-verify after a fix.
 
 In **Maps**:
 
-- **Find maps** diffs a stock file against a tuned file and lists the changed
-  regions, with a stride hint (`~16x16 u16?`) to suggest table shapes — a fast
-  way to locate what a tune touched.
-- The **map viewer** decodes a *defined* calibration map (from an ecudef) out of
-  the opened image into a blue→red heat grid, with the real X/Y axis breakpoints,
-  units and scaling applied. This edition's viewer is **read-only**.
+- **Find maps** diffs a stock file against a tuned file and lists the changed regions, with a stride hint (`~16x16 u16?`) to suggest table shapes — a fast way to locate what a tune touched.
+- The **map viewer** decodes a *defined* calibration map (from an ecudef) out of the opened image into a blue→red heat grid, with the real X/Y axis breakpoints, units and scaling applied. It is also an editor: changed values are written back with a full backup first (see the **Maps** page).
 
 ## 5. Flash (safety-gated)
 

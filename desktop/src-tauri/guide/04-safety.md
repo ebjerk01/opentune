@@ -8,21 +8,16 @@ safety sequence, and so that the free edition stays within a clear, lawful scope
 No driver writes to an ECU directly. Every write goes through one orchestrator
 that enforces, in order:
 
-1. **Voltage gate** — refuse to flash below a minimum battery voltage. A dropout
-   mid-write is the classic way to brick a module. The gate also refuses if an
-   interface that *can* measure voltage returns no reading.
-2. **Verified backup** — read the region back into a buffer first, and abort if
-   the backup read is short. An original is never a single unsaved buffer.
+1. **Voltage gate** — refuse to flash below a minimum battery voltage. A dropout mid-write is the classic way to brick a module. The gate also refuses if an interface that *can* measure voltage returns no reading.
+2. **Verified backup** — read the region back into a buffer first, and abort if the backup read is short. An original is never a single unsaved buffer.
 3. **Write**.
-4. **Read-back verify** — read the region again and compare it byte-for-byte to
-   what was written; any mismatch is an error, not a warning.
+4. **Read-back verify** — read the region again and compare it byte-for-byte to what was written; any mismatch is an error, not a warning.
 
 These rules live in the core, so no driver and no app can opt out of them.
 
 ## Your own habits
 
-- Keep **two** good backups before any write, in the **Vault** with their CRC-32
-  sidecars.
+- Keep **two** good backups before any write, in the **Vault** with their CRC-32 sidecars.
 - Re-run **Checksum → Verify** after every edit and every fix.
 - Never firmware-"update" a clone interface — it can erase the device.
 - Work on a car with a solid battery or a bench supply; watch the voltage gate.
