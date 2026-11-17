@@ -227,7 +227,7 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
   - [x] `Interface::set_seed_key` — any registry-opened driver takes a caller-supplied `SeedKey` (10 drivers with an unlock step accept it; the rest return `false`).
   - [x] `DesktopConfig.seedkeys` resolver — plugin read/flash panels (`adapter::apply_seed_key`), service scripts (optional `seedkey` id) and the seed/key calculator (`source: "plugin"`) unlock through it.
   - [x] **CLI host API** — `opentune-cli` is a library (`opentune_cli`) + thin binary: `run_with(CliConfig { seedkeys, checksums, drivers, extra commands })`, a `CliContext` for extra commands, `--seedkey <id>` on `info/read/flash/dump/identify/service`, collisions refused at startup. See `docs/PLUGINS.md`.
-- [~] **Desktop code split** — `lib.rs` / `app.js` into modules, `node --test` UI tests, a compile-time plugin-API test that pins every path plugins use. *(in progress, after the unlock hook)*
+- [x] **Desktop code split** — `lib.rs` (2,900 → 460 lines) and `app.js` into modules, `node --test` UI tests (11th gate), a compile-time plugin-API test that pins every path plugins use.
 - [x] **Sidebar groups + tiers** — Calibration · Vehicle · Reference · Help · Bench. Car-facing tools start in the Bench section (alpha/bench builds only) and move up once tested on a real car.
 - [x] **In-app help** — a guide page per panel plus a help strip on every panel (risk, what you need, three steps, open full guide). Guide renderer handles wrapped lists and links.
 - [x] **ECU database** (`database/units`, `opentune-db`, CLI `db`, desktop panel) — 17 ECU/TCU/AWD units with read methods, checksum family, vehicles and sourced bench pinouts; a validator enforces per-pin sources and confidence (disputed pins are never part of bench wiring).
@@ -249,7 +249,7 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 
 **Offline — buildable now**
 *(Done since the last revision: ME7 checksum, FRF/ODX/SGO decode, TCU checksums, definition-format breadth, DoIP over a loopback entity, EDC15C6 checksum, map finder, tune recipes, log viewer, OBD inspection, virtual car, starter packs.)*
-1. **Desktop split** — in progress (see Frontends). **ELM327 USB block read/write** (`elm327obd`: 0x23 / 0x35-0x36 upload, guarded 0x34-0x36 download, seed-key hook) — in progress.
+1. **ELM327 CAN memory read — follow-ups**: block read landed (`elm327obd`: 0x23 or 0x35–0x37 upload, session + plugin seed-key, dry-run `plan_read_memory`, mock-tested; writes bench-only single-frame). Next: a CLI `read --plan` dry run, first real read on the car, and the compact address format for `kline-elm327` on CAN. Clone quirks in `docs/DRIVERS.md`.
 2. **Fast logging via UDS 0x2C** (DynamicallyDefineDataIdentifier) — the logger bundles the selected channels (by DID and/or memory address) into one dynamic DID and polls that, falling back to plain 0x22/0x23 polling when the ECU refuses 0x2C. Tested on udssim. Ref: VW_Flash `simos_hsl` (approach).
 3. **Open aftermarket ECUs — Speeduino / rusEFI / MegaSquirt (TunerStudio-compatible)** — parse the INI + `.msq` definitions, read/write tables over their serial protocols, log realtime data; clean-room from the open specs (LibreTune as a reference). Serves engine swaps / standalone setups.
 4. **Recipes on EDC17** — every EDC17 stock/tuned pair is refused today (the corrected output fails attestation); find out why before recipes are trusted beyond EDC16/EDC15.
