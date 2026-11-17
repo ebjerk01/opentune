@@ -19,13 +19,16 @@ The `mock`/file driver operates on local `.bin` files, so the whole
 identify → read → diff → checksum → flash pipeline can be developed and tested
 with no hardware attached.
 
-Before opening a pull request, make sure the same checks CI runs pass locally:
+Before opening a pull request, run every gate CI runs (workspace, data,
+desktop and UI), in CI order:
 
 ```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+scripts/check.sh          # full; --fast = fmt + clippy, --no-desktop to skip the Tauri crate
+scripts/setup-hooks.sh    # once per clone: fast pre-commit hook (fmt + JS syntax)
 ```
+
+The branch model, commit hygiene, validation-state vocabulary and the rest of
+the working agreement are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Scope boundaries
 
