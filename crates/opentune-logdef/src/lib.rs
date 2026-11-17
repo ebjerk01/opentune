@@ -1,10 +1,11 @@
 //! # opentune-logdef
 //!
 //! Parse **RomRaider-style `logger.xml`** live-data definitions into an
-//! OpenTune live-data parameter model, so OpenTune's future logging engine can
-//! be data-driven. This crate is a **definition parser only** — it describes
-//! *how* a parameter would be read and scaled; it performs no transport, no
-//! polling and no value decoding (that comes later).
+//! OpenTune live-data parameter model, so OpenTune's logging engine is
+//! data-driven. The parser describes *how* a parameter is read and scaled; the
+//! [`live`] module then polls the selected parameters over a `RawDiag`
+//! transport (UDS `0x22` DIDs, OBD-II mode `0x01` PIDs and UDS `0x23` memory
+//! reads) and applies their linear conversions.
 //!
 //! ## Formats
 //!

@@ -17,11 +17,10 @@
 //!   identifier (0x22 / 0x2E), tester-present keep-alive (0x3E), fixed waits, and
 //!   `ExpectPositive` / `Verify` guards.
 //! * The executor talks UDS over a tiny [`RawDiag`] request abstraction (one
-//!   `request(&[u8]) -> Vec<u8>`), which the app adapts to `opentune-core`'s
-//!   `DiagTransport` at integration. This keeps the crate standalone and lets
-//!   tests drive it with a scripted responder. (The maintainer unifies this
-//!   transport with the one in `opentune-coding` later; this crate does **not**
-//!   depend on that crate.)
+//!   `request(&[u8]) -> Vec<u8>`), re-exported from `opentune-core` and shared
+//!   with the coding, adaptation and auto-scan engines; an app wraps a driver's
+//!   `DiagTransport` in `opentune_core::CoreDiag`. Tests drive it with a
+//!   scripted responder. (This crate does **not** depend on `opentune-coding`.)
 //! * SecurityAccess is handled by the executor requesting the seed and asking a
 //!   **caller-supplied [`KeyProvider`]** for the key — OpenTune ships **no** OEM
 //!   seed/key algorithm. Any closure `Fn(&[u8], u8) -> Result<Vec<u8>, String>`

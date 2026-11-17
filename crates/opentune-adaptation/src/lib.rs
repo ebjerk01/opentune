@@ -16,11 +16,11 @@
 //!   dependency — it is total and unit-testable on plain byte buffers.
 //! * The **I/O layer** ([`read_value`] / [`write_value`] / [`run_routine`] /
 //!   [`run_actuator_test`]) talks UDS over a tiny [`RawDiag`] request
-//!   abstraction (one `request(&[u8]) -> Vec<u8>`), which the app adapts to
-//!   `opentune-core`'s diagnostic transport at integration. This keeps the
-//!   crate standalone and lets tests drive it with a scripted responder. (This
-//!   crate deliberately does **not** depend on `opentune-coding`; the maintainer
-//!   unifies the two transports later.)
+//!   abstraction (one `request(&[u8]) -> Vec<u8>`), re-exported from
+//!   `opentune-core` and shared with the coding, service-function and auto-scan
+//!   engines; an app wraps a driver's `DiagTransport` in `opentune_core::CoreDiag`.
+//!   Tests drive it with a scripted responder. (This crate does **not** depend
+//!   on `opentune-coding`.)
 //!
 //! ## Safety
 //!

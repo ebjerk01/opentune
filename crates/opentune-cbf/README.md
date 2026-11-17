@@ -36,6 +36,13 @@ for entry in opentune_cbf::dtc_entries(&cbf) {
 
 // Or export the whole parsed model as JSON:
 let json = opentune_cbf::to_json(&cbf)?;
+
+// Or a normalised per-ECU diagnostics view (identity + protocols, DTCs,
+// services classified by kind, variants, and explicit warnings for what the
+// parser does not reconstruct):
+for diag in opentune_cbf::diagnostics(&cbf) {
+    println!("{} services, {} warnings", diag.services.len(), diag.warnings.len());
+}
 ```
 
 ### CLI
@@ -46,6 +53,9 @@ opentune-cbf <FILE.cbf> --json    # full parsed model as JSON
 opentune-cbf <FILE.cbf> --dtcs    # one `code<TAB>description` per line
 ```
 
+The same is available from the main CLI as `opentune cbf <FILE.cbf>
+[--json | --dtcs]`.
+
 ## DTC codes are Mercedes-specific
 
 CBF DTC codes are **not** SAE J2012 `P/C/B/U` codes. Depending on the ECU they
@@ -54,14 +64,12 @@ look like Mercedes hex codes (`01F0EC` → "ECU Internal Error") or re-used
 feeding these into `opentune-dtc`, store them under a manufacturer ("MB")
 namespace rather than mixing them into the generic SAE table.
 
-## Building standalone
+## Building
 
-The `Cargo.toml` declares an empty `[workspace]` table so the crate builds in
-isolation while it is not yet wired into the root workspace:
+Part of the root workspace:
 
 ```
-cd crates/opentune-cbf
-cargo build && cargo test && cargo clippy -- -D warnings && cargo fmt
+cargo test -p opentune-cbf
 ```
 
 ## Attribution / license

@@ -352,9 +352,10 @@ enum Command {
     },
     /// Poll live data defined by a RomRaider-style `logger.xml` and write CSV.
     ///
-    /// Data-defined by `--def`. Only UDS `0x22` (DID) parameters are driven
-    /// today; OBD-II PID and raw-memory reads are reported as unsupported rather
-    /// than guessed. With the default `mock` driver it runs offline.
+    /// Data-defined by `--def`. UDS `0x22` (DID), OBD-II mode `0x01` (PID) and
+    /// UDS `0x23` (raw-memory) parameters are driven; parameters with unknown
+    /// addressing are reported as undetermined rather than guessed. With the
+    /// default `mock` driver it runs offline.
     Log {
         /// RomRaider-style `logger.xml` definition file.
         #[arg(long)]

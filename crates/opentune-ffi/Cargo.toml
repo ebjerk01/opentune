@@ -45,7 +45,3 @@ opentune-driver-mock = { path = "../drivers/mock" }
 [dev-dependencies]
 # Used by the crate's own tests to synthesise a throw-away flash image.
 tempfile = "3"
-
-# ---------------------------------------------------------------------------
-# STANDALONE WORKSPACE — REMOVE WHEN WIRING INTO THE ROOT WORKSPACE.
-#

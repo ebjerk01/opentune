@@ -140,18 +140,11 @@ import.
   blocks, `<XDFFLAG>`, DAC/DALINK data-link scaling, and the checksum region
   descriptors. Legacy `%%TABLE%%` files expose only tables (no constants list).
 
-## Wiring in (maintainer)
+## CLI
 
-This crate is standalone (note the empty `[workspace]` table in its
-`Cargo.toml`, and that it uses explicit package metadata rather than workspace
-inheritance). To wire it into the workspace:
-
-1. Add `"crates/opentune-xdf"` to the root `Cargo.toml` `members`, and remove
-   the `[workspace]` table from this crate's `Cargo.toml` (optionally switching
-   `version`/`edition`/… back to `*.workspace = true`).
-2. Add an `opentune import-xdf <file> --into <ecudef.json>` CLI command that
-   calls `parse_xdf`, then merges `XdfImport.maps` into the target
-   `EcuDef.maps` (de-duplicating by name/address as you see fit).
+Part of the workspace. The CLI exposes it as `opentune import-xdf <file>
+[--into <ecudef.json>]` (lists the maps, or merges `XdfImport.maps` into the
+target `EcuDef.maps`) and `opentune export-xdf` for the reverse direction.
 
 ## Tested on
 

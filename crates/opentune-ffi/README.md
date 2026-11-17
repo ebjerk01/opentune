@@ -13,7 +13,7 @@ pipeline runs on a local flash-image `.bin` with no hardware.
 |----------|---------|
 | `open_image(path) -> ImageInfo` | Validate + size a flash image. |
 | `identify(path, ecudefs_dir) -> Identity` | Read identity (mock driver) and match a definition. |
-| `checksum_verify(path, algo) -> Vec<Block>` | Per-block verify (`edc16`/`edc17`/`pcr21`/`crc32-tail`/`edc15c6`). |
+| `checksum_verify(path, algo) -> Vec<Block>` | Per-block verify; `algo` is any `opentune_checksum::get` id (`edc16`/`edc17`/`pcr21`/`crc32-tail`/`edc15c6`/`me7`/`dq250`/`dq381`/`tcu-ccitt`/`zf8hp`/`haldex`). |
 | `checksum_fix(path, algo, out_path?) -> Vec<Fix>` | Correct checksums in place (or Save-As). |
 | `find_maps(stock, tuned) -> Vec<Region>` | Candidate map regions from a stock/tuned diff. |
 | `list_ecudefs(ecudefs_dir) -> Vec<DefSummary>` | List definitions (for a picker). |
@@ -40,12 +40,3 @@ cargo run --bin uniffi-bindgen -- generate \
     --out-dir ../../android/app/src/main/java
 ```
 
-## Wiring into the workspace
-
-This crate ships with a trailing **empty `[workspace]` table** in its
-`Cargo.toml` so it builds standalone inside the parent tree (the same trick
-`opentune-xdf` used). To wire it into the main workspace:
-
-1. Add `"crates/opentune-ffi"` to `members` in the root `Cargo.toml`.
-2. Delete the `[workspace]` table (and its comment) at the end of
-   `crates/opentune-ffi/Cargo.toml`.

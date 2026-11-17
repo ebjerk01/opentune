@@ -2,8 +2,10 @@
 //! must have for the ECU to accept and run it.
 //!
 //! Each ECU family is a [`ChecksumAlgo`]. A generic CRC32-tail example is
-//! included; real ECU algorithms (EDC16, EDC17, PCR2.1) live in their own
-//! modules and must be validated against known-good reference files.
+//! included; real ECU algorithms (EDC15, EDC16, EDC17, PCR2.1, ME7, and the
+//! TCU/AWD set in [`tcu`]: DQ250, DQ381, ZF 8HP, Haldex Gen5, CCITT trailer)
+//! live in their own modules and must be validated against known-good
+//! reference files. [`get`] maps an id to its algorithm.
 use opentune_core::{MemoryRegion, Result};
 
 pub mod edc15;

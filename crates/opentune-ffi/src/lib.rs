@@ -430,8 +430,10 @@ pub fn identify(path: String, ecudefs_dir: String) -> Result<Identity> {
     })
 }
 
-/// Verify every checksum-protected block for `algo`
-/// (`edc16` / `edc17` / `pcr21` / `crc32-tail` / `edc15c6`).
+/// Verify every checksum-protected block for `algo` — any id
+/// `opentune_checksum::get` accepts (`edc16` / `edc17` / `pcr21` /
+/// `crc32-tail` / `edc15c6` / `me7` / `dq250` / `dq381` / `tcu-ccitt` /
+/// `zf8hp` / `haldex`).
 #[uniffi::export]
 pub fn checksum_verify(path: String, algo: String) -> Result<Vec<Block>> {
     let a = opentune_checksum::get(&algo).ok_or_else(|| OpenTuneError::NotFound {

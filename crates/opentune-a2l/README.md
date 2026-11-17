@@ -46,8 +46,8 @@ Each convertible `CHARACTERISTIC` becomes one `MapDef`:
 | `min`, `max` | `LOWER_LIMIT` / `UPPER_LIMIT` |
 
 The CHARACTERISTIC types handled are `VALUE`, `VAL_BLK`, `CURVE`, `MAP`,
-`CUBOID`/`CUBE_4`/`CUBE_5` (imported as their 2-D X×Y face, with the extra
-dimensions flagged in `notes`). `ASCII` characteristics (strings) are skipped.
+`CUBOID`/`CUBE_4`/`CUBE_5` (sliced into one 2-D X×Y `MapDef` per position of
+the higher dimensions, each slice named and noted). `ASCII` characteristics (strings) are skipped.
 
 ## Scaling: linear only, non-linear never guessed
 
@@ -76,9 +76,11 @@ the non-linear curve is dropped).
   (from the axis `RECORD_LAYOUT`'s `AXIS_PTS_X`) and linear scaling. An
   unresolved reference is kept as `axis_ref` and flagged.
 - **`STD_AXIS`** breakpoints are stored inline inside the map's own data block.
-  The element type, count and scaling are captured, but the axis's **exact
-  embedded address is not computed** (it depends on the full record-layout
-  stride math) — this is flagged in `notes`.
+  The element type, count and scaling are captured, and the axis's **embedded
+  address is computed** from the `RECORD_LAYOUT` positions when every component
+  that precedes it is modelled. If the layout contains components whose size is
+  not modelled (alignment bytes, …) the address is left unset and flagged in
+  `notes` rather than guessed.
 - **`FIX_AXIS`** inline values are computed from `FIX_AXIS_PAR_LIST`,
   `FIX_AXIS_PAR` (`offset + i·2^shift`) or `FIX_AXIS_PAR_DIST`
   (`offset + i·dist`).
@@ -102,9 +104,10 @@ the file; A2L does not, so the base must come from the ECU's memory map.
 ## Limitations (be honest about these)
 
 - **Non-linear conversions** are pre-scaled + flagged, not converted (see above).
-- **STD_AXIS embedded address** is not computed (flagged).
-- **CUBOID / CUBE_4 / CUBE_5** are imported as a 2-D X×Y face; higher dimensions
-  are dropped and flagged. `MapDef` is a 2-D model.
+- **STD_AXIS embedded address** is computed only when the record layout is
+  fully modelled; otherwise it is left unset and flagged.
+- **CUBOID / CUBE_4 / CUBE_5** are sliced into separate 2-D X×Y maps (`MapDef`
+  is a 2-D model), so a large cube yields many maps.
 - **64-bit types** (`A_UINT64`, `A_INT64`, `FLOAT64_IEEE`) have no native
   OpenTune `DataType`; they are approximated to 32-bit and flagged. (Rare in
   calibration maps.)
@@ -121,20 +124,12 @@ the file; A2L does not, so the base must come from the ECU's memory map.
   `COMPU_VTAB` enum text, and `CHARACTERISTIC` dependencies. Only calibration
   tables (maps/curves/values) are converted.
 
-## Wiring in (maintainer)
+## CLI
 
-This crate is standalone (note the empty `[workspace]` table at the end of its
-`Cargo.toml`, and that it uses explicit package metadata rather than workspace
-inheritance). To wire it into the workspace:
-
-1. Add `"crates/opentune-a2l"` to the root `Cargo.toml` `members`, and **remove
-   the `[workspace]` table** from this crate's `Cargo.toml` (optionally switching
-   `version`/`edition`/… back to `*.workspace = true`).
-2. Add an `opentune import-a2l <file> [--into <ecudef.json>]` CLI command that
-   calls `parse_a2l`, then merges `A2lImport.maps` into the target `EcuDef.maps`
-   (de-duplicating by name/address as you see fit), mirroring `import-xdf`.
-   Remember to apply the ECU's flash **base offset** to the imported addresses
-   (see *Address spaces*).
+Part of the workspace. The CLI exposes it as `opentune import-a2l <file>
+[--into <ecudef.json>]` (with `--base` to rebase CPU addresses to bin offsets —
+see *Address spaces*), `opentune a2l2xdf` (A2L → TunerPro XDF with a
+conversion-loss report) and `opentune export-a2l`.
 
 ## Tested on
 

@@ -95,12 +95,12 @@ decoder degrades gracefully.
 
 ## Status
 
-Standalone crate. The maintainer wires it into the workspace and the OpenTune
-CLI/app; this crate deliberately exposes only the library API and ships its own
-data, so it can be built and tested on its own:
+Part of the workspace and used by the CLI (`opentune dtc <code>`), the
+auto-scan engine and the desktop app. The crate exposes only the library API and
+ships its own data, so it can be built and tested on its own:
 
 ```sh
-cargo test --manifest-path crates/opentune-dtc/Cargo.toml
+cargo test -p opentune-dtc
 ```
 
 ## Licence
