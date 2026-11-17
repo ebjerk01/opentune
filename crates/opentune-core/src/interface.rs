@@ -1,4 +1,5 @@
 //! The interface-driver abstraction. Every reader/flasher implements [`Interface`].
+use crate::monitor::CanMonitor;
 use crate::protocol::DiagTransport;
 use crate::{Capabilities, ConnectConfig, EcuId, MemoryRegion, Progress, Result};
 
@@ -54,6 +55,18 @@ pub trait Interface {
     /// Drivers that own a `DiagTransport` override this to hand it out, so an
     /// application can obtain a transport generically from any registry driver.
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        None
+    }
+
+    /// Borrow this driver's passive raw-bus [`CanMonitor`] for a full CAN dump,
+    /// when the adapter can capture every frame on the bus.
+    ///
+    /// The default returns `None` (no raw capture). Unlike [`diag`](Interface::diag)
+    /// this does **not** require [`open`](Interface::open): the monitor opens the
+    /// hardware itself, in listen-only mode where possible, in
+    /// [`CanMonitor::start`]. Do not call `open` first — a diagnostic session may
+    /// transmit on the bus.
+    fn can_monitor(&mut self) -> Option<&mut dyn CanMonitor> {
         None
     }
 }

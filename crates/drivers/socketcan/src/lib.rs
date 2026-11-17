@@ -14,6 +14,8 @@
 //! a stub whose operations return [`Error::Unsupported`], so the crate still
 //! compiles everywhere.
 
+pub mod monitor;
+
 #[cfg(target_os = "linux")]
 mod imp {
     use opentune_core::protocol::diag::DiagTransport;
@@ -87,6 +89,8 @@ mod imp {
         /// Optional seed/key handler for UDS security access (service 0x27). No
         /// OEM algorithm ships with OpenTune; the application supplies one.
         seed_key: Option<Box<dyn SeedKey>>,
+        /// Passive full-bus capture (independent of `open`).
+        monitor: crate::monitor::SocketCanMonitor,
     }
 
     impl SocketCanDriver {
@@ -132,6 +136,10 @@ mod imp {
                 firmware: None,
                 serial: None,
             }
+        }
+
+        fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+            Some(&mut self.monitor)
         }
 
         fn capabilities(&self) -> Capabilities {

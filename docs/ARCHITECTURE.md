@@ -110,6 +110,7 @@ apps that need it.
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
 | `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests |
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
+| `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`

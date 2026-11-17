@@ -44,6 +44,9 @@ opentune-udssim = { path = "../opentune-udssim" }
 opentune-attest = { path = "../opentune-attest" }
 opentune-logdef = { path = "../opentune-logdef" }
 opentune-db = { path = "../opentune-db" }
+opentune-candump = { path = "../opentune-candump" }
+# Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
+ctrlc = "3"
 
 [dev-dependencies]
 # Re-import the generated XDF in the a2l2xdf round-trip integration test.

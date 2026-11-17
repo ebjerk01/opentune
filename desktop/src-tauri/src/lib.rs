@@ -36,6 +36,7 @@ use tauri_plugin_updater::UpdaterExt;
 // Auto-debug wizard is UI-only (it orchestrates these commands from the browser).
 pub mod adapter;
 mod feat_adaptation;
+mod feat_candump;
 mod feat_coding;
 mod feat_dash;
 mod feat_db;
@@ -2571,6 +2572,7 @@ pub fn builder_with(
             app.manage(OpGuard::default());
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());
+            app.manage(feat_candump::CandumpState::default());
             Ok(())
         })
         .build();
@@ -2615,6 +2617,9 @@ macro_rules! core_command_list {
             feat_dash::obd_read,
             feat_db::db_list,
             feat_db::db_get,
+            feat_candump::candump_start,
+            feat_candump::candump_status,
+            feat_candump::candump_stop,
             list_drivers,
             data_paths,
             image_info,

@@ -115,7 +115,12 @@
       stats(st);
       rows(st.ids);
       if (st.error) status("bad", st.error);
-      else if (st.running) status("ok", "capturing");
+      else if (st.running) {
+        // How passive the adapter really is: guaranteed listen-only, passive
+        // (never transmits but the controller still ACKs), or not guaranteed.
+        const lo = st.listen_only;
+        status(lo === "not-guaranteed" ? "accent" : "ok", "capturing" + (lo ? " · " + String(lo).replace(/-/g, " ") : ""));
+      }
       if (!st.running) finished(st);
     } catch (e) {
       status("bad", String(e));

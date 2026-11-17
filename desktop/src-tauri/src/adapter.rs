@@ -410,6 +410,27 @@ impl AdapterHub {
         rrx.recv()
             .map_err(|_| format!("'{op}' aborted inside the adapter worker (internal error)"))?
     }
+
+    /// Start a **long-running** adapter operation (e.g. a CAN capture) on the
+    /// worker and return as soon as it is queued. The busy slot stays claimed
+    /// until `f` returns, so every other operation gets "adapter busy" in the
+    /// meantime. `f` blocks the worker, so it must end on its own (a stop flag
+    /// or a deadline) and report its results through its own channels.
+    pub fn start_op<F>(&self, op: &str, f: F) -> Result<(), String>
+    where
+        F: FnOnce(&mut Session) + Send + 'static,
+    {
+        let token = self.claim(op)?;
+        let job: Job = Box::new(move |s: &mut Session| {
+            let _token = token; // released when `f` returns (or panics)
+            f(s);
+        });
+        self.jobs
+            .lock()
+            .map_err(|_| "internal error: adapter queue poisoned".to_string())?
+            .send(job)
+            .map_err(|_| "adapter worker is not running".to_string())
+    }
 }
 
 // ---------------------------------------------------------------------------

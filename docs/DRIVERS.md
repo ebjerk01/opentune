@@ -50,6 +50,7 @@ pub trait Interface {
                     progress: &mut dyn FnMut(Progress)) -> Result<()>;
 
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> { None }
+    fn can_monitor(&mut self) -> Option<&mut dyn CanMonitor> { None }
 }
 ```
 
@@ -115,6 +116,26 @@ and `read_ecu_id` on `read_data_by_id`. Security access is handled through the
 For K-line, implement `DiagTransport` directly over your init + framing and feed
 it to `Kwp2000Client` the same way.
 
+## 3b. Optional: raw bus capture (`can_monitor`)
+
+A CAN adapter that can see every frame on the bus can offer a full CAN dump
+(`opentune candump`, the desktop CAN capture panel) by overriding
+`can_monitor()` to return a `CanMonitor` (`opentune_core::monitor`):
+`start(&MonitorOpts)` → `next_frame(timeout)` → `stop()`. Rules:
+
+- `start` opens the hardware **itself** — the app never calls `open` first,
+  because a diagnostic session may transmit.
+- Never transmit while monitoring. Use the adapter's silent / listen-only mode
+  where it has one and report the achieved level honestly via `listen_only()`
+  (`Hardware`, `Passive`, `NotGuaranteed`).
+- `next_frame` returns `Ok(None)` for a quiet interval; count adapter overflows
+  in `dropped()` instead of failing.
+
+Implemented today: `mock` (synthetic traffic), `socketcan` and `gsusb` (kernel
+`listen-only on` = Hardware, else Passive), `slcan` (`L` listen-only open),
+`elm327obd` (`ATMA` with `ATCSM1` silent monitoring; clones that refuse it are
+NotGuaranteed). The log writers and stats live in `opentune-candump`.
+
 ## 4. Registration
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build
@@ -141,6 +162,7 @@ reg.register("mock", "Mock / file driver", || Box::new(MockDriver::new()));
 - [ ] `Interface` implemented; `capabilities` honest; `bench_boot` only if true.
 - [ ] CAN driver reuses `IsoTp` + `UdsClient` rather than re-rolling transport.
 - [ ] `diag()` overridden if the driver owns a `DiagTransport`.
+- [ ] `can_monitor()` overridden if the adapter can capture raw frames passively.
 - [ ] Registered in the CLI registry (`crates/opentune-cli/src/main.rs`) and,
       for a user-facing adapter, the desktop registry
       (`desktop/src-tauri/src/main.rs`).

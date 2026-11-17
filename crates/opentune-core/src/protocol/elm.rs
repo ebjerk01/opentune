@@ -29,6 +29,8 @@
 use crate::{Error, Result};
 use std::time::{Duration, Instant};
 
+pub mod monitor;
+
 /// Largest request a CAN ELM327 can send. With `ATCAF1` the adapter wraps the
 /// request in a single ISO-TP frame itself and has no way to transmit an
 /// outgoing multi-frame (first frame + consecutive frames), so 7 bytes is the

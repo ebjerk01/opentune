@@ -27,6 +27,8 @@ description = "gs_usb / candleLight USB-CAN driver for OpenTune (SocketCAN path 
 
 [dependencies]
 opentune-core = { path = "../../opentune-core" }
+# Full-bus capture reuses the SocketCAN monitor (kernel gs_usb path).
+opentune-driver-socketcan = { path = "../socketcan" }
 
 # The kernel gs_usb path goes through SocketCAN, which is Linux-only; scope the
 # dependency so the crate still compiles (as an Unsupported stub) elsewhere.

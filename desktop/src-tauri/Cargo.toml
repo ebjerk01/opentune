@@ -63,6 +63,8 @@ opentune-udssim = { path = "../../crates/opentune-udssim" }
 
 # Control-unit reference database (Database panel).
 opentune-db = { path = "../../crates/opentune-db" }
+# Full CAN bus capture (CAN capture panel).
+opentune-candump = { path = "../../crates/opentune-candump" }
 
 [features]
 # Tauri's default behaviour for a release build.
