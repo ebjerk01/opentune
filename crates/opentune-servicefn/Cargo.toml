@@ -1,0 +1,14 @@
+[package]
+name = "opentune-servicefn"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Declarative, safe service-function script engine (EPB, DPF regen, service reset, SAS calibration, injector coding, …) for OpenTune: service procedures as data, run by one safe UDS executor"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

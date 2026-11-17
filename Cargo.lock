@@ -856,6 +856,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-servicefn"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-vin"
 version = "0.1.0"
 
