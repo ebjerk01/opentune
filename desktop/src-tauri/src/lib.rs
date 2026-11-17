@@ -41,6 +41,7 @@ mod feat_coding;
 mod feat_dash;
 mod feat_db;
 mod feat_logging;
+mod feat_logview;
 mod feat_obd;
 mod feat_scan;
 mod feat_service;
@@ -2611,6 +2612,11 @@ macro_rules! core_command_list {
             feat_service::service_run,
             feat_logging::log_params,
             feat_logging::log_poll_once,
+            feat_logview::log_open,
+            feat_logview::log_series,
+            feat_logview::log_sample_at,
+            feat_logview::log_def_maps,
+            feat_logview::log_map_hits,
             feat_obd::obd_live,
             feat_dash::obd_pid_table,
             feat_dash::obd_supported,
