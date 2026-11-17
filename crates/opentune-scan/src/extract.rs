@@ -35,6 +35,10 @@ pub struct Extracted {
     pub vins: Vec<String>,
     /// Count of ASAM/EPK-looking descriptor strings seen (identity marker).
     pub epk_hits: usize,
+    /// Byte offset of the first occurrence of every token above.
+    pub first_offset: BTreeMap<String, usize>,
+    /// Occurrence count of every token above.
+    pub counts: BTreeMap<String, usize>,
 }
 
 /// Rank the keys of `counts` by descending frequency, then lexically.
@@ -53,6 +57,7 @@ pub fn extract(image: &[u8]) -> Extracted {
     let mut merc: BTreeMap<String, usize> = BTreeMap::new();
     let mut vins: BTreeMap<String, usize> = BTreeMap::new();
     let mut epk = 0usize;
+    let mut first: BTreeMap<String, usize> = BTreeMap::new();
 
     let before_ok = |i: usize| i == 0 || !is_alnum(image[i - 1]);
 
@@ -63,12 +68,14 @@ pub fn extract(image: &[u8]) -> Extracted {
         // --- VAG strict: dd G dddddd [A-Z]{0,2} (e.g. 03G906021LR) ---
         if is_digit(b) && before_ok(i) {
             if let Some((tok, len)) = match_vag_strict(image, i) {
+                first.entry(tok.clone()).or_insert(i);
                 *vag.entry(tok).or_default() += 1;
                 i += len;
                 continue;
             }
             // --- VAG generic 9-digit: ddd ddd ddd [A-Z]{0,2} ---
             if let Some((tok, len)) = match_vag_generic(image, i) {
+                first.entry(tok.clone()).or_insert(i);
                 *vag.entry(tok).or_default() += 1;
                 i += len;
                 continue;
@@ -76,8 +83,10 @@ pub fn extract(image: &[u8]) -> Extracted {
             // --- Bosch / software: 10 digit run ---
             if let Some((tok, len)) = match_digits_run(image, i, 10) {
                 if tok.starts_with("02") {
+                    first.entry(tok.clone()).or_insert(i);
                     *bosch.entry(tok).or_default() += 1;
                 } else if tok.starts_with("103") {
+                    first.entry(tok.clone()).or_insert(i);
                     *sw.entry(tok).or_default() += 1;
                 }
                 i += len;
@@ -88,6 +97,7 @@ pub fn extract(image: &[u8]) -> Extracted {
         // --- Mercedes: A########## ---
         if b == b'A' && before_ok(i) {
             if let Some((tok, len)) = match_mercedes(image, i) {
+                first.entry(tok.clone()).or_insert(i);
                 *merc.entry(tok).or_default() += 1;
                 i += len;
                 continue;
@@ -97,6 +107,7 @@ pub fn extract(image: &[u8]) -> Extracted {
         // --- VIN: 17 VIN-valid chars, validated by opentune-vin ---
         if is_vin_char(b) && before_ok(i) {
             if let Some((tok, len)) = match_vin(image, i) {
+                first.entry(tok.clone()).or_insert(i);
                 *vins.entry(tok).or_default() += 1;
                 i += len;
                 continue;
@@ -111,6 +122,10 @@ pub fn extract(image: &[u8]) -> Extracted {
         i += 1;
     }
 
+    let counts: BTreeMap<String, usize> = [&vag, &bosch, &sw, &merc, &vins]
+        .iter()
+        .flat_map(|m| m.iter().map(|(k, v)| (k.clone(), *v)))
+        .collect();
     Extracted {
         vag_part_numbers: ranked(&vag),
         bosch_numbers: ranked(&bosch),
@@ -118,6 +133,8 @@ pub fn extract(image: &[u8]) -> Extracted {
         mercedes_numbers: ranked(&merc),
         vins: ranked(&vins),
         epk_hits: epk,
+        first_offset: first,
+        counts,
     }
 }
 
