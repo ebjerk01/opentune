@@ -43,3 +43,6 @@ backups/
 .env
 *.log
 .DS_Store
+
+# Local agent notes — not published
+CLAUDE.md
