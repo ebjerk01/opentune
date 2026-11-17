@@ -9,6 +9,666 @@
   "bitrate": 500000,
   "tx_id": 2016,
   "rx_id": 2024,
+  "maps": [
+    {
+      "name": "boost pressure target (role inferred) A1 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1831704,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A2 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1832344,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A3 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1832984,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A4 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1833624,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A5 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1834264,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A6 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1834904,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A7 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1835544,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A8 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1836184,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A9 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1836824,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A10 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1837464,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A11 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1838104,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure target (role inferred) A12 of 12",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED: a reference stock/tuned pair changed this 20x16 table (one of 12 back-to-back at 0x1BF318 + k*0x280). Role INFERRED from shape: every row starts at a constant floor (raw 12060) at the low-load end and rises to a load/speed-dependent peak (~2.4x the floor), the profile of an absolute boost-pressure setpoint whose floor is ambient; the tune raised the mid/high-load cells. Physical scale unconfirmed (if the floor is ~1000 hPa the LSB would be ~0.083 hPa - NOT assumed). Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1838744,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B1 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1841304,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B2 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1841944,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B3 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1842584,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B4 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1843224,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B5 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1843864,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "boost pressure (second family, role inferred) B6 of 6",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 6 at 0x1C1898 + k*0x280, all changed by the reference tune). Role INFERRED: same raw floor (~12048..12362) as family A with per-row plateaus that fall at the high-row end - a boost ceiling/limit-like profile. Treat as a boost-pressure table whose exact function (limit vs mode-specific target) is unconfirmed. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1844504,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "injector energizing time (role inferred) C1 of 2",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (23x18 table at 0x1CCC5C; tables are 0x360 apart with one zero padding row). Role INFERRED: values fall along each row and rise steeply down the rows - the shape of an injector energizing-time map over rail pressure (columns) and injection quantity (rows); the tune lengthened the mid-quantity rows in step with its fuel increase. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1887324,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 23,
+      "cols": 18,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "injector energizing time (role inferred) C2 of 2",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (23x18 table at 0x1CCFBC; tables are 0x360 apart with one zero padding row). Role INFERRED: values fall along each row and rise steeply down the rows - the shape of an injector energizing-time map over rail pressure (columns) and injection quantity (rows); the tune lengthened the mid-quantity rows in step with its fuel increase. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1888188,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 23,
+      "cols": 18,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D1 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1926040,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D2 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1926680,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D3 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1927320,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D4 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1927960,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D5 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1928600,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D6 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1929240,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D7 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1929880,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D8 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1930520,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D9 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1931160,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D10 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1931800,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D11 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1932440,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D12 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1933080,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D13 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1933720,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D14 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1934360,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D15 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1935000,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D16 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1935640,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D17 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1936280,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D18 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1936920,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D19 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1937560,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D20 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1938200,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D21 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1938840,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D22 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1939480,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D23 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1940120,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D24 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1940760,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D25 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1941400,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D26 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1942040,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    },
+    {
+      "name": "driver's wish (role inferred) D27 of 27",
+      "notes": "CONFIDENCE: MEDIUM. Location/shape DIFF-CONFIRMED (20x16 table, one of 27 back-to-back at 0x1D6398 + k*0x280, every one changed by the reference tune). Role INFERRED: column 0 is 0 in every row and each row rises monotonically to its maximum - the pedal-position-to-request shape of a driver's-wish (pedal) map, of which PCR2.1 keeps one per gear/mode; the tune raised the part- to full-pedal columns. Byte offsets into the 2 MiB read of software CASM2K30 (03L906023A); the populated area is 0x180000..0x1FFFFF. Simos PCR2.1 stores axes separately from the table data (count-prefixed breakpoint arrays around 0x1A2000..0x1A6FFF) and the table-to-axis binding is in code, so NO axes are shipped and cells are RAW little-endian u16 (scaling not confirmed). Other software (e.g. CASM2L95, 03L906023S/MK) keeps many of these tables byte-identical but at different offsets - locate them by content in your own read before any write.",
+      "address": 1942680,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 20,
+      "cols": 16,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw"
+    }
+  ],
   "flash_size": 4194304,
   "regions": [
     {
