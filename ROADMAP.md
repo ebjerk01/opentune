@@ -196,14 +196,21 @@ paths are 🔒 (need the car/adapter we now have).
 - [ ] **Service functions** — declarative, safe UDS scripts (session → security → routine → verify): EPB, DPF regen, oil/service reset, SAS calibration, throttle align, injector coding, battery registration, brake bleed. Script library grows as data.
 - [ ] **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
 
+### Live data & logging
+- [ ] **Datalogging engine** — periodic live data to file + dashboards/graphs + triggers, over OBD mode-01, UDS ReadDataByIdentifier (0x22 periodic), **UDS `mode23`/0x23 address logging**, and **Subaru SSM** — modelled on the Tactrix OpenPort logger (PID sorting, multi-request chunking). Reuse **RomRaider `logger.xml`** param definitions (data-defined, like coding). Ref: **RomRaider** (GPL-2), **FreeSSM** (GPL-3).
+
 ### Flashing to modules (not just engine ECUs)
 - [ ] **UDS module flash** end-to-end — `0x34`/`0x36`/`0x37` + security + erase/checksum `RoutineControl`, **container-driven** (VBF/ODX/FRF/SGO/bin → RequestDownload address/length), behind the existing **flash-safety policy** (voltage → backup → write → read-back verify → recovery). 🔒 Ford module flashing (VBF + Bench seed-key) is the first concrete target.
+- [ ] 🔒 **Validate the J2534 drivers on an OpenPort 2.0** — `opentune-driver-j2534`/`j2534-openport` are written but hardware-unproven; the Tactrix OpenPort 2.0 is the reference PassThru box and the right interface for real engine-ECU flashing (vs the read-only ELM327). Target: EDC16/Subaru SH flash end-to-end on the bench.
+- [ ] **Renesas SH boot mode** read/write (SH7055/SH7058/**SH725xx**) — bench/boot access for Subaru/Mitsubishi *and* the SH725xx DSG (DQ381) TCU. 🔒 bench. Refs: **fenugrec/npkern** (GPL-3, SH RAM kernel), EcuFlash SH boot-mode behavior, NefMoto loaders.
 
 ### Frontends (all local — no server)
 - [ ] Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Public **OpenTune** AppImage + private **Bench** AppImage.
 
 ### Definition ecosystem (the scaling lever)
 - [ ] New data formats — **coding-label** (done, in `opentune-coding`), **adaptation-channel map**, **service-function script**, **seed-key DB** (private). Public **community** pack + private **premium** pack, versioned files the app loads locally (no hosting).
+- [ ] **EcuFlash / RomRaider XML definition importer** (public, offline) — parse the open ECUFlash/RomRaider `.xml` ROM-def + `logger.xml` formats → OpenTune map defs, mirroring the existing XDF/A2L importers. Unlocks the large community **Subaru + Mitsubishi** map library at once (and the `mitsucan` checksum heuristic). Parse the open **format** + use community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** definitions (GPL-2), **FastECU** def parser (GPL-3), ECUFlash def docs.
+- [ ] **Subaru / Mitsubishi seed-key** tables as an optional user-enabled plugin (published tables; Bench), same stance as the Ford/Daimler entries above.
 
 ---
 
@@ -215,7 +222,7 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 1. **ME7 checksum** — a whole new petrol family; `ME7Sum` (BSD) is directly liftable, validatable against dumps. Biggest coverage win.
 2. **FRF / ODX / SGO flash-container decode** — foundational for all VAG/DSG work (lets us open real flash containers); MIT refs.
 3. **TCU checksums** (CRC32-VW, CRC-CCITT, JAMCRC) — prerequisite for DSG/TCU; small and self-contained.
-4. **WinOLS `.ols` import + `a2l2xdf`** — definition-format breadth; feeds the map pipeline.
+4. **Definition-format breadth — EcuFlash/RomRaider XML + WinOLS `.ols` + `a2l2xdf`** — the EcuFlash/RomRaider importer unlocks the large community **Subaru/Mitsubishi** map + `logger.xml` set in one move (highest coverage win here, fully offline); `.ols` and `a2l2xdf` round out the map pipeline.
 5. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening/confidence of what already ships.
 6. **Validate UDS state machine vs `python-udsoncan`** — offline conformance of the protocol layer.
 7. **Real DoIP (ISO-13400) transport** — code + mock-testable now; unblocks BMW/VAG-Ethernet later.
