@@ -45,7 +45,7 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 pub type MakeDriver = fn(&str) -> Option<Box<dyn Interface>>;
 
 fn registry_driver(id: &str) -> Option<Box<dyn Interface>> {
-    crate::registry().make(id)
+    crate::drivers::registry().make(id)
 }
 
 #[derive(Default)]

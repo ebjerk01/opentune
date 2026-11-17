@@ -190,7 +190,7 @@ fn find_def(
     let id = ecudef_id
         .filter(|i| !i.is_empty())
         .ok_or("choose a definition")?;
-    crate::load_defs(&state.ecudefs)
+    crate::state::load_defs(&state.ecudefs)
         .iter()
         .find(|d| d.id == id)
         .cloned()
@@ -348,7 +348,7 @@ fn axis_values(
         let w = a.data_type.byte_len() as usize;
         return (0..n)
             .map(|i| {
-                crate::read_elem(img, addr as usize + i * w, a.data_type, a.endian)
+                crate::maps::read_elem(img, addr as usize + i * w, a.data_type, a.endian)
                     .map(|raw| a.scaling.to_physical(raw))
                     .ok_or_else(|| {
                         format!("the {label} axis at 0x{addr:08X} lies outside the opened image")
@@ -477,7 +477,7 @@ fn overlay_value(
     })
     .map_err(|e| e.to_string())?;
 
-    let cells = img.map(|b| crate::decode_map_value(b, map, Some(def.flash_size / 1024)));
+    let cells = img.map(|b| crate::maps::decode_map_value(b, map, Some(def.flash_size / 1024)));
     let mut v = serde_json::to_value(&hits).map_err(|e| e.to_string())?;
     v["map"] = json!({
         "name": map.name,
