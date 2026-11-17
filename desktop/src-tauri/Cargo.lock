@@ -2520,6 +2520,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-candump"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+]
+
+[[package]]
 name = "opentune-checksum"
 version = "0.1.0"
 dependencies = [
@@ -2551,6 +2559,7 @@ dependencies = [
  "opentune-a2l",
  "opentune-adaptation",
  "opentune-autoscan",
+ "opentune-candump",
  "opentune-checksum",
  "opentune-coding",
  "opentune-core",
@@ -2610,6 +2619,7 @@ name = "opentune-driver-gsusb"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-driver-socketcan",
  "socketcan",
 ]
 
