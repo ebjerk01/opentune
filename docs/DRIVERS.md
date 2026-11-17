@@ -138,6 +138,12 @@ NotGuaranteed). The log writers and stats live in `opentune-candump`.
 
 ## 4. Registration
 
+Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
+are listed in [`ARCHITECTURE.md`](ARCHITECTURE.md#drivers--cratesdrivers)):
+`mock`, `openport2`, `socketcan`, `elm327`, `kkl`, `kline-bridge`, `slcan`,
+`j2534`, `gsusb`, `elm327net`, `elm327obd`. A doc-drift test fails when a new id
+is registered without being added here.
+
 Drivers are constructed through a `Registry`, so an app can enumerate and build
 them by id without hard-coding:
 

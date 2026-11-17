@@ -42,6 +42,50 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).
 
+#### CLI commands
+
+`opentune --help` is authoritative; `opentune <command> --help` gives the
+options. A doc-drift test (`crates/opentune-cli/tests/doc_drift.rs`) fails when
+a top-level command is added without a row here.
+
+| Command | Purpose |
+|---|---|
+| `opentune drivers` | List the interface drivers this build knows about |
+| `opentune info` | Open a driver and print ECU identity + battery voltage |
+| `opentune read` | Read a memory region to a file |
+| `opentune diff` | Byte-diff two images and summarise changed regions |
+| `opentune checksum` | Verify / correct checksums; `checksum algos` lists the algorithms |
+| `opentune flash` | Write a region through the safety orchestrator (backup → write → verify) |
+| `opentune dump` | Full read via a driver, archived to the backup vault with ECU id |
+| `opentune findmaps` | Find candidate calibration maps from the diff of two images |
+| `opentune ecudefs` | List / validate ECU-definition files |
+| `opentune identify` | Read the connected ECU's identity and match it to a definition |
+| `opentune db` | Control-unit reference database: list, show, validate |
+| `opentune dtc` | Look up a diagnostic trouble code |
+| `opentune vin` | Decode a VIN |
+| `opentune decode-part` | Parse a VAG or Bosch ECU part number |
+| `opentune compare` | Compare two calibrations map-by-map through an ECU definition |
+| `opentune import-xdf` | Import a TunerPro XDF definition |
+| `opentune import-ecuflash` | Import an EcuFlash / RomRaider XML ROM definition |
+| `opentune import-ols` | Import a WinOLS `.ols` project's map definitions |
+| `opentune import-a2l` | Import an ASAM A2L description |
+| `opentune a2l2xdf` | Convert an A2L straight into a TunerPro XDF |
+| `opentune export-xdf` | Export an ECU definition's maps as a TunerPro XDF |
+| `opentune export-a2l` | Export an ECU definition's maps as an ASAM A2L |
+| `opentune packs` | Load definition packs and report their contents |
+| `opentune vault` | List archived reads in a backup vault directory |
+| `opentune scan` | Scan a directory of ECU dumps offline, emit identification JSON |
+| `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO) |
+| `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
+| `opentune coding` | Module coding over UDS (read, decode, edit, write) |
+| `opentune adaptation` | Adaptation channels (value / routine / actuator) |
+| `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
+| `opentune service` | Plan or run a service-function script |
+| `opentune log` | Poll live data from a RomRaider-style `logger.xml` to CSV |
+| `opentune obd` | Generic OBD-II mode-01 live data |
+| `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
+| `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
+
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.
 
@@ -110,6 +154,7 @@ apps that need it.
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
 | `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests |
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
+| `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
@@ -131,7 +176,7 @@ Each implements `Interface`. CAN drivers typically implement the lighter
 | `opentune-driver-elm327net` | `elm327net` | ELM327 over WiFi / Bluetooth |
 | `opentune-driver-elm327-obd` | `elm327obd` | ELM327 serial, OBD/UDS diagnostics (exposes `diag()`) |
 
-These twelve are registered in the CLI's `Registry` (`opentune drivers`). The
+These eleven are registered in the CLI's `Registry` (`opentune drivers`). The
 `opentune-driver-esp32` crate (ESP32-S3 open interface) is in the workspace but
 not yet in the CLI registry.
 
