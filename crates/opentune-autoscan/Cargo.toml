@@ -1,0 +1,17 @@
+[package]
+name = "opentune-autoscan"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+description = "Full-vehicle module auto-scan (ForScan/VCDS-style) over UDS/OBD for OpenTune: data-defined module list, per-module presence/identity/DTC read, read-only"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+# DTC decode/database is reused, not reimplemented. This is the only OpenTune
+# dependency: the scan engine stays independent of opentune-coding/adaptation.
+opentune-dtc = { path = "../opentune-dtc" }
