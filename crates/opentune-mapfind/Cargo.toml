@@ -1,0 +1,16 @@
+[package]
+name = "opentune-mapfind"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Single-image calibration map finder: axis/header heuristics that propose candidate MapDefs with a score and the evidence."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

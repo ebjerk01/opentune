@@ -1,0 +1,24 @@
+opentune-recipe
+===============
+
+This crate captures the difference between a stock and a tuned ECU image as a
+portable, identity-bound recipe and re-applies it only to a matching image.
+
+The idea of a portable tune recipe with an explicit identity policy -- a strict
+rung that requires the exact source image and exact original bytes, and a
+looser, explicitly requested rung that refuses ambiguous matches rather than
+guessing -- was learned from the described behaviour of:
+
+    openremap-core -- https://github.com/v-arapidis/openremap-core
+      (the cook / tune-strict / tune-shift / tune-unique commands)
+      Copyright (c) V. Arapidis, licensed MIT.
+
+This crate is an independent Rust implementation: its own JSON format
+("opentune-recipe" v1, see docs/RECIPES.md), its own identity checks (built on
+opentune-scan's structural family and identity-string extraction), its own
+patch/context anchoring and relocation rules, and its own integration with
+opentune-checksum and opentune-attest. No source text is taken from
+openremap-core. The MIT licence is compatible with OpenTune's
+GPL-3.0-or-later; this notice is the attribution it asks for.
+
+No ECU images are shipped with this crate.

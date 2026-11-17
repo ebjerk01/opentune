@@ -1,0 +1,22 @@
+opentune-mapfind
+================
+
+This crate proposes candidate calibration maps from a single ECU image.
+
+The general approach -- scan for monotonic breakpoint axes, pair adjacent axes
+and promote the following block to a candidate table, score it by axis
+plausibility and surface smoothness, and attach only probabilistic,
+evidence-based labels instead of claimed map names -- was learned from the
+described behaviour of:
+
+    openremap-core -- https://github.com/v-arapidis/openremap-core
+      (openremap/core/services/maps/map_hunter.py, map_classifier.py)
+      Copyright (c) V. Arapidis, licensed MIT.
+
+This crate is an independent re-implementation in Rust: its own types, its own
+count-header layouts ([n1][n2][axis1][axis2][data] and [n][axis][data], 8- and
+16-bit, big- and little-endian), its own scoring formula and classifier rules,
+and no source text taken from openremap-core. The MIT licence is compatible with
+OpenTune's GPL-3.0-or-later; this notice is the attribution it asks for.
+
+No ECU images are shipped with this crate.

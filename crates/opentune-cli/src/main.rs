@@ -10,7 +10,9 @@ use opentune_core::{ConnectConfig, Interface, MemoryRegion, Progress, Registry};
 use std::path::PathBuf;
 
 mod candump;
+mod mapfind_cmd;
 mod obd_cmd;
+mod recipe_cmd;
 
 #[derive(Parser)]
 #[command(
@@ -93,12 +95,15 @@ enum Command {
         #[arg(long, default_value = "backups")]
         vault: PathBuf,
     },
-    /// Find candidate calibration maps by clustering the diff of two images.
+    /// Find candidate calibration maps: in ONE image (axis/header heuristics,
+    /// ranked with evidence), or by clustering the diff of a stock/tuned pair.
     Findmaps {
-        /// Stock image.
+        /// Image to scan (the stock image in two-file diff mode).
         stock: PathBuf,
-        /// Modified image.
-        tuned: PathBuf,
+        /// Modified image: switches to the two-file diff mode.
+        tuned: Option<PathBuf>,
+        #[command(flatten)]
+        single: mapfind_cmd::SingleArgs,
         /// Merge changed bytes closer than this many bytes into one region.
         #[arg(long, default_value_t = 16)]
         gap: usize,
@@ -108,6 +113,12 @@ enum Command {
         /// Optionally write the candidate regions as JSON.
         #[arg(long)]
         emit: Option<PathBuf>,
+    },
+    /// Portable tune recipes: create from a stock/tuned pair, apply to a
+    /// matching image (checksum-fixed + attested), show.
+    Recipe {
+        #[command(subcommand)]
+        action: recipe_cmd::RecipeAction,
     },
     /// Work with ECU-definition files (list, validate).
     Ecudefs {
@@ -1061,10 +1072,18 @@ fn main() -> Result<()> {
         }
         Command::Findmaps {
             stock,
-            tuned,
+            tuned: None,
+            single,
+            emit,
+            ..
+        } => mapfind_cmd::run_single(&stock, &single, emit.as_deref())?,
+        Command::Findmaps {
+            stock,
+            tuned: Some(tuned),
             gap,
             min_len,
             emit,
+            ..
         } => {
             let a = std::fs::read(&stock).with_context(|| format!("read {}", stock.display()))?;
             let b = std::fs::read(&tuned).with_context(|| format!("read {}", tuned.display()))?;
@@ -2050,6 +2069,7 @@ fn main() -> Result<()> {
             &params,
         )?,
         Command::Candump(args) => candump::run(&reg, args)?,
+        Command::Recipe { action } => recipe_cmd::run(action)?,
     }
     Ok(())
 }

@@ -41,6 +41,8 @@ members = [
     "crates/opentune-db",
     "crates/opentune-candump",
     "crates/opentune-logview",
+    "crates/opentune-mapfind",
+    "crates/opentune-recipe",
 ]
 
 [workspace.package]
