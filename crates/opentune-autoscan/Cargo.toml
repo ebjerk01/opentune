@@ -10,6 +10,7 @@ description = "Full-vehicle module auto-scan (ForScan/VCDS-style) over UDS/OBD f
 publish = false
 
 [dependencies]
+opentune-core = { path = "../opentune-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # DTC decode/database is reused, not reimplemented. This is the only OpenTune

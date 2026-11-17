@@ -10,5 +10,6 @@ description = "Declarative, safe service-function script engine (EPB, DPF regen,
 publish = false
 
 [dependencies]
+opentune-core = { path = "../opentune-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }

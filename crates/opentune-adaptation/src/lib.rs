@@ -443,24 +443,9 @@ pub fn write_be(data: &mut [u8], offset: usize, width: u8, val: u64) -> Result<(
 // I/O layer (UDS over a tiny transport abstraction)
 // ---------------------------------------------------------------------------
 
-/// One UDS request → response exchange. The app adapts `opentune-core`'s
-/// diagnostic transport to this; tests use a scripted responder. Implementations
-/// return the raw response bytes (including a 0x7F negative response, which the
-/// engine then classifies).
-pub trait RawDiag {
-    /// Send `req` and return the ECU's response bytes.
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String>;
-}
-
-/// Blanket impl so a plain closure can be used as a [`RawDiag`].
-impl<F> RawDiag for F
-where
-    F: FnMut(&[u8]) -> std::result::Result<Vec<u8>, String>,
-{
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
-        self(req)
-    }
-}
+/// The request→response seam (and a blanket closure impl) lives in
+/// `opentune-core` so a single `CoreDiag` adapter drives every service engine.
+pub use opentune_core::RawDiag;
 
 /// Check a UDS response against the request's service id (`req_sid`): accept a
 /// positive response (`req_sid + 0x40`), and map a negative response (0x7F) to a

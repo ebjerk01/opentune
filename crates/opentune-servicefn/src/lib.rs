@@ -96,24 +96,9 @@ pub type Result<T> = std::result::Result<T, ServiceError>;
 // Transport + key provider (caller-supplied)
 // ---------------------------------------------------------------------------
 
-/// One UDS request → response exchange. The app adapts `opentune-core`'s
-/// `DiagTransport` to this; tests use a scripted responder. Implementations
-/// return the raw response bytes (including a 0x7F negative response, which the
-/// engine then classifies).
-pub trait RawDiag {
-    /// Send `req` and return the ECU's response bytes.
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String>;
-}
-
-/// Blanket impl so a plain closure can be used as a [`RawDiag`].
-impl<F> RawDiag for F
-where
-    F: FnMut(&[u8]) -> std::result::Result<Vec<u8>, String>,
-{
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
-        self(req)
-    }
-}
+/// The request→response seam (and a blanket closure impl) lives in
+/// `opentune-core` so a single `CoreDiag` adapter drives every service engine.
+pub use opentune_core::RawDiag;
 
 /// Computes the UDS SecurityAccess key for a given seed and level. This is the
 /// **caller's** responsibility: OpenTune ships no OEM seed/key algorithm. The

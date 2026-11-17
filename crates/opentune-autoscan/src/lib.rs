@@ -108,19 +108,7 @@ mod system_serde {
 ///
 /// A blanket impl makes any `FnMut(&[u8]) -> Result<Vec<u8>, String>` a
 /// `RawDiag`, so a closure (or a scripted responder in tests) is a transport.
-pub trait RawDiag {
-    /// Send `req` and return the raw response bytes.
-    fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String>;
-}
-
-impl<F> RawDiag for F
-where
-    F: FnMut(&[u8]) -> Result<Vec<u8>, String>,
-{
-    fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String> {
-        self(req)
-    }
-}
+pub use opentune_core::RawDiag;
 
 // ---------------------------------------------------------------------------
 // Module list (data-defined)

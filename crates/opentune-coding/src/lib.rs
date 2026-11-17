@@ -550,58 +550,10 @@ pub fn diff_params(def: &CodingDef, old: &Coding, new: &Coding) -> Result<Vec<Pa
 // I/O layer (UDS over a tiny transport abstraction)
 // ---------------------------------------------------------------------------
 
-/// One UDS request → response exchange. The app adapts `opentune-core`'s
-/// `DiagTransport` to this; tests use a scripted responder. Implementations
-/// return the raw response bytes (including a 0x7F negative response, which the
-/// engine then classifies).
-pub trait RawDiag {
-    /// Send `req` and return the ECU's response bytes.
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String>;
-}
-
-/// Blanket impl so a plain closure can be used as a [`RawDiag`].
-impl<F> RawDiag for F
-where
-    F: FnMut(&[u8]) -> std::result::Result<Vec<u8>, String>,
-{
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
-        self(req)
-    }
-}
-
-/// Adapter that runs the coding engine's [`RawDiag`] requests over an
-/// `opentune-core` [`DiagTransport`](opentune_core::protocol::DiagTransport).
-///
-/// This is the integration seam the crate-level docs describe: the engine stays
-/// standalone over the tiny [`RawDiag`] abstraction, and the application wraps a
-/// real driver's transport in `CoreDiag` to drive it. The core transport already
-/// handles ISO-TP framing and the UDS `responsePending` (0x78) loop, so each
-/// `request` returns the final raw response bytes — **including** a `0x7F`
-/// negative response, which the coding engine then classifies itself. Hard
-/// transport failures (timeout, I/O) are mapped from the core [`Error`] to the
-/// `String` that [`RawDiag`] uses.
-///
-/// [`Error`]: opentune_core::Error
-pub struct CoreDiag<'a> {
-    inner: &'a mut dyn opentune_core::protocol::DiagTransport,
-    timeout_ms: u64,
-}
-
-impl<'a> CoreDiag<'a> {
-    /// Wrap a core [`DiagTransport`](opentune_core::protocol::DiagTransport),
-    /// issuing every request with `timeout_ms`.
-    pub fn new(inner: &'a mut dyn opentune_core::protocol::DiagTransport, timeout_ms: u64) -> Self {
-        CoreDiag { inner, timeout_ms }
-    }
-}
-
-impl RawDiag for CoreDiag<'_> {
-    fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
-        self.inner
-            .request(req, self.timeout_ms)
-            .map_err(|e| e.to_string())
-    }
-}
+/// The request→response seam and its core-transport adapter now live in
+/// `opentune-core` so a single `CoreDiag` satisfies every service engine. Re-
+/// exported here for backward compatibility.
+pub use opentune_core::{CoreDiag, RawDiag};
 
 /// Check a UDS response against the request's service id (`req_sid`): accept a
 /// positive response (`req_sid + 0x40`), and map a negative response (0x7F) to a

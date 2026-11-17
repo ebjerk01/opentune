@@ -6,6 +6,7 @@
 //! to that trait, so a new reader/flasher is a new driver, nothing else.
 pub mod capabilities;
 pub mod catalog;
+pub mod diag;
 pub mod ecudef;
 pub mod error;
 pub mod interface;
@@ -15,6 +16,7 @@ pub mod types;
 pub mod validate;
 
 pub use capabilities::Capabilities;
+pub use diag::{CoreDiag, RawDiag};
 pub use error::{Error, Result};
 pub use interface::{Interface, InterfaceInfo};
 pub use protocol::{CanFrame, DoIpTransport, IsoTpFd};

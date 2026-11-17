@@ -641,6 +641,7 @@ dependencies = [
 name = "opentune-adaptation"
 version = "0.1.0"
 dependencies = [
+ "opentune-core",
  "serde",
  "serde_json",
 ]
@@ -649,6 +650,7 @@ dependencies = [
 name = "opentune-autoscan"
 version = "0.1.0"
 dependencies = [
+ "opentune-core",
  "opentune-dtc",
  "serde",
  "serde_json",
@@ -924,6 +926,7 @@ dependencies = [
 name = "opentune-servicefn"
 version = "0.1.0"
 dependencies = [
+ "opentune-core",
  "serde",
  "serde_json",
 ]
