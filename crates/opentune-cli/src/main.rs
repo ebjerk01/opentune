@@ -1864,7 +1864,7 @@ fn open_diag_driver(
 /// Parse a whitespace-tolerant hex-byte string (`"22 F1 90"` or `"22F190"`).
 fn parse_hex_vec(s: &str) -> Result<Vec<u8>> {
     let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    if clean.len() % 2 != 0 {
+    if !clean.len().is_multiple_of(2) {
         return Err(anyhow!("hex string '{s}' has an odd number of digits"));
     }
     (0..clean.len())
