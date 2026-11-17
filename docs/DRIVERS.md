@@ -189,7 +189,7 @@ reg.register("mock", "Mock / file driver", || Box::new(MockDriver::new()));
 - [ ] CAN driver reuses `IsoTp` + `UdsClient` rather than re-rolling transport.
 - [ ] `diag()` overridden if the driver owns a `DiagTransport`.
 - [ ] `can_monitor()` overridden if the adapter can capture raw frames passively.
-- [ ] Registered in the CLI registry (`crates/opentune-cli/src/main.rs`) and,
+- [ ] Registered in the CLI registry (`crates/opentune-cli/src/registry.rs`) and,
       for a user-facing adapter, the desktop registry
       (`desktop/src-tauri/src/main.rs`).
 - [ ] Progress reported; errors use the structured `Error` variants.

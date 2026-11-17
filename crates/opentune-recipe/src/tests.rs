@@ -260,3 +260,32 @@ fn rejects_bad_files_and_inputs() {
     let rep = apply(&r, &s[..N / 2], &ApplyOptions::default());
     assert!(rep.refusal.unwrap().contains("size"));
 }
+
+#[test]
+fn an_embedder_lookup_resolves_ids_the_public_set_lacks() {
+    // "host-crc" is not a public id: an embedding app maps it to its own
+    // implementation (here the public CRC tail under another name).
+    let lookup = |id: &str| (id == "host-crc").then(|| opentune_checksum::get(ALGO).unwrap());
+    let s = stock();
+    let t = tuned(&s);
+    let o = CreateOptions {
+        checksum: Some("host-crc".into()),
+        ..CreateOptions::default()
+    };
+    assert!(matches!(
+        create(&s, &t, &o),
+        Err(RecipeError::UnknownChecksum(_))
+    ));
+    let (r, _) = create_with(&s, &t, &o, &lookup).unwrap();
+    assert_eq!(r.checksum.as_deref(), Some("host-crc"));
+
+    let rep = apply(&r, &s, &ApplyOptions::default());
+    assert!(
+        rep.refusal.is_some(),
+        "public lookup must not know host-crc"
+    );
+    let rep = apply_with(&r, &s, &ApplyOptions::default(), &lookup);
+    assert_eq!(rep.refusal, None, "{rep:?}");
+    assert_eq!(rep.output.as_deref(), Some(&t[..]));
+    assert_eq!(rep.attestation.unwrap().algorithm, "host-crc");
+}

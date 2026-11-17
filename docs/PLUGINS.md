@@ -11,6 +11,8 @@ A plugin lives in its own repository and depends on this one by path or git;
 nothing plugin-specific is ever added to this repo. The public app has no
 knowledge of any particular plugin.
 
+The command-line app is a host in the same way: see [CLI host API](#cli-host-api).
+
 ## Backend: embed the library and add commands
 
 ```toml
@@ -232,3 +234,104 @@ An overlay panel script:
   (`#panel-<id>`) when present instead of forking the public script.
 - Use `OT.connArgs()` for adapter arguments (driver/port/baud/bus/txId/rxId) so
   plugin commands target the same module as the public panels.
+
+## CLI host API
+
+The CLI is a library too: `opentune_cli` (`crates/opentune-cli/src/lib.rs`),
+whose `opentune` binary only calls `opentune_cli::run()`. A private front end
+is a separate binary that calls `run_with(CliConfig)`: every public subcommand
+works unchanged, and the front end adds its own subcommands, registry drivers,
+checksum algorithms and seed-key handlers.
+
+```toml
+# front end's Cargo.toml
+[dependencies]
+opentune-cli = { path = "../opentune/crates/opentune-cli" }
+opentune-core = { path = "../opentune/crates/opentune-core" }
+opentune-checksum = { path = "../opentune/crates/opentune-checksum" }
+clap = "4"
+anyhow = "1"
+```
+
+```rust
+// front end's src/main.rs
+use clap::{Args, FromArgMatches};
+use opentune_checksum::ChecksumAlgo;
+use opentune_cli::{CliConfig, CliContext, ConnectArgs, ExtraCommand};
+use opentune_core::protocol::seedkey::SeedKey;
+
+/// Extra checksum ids, tried before the public set by `checksum verify|fix|attest`
+/// and `recipe create|apply`.
+fn my_checksums(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
+    match id {
+        "my-algo" => Some(Box::new(my_algos::MyAlgo)),
+        _ => None,
+    }
+}
+
+/// Seed-key handlers for `--seedkey <id>` (info/read/flash/dump/identify/service).
+fn my_seedkeys(id: &str) -> Option<Box<dyn SeedKey>> {
+    match id {
+        "my-unit" => Some(Box::new(my_keys::MyUnit)),
+        _ => None,
+    }
+}
+
+/// `my-tool bench-read --driver kkl --seedkey my-unit ...`
+fn bench_read(m: &clap::ArgMatches, ctx: &CliContext) -> anyhow::Result<()> {
+    let conn = ConnectArgs::from_arg_matches(m)?; // --driver/--file/--base/--seedkey
+    let mut drv = ctx.open_connect(&conn)?; // seed key attached before open
+    // ... drv.read_memory(...), ctx.checksum("my-algo"), ...
+    drv.close()?;
+    Ok(())
+}
+
+fn main() -> std::process::ExitCode {
+    opentune_cli::run_with(CliConfig {
+        name: "my-tool",
+        about: Some("OpenTune plus my bench tools".into()),
+        seedkeys: vec![my_seedkeys],
+        checksums: vec![my_checksums],
+        drivers: vec![("my-adapter", "My adapter", my_adapter::make)], // fn() -> Box<dyn Interface>
+        extra: vec![ExtraCommand {
+            command: ConnectArgs::augment_args(
+                clap::Command::new("bench-read").about("Read through my unlock"),
+            ),
+            run: bench_read,
+        }],
+    })
+}
+```
+
+| Item | Purpose |
+|---|---|
+| `run()` / `run_with(CliConfig)` | Run the public CLI / the configured one on the process arguments; returns the `ExitCode`. |
+| `run_from(cfg, args)` / `try_run_from(cfg, args)` | Same on explicit arguments, never exiting the process; `try_run_from` returns help/usage as a `clap::Error`, a silent exit as `ExitStatus`, other failures as the command's error (for tests). |
+| `CliConfig` | `name` (help and `--version`, default `opentune`), `about`, `seedkeys`, `checksums`, `drivers` (`(id, description, fn() -> Box<dyn Interface>)`, listed after the public drivers), `extra` subcommands. `Default` = the public CLI. |
+| `SeedKeyResolver` / `ChecksumResolver` | `fn(&str) -> Option<Box<dyn SeedKey>>` / `fn(&str) -> Option<Box<dyn ChecksumAlgo>>`, the desktop's shapes. Tried in order; checksum ids fall back to the public `opentune_checksum::get`. |
+| `ExtraCommand { command, run }` | A `clap::Command` merged into the top-level tree and its `fn(&ArgMatches, &CliContext) -> anyhow::Result<()>`. A name or alias that collides with a core subcommand, `help` or another extra (or an extra driver id that repeats a public one) is refused at startup; `check_config` reports the same check. |
+| `CliContext` | `registry()`, `checksum(id)` / `require_checksum(id)`, `seed_key(id)` / `require_seed_key(id)`, `open_driver(driver, &ConnectConfig, seedkey)`, `open_connect(&ConnectArgs)`, `attach_seed_key(drv, driver, id)`. |
+| `ConnectArgs` | The public `--driver --file --base --seedkey` group, to flatten into extra commands. |
+| `command(cfg)` | The merged clap tree (e.g. to render help in tests). |
+| `ExitStatus(n)` | Return `Err(ExitStatus(n).into())` to end with exit code `n` and no error message. |
+
+`--seedkey <id>` on `info`, `read`, `flash`, `dump` and `identify` resolves the
+id through the context and hands it to the driver with `Interface::set_seed_key`
+before the driver opens. An unknown id is an error before any driver is made;
+a driver without an unlock step (`set_seed_key` returns `false`, e.g. `mock`)
+is an error rather than a silently dropped key. On `service`, `--seedkey`
+becomes the script runner's `KeyProvider` for its SecurityAccess steps.
+
+Safety expectations for a CLI front end:
+
+- **The embedder owns every algorithm it registers.** OpenTune ships no OEM
+  seed/key algorithm and registers no seed-key resolver, so `--seedkey` fails
+  in the public build; checksum algorithms the public set lacks come only from
+  the embedder. Keep them in the embedder's own repository.
+- Extra commands that write, start a routine or attempt security access follow
+  the same rules as desktop plugin commands: explicit target, explicit
+  acknowledgement flag, backup before destructive writes, and the core flash
+  orchestrator (`opentune_flash`) for writes rather than raw driver calls.
+- A checksum resolver must refuse rather than guess, like the public engines:
+  return `None` for an id it does not fully support.
+- Core subcommands cannot be replaced or shadowed; add a new name instead.

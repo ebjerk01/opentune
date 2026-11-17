@@ -59,8 +59,19 @@ impl std::error::Error for AttestError {}
 pub fn attest_image(algo_id: &str, image: &[u8]) -> Result<ChecksumAttestation, AttestError> {
     let algo = opentune_checksum::get(algo_id)
         .ok_or_else(|| AttestError::UnknownAlgorithm(algo_id.to_string()))?;
-    let blocks = opentune_checksum::report(&*algo, image)
-        .map_err(|e| AttestError::Checksum(e.to_string()))?;
+    attest_image_with(&*algo, algo_id, image)
+}
+
+/// [`attest_image`] with an already resolved algorithm, e.g. one an embedding
+/// application supplies that is not in the public `opentune-checksum` set.
+/// `algo_id` is recorded in the attestation as the algorithm's name.
+pub fn attest_image_with(
+    algo: &dyn opentune_checksum::ChecksumAlgo,
+    algo_id: &str,
+    image: &[u8],
+) -> Result<ChecksumAttestation, AttestError> {
+    let blocks =
+        opentune_checksum::report(algo, image).map_err(|e| AttestError::Checksum(e.to_string()))?;
 
     if blocks.is_empty() {
         return Err(AttestError::NoBlocksFound(algo_id.to_string()));
