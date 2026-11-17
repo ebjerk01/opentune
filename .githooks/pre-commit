@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Fast pre-commit gate: formatting of the workspace and the desktop crate, plus
+# a syntax check of staged UI JavaScript. Enable with scripts/setup-hooks.sh.
+# The full gate set is scripts/check.sh; bypass in an emergency with
+# `git commit --no-verify` (CI will still catch it).
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+fail=0
+
+if command -v cargo >/dev/null 2>&1; then
+    if ! cargo fmt --all -- --check >/dev/null 2>&1; then
+        echo "pre-commit: workspace is not formatted — run \`cargo fmt --all\`" >&2
+        fail=1
+    fi
+    if [ -f desktop/src-tauri/Cargo.toml ] &&
+        ! (cd desktop/src-tauri && cargo fmt -- --check >/dev/null 2>&1); then
+        echo "pre-commit: desktop crate is not formatted — run \`cargo fmt\` in desktop/src-tauri" >&2
+        fail=1
+    fi
+else
+    echo "pre-commit: cargo not found, skipping fmt check" >&2
+fi
+
+# Staged (added/copied/modified/renamed) JS files under desktop/.
+mapfile -t js < <(git diff --cached --name-only --diff-filter=ACMR -- 'desktop/*.js')
+if [ "${#js[@]}" -gt 0 ]; then
+    if command -v node >/dev/null 2>&1; then
+        for f in "${js[@]}"; do
+            # Check the STAGED content, not the working copy.
+            if ! out="$(git show ":$f" | node --check - 2>&1)"; then
+                echo "pre-commit: syntax error in $f (node --check):" >&2
+                printf '%s\n' "$out" | sed -n '1,4p' >&2
+                fail=1
+            fi
+        done
+    else
+        echo "pre-commit: node not found, skipping JS syntax check" >&2
+    fi
+fi
+
+if [ "$fail" != 0 ]; then
+    echo "pre-commit: blocked (full gates: scripts/check.sh)" >&2
+    exit 1
+fi
