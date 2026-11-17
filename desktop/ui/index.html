@@ -23,7 +23,7 @@
                registering through window.OTNav (nav.js). Empty groups hide. -->
           <div class="nav-group" data-group="calibration">
             <div class="nav-group-label">Calibration</div>
-            <button class="nav-item" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
+            <button class="nav-item active" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
             <button class="nav-item" data-panel="analyze" data-tier="public"><span class="ni-ico">🔎</span> Analyze bin</button>
             <button class="nav-item" data-panel="identify" data-tier="public"><span class="ni-ico">⌖</span> Identify</button>
             <button class="nav-item" data-panel="checksum" data-tier="public"><span class="ni-ico">✓</span> Checksum</button>
@@ -69,7 +69,8 @@
       <!-- Main -->
       <main id="main">
         <!-- IMAGE -->
-        <section class="panel" id="panel-image">
+        <!-- Active from the first paint, before any script has run. -->
+        <section class="panel active" id="panel-image">
           <header class="panel-head">
             <h1>Image</h1>
             <p>Open a flash dump and inspect it. Everything downstream works on this file, offline.</p>

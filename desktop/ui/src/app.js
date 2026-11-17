@@ -63,10 +63,35 @@ const binFilter = [
   { name: "All files", extensions: ["*"] },
 ];
 
+// Startup trace mark: printed by the backend with OPENTUNE_TRACE_STARTUP=1, a
+// no-op otherwise. Fire-and-forget; never throws.
+function startupMark(label) {
+  try {
+    const ms = typeof performance !== "undefined" ? Math.round(performance.now()) : 0;
+    const p = TAURI.core && TAURI.core.invoke("startup_mark", { label: `${label} (page +${ms} ms)` });
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* not in Tauri */ }
+}
+startupMark("app.js running");
+
 // ---- navigation ------------------------------------------------------------
+// Panels do their expensive work (backend loads, big renders) the first time
+// they are shown, not at startup: onPanelFirstShow(id, fn) runs fn then (or
+// right away when the panel has already been shown).
+const panelShown = new Set();
+const panelFirstShow = {};
+function onPanelFirstShow(name, fn) {
+  if (panelShown.has(name)) { try { fn(); } catch (e) {} return; }
+  (panelFirstShow[name] = panelFirstShow[name] || []).push(fn);
+}
+window.onPanelFirstShow = onPanelFirstShow;
 function showPanel(name) {
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
   document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.panel === name));
+  if (!panelShown.has(name)) {
+    panelShown.add(name);
+    (panelFirstShow[name] || []).splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
+  }
 }
 document.querySelectorAll(".nav-item").forEach((n) => n.addEventListener("click", () => {
   showPanel(n.dataset.panel);
@@ -236,8 +261,18 @@ async function populateMapDefs() {
     fill($("mvDef"));
     fill($("cmpDef"));
     await populateMaps();
-  } catch (e) { toast("ecudefs: " + e, true); }
+    return true;
+  } catch (e) { toast("ecudefs: " + e, true); return false; }
 }
+// The definition lists load once, off the startup path: when Maps / Compare is
+// first shown, when a project needs them, or in idle time after boot.
+let defsReady = null;
+function ensureDefs() {
+  if (!defsReady) defsReady = populateMapDefs().then((ok) => { if (!ok) defsReady = null; });
+  return defsReady;
+}
+onPanelFirstShow("maps", ensureDefs);
+onPanelFirstShow("compare", ensureDefs);
 async function populateMaps() {
   const id = $("mvDef").value; if (!id) return;
   try {
@@ -647,9 +682,16 @@ $("btnVaultPick").onclick = async () => { const d = await pickDir("Backups folde
 $("btnVaultRefresh").onclick = refreshVault;
 
 // =================== DRIVERS ===================
+// One list_drivers call shared by the Drivers panel, the Debug tab and the
+// sidebar connection bar.
+let driversP = null;
+function driverList() {
+  if (!driversP) driversP = invoke("list_drivers").catch((e) => { driversP = null; throw e; });
+  return driversP;
+}
 async function initDrivers() {
   try {
-    const list = await invoke("list_drivers");
+    const list = await driverList();
     const rows = list.map((d) => `<tr><td class="mono">${esc(d.id)}</td><td>${esc(d.name)}</td><td>${d.id === "mock" ? '<span class="pill ok">offline</span>' : '<span class="pill neutral">hardware</span>'}</td></tr>`).join("");
     $("driversResult").innerHTML = `<div class="banner info">${list.length} driver(s) registered. Offline work uses <code>mock</code>.</div>
       <table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Mode</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -772,9 +814,13 @@ async function initGuide() {
       b.onclick = () => loadGuideSection(s.id);
       nav.appendChild(b);
     });
-    await loadGuideSection(state.guideSections[0].id);
+    // A panel's "Open full guide" may already have picked a page: keep it.
+    if (state.guideCur) document.querySelectorAll("#guideNav .gnav").forEach((b) => b.classList.toggle("active", b.dataset.id === state.guideCur));
+    else await loadGuideSection(state.guideSections[0].id);
   } catch (e) { $("guideBody").innerHTML = errBanner(e); }
 }
+// The guide loads when its panel is first opened.
+onPanelFirstShow("guide", initGuide);
 
 // =================== 3D SURFACE / CURVE VIEW ===================
 // Self-contained canvas renderer — no external/CDN libraries. A 2-D map draws
@@ -1187,7 +1233,7 @@ async function doOpenProject(path) {
       }),
     };
     // Restore the selected definition + checksum so the editor lines up.
-    if (p.ecudef_id && $("mvDef")) { $("mvDef").value = p.ecudef_id; if ($("cmpDef")) $("cmpDef").value = p.ecudef_id; await populateMaps(); }
+    if (p.ecudef_id && $("mvDef")) { await ensureDefs(); $("mvDef").value = p.ecudef_id; if ($("cmpDef")) $("cmpDef").value = p.ecudef_id; await populateMaps(); }
     if (p.checksum_algo && $("csAlgo")) $("csAlgo").value = p.checksum_algo;
     pushRecent(r.path);
     renderProject();
@@ -1457,7 +1503,7 @@ async function initDebug() {
 
   // Populate the driver dropdown.
   try {
-    const list = await invoke("list_drivers");
+    const list = await driverList();
     const sel = $("dbgDriver");
     sel.innerHTML = "";
     list.forEach((d) => { const o = el("option"); o.value = d.id; o.textContent = `${d.id} — ${d.name}`; sel.appendChild(o); });
@@ -1530,7 +1576,7 @@ async function initConnBar() {
     '<div class="conn-row"><button id="connDetect" class="btn">Detect adapter</button></div>';
   foot.insertBefore(bar, $("adapterBadge"));
   try {
-    const list = await invoke("list_drivers");
+    const list = await driverList();
     const sel = $("connDriver"); sel.innerHTML = "";
     list.forEach((d) => { const o = el("option"); o.value = d.id; o.textContent = d.id; sel.appendChild(o); });
     sel.value = window.OT.conn.driver || "elm327obd";
@@ -1559,22 +1605,35 @@ window.showPanel = showPanel;
 // =================== BOOT ===================
 async function boot() {
   if (!TAURI.core) { document.body.innerHTML = '<p style="padding:2rem">Tauri API unavailable — run inside the OpenTune app.</p>'; return; }
-  try {
-    const dp = await invoke("data_paths");
-    $("dataStatus").innerHTML = `ecudefs: ${dp.ecudefs ? "✓" : "✗"} · catalog: ${dp.catalog ? "✓" : "✗"} · guide: ${dp.guide ? "✓" : "✗"}`;
-  } catch (e) { $("dataStatus").textContent = "data resolve failed"; }
-  await initDrivers();
-  await populateMapDefs();
-  await initSeedKey();
-  await initGuide();
-  await initUpdates();
-  renderRecent();
-  renderProject();
-  await initDebug();
-  await initConnBar();
+  // 1. Paint the shell now: the first panel is visible before any backend call
+  //    returns, and nothing below blocks it.
   showPanel("image");
   refreshImageHints();
-  // App-wide adapter probe (fire-and-forget so it never delays the UI).
-  refreshAdapterStatus();
+  renderRecent();
+  renderProject();
+  requestAnimationFrame(() => requestAnimationFrame(() => startupMark("first frame painted")));
+
+  // 2. Fill the panels concurrently; each init handles its own errors. The
+  //    Debug inputs and the sidebar connection bar share OT.conn, so those two
+  //    stay in order, and the adapter probe follows them.
+  const dataPaths = (async () => {
+    try {
+      const dp = await invoke("data_paths");
+      $("dataStatus").innerHTML = `ecudefs: ${dp.ecudefs ? "✓" : "✗"} · catalog: ${dp.catalog ? "✓" : "✗"} · guide: ${dp.guide ? "✓" : "✗"}`;
+    } catch (e) { $("dataStatus").textContent = "data resolve failed"; }
+  })();
+  const conn = (async () => {
+    await initDebug();
+    await initConnBar();
+    // App-wide adapter probe (fire-and-forget so it never delays the UI).
+    refreshAdapterStatus();
+  })();
+  await Promise.allSettled([dataPaths, initDrivers(), initSeedKey(), initUpdates(), conn]);
+  startupMark("boot done");
+
+  // 3. Heavier, not-yet-visible work in idle time: the definition lists (Maps /
+  //    Compare load them on first show anyway). The guide loads on first open.
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 300));
+  idle(() => ensureDefs(), { timeout: 2000 });
 }
 boot();
