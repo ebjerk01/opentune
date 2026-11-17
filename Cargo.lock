@@ -700,6 +700,7 @@ dependencies = [
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
+ "opentune-ols",
  "opentune-packs",
  "opentune-scan",
  "opentune-servicefn",

@@ -162,6 +162,18 @@ enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// Import a WinOLS `.ols` project and list (or merge) its map definitions.
+    ImportOls {
+        /// Path to the `.ols` project file.
+        file: PathBuf,
+        /// Saved version index to extract as the ROM image (default 0).
+        #[arg(long, default_value_t = 0)]
+        version: u32,
+        /// Optional ECU-definition JSON to merge the imported maps into
+        /// (existing maps with the same name are left untouched).
+        #[arg(long)]
+        into: Option<PathBuf>,
+    },
     /// Load definition pack(s) from a directory and report their contents.
     Packs {
         /// A pack directory (contains pack.json), or a root holding several packs.
@@ -1319,6 +1331,54 @@ fn main() -> Result<()> {
                 }
                 std::fs::write(&into, serde_json::to_string_pretty(&def)?)
                     .map_err(|e| anyhow!("write {}: {e}", into.display()))?;
+                println!(
+                    "Merged {added} new map(s) into {} ({} total).",
+                    into.display(),
+                    def.maps.len()
+                );
+            }
+        }
+        Command::ImportOls {
+            file,
+            version,
+            into,
+        } => {
+            let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+            let project = opentune_ols::OlsProject::parse_version(&raw, version)
+                .map_err(|e| anyhow!("parse {}: {e}", file.display()))?;
+            println!(
+                "WinOLS: format {} — ROM {} byte(s) (version {}) — {} map(s)",
+                project.format_version,
+                project.rom.size(),
+                project.rom.version_index,
+                project.maps.len()
+            );
+            for w in &project.warnings {
+                println!("  ! warning: {w}");
+            }
+            for m in &project.maps {
+                println!(
+                    "  {:<28} @0x{:06X}  {}x{}",
+                    m.name, m.address, m.rows, m.cols
+                );
+            }
+            if let Some(into) = into {
+                let txt = std::fs::read_to_string(&into)
+                    .map_err(|e| anyhow!("read {}: {e}", into.display()))?;
+                let mut def: opentune_core::ecudef::EcuDef = serde_json::from_str(&txt)
+                    .map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+                let have: std::collections::HashSet<String> =
+                    def.maps.iter().map(|m| m.name.clone()).collect();
+                let mut added = 0usize;
+                for m in project.maps {
+                    if have.contains(&m.name) {
+                        continue;
+                    }
+                    def.maps.push(m);
+                    added += 1;
+                }
+                let out = serde_json::to_string_pretty(&def)?;
+                std::fs::write(&into, out).map_err(|e| anyhow!("write {}: {e}", into.display()))?;
                 println!(
                     "Merged {added} new map(s) into {} ({} total).",
                     into.display(),
