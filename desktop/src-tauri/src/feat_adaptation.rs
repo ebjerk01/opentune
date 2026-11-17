@@ -26,7 +26,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
     if clean.is_empty() {
         return Ok(Vec::new());
     }
-    if clean.len() % 2 != 0 {
+    if !clean.len().is_multiple_of(2) {
         return Err(format!("hex string '{s}' has an odd number of digits"));
     }
     (0..clean.len())
@@ -112,6 +112,7 @@ pub async fn adaptation_read(
 /// (`start` / `stop` / `request_results`); `extra` optionally overrides the
 /// channel's start/stop data record (hex, whitespace tolerant).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn adaptation_routine(
     driver: String,
     port: Option<String>,
@@ -151,6 +152,7 @@ pub async fn adaptation_routine(
 /// case where control could not be handed back. `state` optionally overrides the
 /// channel's default control-state record (hex, whitespace tolerant).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn adaptation_actuator(
     driver: String,
     port: Option<String>,
