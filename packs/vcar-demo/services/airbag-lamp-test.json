@@ -1,0 +1,37 @@
+{
+  "id": "vcar-airbag-lamp-test",
+  "name": "Virtual car - airbag lamp test (secured)",
+  "description": "Airbag (715/77F): extended session, SecurityAccess level 01 with the virtual car's TEST-ONLY XOR key, lamp IO 0x0530 on, then control returned. Needs a key provider for the test algorithm (see docs/VIRTUAL-CAR.md). OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "715",
+  "resp_id": "77F",
+  "requires_security": true,
+  "steps": [
+    {
+      "op": "diagnostic_session",
+      "subfunction": 3
+    },
+    {
+      "op": "security_access",
+      "level": 1
+    },
+    {
+      "op": "io_control",
+      "did": 1328,
+      "control": 3,
+      "data": [
+        1
+      ]
+    },
+    {
+      "op": "expect_positive"
+    },
+    {
+      "op": "io_control",
+      "did": 1328,
+      "control": 0
+    },
+    {
+      "op": "expect_positive"
+    }
+  ]
+}

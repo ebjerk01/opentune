@@ -1,0 +1,77 @@
+{
+  "id": "vcar-engine-adaptation",
+  "name": "Virtual car - Engine adaptation",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "7E0",
+  "resp_id": "7E8",
+  "requires_security": false,
+  "channels": [
+    {
+      "name": "Idle speed target",
+      "kind": "value",
+      "did": 1552,
+      "field": {
+        "offset": 0,
+        "width": 2,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": "rpm"
+        }
+      },
+      "min": 650,
+      "max": 1000,
+      "note": "DID 0x0610"
+    },
+    {
+      "name": "Fan run-on time",
+      "kind": "value",
+      "did": 1553,
+      "field": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": "s"
+        }
+      },
+      "min": 0,
+      "max": 120,
+      "note": "DID 0x0611"
+    },
+    {
+      "name": "Throttle body adaptation",
+      "kind": "routine",
+      "id": 515,
+      "result": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "RoutineControl 0x0203; result 00 = OK"
+    },
+    {
+      "name": "Radiator fan",
+      "kind": "actuator",
+      "did": 1280,
+      "state": [
+        1
+      ],
+      "status": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "IO control 0x0500; 01 = on, control returned to the ECU afterwards"
+    }
+  ]
+}

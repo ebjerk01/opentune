@@ -1,0 +1,26 @@
+{
+  "id": "vcar-cluster-service-reset",
+  "name": "Virtual car - service interval reset",
+  "description": "Instrument cluster (714/77E): extended session, start routine 0x0240, confirm, read the service interval DID 0x0611. OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "714",
+  "resp_id": "77E",
+  "requires_security": false,
+  "steps": [
+    {
+      "op": "diagnostic_session",
+      "subfunction": 3
+    },
+    {
+      "op": "routine_control",
+      "control_type": 1,
+      "routine_id": 576
+    },
+    {
+      "op": "expect_positive"
+    },
+    {
+      "op": "read_data_by_identifier",
+      "did": 1553
+    }
+  ]
+}

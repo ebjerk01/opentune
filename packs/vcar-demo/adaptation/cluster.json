@@ -1,0 +1,77 @@
+{
+  "id": "vcar-cluster-adaptation",
+  "name": "Virtual car - Instrument cluster adaptation",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "714",
+  "resp_id": "77E",
+  "requires_security": false,
+  "channels": [
+    {
+      "name": "Display brightness",
+      "kind": "value",
+      "did": 1552,
+      "field": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 0.39215686274509803,
+          "offset": 0.0,
+          "unit": "%"
+        }
+      },
+      "min": 25,
+      "max": 255,
+      "note": "DID 0x0610"
+    },
+    {
+      "name": "Service interval",
+      "kind": "value",
+      "did": 1553,
+      "field": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1000.0,
+          "offset": 0.0,
+          "unit": "km"
+        }
+      },
+      "min": 10,
+      "max": 30,
+      "note": "DID 0x0611"
+    },
+    {
+      "name": "Service interval reset",
+      "kind": "routine",
+      "id": 576,
+      "result": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "RoutineControl 0x0240; result 00 = OK"
+    },
+    {
+      "name": "Gauge sweep test",
+      "kind": "actuator",
+      "did": 1344,
+      "state": [
+        1
+      ],
+      "status": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": ""
+        }
+      },
+      "note": "IO control 0x0540; 01 = on, control returned to the ECU afterwards"
+    }
+  ]
+}

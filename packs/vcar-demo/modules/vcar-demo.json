@@ -1,0 +1,61 @@
+{
+  "vehicle": "OpenTune virtual car (demo)",
+  "modules": [
+    {
+      "name": "Engine",
+      "addr": 1,
+      "req_id": 2016,
+      "resp_id": 2024,
+      "protocol": "uds"
+    },
+    {
+      "name": "Gearbox",
+      "addr": 2,
+      "req_id": 2017,
+      "resp_id": 2025,
+      "protocol": "uds"
+    },
+    {
+      "name": "ABS / ESC",
+      "addr": 3,
+      "req_id": 1811,
+      "resp_id": 1917,
+      "protocol": "uds"
+    },
+    {
+      "name": "Airbag",
+      "addr": 4,
+      "req_id": 1813,
+      "resp_id": 1919,
+      "protocol": "uds"
+    },
+    {
+      "name": "Body / central",
+      "addr": 5,
+      "req_id": 1806,
+      "resp_id": 1912,
+      "protocol": "uds"
+    },
+    {
+      "name": "Instrument cluster",
+      "addr": 6,
+      "req_id": 1812,
+      "resp_id": 1918,
+      "protocol": "uds"
+    },
+    {
+      "name": "Engine (OBD-II)",
+      "addr": 1,
+      "req_id": 2015,
+      "resp_id": 2024,
+      "protocol": "obd"
+    },
+    {
+      "name": "Parking assist (not fitted)",
+      "addr": 7,
+      "req_id": 1898,
+      "resp_id": 2004,
+      "protocol": "uds"
+    }
+  ]
+}

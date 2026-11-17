@@ -1,0 +1,13 @@
+{
+  "id": "vcar-demo",
+  "name": "OpenTune virtual car (demo)",
+  "version": "1.0.0",
+  "maker": "OpenTune (virtual)",
+  "platform": "vcar",
+  "vehicles": [
+    "OpenTune virtual car (demo profile)"
+  ],
+  "author": "OpenTune contributors",
+  "license": "GPL-3.0-or-later",
+  "description": "Definitions for the 'vcar' virtual-car driver's built-in demo profile (crates/drivers/vcar/profiles/demo.json): module list for auto-scan, coding, adaptation and service scripts for its six simulated modules. Every address, DID and value is the virtual car's own and makes no claim about any real vehicle. See docs/VIRTUAL-CAR.md."
+}

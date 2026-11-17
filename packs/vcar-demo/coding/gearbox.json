@@ -1,0 +1,62 @@
+{
+  "id": "vcar-gearbox",
+  "name": "Virtual car - Gearbox",
+  "module": "OpenTune virtual car only (driver 'vcar'): fictional addresses and data, not any real vehicle.",
+  "req_id": "7E1",
+  "resp_id": "7E9",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "params": [
+    {
+      "name": "Drive layout",
+      "byte": 0,
+      "bit": 0,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "front-wheel"
+        },
+        {
+          "value": 1,
+          "label": "all-wheel"
+        },
+        {
+          "value": 2,
+          "label": "rear-wheel"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "name": "Sport mode button",
+      "byte": 0,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Tow mode",
+      "byte": 0,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "note": ""
+    },
+    {
+      "name": "Tyre circumference",
+      "byte": 1,
+      "bit": 0,
+      "len": 8,
+      "kind": "number",
+      "note": "centimetres"
+    }
+  ]
+}
