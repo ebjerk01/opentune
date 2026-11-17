@@ -15,7 +15,9 @@
 use opentune_core::protocol::doip::DoIpTransport;
 use opentune_core::protocol::{check_response, DiagTransport, UdsClient};
 use opentune_core::Error;
-use opentune_udssim::{AlwaysReject, DoIpSimStream, DtcRecord, ServerConfig, SimTransport, UdsServer};
+use opentune_udssim::{
+    AlwaysReject, DoIpSimStream, DtcRecord, ServerConfig, SimTransport, UdsServer,
+};
 
 /// The XOR mask the default simulated ECU uses for SecurityAccess.
 const SEC_MASK: u8 = 0xA5;
@@ -78,7 +80,9 @@ fn happy_path_full_session_flow() {
     // RequestDownload -> TransferData -> RequestTransferExit (0x34/0x36/0x37).
     {
         let mut uds = UdsClient::new(&mut t);
-        let max_block = uds.request_download(0x00, 0x8000_0000, 4).expect("download");
+        let max_block = uds
+            .request_download(0x00, 0x8000_0000, 4)
+            .expect("download");
         assert_eq!(max_block, 0x0402);
         uds.transfer_data(0x01, &[0xDE, 0xAD, 0xBE, 0xEF])
             .expect("block 1");
@@ -116,12 +120,17 @@ fn response_pending_drained_without_resending_write() {
     {
         let mut uds = UdsClient::new(&mut t);
         uds.request_download(0x00, 0x1000, 4).unwrap();
-        uds.transfer_data(0x01, &[1, 2, 3, 4]).expect("drained to success");
+        uds.transfer_data(0x01, &[1, 2, 3, 4])
+            .expect("drained to success");
     }
 
     // One request per service; the transferData was NOT re-sent despite 3x 0x78.
     assert_eq!(t.request_count(), 2, "download + transferData, no resend");
-    assert_eq!(t.trace().pending_count(), 3, "three pending frames interposed");
+    assert_eq!(
+        t.trace().pending_count(),
+        3,
+        "three pending frames interposed"
+    );
     assert_eq!(
         t.server().downloaded().unwrap(),
         &[1, 2, 3, 4],
@@ -168,7 +177,10 @@ fn wrong_block_counter_echo_rejected() {
     t.faults().wrong_echo(0x36);
     let mut uds = UdsClient::new(&mut t);
     assert!(
-        matches!(uds.transfer_data(0x01, &[1, 2, 3, 4]), Err(Error::Protocol(_))),
+        matches!(
+            uds.transfer_data(0x01, &[1, 2, 3, 4]),
+            Err(Error::Protocol(_))
+        ),
         "a corrupted blockSequenceCounter echo must be rejected"
     );
 }
@@ -201,7 +213,10 @@ fn wrong_routine_echo_rejected() {
     t.faults().wrong_echo(0x31); // corrupts the echoed routine id
     let mut uds = UdsClient::new(&mut t);
     assert!(
-        matches!(uds.routine_control(0x01, 0xFF00, &[]), Err(Error::Protocol(_))),
+        matches!(
+            uds.routine_control(0x01, 0xFF00, &[]),
+            Err(Error::Protocol(_))
+        ),
         "a corrupted routine-id echo must be rejected"
     );
 }
@@ -217,7 +232,10 @@ fn truncated_download_response_rejected() {
     t.faults().truncate(0x34, 2);
     let mut uds = UdsClient::new(&mut t);
     assert!(
-        matches!(uds.request_download(0x00, 0x1000, 4), Err(Error::Protocol(_))),
+        matches!(
+            uds.request_download(0x00, 0x1000, 4),
+            Err(Error::Protocol(_))
+        ),
         "a truncated requestDownload response must be rejected"
     );
 }

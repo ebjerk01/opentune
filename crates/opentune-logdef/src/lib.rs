@@ -173,7 +173,11 @@ mod tests {
         let (_p, _e, p8) = def.params().find(|(_, _, p)| p.id == "P8").unwrap();
         assert_eq!(
             p8.addressing,
-            Addressing::Memory { address: 0x08, length: 1, bit: None }
+            Addressing::Memory {
+                address: 0x08,
+                length: 1,
+                bit: None
+            }
         );
         assert_eq!(p8.storagetype, Some(DataType::U8));
         assert_eq!(p8.endian, Endian::Big);
@@ -209,7 +213,11 @@ mod tests {
         let (_p, _e, sw) = def.params().find(|(_, _, p)| p.id == "S1").unwrap();
         assert_eq!(
             sw.addressing,
-            Addressing::Memory { address: 0x61, length: 1, bit: Some(3) }
+            Addressing::Memory {
+                address: 0x61,
+                length: 1,
+                bit: Some(3)
+            }
         );
     }
 
@@ -219,8 +227,16 @@ mod tests {
         let e1: Vec<_> = def.params().filter(|(_, _, p)| p.id == "E1").collect();
         assert_eq!(e1.len(), 2);
         let addrs: Vec<_> = e1.iter().map(|(_, _, p)| p.addressing.clone()).collect();
-        assert!(addrs.contains(&Addressing::Memory { address: 0xD3, length: 1, bit: None }));
-        assert!(addrs.contains(&Addressing::Memory { address: 0xE0, length: 1, bit: None }));
+        assert!(addrs.contains(&Addressing::Memory {
+            address: 0xD3,
+            length: 1,
+            bit: None
+        }));
+        assert!(addrs.contains(&Addressing::Memory {
+            address: 0xE0,
+            length: 1,
+            bit: None
+        }));
     }
 
     // ---- OBD / UDS modes ----
@@ -293,34 +309,61 @@ mod tests {
     #[test]
     fn ecuflash_param_address_conversion_and_alts() {
         let def = parse(ECUS_SSM).unwrap();
-        let (_p, _e, rpm) = def.params().find(|(_, _, p)| p.id == "Engine Speed").unwrap();
+        let (_p, _e, rpm) = def
+            .params()
+            .find(|(_, _, p)| p.id == "Engine Speed")
+            .unwrap();
         assert_eq!(
             rpm.addressing,
-            Addressing::Memory { address: 0x0E, length: 2, bit: None }
+            Addressing::Memory {
+                address: 0x0E,
+                length: 2,
+                bit: None
+            }
         );
         assert_eq!(rpm.storagetype, Some(DataType::U16));
         assert_eq!(rpm.units, "RPM");
         // [value] normalized to X and fitted linear.
         assert_eq!(rpm.conversion.as_ref().unwrap().expr, "X/4");
-        assert!(matches!(rpm.conversion.as_ref().unwrap().fit, ConversionFit::Linear { .. }));
+        assert!(matches!(
+            rpm.conversion.as_ref().unwrap().fit,
+            ConversionFit::Linear { .. }
+        ));
         assert_eq!(rpm.alternates.len(), 2);
         assert_eq!(
             rpm.alternates[0].addressing,
-            Addressing::Memory { address: 0x20118, length: 2, bit: None }
+            Addressing::Memory {
+                address: 0x20118,
+                length: 2,
+                bit: None
+            }
         );
     }
 
     #[test]
     fn ecuflash_convert_group_and_dependency() {
         let def = parse(ECUS_SSM).unwrap();
-        let (_p, _e, ect) = def.params().find(|(_, _, p)| p.id == "Coolant Temperature").unwrap();
+        let (_p, _e, ect) = def
+            .params()
+            .find(|(_, _, p)| p.id == "Coolant Temperature")
+            .unwrap();
         assert_eq!(ect.convert_group.as_deref(), Some("temp"));
         // GetLogParam reference captured as a dependency and flagged non-linear.
-        let (_p, _e, inj) = def.params().find(|(_, _, p)| p.id == "Injector Duty").unwrap();
+        let (_p, _e, inj) = def
+            .params()
+            .find(|(_, _, p)| p.id == "Injector Duty")
+            .unwrap();
         assert_eq!(inj.depends_on, vec!["Engine Speed".to_string()]);
-        assert!(matches!(inj.conversion.as_ref().unwrap().fit, ConversionFit::NonLinear { .. }));
+        assert!(matches!(
+            inj.conversion.as_ref().unwrap().fit,
+            ConversionFit::NonLinear { .. }
+        ));
         // The convert_factor with a GetLogParam expr is also flagged.
-        let inj_cf = def.convert_factors.iter().find(|c| c.kind == "inj").unwrap();
+        let inj_cf = def
+            .convert_factors
+            .iter()
+            .find(|c| c.kind == "inj")
+            .unwrap();
         assert!(matches!(inj_cf.fit, ConversionFit::NonLinear { .. }));
     }
 

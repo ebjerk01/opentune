@@ -117,7 +117,10 @@ pub fn poll_once(diag: &mut dyn RawDiag, def: &LogDef, ids: &[&str]) -> Vec<Samp
                 let req = [0x22u8, (did >> 8) as u8, (did & 0xFF) as u8];
                 match diag.request(&req) {
                     Ok(resp) => {
-                        if resp.len() >= 3 && resp[0] == 0x62 && resp[1] == req[1] && resp[2] == req[2]
+                        if resp.len() >= 3
+                            && resp[0] == 0x62
+                            && resp[1] == req[1]
+                            && resp[2] == req[2]
                         {
                             let raw = decode_uint(&resp[3..], p.endian);
                             s.raw = Some(raw);

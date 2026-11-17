@@ -518,7 +518,10 @@ mod tests {
     #[test]
     fn unknown_service_is_service_not_supported() {
         let mut s = UdsServer::new();
-        assert_eq!(s.handle(&[0x99]), vec![0x7F, 0x99, nrc::SERVICE_NOT_SUPPORTED]);
+        assert_eq!(
+            s.handle(&[0x99]),
+            vec![0x7F, 0x99, nrc::SERVICE_NOT_SUPPORTED]
+        );
     }
 
     #[test]
@@ -612,9 +615,15 @@ mod tests {
             received: Vec::new(),
             upload_remaining: Vec::new(),
         });
-        assert_eq!(s.handle(&[sid::TRANSFER_DATA, 0xFF, 0x01]), vec![0x76, 0xFF]);
+        assert_eq!(
+            s.handle(&[sid::TRANSFER_DATA, 0xFF, 0x01]),
+            vec![0x76, 0xFF]
+        );
         // Next expected counter wrapped to 0x00.
-        assert_eq!(s.handle(&[sid::TRANSFER_DATA, 0x00, 0x02]), vec![0x76, 0x00]);
+        assert_eq!(
+            s.handle(&[sid::TRANSFER_DATA, 0x00, 0x02]),
+            vec![0x76, 0x00]
+        );
     }
 
     #[test]

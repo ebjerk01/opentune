@@ -594,7 +594,8 @@ pub fn clear_all(diag: &mut dyn RawDiag, modules: &VehicleModules) -> Vec<ClearR
         let result = match module.protocol {
             Protocol::Uds => {
                 let req = [SID_CLEAR_DTC, 0xFF, 0xFF, 0xFF];
-                diag.request(&req).and_then(|resp| check(SID_CLEAR_DTC, &resp))
+                diag.request(&req)
+                    .and_then(|resp| check(SID_CLEAR_DTC, &resp))
             }
             Protocol::Obd => diag.request(&[OBD_MODE_CLEAR_DTC]).and_then(|resp| {
                 if resp.first() == Some(&(OBD_MODE_CLEAR_DTC + 0x40)) {
@@ -686,7 +687,9 @@ mod tests {
                 };
             }
 
-            let idx = self.cursor.ok_or_else(|| "request before any ping".to_string())?;
+            let idx = self
+                .cursor
+                .ok_or_else(|| "request before any ping".to_string())?;
             let script = &self.scripts[idx];
             script
                 .responses
@@ -739,7 +742,9 @@ mod tests {
         // 0x19/02: availability 0xFF, then P0101 (status 0x24) and U0100 (0x2F).
         engine.insert(
             vec![0x19, 0x02, 0xFF],
-            vec![0x59, 0x02, 0xFF, 0x01, 0x01, 0x00, 0x24, 0xC1, 0x00, 0x00, 0x2F],
+            vec![
+                0x59, 0x02, 0xFF, 0x01, 0x01, 0x00, 0x24, 0xC1, 0x00, 0x00, 0x2F,
+            ],
         );
         let engine_script = ModuleScript {
             present: true,
@@ -765,7 +770,11 @@ mod tests {
 
         let modules = VehicleModules {
             vehicle: "test-vehicle".into(),
-            modules: vec![uds("Engine", 0x01), obd("Transmission", 0x02), uds("ABS", 0x03)],
+            modules: vec![
+                uds("Engine", 0x01),
+                obd("Transmission", 0x02),
+                uds("ABS", 0x03),
+            ],
         };
 
         let report = scan(&mut diag, &modules);
@@ -791,7 +800,10 @@ mod tests {
         assert_eq!(eng.dtcs[1].status, Some(0x2F));
         assert_eq!(eng.dtcs[1].system, System::Network);
         // The DTC description came from the bundled table (reused, not invented).
-        assert_eq!(eng.dtcs[0].description, opentune_dtc::lookup("P0101").unwrap().description);
+        assert_eq!(
+            eng.dtcs[0].description,
+            opentune_dtc::lookup("P0101").unwrap().description
+        );
 
         // --- Transmission (OBD) ---
         let trans = &report.modules[1];
@@ -822,7 +834,10 @@ mod tests {
         m.insert(vec![0x22, 0xF1, 0x90], did_resp(0xF190, "VIN0000000000001"));
         // Unsupported identity DIDs.
         for did in [0xF187u16, 0xF189, 0xF191, 0xF195] {
-            m.insert(vec![0x22, (did >> 8) as u8, did as u8], vec![0x7F, 0x22, 0x31]);
+            m.insert(
+                vec![0x22, (did >> 8) as u8, did as u8],
+                vec![0x7F, 0x22, 0x31],
+            );
         }
         // 0x19 → negative response 0x31 (requestOutOfRange).
         m.insert(vec![0x19, 0x02, 0xFF], vec![0x7F, 0x19, 0x31]);
@@ -840,7 +855,10 @@ mod tests {
         assert!(eng.present);
         assert!(eng.dtcs.is_empty());
         let err = eng.error.as_ref().expect("error should be recorded");
-        assert!(err.contains("dtc:"), "error should name the dtc read: {err}");
+        assert!(
+            err.contains("dtc:"),
+            "error should name the dtc read: {err}"
+        );
         assert!(err.contains("0x31"), "error should carry the NRC: {err}");
         // Identity still succeeded despite the DTC failure.
         assert_eq!(
@@ -899,7 +917,11 @@ mod tests {
         let mut diag = ScriptDiag::new(vec![present_uds, present_obd, absent]);
         let modules = VehicleModules {
             vehicle: "clear".into(),
-            modules: vec![uds("Engine", 0x01), obd("Transmission", 0x02), uds("ABS", 0x03)],
+            modules: vec![
+                uds("Engine", 0x01),
+                obd("Transmission", 0x02),
+                uds("ABS", 0x03),
+            ],
         };
         let results = clear_all(&mut diag, &modules);
         assert_eq!(results.len(), 3);

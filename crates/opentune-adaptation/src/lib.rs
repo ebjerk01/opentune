@@ -605,7 +605,11 @@ fn value_channel<'a>(
 }
 
 /// Read a value channel's current reading (0x22), decoding its numeric field.
-pub fn read_value(diag: &mut dyn RawDiag, def: &AdaptationDef, channel: &str) -> Result<ValueReading> {
+pub fn read_value(
+    diag: &mut dyn RawDiag,
+    def: &AdaptationDef,
+    channel: &str,
+) -> Result<ValueReading> {
     def.validate()?;
     let (did, field, _min, _max) = value_channel(def, channel)?;
     let data = read_did(diag, did)?;
@@ -693,7 +697,13 @@ impl ValueWriteReport {
 }
 
 /// Validate `new_raw` against a value channel's width and declared range.
-fn validate_raw(channel: &str, field: &NumericField, min: Option<u64>, max: Option<u64>, new_raw: u64) -> Result<()> {
+fn validate_raw(
+    channel: &str,
+    field: &NumericField,
+    min: Option<u64>,
+    max: Option<u64>,
+    new_raw: u64,
+) -> Result<()> {
     if new_raw > width_cap(field.width) {
         return Err(AdaptationError::InvalidValue {
             channel: channel.to_string(),
@@ -1324,8 +1334,14 @@ mod tests {
         assert_eq!(start.op, RoutineOp::Start);
         // start sent the channel's start_data (0x01)
         assert_eq!(io.log[0], vec![0x31, 0x01, 0x02, 0x03, 0x01]);
-        let res =
-            run_routine(&mut io, &def, "Throttle learn", RoutineOp::RequestResults, &[]).unwrap();
+        let res = run_routine(
+            &mut io,
+            &def,
+            "Throttle learn",
+            RoutineOp::RequestResults,
+            &[],
+        )
+        .unwrap();
         assert_eq!(res.value, Some(42.0));
         assert_eq!(res.unit, "%");
         assert_eq!(io.log[1], vec![0x31, 0x03, 0x02, 0x03]); // requestResults, no data
@@ -1337,8 +1353,8 @@ mod tests {
     fn actuator_test_returns_control() {
         let def = sample_def();
         let mut io = Script::new(&[]);
-        let rep = run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default())
-            .unwrap();
+        let rep =
+            run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default()).unwrap();
         assert!(rep.is_completed());
         assert!(rep.applied && rep.control_returned);
         // shortTermAdjustment (0x03) with default state, then returnControlToECU (0x00)
@@ -1378,8 +1394,8 @@ mod tests {
                 _ => Err("?".into()),
             }
         };
-        let rep = run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default())
-            .unwrap();
+        let rep =
+            run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default()).unwrap();
         assert!(matches!(rep.outcome, ActuatorOutcome::ApplyFailed { .. }));
         assert!(!rep.applied && rep.control_returned); // control handed back despite failure
     }
@@ -1390,15 +1406,13 @@ mod tests {
         // adjustment succeeds but control return is denied -> dangerous outcome.
         let mut io = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
             match (req[0], req[3]) {
-                (0x2F, IO_SHORT_TERM_ADJUSTMENT) => {
-                    Ok(vec![0x6F, req[1], req[2], req[3], 0x01])
-                }
+                (0x2F, IO_SHORT_TERM_ADJUSTMENT) => Ok(vec![0x6F, req[1], req[2], req[3], 0x01]),
                 (0x2F, IO_RETURN_CONTROL_TO_ECU) => Ok(vec![0x7F, 0x2F, 0x22]),
                 _ => Err("?".into()),
             }
         };
-        let rep = run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default())
-            .unwrap();
+        let rep =
+            run_actuator_test(&mut io, &def, "Cooling fan", &[], &WriteOptions::default()).unwrap();
         assert!(matches!(
             rep.outcome,
             ActuatorOutcome::ControlReturnFailed { .. }
@@ -1424,9 +1438,8 @@ mod tests {
     fn mis_correlated_and_truncated_rejected() {
         let def = sample_def();
         // 0x22 request but the 0x7F echoes service 0x2E -> mis-correlated
-        let mut io = |_req: &[u8]| -> std::result::Result<Vec<u8>, String> {
-            Ok(vec![0x7F, 0x2E, 0x33])
-        };
+        let mut io =
+            |_req: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x7F, 0x2E, 0x33]) };
         assert!(matches!(
             read_value(&mut io, &def, "Idle RPM"),
             Err(AdaptationError::Protocol(_))

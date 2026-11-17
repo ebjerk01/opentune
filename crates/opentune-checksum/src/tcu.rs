@@ -713,7 +713,8 @@ impl ChecksumAlgo for Zf8hpCal {
         };
         let mut fixes = Vec::new();
         if stored != computed {
-            image[ZF8HP_CAL_CRC_OFF..ZF8HP_CAL_CRC_OFF + 4].copy_from_slice(&computed.to_be_bytes());
+            image[ZF8HP_CAL_CRC_OFF..ZF8HP_CAL_CRC_OFF + 4]
+                .copy_from_slice(&computed.to_be_bytes());
             fixes.push(Fix {
                 name: "zf8hp-CAL".into(),
                 offset: ZF8HP_CAL_CRC_OFF as u32,
@@ -1323,7 +1324,9 @@ mod tests {
         edited[ZF8HP_CAL_REGION_START + 0x100] ^= 0xFF;
         assert!(algo.verify(&edited).unwrap().iter().any(|s| !s.ok));
         // A tampered image is now only "consistent", never supported.
-        let rep = algo.verify_report(&edited, Representation::Unknown).unwrap();
+        let rep = algo
+            .verify_report(&edited, Representation::Unknown)
+            .unwrap();
         assert_eq!(rep[0].recognition, Recognition::Consistent);
         assert!(!rep[0].is_supported());
 
@@ -1335,9 +1338,7 @@ mod tests {
 
         // With the owner's validating stock dump, the layout is confirmed and the
         // edited image is corrected; it then round-trips and is idempotent.
-        let fixes = algo
-            .correct_with_reference(&mut edited, &stock)
-            .unwrap();
+        let fixes = algo.correct_with_reference(&mut edited, &stock).unwrap();
         assert_eq!(fixes.len(), 1);
         assert_eq!(fixes[0].name, "zf8hp-CAL");
         assert_eq!(fixes[0].offset, ZF8HP_CAL_CRC_OFF as u32);
@@ -1359,7 +1360,8 @@ mod tests {
         let mut target = stock.clone();
         target[ZF8HP_CAL_REGION_START] ^= 0x01;
         assert!(matches!(
-            algo.correct_with_reference(&mut target, &bad_ref).unwrap_err(),
+            algo.correct_with_reference(&mut target, &bad_ref)
+                .unwrap_err(),
             Error::Unsupported(_)
         ));
 
@@ -1402,8 +1404,7 @@ mod tests {
     /// length `len`, and fill in the correct little-endian word-sum checksum.
     fn put_haldex_block(img: &mut [u8], def: HaldexBlockDef, header_off: usize, len: usize) {
         // Embedded little-endian length field at cs_loc+0x4.
-        img[header_off + def.cs_loc + HALDEX_LEN_OFF
-            ..header_off + def.cs_loc + HALDEX_LEN_OFF + 4]
+        img[header_off + def.cs_loc + HALDEX_LEN_OFF..header_off + def.cs_loc + HALDEX_LEN_OFF + 4]
             .copy_from_slice(&(len as u32).to_le_bytes());
         let blk = &img[header_off..header_off + len];
         let c = haldex_checksum(blk, def.cs_loc).unwrap();
@@ -1475,9 +1476,24 @@ mod tests {
         for (i, b) in img.iter_mut().enumerate() {
             *b = (i as u8).wrapping_mul(17).wrapping_add(3);
         }
-        put_haldex_block(&mut img, haldex_def("CAL"), haldex_def("CAL").binfile_off, 0x333E);
-        put_haldex_block(&mut img, haldex_def("ASW"), haldex_def("ASW").binfile_off, 0x3DB80);
-        put_haldex_block(&mut img, haldex_def("VERSION"), haldex_def("VERSION").binfile_off, 0xE);
+        put_haldex_block(
+            &mut img,
+            haldex_def("CAL"),
+            haldex_def("CAL").binfile_off,
+            0x333E,
+        );
+        put_haldex_block(
+            &mut img,
+            haldex_def("ASW"),
+            haldex_def("ASW").binfile_off,
+            0x3DB80,
+        );
+        put_haldex_block(
+            &mut img,
+            haldex_def("VERSION"),
+            haldex_def("VERSION").binfile_off,
+            0xE,
+        );
         img
     }
 

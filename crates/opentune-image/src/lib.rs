@@ -92,7 +92,13 @@ mod tests {
     fn overlap_error_policy_rejects_and_preserves() {
         let mut img = img_from(&[(0x00, &[1, 2, 3, 4])]);
         let err = img.insert(0x02, &[9, 9], Overlap::Error).unwrap_err();
-        assert_eq!(err, ImageError::Overlap { start: 0x02, end: 0x04 });
+        assert_eq!(
+            err,
+            ImageError::Overlap {
+                start: 0x02,
+                end: 0x04
+            }
+        );
         // Image is untouched by the rejected insert.
         assert_eq!(img.range(0x00, 4), Some(vec![1, 2, 3, 4]));
     }
@@ -100,7 +106,9 @@ mod tests {
     #[test]
     fn overlap_overwrite_and_reject_policies() {
         let mut ow = img_from(&[(0x00, &[1, 2, 3, 4])]);
-        let r = ow.insert(0x02, &[0xA, 0xB, 0xC], Overlap::Overwrite).unwrap();
+        let r = ow
+            .insert(0x02, &[0xA, 0xB, 0xC], Overlap::Overwrite)
+            .unwrap();
         assert_eq!(r.conflicts, vec![(0x02, 0x04)]);
         assert_eq!(ow.range(0x00, 5), Some(vec![1, 2, 0xA, 0xB, 0xC]));
 
@@ -132,17 +140,17 @@ mod tests {
     #[test]
     fn hex_roundtrip_with_extended_linear_and_a_hole() {
         // Two segments either side of a 64 KiB boundary → forces type-04 records.
-        let img = img_from(&[
-            (0x0000_F000, &[0x11; 32]),
-            (0x0001_0000, &[0x22; 48]),
-        ]);
+        let img = img_from(&[(0x0000_F000, &[0x11; 32]), (0x0001_0000, &[0x22; 48])]);
         let file = hex::HexFile {
             image: img.clone(),
             start: Some(hex::StartAddress::Linear(0x0001_0000)),
         };
         let text = hex::write(&file, hex::WriteOptions { record_len: 16 }).unwrap();
         // Crossing the 64 KiB boundary forces a type-04 extended-linear record.
-        assert!(text.contains(":020000040001"), "expected an extended-linear record");
+        assert!(
+            text.contains(":020000040001"),
+            "expected an extended-linear record"
+        );
         let back = hex::read(&text).unwrap();
         assert_eq!(back.image, img);
         assert_eq!(back.start, Some(hex::StartAddress::Linear(0x0001_0000)));
@@ -154,7 +162,10 @@ mod tests {
     fn hex_rejects_bad_checksum() {
         let img = img_from(&[(0x0010, &[0xDE, 0xAD, 0xBE, 0xEF])]);
         let text = hex::write(
-            &hex::HexFile { image: img, start: None },
+            &hex::HexFile {
+                image: img,
+                start: None,
+            },
             hex::WriteOptions::default(),
         )
         .unwrap();
@@ -164,14 +175,20 @@ mod tests {
         let last = lines[0].pop().unwrap();
         lines[0].push(if last == '0' { '1' } else { '0' });
         let bad = lines.join("\n");
-        assert!(matches!(hex::read(&bad), Err(ImageError::Checksum { line: 1, .. })));
+        assert!(matches!(
+            hex::read(&bad),
+            Err(ImageError::Checksum { line: 1, .. })
+        ));
     }
 
     #[test]
     fn hex_requires_eof_record() {
         let img = img_from(&[(0x0010, &[0xDE, 0xAD, 0xBE, 0xEF])]);
         let text = hex::write(
-            &hex::HexFile { image: img, start: None },
+            &hex::HexFile {
+                image: img,
+                start: None,
+            },
             hex::WriteOptions::default(),
         )
         .unwrap();
@@ -181,7 +198,10 @@ mod tests {
             .filter(|l| !l.starts_with(":00000001"))
             .map(|l| format!("{l}\n"))
             .collect();
-        assert!(matches!(hex::read(&no_eof), Err(ImageError::Truncated { .. })));
+        assert!(matches!(
+            hex::read(&no_eof),
+            Err(ImageError::Truncated { .. })
+        ));
     }
 
     #[test]
@@ -219,7 +239,10 @@ mod tests {
         let flipped = if last == '0' { '1' } else { '0' };
         line.push(flipped);
         let corrupted = lines.join("\n");
-        assert!(matches!(srec::read(&corrupted), Err(ImageError::Checksum { .. })));
+        assert!(matches!(
+            srec::read(&corrupted),
+            Err(ImageError::Checksum { .. })
+        ));
     }
 
     #[test]
@@ -237,23 +260,34 @@ mod tests {
             .filter(|l| !(l.starts_with("S7") || l.starts_with("S8") || l.starts_with("S9")))
             .map(|l| format!("{l}\n"))
             .collect();
-        assert!(matches!(srec::read(&no_term), Err(ImageError::Truncated { .. })));
+        assert!(matches!(
+            srec::read(&no_term),
+            Err(ImageError::Truncated { .. })
+        ));
     }
 
     #[test]
     fn hex_and_srec_describe_the_same_image() {
-        let img = img_from(&[
-            (0x0000_F800, &[0x5A; 64]),
-            (0x0001_0040, &[0xA5; 20]),
-        ]);
+        let img = img_from(&[(0x0000_F800, &[0x5A; 64]), (0x0001_0040, &[0xA5; 20])]);
         let hex_text = hex::write(
-            &hex::HexFile { image: img.clone(), start: None },
+            &hex::HexFile {
+                image: img.clone(),
+                start: None,
+            },
             hex::WriteOptions { record_len: 32 },
         )
         .unwrap();
         let srec_text = srec::write(
-            &srec::SRecFile { header: None, image: img.clone(), start: None },
-            srec::WriteOptions { record_len: 24, width: None, emit_count: true },
+            &srec::SRecFile {
+                header: None,
+                image: img.clone(),
+                start: None,
+            },
+            srec::WriteOptions {
+                record_len: 24,
+                width: None,
+                emit_count: true,
+            },
         )
         .unwrap();
         let from_hex = hex::read(&hex_text).unwrap().image;
@@ -272,7 +306,10 @@ mod tests {
             Err(ImageError::Record { line: 1, .. })
         ));
         // Non-hex characters inside an otherwise record-shaped line.
-        assert!(matches!(hex::read(":00ZZ0001FF\n"), Err(ImageError::Record { .. })));
+        assert!(matches!(
+            hex::read(":00ZZ0001FF\n"),
+            Err(ImageError::Record { .. })
+        ));
     }
 
     #[test]
@@ -288,14 +325,20 @@ mod tests {
     fn hex_data_after_eof_is_rejected() {
         // Anything following the type-01 EOF record is a malformed file.
         let r = hex::read(":00000001FF\n:00000001FF\n");
-        assert!(matches!(r, Err(ImageError::Record { line: 2, .. })), "got {r:?}");
+        assert!(
+            matches!(r, Err(ImageError::Record { line: 2, .. })),
+            "got {r:?}"
+        );
     }
 
     #[test]
     fn hex_byte_count_mismatch_is_rejected() {
         // The length field claims two data bytes but the record carries none.
         let r = hex::read(":0200000000FF\n");
-        assert!(matches!(r, Err(ImageError::Record { line: 1, .. })), "got {r:?}");
+        assert!(
+            matches!(r, Err(ImageError::Record { line: 1, .. })),
+            "got {r:?}"
+        );
     }
 
     #[test]

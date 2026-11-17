@@ -47,7 +47,10 @@ fn parses_real_romraider_log_defs() {
     let def = opentune_logdef::parse(&xml).expect("parse real log_defs");
 
     // Structural expectations for the Subaru SSM EcuFlash-format sample.
-    assert_eq!(def.format, opentune_logdef::SourceFormat::EcuFlashLogProtocols);
+    assert_eq!(
+        def.format,
+        opentune_logdef::SourceFormat::EcuFlashLogProtocols
+    );
     assert!(!def.convert_factors.is_empty(), "convert_factors captured");
     assert!(!def.protocols.is_empty(), "at least one protocol");
 

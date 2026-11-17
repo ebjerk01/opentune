@@ -509,7 +509,10 @@ mod tests {
         // Minimal positive response: echoes only control type + routine id.
         let mut t = Script::new(vec![vec![0x71, 0x01, 0xFF, 0x00]]);
         let mut uds = UdsClient::new(&mut t);
-        assert_eq!(uds.routine_control(0x01, 0xFF00, &[]).unwrap(), Vec::<u8>::new());
+        assert_eq!(
+            uds.routine_control(0x01, 0xFF00, &[]).unwrap(),
+            Vec::<u8>::new()
+        );
     }
 
     #[test]
@@ -655,10 +658,7 @@ mod tests {
         {
             let mut uds = UdsClient::new(&mut t);
             let r = uds.transfer_data(0x01, &[0x00]);
-            assert!(matches!(
-                r,
-                Err(Error::NegativeResponse { code: 0x78, .. })
-            ));
+            assert!(matches!(r, Err(Error::NegativeResponse { code: 0x78, .. })));
         }
         assert_eq!(t.reqs.len(), 1, "the request must be sent exactly once");
     }

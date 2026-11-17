@@ -362,9 +362,7 @@ impl ServiceScript {
                         )));
                     }
                 }
-                Step::ReadDataByIdentifier { .. }
-                | Step::TesterPresent
-                | Step::ExpectPositive => {}
+                Step::ReadDataByIdentifier { .. } | Step::TesterPresent | Step::ExpectPositive => {}
             }
         }
         // Write/action-before-security gate.
@@ -525,7 +523,9 @@ fn exchange(
     echo: &[u8],
 ) -> std::result::Result<Vec<u8>, String> {
     sr.request = Some(req.clone());
-    let resp = diag.request(&req).map_err(|e| format!("transport error: {e}"))?;
+    let resp = diag
+        .request(&req)
+        .map_err(|e| format!("transport error: {e}"))?;
     sr.response = Some(resp.clone());
     check(sid, &resp)?;
     if resp.len() < 1 + echo.len() || resp[1..1 + echo.len()] != *echo {
@@ -647,11 +647,16 @@ fn execute_one(
     };
 
     let result: std::result::Result<(), String> = match step {
-        Step::DiagnosticSession { subfunction } => {
-            exchange(diag, &mut sr, vec![0x10, *subfunction], 0x10, &[*subfunction]).map(|resp| {
-                *last_response = Some(resp);
-            })
-        }
+        Step::DiagnosticSession { subfunction } => exchange(
+            diag,
+            &mut sr,
+            vec![0x10, *subfunction],
+            0x10,
+            &[*subfunction],
+        )
+        .map(|resp| {
+            *last_response = Some(resp);
+        }),
         Step::TesterPresent => {
             exchange(diag, &mut sr, vec![0x3E, 0x00], 0x3E, &[0x00]).map(|resp| {
                 *last_response = Some(resp);
@@ -763,7 +768,9 @@ fn security_access(
     }
 
     let kp = key.ok_or_else(|| "security access requires a key provider".to_string())?;
-    let computed = kp.key(&seed, level).map_err(|e| format!("key provider failed: {e}"))?;
+    let computed = kp
+        .key(&seed, level)
+        .map_err(|e| format!("key provider failed: {e}"))?;
 
     // Send key (0x27, level + 1, key…).
     let mut req = vec![0x27, level + 1];
@@ -1058,7 +1065,10 @@ mod tests {
                 Step::SecurityAccess { level: 0x11 },
             ],
         };
-        assert!(matches!(script.validate(), Err(ServiceError::InvalidScript(_))));
+        assert!(matches!(
+            script.validate(),
+            Err(ServiceError::InvalidScript(_))
+        ));
         // run_script refuses it before sending anything.
         let mut io = Script::new();
         let kp = good_key();
@@ -1203,7 +1213,7 @@ mod tests {
     fn already_unlocked_zero_seed_sends_no_key() {
         let mut io = Script::new();
         io.seed = vec![0x00, 0x00, 0x00, 0x00]; // zero seed => already unlocked
-        // A key provider that would panic the test if called.
+                                                // A key provider that would panic the test if called.
         let kp = |_s: &[u8], _l: u8| -> std::result::Result<Vec<u8>, String> {
             panic!("key provider must not be called for a zero seed")
         };

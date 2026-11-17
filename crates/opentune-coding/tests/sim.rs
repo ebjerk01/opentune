@@ -108,5 +108,8 @@ fn unknown_did_surfaces_as_an_error_not_a_guess() {
 
     let def = sample_def();
     let result = read_coding(&mut diag, &def);
-    assert!(result.is_err(), "unseeded DID must not yield fabricated bytes");
+    assert!(
+        result.is_err(),
+        "unseeded DID must not yield fabricated bytes"
+    );
 }

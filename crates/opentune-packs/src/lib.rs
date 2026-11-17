@@ -351,7 +351,11 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
             return; // a pack's sub-dirs are its contents, not nested packs
         }
         if let Ok(rd) = std::fs::read_dir(dir) {
-            let mut subs: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+            let mut subs: Vec<PathBuf> = rd
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect();
             subs.sort();
             for s in subs {
                 walk(&s, found);
@@ -468,7 +472,11 @@ mod tests {
     #[test]
     fn loads_a_pack_and_counts_definitions() {
         let d = temp_dir("load");
-        write(&d, "pack.json", r#"{"id":"vag-test","name":"VAG test","version":"1.0.0","license":"GPL-3.0-or-later"}"#);
+        write(
+            &d,
+            "pack.json",
+            r#"{"id":"vag-test","name":"VAG test","version":"1.0.0","license":"GPL-3.0-or-later"}"#,
+        );
         write(&d, "coding/bcm.clb.json", CODING);
         // a deliberately broken coding file -> should be noted, not fatal
         write(&d, "coding/broken.json", r#"{"id":"dup","name":"bad"}"#); // missing addressing -> parse error
@@ -486,7 +494,11 @@ mod tests {
         let d = temp_dir("invalid");
         write(&d, "pack.json", r#"{"id":"p","name":"P"}"#);
         // valid JSON + valid shape but semantically invalid: duplicate DID
-        write(&d, "coding/dupdid.json", r#"{"id":"x","name":"X","addressing":{"kind":"did","dids":[1,1]},"params":[]}"#);
+        write(
+            &d,
+            "coding/dupdid.json",
+            r#"{"id":"x","name":"X","addressing":{"kind":"did","dids":[1,1]},"params":[]}"#,
+        );
         let pack = load_pack(&d).unwrap();
         assert_eq!(pack.coding.len(), 0);
         assert_eq!(pack.report.notes.len(), 1);
@@ -506,7 +518,11 @@ mod tests {
         let root = temp_dir("lib");
         write(&root.join("packA"), "pack.json", r#"{"id":"a","name":"A"}"#);
         write(&root.join("packA"), "coding/c.json", CODING);
-        write(&root.join("sub").join("packB"), "pack.json", r#"{"id":"b","name":"B"}"#);
+        write(
+            &root.join("sub").join("packB"),
+            "pack.json",
+            r#"{"id":"b","name":"B"}"#,
+        );
         let found = discover(&root);
         assert_eq!(found.len(), 2);
         let lib = PackLibrary::load_all(&root);

@@ -12,7 +12,9 @@ pub enum Sa2Error {
     SeedLength(usize),
 
     /// The program byte stream ended in the middle of an instruction's operands.
-    #[error("program truncated: opcode 0x{opcode:02X} at offset {offset} needs more operand bytes")]
+    #[error(
+        "program truncated: opcode 0x{opcode:02X} at offset {offset} needs more operand bytes"
+    )]
     Truncated {
         /// Offset of the opcode whose operands ran past the end of the program.
         offset: usize,

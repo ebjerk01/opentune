@@ -194,9 +194,7 @@ impl SparseImage {
             self.segments.splice(first..last, core::iter::once(merged));
         } else {
             // No touched segments: insert at the sorted position.
-            let pos = self
-                .segments
-                .partition_point(|s| s.address < merged_lo);
+            let pos = self.segments.partition_point(|s| s.address < merged_lo);
             self.segments.insert(pos, merged);
         }
 

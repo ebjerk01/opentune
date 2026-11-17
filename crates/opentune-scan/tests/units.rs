@@ -67,7 +67,10 @@ fn extract_does_not_invent_a_vin_from_random_digits() {
 #[test]
 fn filename_parse_reads_identity_from_a_sorted_tree() {
     let p = filename::parse("Volkswagen/Passat/1.9 TDI/dump.bin");
-    assert!(p.has_identity(), "a well-named path should yield an identity");
+    assert!(
+        p.has_identity(),
+        "a well-named path should yield an identity"
+    );
     assert_eq!(p.make.as_deref(), Some("Volkswagen"));
 }
 

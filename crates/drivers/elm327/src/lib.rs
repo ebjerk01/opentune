@@ -236,12 +236,12 @@ impl ElmTransport {
             }
             CanBus::MsCan => {
                 self.at_ok("ATSPB")?; // user protocol B
-                // Program protocol B: options byte + baud divisor. The ELM327
-                // datasheet sets the CAN rate to (500 / divisor) kbit when the
-                // options byte's high bit is clear, so divisor 4 => 125 kbit.
-                // Options 0xC1 selects 11-bit/variable-DLC per the datasheet's
-                // CAN options nibble. Both bytes are overridable because clones
-                // vary; these defaults need bench confirmation (see crate docs).
+                                      // Program protocol B: options byte + baud divisor. The ELM327
+                                      // datasheet sets the CAN rate to (500 / divisor) kbit when the
+                                      // options byte's high bit is clear, so divisor 4 => 125 kbit.
+                                      // Options 0xC1 selects 11-bit/variable-DLC per the datasheet's
+                                      // CAN options nibble. Both bytes are overridable because clones
+                                      // vary; these defaults need bench confirmation (see crate docs).
                 let opts = cfg
                     .options
                     .get("can_pb_options")
@@ -569,7 +569,9 @@ impl Elm327Obd {
     /// Engine coolant temperature in °C from PID 0x05 (`A - 40`).
     pub fn live_coolant_celsius(&mut self) -> Result<i16> {
         let d = self.read_pid(0x05)?;
-        let a = *d.first().ok_or_else(|| Error::Protocol("short coolant PID".into()))?;
+        let a = *d
+            .first()
+            .ok_or_else(|| Error::Protocol("short coolant PID".into()))?;
         Ok(i16::from(a) - 40)
     }
 
@@ -590,7 +592,11 @@ impl Elm327Obd {
 /// DTC bytes share the ISO 15031-6 first-byte layout used by UDS, so they decode
 /// through the same `opentune-dtc` formatter.
 fn decode_obd_dtcs(data: &[u8]) -> Vec<Dtc> {
-    let pairs = if data.len() % 2 == 1 { &data[1..] } else { data };
+    let pairs = if data.len() % 2 == 1 {
+        &data[1..]
+    } else {
+        data
+    };
     let mut out = Vec::new();
     let mut i = 0;
     while i + 1 < pairs.len() {
@@ -664,9 +670,7 @@ impl Interface for Elm327Obd {
     /// service/logging engines (and the raw-request console) can drive this
     /// adapter. Available once `open()` has brought the ELM327 up.
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
-        self.transport
-            .as_mut()
-            .map(|t| t as &mut dyn DiagTransport)
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
@@ -770,10 +774,7 @@ mod tests {
     impl MockElm {
         fn new(diag_replies: &[&str]) -> Self {
             Self {
-                diag_replies: diag_replies
-                    .iter()
-                    .map(|s| s.as_bytes().to_vec())
-                    .collect(),
+                diag_replies: diag_replies.iter().map(|s| s.as_bytes().to_vec()).collect(),
                 outbox: VecDeque::new(),
                 line: Vec::new(),
                 written: Arc::new(Mutex::new(Vec::new())),
@@ -811,7 +812,10 @@ mod tests {
                 self.load(&reply);
             } else {
                 // Hex diagnostic request: pop the next scripted reply.
-                let reply = self.diag_replies.pop_front().unwrap_or_else(|| b"NO DATA".to_vec());
+                let reply = self
+                    .diag_replies
+                    .pop_front()
+                    .unwrap_or_else(|| b"NO DATA".to_vec());
                 self.load(&reply);
             }
         }
@@ -867,8 +871,19 @@ mod tests {
         let log = handshake_log(&ConnectConfig::default());
         // Core init + HS-CAN protocol + ISO-TP framing + flow control + headers.
         for expect in [
-            "ATZ", "ATE0", "ATL0", "ATS0", "ATAT1", "ATSP6", "ATCAF1", "ATSH 7E0", "ATCRA 7E8",
-            "ATFCSH 7E0", "ATFCSD 30 00 00", "ATFCSM 1", "ATST 64",
+            "ATZ",
+            "ATE0",
+            "ATL0",
+            "ATS0",
+            "ATAT1",
+            "ATSP6",
+            "ATCAF1",
+            "ATSH 7E0",
+            "ATCRA 7E8",
+            "ATFCSH 7E0",
+            "ATFCSD 30 00 00",
+            "ATFCSM 1",
+            "ATST 64",
         ] {
             assert!(log.contains(expect), "handshake missing {expect}: {log}");
         }
@@ -882,7 +897,10 @@ mod tests {
         let mut cfg = ConnectConfig::default();
         cfg.options.insert("bus".into(), "ms".into());
         let log = handshake_log(&cfg);
-        assert!(log.contains("ATSPB"), "MS-CAN must select protocol B: {log}");
+        assert!(
+            log.contains("ATSPB"),
+            "MS-CAN must select protocol B: {log}"
+        );
         // Default protocol-B programming: options 0xC1, divisor 0x04 (=125 kbit).
         assert!(log.contains("ATPB C1 04"), "MS-CAN PB programming: {log}");
     }
@@ -928,8 +946,10 @@ mod tests {
         let reply = "43020101C101";
         let mut d = open_mock(&[reply]);
         let dtcs = d.read_obd_dtcs().unwrap();
-        assert_eq!(dtcs.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(),
-            vec!["P0101", "U0101"]);
+        assert_eq!(
+            dtcs.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(),
+            vec!["P0101", "U0101"]
+        );
     }
 
     #[test]
@@ -967,7 +987,11 @@ mod tests {
         let mut d = open_mock(&["7F1931"]);
         assert!(matches!(
             d.read_dtcs(),
-            Err(Error::NegativeResponse { service: 0x19, code: 0x31, .. })
+            Err(Error::NegativeResponse {
+                service: 0x19,
+                code: 0x31,
+                ..
+            })
         ));
     }
 

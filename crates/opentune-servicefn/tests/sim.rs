@@ -63,5 +63,8 @@ fn verify_mismatch_fails_the_script() {
     };
 
     let report = run_script(&mut diag, &script, None, &opts).expect("run completes");
-    assert!(!report.succeeded(), "a Verify mismatch must not report success");
+    assert!(
+        !report.succeeded(),
+        "a Verify mismatch must not report success"
+    );
 }

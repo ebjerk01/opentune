@@ -177,8 +177,7 @@ pub fn find_version_directory(data: &[u8]) -> Option<VersionDirectory> {
         return None;
     }
     let count = count_minus_1.wrapping_add(1);
-    let expected_end =
-        u64::from(data_start) + 4 + u64::from(record_size) * u64::from(count);
+    let expected_end = u64::from(data_start) + 4 + u64::from(record_size) * u64::from(count);
     if expected_end != total {
         return None;
     }
@@ -191,11 +190,7 @@ pub fn find_version_directory(data: &[u8]) -> Option<VersionDirectory> {
 }
 
 /// Copy one saved version's raw ROM bytes out of the container.
-pub fn extract_version(
-    data: &[u8],
-    dir: VersionDirectory,
-    index: u32,
-) -> crate::Result<Vec<u8>> {
+pub fn extract_version(data: &[u8], dir: VersionDirectory, index: u32) -> crate::Result<Vec<u8>> {
     if index >= dir.count {
         return Err(crate::Error::VersionOutOfRange {
             requested: index,

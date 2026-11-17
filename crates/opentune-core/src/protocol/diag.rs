@@ -171,7 +171,10 @@ mod tests {
         match check_response(0x27, &[0x7F, 0x31, 0x35]) {
             Err(Error::Protocol(msg)) => {
                 assert!(msg.contains("0x31"), "message should name echoed id: {msg}");
-                assert!(msg.contains("0x27"), "message should name request id: {msg}");
+                assert!(
+                    msg.contains("0x27"),
+                    "message should name request id: {msg}"
+                );
             }
             other => panic!("expected mis-correlation protocol error, got {other:?}"),
         }

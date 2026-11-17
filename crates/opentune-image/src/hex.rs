@@ -66,12 +66,10 @@ pub fn read(input: &str) -> Result<HexFile> {
         if rec.is_empty() {
             continue;
         }
-        let body = rec
-            .strip_prefix(':')
-            .ok_or_else(|| ImageError::Record {
-                line,
-                reason: "record does not start with ':'".into(),
-            })?;
+        let body = rec.strip_prefix(':').ok_or_else(|| ImageError::Record {
+            line,
+            reason: "record does not start with ':'".into(),
+        })?;
         if saw_eof {
             return Err(ImageError::Record {
                 line,

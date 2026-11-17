@@ -771,7 +771,10 @@ pub fn write_coding(
         for byte in 0..base.len() {
             if des[byte] != base[byte] {
                 if !opts.force_overwrite && liveb[byte] != base[byte] {
-                    return Err(CodingError::StaleBaseline { did: dids[bi], byte });
+                    return Err(CodingError::StaleBaseline {
+                        did: dids[bi],
+                        byte,
+                    });
                 }
                 target.blocks[bi].bytes[byte] = des[byte];
             }
@@ -871,9 +874,18 @@ mod tests {
                     len: 2,
                     kind: ParamKind::Enum,
                     options: vec![
-                        CodingOption { value: 0, label: "off".into() },
-                        CodingOption { value: 1, label: "on".into() },
-                        CodingOption { value: 2, label: "auto".into() },
+                        CodingOption {
+                            value: 0,
+                            label: "off".into(),
+                        },
+                        CodingOption {
+                            value: 1,
+                            label: "on".into(),
+                        },
+                        CodingOption {
+                            value: 2,
+                            label: "auto".into(),
+                        },
                     ],
                     note: String::new(),
                 },
@@ -894,8 +906,14 @@ mod tests {
     fn sample_coding() -> Coding {
         Coding {
             blocks: vec![
-                CodingBlock { did: 0x0401, bytes: vec![0b0000_0101, 0x00] }, // SS=1, DRL=2(auto)
-                CodingBlock { did: 0x0402, bytes: vec![0x00, 0x00, 0x2A] },  // Country=42
+                CodingBlock {
+                    did: 0x0401,
+                    bytes: vec![0b0000_0101, 0x00],
+                }, // SS=1, DRL=2(auto)
+                CodingBlock {
+                    did: 0x0402,
+                    bytes: vec![0x00, 0x00, 0x2A],
+                }, // Country=42
             ],
         }
     }
@@ -907,16 +925,36 @@ mod tests {
         assert_eq!(read_field(&d, 0, 4, 8), 0xAB);
         assert_eq!(d[0] & 0x0F, 0x00);
         // out of range + overflow are rejected
-        assert!(matches!(write_field(&mut d, 2, 4, 8, 0x01), Err(CodingError::OutOfRange { .. })));
-        assert!(matches!(write_field(&mut d, 0, 0, 2, 4), Err(CodingError::InvalidValue { .. })));
+        assert!(matches!(
+            write_field(&mut d, 2, 4, 8, 0x01),
+            Err(CodingError::OutOfRange { .. })
+        ));
+        assert!(matches!(
+            write_field(&mut d, 0, 0, 2, 4),
+            Err(CodingError::InvalidValue { .. })
+        ));
     }
 
     #[test]
     fn decode_labels() {
         let def = sample_def();
         let dec = decode(&def, &sample_coding()).unwrap();
-        assert_eq!(dec[0], DecodedParam { name: "Start-Stop".into(), value: 1, label: "on".into() });
-        assert_eq!(dec[1], DecodedParam { name: "DRL mode".into(), value: 2, label: "auto".into() });
+        assert_eq!(
+            dec[0],
+            DecodedParam {
+                name: "Start-Stop".into(),
+                value: 1,
+                label: "on".into()
+            }
+        );
+        assert_eq!(
+            dec[1],
+            DecodedParam {
+                name: "DRL mode".into(),
+                value: 2,
+                label: "auto".into()
+            }
+        );
         assert_eq!(dec[2].label, "42");
     }
 
@@ -925,9 +963,15 @@ mod tests {
         let def = sample_def();
         let c0 = sample_coding();
         // enum rejects an undeclared option
-        assert!(matches!(set(&def, &c0, "DRL mode", 3), Err(CodingError::InvalidValue { .. })));
+        assert!(matches!(
+            set(&def, &c0, "DRL mode", 3),
+            Err(CodingError::InvalidValue { .. })
+        ));
         // unknown param
-        assert!(matches!(set(&def, &c0, "Nope", 0), Err(CodingError::UnknownParam(_))));
+        assert!(matches!(
+            set(&def, &c0, "Nope", 0),
+            Err(CodingError::UnknownParam(_))
+        ));
         // valid change
         let c1 = set(&def, &c0, "DRL mode", 1).unwrap();
         let pc = diff_params(&def, &c0, &c1).unwrap();
@@ -983,11 +1027,15 @@ mod tests {
         ]);
         let current = read_coding(&mut io, &def).unwrap();
         let desired = set(&def, &current, "Country", 7).unwrap();
-        let rep = write_coding(&mut io, &def, &current, &desired, &WriteOptions::default()).unwrap();
+        let rep =
+            write_coding(&mut io, &def, &current, &desired, &WriteOptions::default()).unwrap();
         assert!(rep.is_verified() && rep.security_required);
         assert_eq!(rep.written, vec![0x0402]); // only the changed block
         assert_eq!(rep.param_changes.len(), 1);
-        assert_eq!(get(&def, &read_coding(&mut io, &def).unwrap(), "Country").unwrap(), 7);
+        assert_eq!(
+            get(&def, &read_coding(&mut io, &def).unwrap(), "Country").unwrap(),
+            7
+        );
     }
 
     #[test]
@@ -999,10 +1047,23 @@ mod tests {
         ]);
         let current = read_coding(&mut io, &def).unwrap();
         let desired = set(&def, &current, "Start-Stop", 0).unwrap();
-        let rep = write_coding(&mut io, &def, &current, &desired, &WriteOptions { dry_run: true, ..Default::default() }).unwrap();
+        let rep = write_coding(
+            &mut io,
+            &def,
+            &current,
+            &desired,
+            &WriteOptions {
+                dry_run: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(rep.outcome, WriteOutcome::Planned);
         assert!(rep.written.is_empty() && !rep.param_changes.is_empty());
-        assert_eq!(get(&def, &read_coding(&mut io, &def).unwrap(), "Start-Stop").unwrap(), 1);
+        assert_eq!(
+            get(&def, &read_coding(&mut io, &def).unwrap(), "Start-Stop").unwrap(),
+            1
+        );
     }
 
     #[test]
@@ -1018,9 +1079,22 @@ mod tests {
         ]);
         assert!(matches!(
             write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()),
-            Err(CodingError::StaleBaseline { did: 0x0402, byte: 2 })
+            Err(CodingError::StaleBaseline {
+                did: 0x0402,
+                byte: 2
+            })
         ));
-        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions { force_overwrite: true, ..Default::default() }).unwrap();
+        let rep = write_coding(
+            &mut io,
+            &def,
+            &baseline,
+            &desired,
+            &WriteOptions {
+                force_overwrite: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert!(rep.is_verified());
     }
 
@@ -1035,7 +1109,8 @@ mod tests {
             (0x0401, vec![0b0000_0100, 0x00]), // live SS=0 (drifted)
             (0x0402, vec![0x00, 0x00, 0x2A]),
         ]);
-        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        let rep =
+            write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
         assert!(rep.is_verified());
         let after = read_coding(&mut io, &def).unwrap();
         assert_eq!(get(&def, &after, "Country").unwrap(), 7); // edit applied
@@ -1073,7 +1148,11 @@ mod tests {
             match req[0] {
                 0x22 => {
                     let did = ((req[1] as u16) << 8) | req[2] as u16;
-                    let data: &[u8] = if did == 0x0401 { &[0b0000_0101, 0x00] } else { &[0x00, 0x00, 0x2A] };
+                    let data: &[u8] = if did == 0x0401 {
+                        &[0b0000_0101, 0x00]
+                    } else {
+                        &[0x00, 0x00, 0x2A]
+                    };
                     let mut r = vec![0x62, req[1], req[2]];
                     r.extend_from_slice(data);
                     Ok(r)
@@ -1082,8 +1161,15 @@ mod tests {
                 _ => Err("?".into()),
             }
         };
-        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
-        assert!(matches!(rep.outcome, WriteOutcome::WriteError { uncertain_did: 0x0402, .. }));
+        let rep =
+            write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        assert!(matches!(
+            rep.outcome,
+            WriteOutcome::WriteError {
+                uncertain_did: 0x0402,
+                ..
+            }
+        ));
         assert!(rep.written.is_empty());
         assert_eq!(rep.backup.blocks[1].bytes, vec![0x00, 0x00, 0x2A]); // backup kept
     }
@@ -1097,7 +1183,11 @@ mod tests {
             match req[0] {
                 0x22 => {
                     let did = ((req[1] as u16) << 8) | req[2] as u16;
-                    let data: &[u8] = if did == 0x0401 { &[0b0000_0101, 0x00] } else { &[0x00, 0x00, 0x2A] };
+                    let data: &[u8] = if did == 0x0401 {
+                        &[0b0000_0101, 0x00]
+                    } else {
+                        &[0x00, 0x00, 0x2A]
+                    };
                     let mut r = vec![0x62, req[1], req[2]];
                     r.extend_from_slice(data);
                     Ok(r)
@@ -1106,7 +1196,8 @@ mod tests {
                 _ => Err("?".into()),
             }
         };
-        let rep = write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
+        let rep =
+            write_coding(&mut io, &def, &baseline, &desired, &WriteOptions::default()).unwrap();
         assert!(matches!(rep.outcome, WriteOutcome::WriteError { .. }));
     }
 
@@ -1114,7 +1205,9 @@ mod tests {
     fn def_validate_catches_bad_defs() {
         assert!(sample_def().validate().is_ok());
         let mut d = sample_def();
-        d.addressing = Addressing::Did { dids: vec![0x0401, 0x0401] };
+        d.addressing = Addressing::Did {
+            dids: vec![0x0401, 0x0401],
+        };
         assert!(matches!(d.validate(), Err(CodingError::InvalidDef(_)))); // dup DID
         let mut d2 = sample_def();
         d2.params[0].bit = 8;
@@ -1136,15 +1229,22 @@ mod tests {
         let mut io = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
             Ok(vec![0x7F, req[0], 0x33]) // security denied, echoes requested SID
         };
-        assert!(matches!(read_coding(&mut io, &def), Err(CodingError::Protocol(_))));
+        assert!(matches!(
+            read_coding(&mut io, &def),
+            Err(CodingError::Protocol(_))
+        ));
     }
 
     #[test]
     fn mis_correlated_negative_response_rejected() {
         let def = sample_def();
         // 0x22 request but the 0x7F echoes service 0x2E -> rejected as mis-correlated
-        let mut io = |_req: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x7F, 0x2E, 0x33]) };
-        assert!(matches!(read_coding(&mut io, &def), Err(CodingError::Protocol(_))));
+        let mut io =
+            |_req: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x7F, 0x2E, 0x33]) };
+        assert!(matches!(
+            read_coding(&mut io, &def),
+            Err(CodingError::Protocol(_))
+        ));
     }
 
     #[test]
@@ -1214,11 +1314,20 @@ mod tests {
             let current = read_coding(&mut diag, &def).unwrap();
             assert_eq!(get(&def, &current, "Country").unwrap(), 42);
             let desired = set(&def, &current, "Country", 7).unwrap();
-            let rep =
-                write_coding(&mut diag, &def, &current, &desired, &WriteOptions::default()).unwrap();
+            let rep = write_coding(
+                &mut diag,
+                &def,
+                &current,
+                &desired,
+                &WriteOptions::default(),
+            )
+            .unwrap();
             assert!(rep.is_verified());
             assert_eq!(rep.written, vec![0x0402]); // only the changed block
-            assert_eq!(get(&def, &read_coding(&mut diag, &def).unwrap(), "Country").unwrap(), 7);
+            assert_eq!(
+                get(&def, &read_coding(&mut diag, &def).unwrap(), "Country").unwrap(),
+                7
+            );
         }
         // The adapter passed the configured timeout to every exchange.
         assert!(transport.timeouts.iter().all(|&t| t == 2_000));

@@ -221,7 +221,14 @@ mod tests {
         v
     }
 
-    fn axis(name: &str, unit: &str, factor: f64, address: u32, type_code: u32, signed: bool) -> Vec<u8> {
+    fn axis(
+        name: &str,
+        unit: &str,
+        factor: f64,
+        address: u32,
+        type_code: u32,
+        signed: bool,
+    ) -> Vec<u8> {
         let mut v = folder_ref(name);
         v.extend(rec_str(unit));
         v.extend_from_slice(&factor.to_le_bytes());
@@ -383,7 +390,18 @@ mod tests {
     fn recovers_a_map_as_a_mapdef() {
         let rom = vec![0u8; 0x200];
         // 2 rows x 3 cols, u16 little-endian (type 3), at 0x100, factor 0.1.
-        let rec = record("EGR setpoint", "EGR comment", "mg", 2, 3, 0x100, 0x200, 3, 0.1, false);
+        let rec = record(
+            "EGR setpoint",
+            "EGR comment",
+            "mg",
+            2,
+            3,
+            0x100,
+            0x200,
+            3,
+            0.1,
+            false,
+        );
         let file = build("EDC15P", "0 (Original)", &[rec], &rom);
         let p = OlsProject::parse(&file).expect("parse");
         assert_eq!(p.maps.len(), 1, "warnings: {:?}", p.warnings);
@@ -476,10 +494,7 @@ mod tests {
         let p = OlsProject::parse(&file).expect("parse");
         assert!(p.maps.is_empty());
         assert_eq!(p.rom.bytes, rom);
-        assert!(p
-            .warnings
-            .iter()
-            .any(|w| w.contains("predates WinOLS 5")));
+        assert!(p.warnings.iter().any(|w| w.contains("predates WinOLS 5")));
     }
 
     #[test]
@@ -516,7 +531,10 @@ mod tests {
         let file = build("EDC15P", "0 (Original)", &[], &rom);
         for cut in [8usize, 24, file.len() / 2, file.len() - 1] {
             let r = OlsProject::parse(&file[..cut]);
-            assert!(r.is_err(), "truncation to {cut} bytes should error, got {r:?}");
+            assert!(
+                r.is_err(),
+                "truncation to {cut} bytes should error, got {r:?}"
+            );
         }
     }
 
@@ -543,7 +561,9 @@ mod tests {
         let p = OlsProject::parse(&file).expect("parse");
         assert!(p.maps.is_empty(), "64-bit map must not be emitted");
         assert!(
-            p.warnings.iter().any(|w| w.contains("no OpenTune equivalent")),
+            p.warnings
+                .iter()
+                .any(|w| w.contains("no OpenTune equivalent")),
             "warnings: {:?}",
             p.warnings
         );

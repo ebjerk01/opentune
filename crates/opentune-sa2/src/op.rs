@@ -133,7 +133,10 @@ pub enum Op {
     Call(u16),
     Ret,
     /// Decrement `regs[reg]`; branch to the byte offset while it stays non-zero.
-    Loop { reg: u8, target: u16 },
+    Loop {
+        reg: u8,
+        target: u16,
+    },
     /// Jump to the given program byte offset.
     Jmp(u16),
 

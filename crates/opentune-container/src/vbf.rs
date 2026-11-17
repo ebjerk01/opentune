@@ -73,7 +73,11 @@ const fn crc32_table() -> [u32; 256] {
         let mut c = i;
         let mut k = 0;
         while k < 8 {
-            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
             k += 1;
         }
         t[i as usize] = c;
@@ -605,7 +609,11 @@ mod tests {
     fn parse_roundtrip_and_verify() {
         let b0 = vec![0xAAu8; 32];
         let b1 = vec![0x5Au8; 48];
-        let raw = make_vbf("BM5T-14C025-AD", "CAN_MS", &[(0x03FF_0000, &b0), (0x0001_0000, &b1)]);
+        let raw = make_vbf(
+            "BM5T-14C025-AD",
+            "CAN_MS",
+            &[(0x03FF_0000, &b0), (0x0001_0000, &b1)],
+        );
 
         assert!(looks_like_vbf(&raw));
         assert_eq!(crate::detect(&raw), crate::InputFormat::Vbf);
@@ -688,8 +696,8 @@ mod tests {
                 continue;
             }
             let bytes = std::fs::read(&p).unwrap();
-            let v = Vbf::parse(&bytes)
-                .unwrap_or_else(|e| panic!("{}: parse failed: {e}", p.display()));
+            let v =
+                Vbf::parse(&bytes).unwrap_or_else(|e| panic!("{}: parse failed: {e}", p.display()));
             assert!(
                 v.crc_errors().is_empty(),
                 "{}: block CRC errors at {:?}",

@@ -2,9 +2,9 @@
 //!
 //! Every program here is hand-written for the test. None is real OEM SA2
 //! bytecode; the vectors exist only to pin down the documented opcode semantics.
+use opentune_core::protocol::SeedKey;
 use opentune_sa2::op::*;
 use opentune_sa2::{assemble, execute, Op, Program, Sa2Error, Sa2SeedKey};
-use opentune_core::protocol::SeedKey;
 
 /// Run a list of `Op`s over a seed via assemble + execute.
 fn run_ops(seed: &[u8], ops: &[Op]) -> Vec<u8> {
@@ -24,10 +24,7 @@ fn xor_immediate() {
 #[test]
 fn add_immediate_wraps() {
     // 0xFFFFFFFF + 2 = 0x00000001 (wrapping)
-    let key = run_ops(
-        &[0xFF, 0xFF, 0xFF, 0xFF],
-        &[Op::AddImm(2), Op::OutKey(4)],
-    );
+    let key = run_ops(&[0xFF, 0xFF, 0xFF, 0xFF], &[Op::AddImm(2), Op::OutKey(4)]);
     assert_eq!(key, vec![0x00, 0x00, 0x00, 0x01]);
 }
 
@@ -41,20 +38,14 @@ fn sub_immediate_wraps() {
 #[test]
 fn rotate_left_immediate() {
     // 0x80000001 rotate_left 1 = 0x00000003
-    let key = run_ops(
-        &[0x80, 0x00, 0x00, 0x01],
-        &[Op::RolImm(1), Op::OutKey(4)],
-    );
+    let key = run_ops(&[0x80, 0x00, 0x00, 0x01], &[Op::RolImm(1), Op::OutKey(4)]);
     assert_eq!(key, vec![0x00, 0x00, 0x00, 0x03]);
 }
 
 #[test]
 fn rotate_right_immediate() {
     // 0x00000003 rotate_right 1 = 0x80000001
-    let key = run_ops(
-        &[0x00, 0x00, 0x00, 0x03],
-        &[Op::RorImm(1), Op::OutKey(4)],
-    );
+    let key = run_ops(&[0x00, 0x00, 0x00, 0x03], &[Op::RorImm(1), Op::OutKey(4)]);
     assert_eq!(key, vec![0x80, 0x00, 0x00, 0x01]);
 }
 
@@ -70,7 +61,11 @@ fn shift_left_and_right_immediate() {
 fn and_or_immediate() {
     let key = run_ops(
         &[0x12, 0x34, 0x56, 0x78],
-        &[Op::AndImm(0x0000_FFFF), Op::OrImm(0xFF00_0000), Op::OutKey(4)],
+        &[
+            Op::AndImm(0x0000_FFFF),
+            Op::OrImm(0xFF00_0000),
+            Op::OutKey(4),
+        ],
     );
     assert_eq!(key, vec![0xFF, 0x00, 0x56, 0x78]);
 }
@@ -97,9 +92,9 @@ fn register_load_store_and_add() {
     let key = run_ops(
         &[0x00, 0x00, 0x00, 0x10],
         &[
-            Op::StoreReg(0),       // reg0 = 0x10
-            Op::LoadImm(0x20),     // acc  = 0x20
-            Op::AddReg(0),         // acc  = 0x30
+            Op::StoreReg(0),   // reg0 = 0x10
+            Op::LoadImm(0x20), // acc  = 0x20
+            Op::AddReg(0),     // acc  = 0x30
             Op::OutKey(4),
         ],
     );
@@ -156,10 +151,7 @@ fn countdown_loop() {
 #[test]
 fn partial_and_multiple_outkey() {
     // 0x1122AABB: OUTKEY 2 twice => the low two bytes, emitted twice.
-    let key = run_ops(
-        &[0x11, 0x22, 0xAA, 0xBB],
-        &[Op::OutKey(2), Op::OutKey(2)],
-    );
+    let key = run_ops(&[0x11, 0x22, 0xAA, 0xBB], &[Op::OutKey(2), Op::OutKey(2)]);
     assert_eq!(key, vec![0xAA, 0xBB, 0xAA, 0xBB]);
 }
 
@@ -190,7 +182,10 @@ fn parse_round_trip() {
         Op::SwapBytes,
         Op::SwapNibbles,
         Op::Call(0x0030),
-        Op::Loop { reg: 2, target: 0x0005 },
+        Op::Loop {
+            reg: 2,
+            target: 0x0005,
+        },
         Op::Jmp(0x0001),
         Op::Ret,
         Op::OutKey(4),
@@ -208,14 +203,23 @@ fn unknown_opcode_rejected() {
     let err = execute(&[0x00, 0x01], &[0xAB]).unwrap_err();
     assert!(matches!(
         err,
-        Sa2Error::UnknownOpcode { opcode: 0xAB, offset: 0 }
+        Sa2Error::UnknownOpcode {
+            opcode: 0xAB,
+            offset: 0
+        }
     ));
 }
 
 #[test]
 fn truncated_immediate_rejected() {
     let err = execute(&[0x00, 0x01], &[OP_LOAD_IMM, 0x00]).unwrap_err();
-    assert!(matches!(err, Sa2Error::Truncated { opcode: OP_LOAD_IMM, offset: 0 }));
+    assert!(matches!(
+        err,
+        Sa2Error::Truncated {
+            opcode: OP_LOAD_IMM,
+            offset: 0
+        }
+    ));
 }
 
 #[test]
@@ -227,7 +231,13 @@ fn bad_register_rejected() {
 #[test]
 fn bad_outkey_operand_rejected() {
     let err = execute(&[0x00, 0x01], &[OP_OUTKEY, 0x05]).unwrap_err();
-    assert!(matches!(err, Sa2Error::BadOperand { opcode: OP_OUTKEY, .. }));
+    assert!(matches!(
+        err,
+        Sa2Error::BadOperand {
+            opcode: OP_OUTKEY,
+            ..
+        }
+    ));
 }
 
 #[test]

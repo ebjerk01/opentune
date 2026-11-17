@@ -52,9 +52,9 @@ impl MockDiag {
         let mut store = HashMap::new();
         for (k, v) in map {
             let did = parse_did(k)?;
-            let hex = v
-                .as_str()
-                .ok_or_else(|| Error::Config(format!("coding store DID {k} value is not a string")))?;
+            let hex = v.as_str().ok_or_else(|| {
+                Error::Config(format!("coding store DID {k} value is not a string"))
+            })?;
             store.insert(did, parse_hex(hex)?);
         }
         Ok(MockDiag { store, path })
@@ -130,7 +130,9 @@ impl DiagTransport for MockDiag {
             }
             0x2E => {
                 if req.len() < 3 {
-                    return Err(Error::Protocol("short WriteDataByIdentifier request".into()));
+                    return Err(Error::Protocol(
+                        "short WriteDataByIdentifier request".into(),
+                    ));
                 }
                 let did = ((req[1] as u16) << 8) | req[2] as u16;
                 self.store.insert(did, req[3..].to_vec());

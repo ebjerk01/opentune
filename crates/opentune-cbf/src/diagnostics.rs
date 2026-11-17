@@ -533,8 +533,14 @@ mod tests {
         // A DTC without text, a service without a name, a heuristic
         // classification, an unclassified service, and the standing note about
         // undecoded parameter layouts should all be reported.
-        assert!(joined.contains("DTC(s) have no plaintext description"), "{joined}");
-        assert!(joined.contains("service(s) have no plaintext name"), "{joined}");
+        assert!(
+            joined.contains("DTC(s) have no plaintext description"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("service(s) have no plaintext name"),
+            "{joined}"
+        );
         assert!(joined.contains("qualifier-prefix heuristic"), "{joined}");
         assert!(joined.contains("could not be categorised"), "{joined}");
         assert!(joined.contains("not decoded by this parser"), "{joined}");
@@ -549,7 +555,10 @@ mod tests {
         ecu.services.pop(); // remove the unnamed/unclassified mystery service
         let diag = ecu_diagnostics(&ecu);
         let joined = diag.warnings.join("\n");
-        assert!(!joined.contains("no plaintext name in the string pool"), "{joined}");
+        assert!(
+            !joined.contains("no plaintext name in the string pool"),
+            "{joined}"
+        );
         assert!(!joined.contains("no plaintext description"), "{joined}");
         assert!(!joined.contains("qualifier-prefix heuristic"), "{joined}");
         assert!(!joined.contains("could not be categorised"), "{joined}");

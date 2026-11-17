@@ -60,7 +60,11 @@ fn main() -> ExitCode {
                     diag.ecu.name.as_deref().unwrap_or("-"),
                     diag.ecu.protocols,
                 );
-                println!("  {} DTCs, {} services", diag.dtcs.len(), diag.services.len());
+                println!(
+                    "  {} DTCs, {} services",
+                    diag.dtcs.len(),
+                    diag.services.len()
+                );
                 // Count services by classified kind.
                 let mut kinds: std::collections::BTreeMap<String, usize> =
                     std::collections::BTreeMap::new();

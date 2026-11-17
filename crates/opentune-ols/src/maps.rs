@@ -321,7 +321,12 @@ pub fn to_map_defs(data: &[u8], region_end: usize) -> (Vec<MapDef>, Vec<String>)
 /// Convert one stored axis to an [`AxisDef`] with `count` breakpoints. A stored
 /// axis whose type OpenTune cannot encode keeps its name/unit/count but drops
 /// the address, and a warning is pushed.
-fn convert_axis(raw: &RawAxis, count: u32, map_name: &str, warnings: &mut Vec<String>) -> Option<AxisDef> {
+fn convert_axis(
+    raw: &RawAxis,
+    count: u32,
+    map_name: &str,
+    warnings: &mut Vec<String>,
+) -> Option<AxisDef> {
     let has_label = !raw.name.trim().is_empty() || !raw.unit.trim().is_empty();
     if !raw.has_address() && !has_label {
         return None;

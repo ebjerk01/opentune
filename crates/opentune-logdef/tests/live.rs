@@ -93,7 +93,11 @@ fn polls_and_scales_a_did_from_the_sim() {
     let s = &samples[0];
     assert_eq!(s.raw, Some(0x0190));
     assert!((s.value.unwrap() - 40.0).abs() < 1e-9);
-    assert!(s.note.is_empty(), "note should be empty on success: {}", s.note);
+    assert!(
+        s.note.is_empty(),
+        "note should be empty on success: {}",
+        s.note
+    );
 }
 
 #[test]
@@ -105,7 +109,11 @@ fn unseeded_did_is_noted_not_dropped() {
     let d = def(vec![param("boost", 0x2000, 1.0, 0.0, "kPa")]);
     let samples = poll_once(&mut diag, &d, &[]);
 
-    assert_eq!(samples.len(), 1, "a failed read must still produce a sample");
+    assert_eq!(
+        samples.len(),
+        1,
+        "a failed read must still produce a sample"
+    );
     assert!(samples[0].raw.is_none());
     assert!(!samples[0].note.is_empty(), "the failure must be noted");
 }
@@ -156,7 +164,11 @@ fn polls_and_scales_an_obd_pid() {
     let s = &samples[0];
     assert_eq!(s.raw, Some(0x1AF8));
     assert!((s.value.unwrap() - 1726.0).abs() < 1e-9);
-    assert!(s.note.is_empty(), "note should be empty on success: {}", s.note);
+    assert!(
+        s.note.is_empty(),
+        "note should be empty on success: {}",
+        s.note
+    );
 }
 
 #[test]
@@ -197,7 +209,11 @@ fn obd_pid_short_response_is_noted_not_guessed() {
     )]);
     let samples = poll_once(&mut diag, &d, &[]);
     assert!(samples[0].raw.is_none());
-    assert!(samples[0].note.contains("short response"), "note: {}", samples[0].note);
+    assert!(
+        samples[0].note.contains("short response"),
+        "note: {}",
+        samples[0].note
+    );
 }
 
 #[test]
@@ -251,7 +267,11 @@ fn reads_a_single_bit_from_memory() {
     let samples = poll_once(&mut diag, &d, &[]);
     assert_eq!(samples[0].raw, Some(1));
     assert!((samples[0].value.unwrap() - 1.0).abs() < 1e-9);
-    assert!(samples[0].note.contains("bit 3"), "note: {}", samples[0].note);
+    assert!(
+        samples[0].note.contains("bit 3"),
+        "note: {}",
+        samples[0].note
+    );
 }
 
 #[test]
@@ -298,7 +318,11 @@ fn memory_short_response_is_noted_not_guessed() {
     )]);
     let samples = poll_once(&mut diag, &d, &[]);
     assert!(samples[0].raw.is_none());
-    assert!(samples[0].note.contains("short response"), "note: {}", samples[0].note);
+    assert!(
+        samples[0].note.contains("short response"),
+        "note: {}",
+        samples[0].note
+    );
 }
 
 #[test]
@@ -316,5 +340,9 @@ fn unknown_addressing_is_noted() {
     )]);
     let samples = poll_once(&mut diag, &d, &[]);
     assert!(samples[0].raw.is_none());
-    assert!(samples[0].note.contains("addressing"), "note: {}", samples[0].note);
+    assert!(
+        samples[0].note.contains("addressing"),
+        "note: {}",
+        samples[0].note
+    );
 }

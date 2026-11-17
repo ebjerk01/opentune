@@ -13,8 +13,17 @@ cargo run -p opentune-cli -- --help
 cd desktop && cargo tauri build --features alpha --bundles appimage
 ```
 
-Before committing: `cargo clippy -p <crate> --all-targets -- -D warnings` must be clean
-(clippy is treated as a gate here).
+Before committing, run the same gates CI runs, in CI's order (CI stops at the first
+failure, so a fmt diff hides everything after it):
+
+```bash
+cargo fmt --all                                            # CI: cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
+
+Agent worktrees: run `cargo fmt --all` *before* merging back — unformatted merges kept
+`main` CI red for a whole day (2026-11-17).
 
 ## Layout
 

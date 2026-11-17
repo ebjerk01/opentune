@@ -157,7 +157,10 @@ struct ScalingDef {
 
 fn parse_u32_hex(s: &str) -> Option<u32> {
     let t = s.trim();
-    let t = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let t = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u32::from_str_radix(t, 16).ok()
 }
 
@@ -450,7 +453,10 @@ fn parse_axis(
     let values = collect_axis_values(axis);
     let from_values = (!values.is_empty()).then_some(values.len() as u32);
     let count = forced_count
-        .or_else(|| axis.attribute("elements").and_then(|v| v.trim().parse::<u32>().ok()))
+        .or_else(|| {
+            axis.attribute("elements")
+                .and_then(|v| v.trim().parse::<u32>().ok())
+        })
         .or(from_values)
         .unwrap_or(0);
     AxisDef {
@@ -519,8 +525,12 @@ fn build_plain_map(
     let cell = resolve_scaling(dialect, table, scalings, warnings);
 
     // RomRaider dimensions live on the table; EcuFlash reads them off the axes.
-    let size_x = table.attribute("sizex").and_then(|v| v.trim().parse::<u32>().ok());
-    let size_y = table.attribute("sizey").and_then(|v| v.trim().parse::<u32>().ok());
+    let size_x = table
+        .attribute("sizex")
+        .and_then(|v| v.trim().parse::<u32>().ok());
+    let size_y = table
+        .attribute("sizey")
+        .and_then(|v| v.trim().parse::<u32>().ok());
 
     let (x_axis, y_axis) = build_axes(dialect, table, scalings, warnings, size_x, size_y);
 
@@ -550,7 +560,9 @@ fn build_plain_map(
     let address = match node_address(table) {
         Some(a) => a,
         None => {
-            warnings.push(format!("table `{name}` ({ty}): no/invalid address, skipped"));
+            warnings.push(format!(
+                "table `{name}` ({ty}): no/invalid address, skipped"
+            ));
             return None;
         }
     };
@@ -770,10 +782,16 @@ fn overlay_child_fields(
     if let Some(e) = node.attribute("endian") {
         base_map.endian = endian_of(Some(e));
     }
-    if let Some(sx) = node.attribute("sizex").and_then(|v| v.trim().parse::<u32>().ok()) {
+    if let Some(sx) = node
+        .attribute("sizex")
+        .and_then(|v| v.trim().parse::<u32>().ok())
+    {
         base_map.cols = sx;
     }
-    if let Some(sy) = node.attribute("sizey").and_then(|v| v.trim().parse::<u32>().ok()) {
+    if let Some(sy) = node
+        .attribute("sizey")
+        .and_then(|v| v.trim().parse::<u32>().ok())
+    {
         base_map.rows = sy;
     }
 
@@ -862,7 +880,8 @@ fn build_merged_map<'a, 'i>(
         }
         Some(base_node) => {
             visiting.push(base_name.to_string());
-            let base_map = build_merged_map(dialect, *base_node, scalings, scope, warnings, visiting);
+            let base_map =
+                build_merged_map(dialect, *base_node, scalings, scope, warnings, visiting);
             visiting.pop();
             match base_map {
                 Some(bm) => Some(overlay_child_fields(bm, dialect, node, scalings, warnings)),
@@ -899,7 +918,9 @@ fn resolve_base_chain<F: Fn(&str) -> Option<String>>(
             continue;
         }
         let Some(src) = resolve(id) else {
-            warnings.push(format!("base def `{id}` not found via resolver; not merged"));
+            warnings.push(format!(
+                "base def `{id}` not found via resolver; not merged"
+            ));
             continue;
         };
         // Parse transiently to find this base's own base ids (the Document is
@@ -988,7 +1009,9 @@ where
 
     // Dialect: RomRaider if the main doc or any base looks RomRaider.
     let dialect = if detect_dialect(&main_doc) == Dialect::RomRaider
-        || base_docs.iter().any(|d| detect_dialect(d) == Dialect::RomRaider)
+        || base_docs
+            .iter()
+            .any(|d| detect_dialect(d) == Dialect::RomRaider)
     {
         Dialect::RomRaider
     } else {
@@ -1115,20 +1138,30 @@ mod tests {
         assert_eq!(imp.rom_id.memmodel, "SH7058");
         assert_eq!(imp.rom_id.internalidaddress, Some(0x400));
         assert_eq!(imp.includes, vec!["32BITBASE".to_string()]);
-        assert!(imp.warnings.iter().any(|w| w.contains("inherits from base")));
+        assert!(imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("inherits from base")));
     }
 
     #[test]
     fn imports_3d_map_with_axes_and_scaling() {
         let imp = parse_ecuflash(SAMPLE).unwrap();
-        let m = imp.maps.iter().find(|m| m.name == "Primary Open Loop Fueling").unwrap();
+        let m = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "Primary Open Loop Fueling")
+            .unwrap();
         assert_eq!(m.address, 0x30000);
         assert_eq!(m.data_type, DataType::U8); // Timing scaling = uint8
         assert_eq!((m.cols, m.rows), (4, 3)); // X=4, Y=3
         assert!((m.scaling.factor - 0.5).abs() < 1e-9 && (m.scaling.offset + 64.0).abs() < 1e-9);
         assert_eq!(m.unit, "deg");
         let x = m.x_axis.as_ref().unwrap();
-        assert_eq!((x.address, x.count, x.data_type), (Some(0x30100), 4, DataType::U16));
+        assert_eq!(
+            (x.address, x.count, x.data_type),
+            (Some(0x30100), 4, DataType::U16)
+        );
         assert!((x.scaling.factor - 0.25).abs() < 1e-9);
         let y = m.y_axis.as_ref().unwrap();
         assert_eq!((y.address, y.count), (Some(0x30200), 3));
@@ -1152,7 +1185,10 @@ mod tests {
         // x*x cannot be linear: imported pre-scaled (factor 1) + noted + warned.
         assert_eq!(m.scaling.factor, 1.0);
         assert!(m.notes.contains("non-linear"));
-        assert!(imp.warnings.iter().any(|w| w.contains("Squared") && w.contains("non-linear")));
+        assert!(imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("Squared") && w.contains("non-linear")));
     }
 
     #[test]
@@ -1161,7 +1197,10 @@ mod tests {
           <table name="NoAddr" type="1D"/></rom>"#;
         let imp = parse_ecuflash(src).unwrap();
         assert!(imp.maps.is_empty());
-        assert!(imp.warnings.iter().any(|w| w.contains("no/invalid address")));
+        assert!(imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("no/invalid address")));
     }
 
     #[test]
@@ -1179,7 +1218,10 @@ mod tests {
         let r = parse_ecuflash(r#"<rom><table name="T" type="1D" address="0x10""#);
         assert!(matches!(r, Err(Error::Xml(_))), "got {r:?}");
         // Garbage that is not XML at all.
-        assert!(matches!(parse_ecuflash("\u{0}\u{1}\u{2}not xml"), Err(Error::Xml(_))));
+        assert!(matches!(
+            parse_ecuflash("\u{0}\u{1}\u{2}not xml"),
+            Err(Error::Xml(_))
+        ));
     }
 
     #[test]
@@ -1200,10 +1242,16 @@ mod tests {
         let src = r#"<rom><romid><xmlid>t</xmlid></romid>
           <table name="M" type="1D" address="0x100" storagetype="weird64" toexpr="x"/></rom>"#;
         let imp = parse_ecuflash(src).unwrap();
-        let m = imp.maps.iter().find(|m| m.name == "M").expect("map M imported");
+        let m = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "M")
+            .expect("map M imported");
         assert_eq!(m.data_type, DataType::U8);
         assert!(
-            imp.warnings.iter().any(|w| w.contains("unknown storagetype")),
+            imp.warnings
+                .iter()
+                .any(|w| w.contains("unknown storagetype")),
             "warnings: {:?}",
             imp.warnings
         );
@@ -1285,7 +1333,10 @@ mod tests {
         assert_eq!(imp.rom_id.internalidaddress, Some(0x2000));
         // <rom base="32BITBASE"> surfaces as an unmerged-base include + warning.
         assert_eq!(imp.includes, vec!["32BITBASE".to_string()]);
-        assert!(imp.warnings.iter().any(|w| w.contains("inherits from base")));
+        assert!(imp
+            .warnings
+            .iter()
+            .any(|w| w.contains("inherits from base")));
     }
 
     #[test]
@@ -1344,7 +1395,11 @@ mod tests {
     #[test]
     fn romraider_nonlinear_scalingbase_is_flagged() {
         let imp = parse_ecuflash(RR).unwrap();
-        let m = imp.maps.iter().find(|m| m.name == "Initial Wastegate Duty").unwrap();
+        let m = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "Initial Wastegate Duty")
+            .unwrap();
         // wgdc expression x*x is non-linear -> pre-scaled factor 1, noted + warned.
         assert_eq!(m.scaling.factor, 1.0);
         assert!(m.notes.contains("non-linear"));
@@ -1418,7 +1473,11 @@ mod tests {
         assert_eq!(imp.includes, vec!["32BITBASE".to_string()]);
 
         // A table that lives ONLY in the base def is merged in.
-        let base_tbl = imp.maps.iter().find(|m| m.name == "Base Rev Limit").unwrap();
+        let base_tbl = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "Base Rev Limit")
+            .unwrap();
         assert_eq!(base_tbl.data_type, DataType::U16);
         assert!((base_tbl.scaling.factor - 0.25).abs() < 1e-9);
 
@@ -1453,10 +1512,20 @@ mod tests {
         let imp = parse_ecuflash_with_base_map(child, &bases).unwrap();
 
         // Table override by name: the child's address, not the base's 0x31000.
-        let rl = imp.maps.iter().find(|m| m.name == "Base Rev Limit").unwrap();
+        let rl = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "Base Rev Limit")
+            .unwrap();
         assert_eq!(rl.address, 0x39000);
         // Exactly one map with that name (base version was overridden, not kept).
-        assert_eq!(imp.maps.iter().filter(|m| m.name == "Base Rev Limit").count(), 1);
+        assert_eq!(
+            imp.maps
+                .iter()
+                .filter(|m| m.name == "Base Rev Limit")
+                .count(),
+            1
+        );
         // Scaling override by name: child RPM factor 0.5, not the base's 0.25.
         assert!((rl.scaling.factor - 0.5).abs() < 1e-9);
         let cm = imp.maps.iter().find(|m| m.name == "Child Map").unwrap();
@@ -1557,7 +1626,11 @@ mod tests {
         let imp = parse_ecuflash_with_base_map(rr, &HashMap::new()).unwrap();
 
         // The inherited table is emitted (not skipped) with merged fields.
-        let b = imp.maps.iter().find(|m| m.name == "Target Boost B").unwrap();
+        let b = imp
+            .maps
+            .iter()
+            .find(|m| m.name == "Target Boost B")
+            .unwrap();
         assert_eq!(b.address, 0xBEEF); // child override
         assert_eq!(b.data_type, DataType::U16); // inherited storage
         assert_eq!(b.endian, Endian::Big);
@@ -1622,6 +1695,9 @@ mod tests {
                 Err(e) => panic!("{}: {e}", p.display()),
             }
         }
-        assert!(checked >= 1, "no EcuFlash fixtures under OPENTUNE_FIXTURES/ecuflash");
+        assert!(
+            checked >= 1,
+            "no EcuFlash fixtures under OPENTUNE_FIXTURES/ecuflash"
+        );
     }
 }

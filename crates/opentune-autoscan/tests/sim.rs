@@ -38,8 +38,8 @@ fn scans_a_seeded_module_over_the_conformance_server() {
     let mut server = UdsServer::new();
     server.set_did(0xF190, b"WVWZZZ1KZAW000001".to_vec()); // VIN (17 ASCII chars)
     server.set_did(0xF187, b"04E906016AD".to_vec()); // part number
-    // Two DTCs: P0101 (status 0x24) and U0100 (status 0x2F) — same encoding the
-    // engine's own unit test asserts, decoded here by the shared opentune-dtc.
+                                                     // Two DTCs: P0101 (status 0x24) and U0100 (status 0x2F) — same encoding the
+                                                     // engine's own unit test asserts, decoded here by the shared opentune-dtc.
     server.add_dtc(DtcRecord::new([0x01, 0x01, 0x00], 0x24));
     server.add_dtc(DtcRecord::new([0xC1, 0x00, 0x00], 0x2F));
 
@@ -53,13 +53,21 @@ fn scans_a_seeded_module_over_the_conformance_server() {
     let engine = &report.modules[0];
     assert_eq!(engine.name, "Engine");
     assert!(engine.present, "seeded module answered TesterPresent");
-    assert!(engine.error.is_none(), "unexpected error: {:?}", engine.error);
+    assert!(
+        engine.error.is_none(),
+        "unexpected error: {:?}",
+        engine.error
+    );
 
     // Identity: VIN lifted out, the one supported DID recorded, unsupported DIDs
     // silently skipped (the server answered them with a negative response).
     let id = engine.identity.as_ref().expect("identity read");
     assert_eq!(id.vin.as_deref(), Some("WVWZZZ1KZAW000001"));
-    assert_eq!(id.dids.len(), 1, "only the one seeded identity DID is present");
+    assert_eq!(
+        id.dids.len(),
+        1,
+        "only the one seeded identity DID is present"
+    );
     assert_eq!(id.dids[0].did, 0xF187);
     assert_eq!(id.dids[0].text.as_deref(), Some("04E906016AD"));
 

@@ -34,7 +34,6 @@ impl SeedKey for Sa2SeedKey {
     /// supplied the program that belongs to that level. VM errors are surfaced
     /// as [`opentune_core::Error::Protocol`].
     fn compute(&self, seed: &[u8], _level: u8) -> Result<Vec<u8>> {
-        vm::execute(seed, &self.program)
-            .map_err(|e| Error::Protocol(format!("SA2 seed/key: {e}")))
+        vm::execute(seed, &self.program).map_err(|e| Error::Protocol(format!("SA2 seed/key: {e}")))
     }
 }

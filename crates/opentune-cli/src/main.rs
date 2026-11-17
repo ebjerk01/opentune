@@ -697,8 +697,20 @@ fn rebase_maps_checked(maps: &mut Vec<opentune_core::ecudef::MapDef>, base: u32)
                 continue;
             }
         }
-        rebase_axis(m.x_axis.as_mut(), base, &m.name, "x", &mut report.axis_failures);
-        rebase_axis(m.y_axis.as_mut(), base, &m.name, "y", &mut report.axis_failures);
+        rebase_axis(
+            m.x_axis.as_mut(),
+            base,
+            &m.name,
+            "x",
+            &mut report.axis_failures,
+        );
+        rebase_axis(
+            m.y_axis.as_mut(),
+            base,
+            &m.name,
+            "y",
+            &mut report.axis_failures,
+        );
         kept.push(m);
     }
     *maps = kept;
@@ -784,11 +796,8 @@ fn main() -> Result<()> {
                 let img = std::fs::read(&file)?;
                 // A file handed to `checksum verify` is a full ECU image; declare
                 // it so, and let the algorithm narrow it (or confirm recognition).
-                let reports = opentune_checksum::report_detailed(
-                    &*algo,
-                    &img,
-                    Representation::RawFullImage,
-                )?;
+                let reports =
+                    opentune_checksum::report_detailed(&*algo, &img, Representation::RawFullImage)?;
                 for r in &reports {
                     let rep = match r.representation {
                         Representation::RawFullImage => "full image",
@@ -869,10 +878,9 @@ fn main() -> Result<()> {
                 }
             }
             ChecksumAction::Attest { algo, file, out } => {
-                let img = std::fs::read(&file)
-                    .map_err(|e| anyhow!("read {}: {e}", file.display()))?;
-                let att = opentune_attest::attest_image(&algo, &img)
-                    .map_err(|e| anyhow!("{e}"))?;
+                let img =
+                    std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+                let att = opentune_attest::attest_image(&algo, &img).map_err(|e| anyhow!("{e}"))?;
                 let json = serde_json::to_string_pretty(&att)?;
                 if let Some(out) = out {
                     std::fs::write(&out, &json)
@@ -1368,7 +1376,13 @@ fn main() -> Result<()> {
             let r = &import.rom_id;
             println!(
                 "EcuFlash: {} {} {} {} [{}] ({}) — {} map(s)",
-                r.make, r.model, r.submodel, r.year, r.xmlid, r.memmodel, import.maps.len()
+                r.make,
+                r.model,
+                r.submodel,
+                r.year,
+                r.xmlid,
+                r.memmodel,
+                import.maps.len()
             );
             for w in &import.warnings {
                 println!("  ! warning: {w}");
@@ -1474,8 +1488,16 @@ fn main() -> Result<()> {
             }
             for p in &lib.packs {
                 let m = &p.manifest;
-                let name = if m.name.is_empty() { "(unnamed)" } else { &m.name };
-                let ver = if m.version.is_empty() { "?" } else { &m.version };
+                let name = if m.name.is_empty() {
+                    "(unnamed)"
+                } else {
+                    &m.name
+                };
+                let ver = if m.version.is_empty() {
+                    "?"
+                } else {
+                    &m.version
+                };
                 println!("pack {} — {name} v{ver}", m.id);
                 if !m.maker.is_empty() || !m.platform.is_empty() {
                     println!("  {} {}", m.maker, m.platform);
@@ -2203,7 +2225,10 @@ fn run_service(
         }
     );
     for s in &report.steps {
-        println!("  #{:<2} {:<20} {:?}  {}", s.index, s.op, s.status, s.detail);
+        println!(
+            "  #{:<2} {:<20} {:?}  {}",
+            s.index, s.op, s.status, s.detail
+        );
     }
     Ok(())
 }
@@ -2229,7 +2254,9 @@ fn resolve_coding_value(def: &opentune_coding::CodingDef, name: &str, value: &st
         .iter()
         .find(|o| o.label.eq_ignore_ascii_case(v))
         .map(|o| o.value)
-        .ok_or_else(|| anyhow!("value '{value}' is neither a number nor a known option of '{name}'"))
+        .ok_or_else(|| {
+            anyhow!("value '{value}' is neither a number nor a known option of '{name}'")
+        })
 }
 
 /// Print one coding's blocks as `DID  hex`.
@@ -2266,7 +2293,9 @@ fn print_coding_report(rep: &opentune_coding::WriteReport) {
         }
     }
     match &rep.outcome {
-        opentune_coding::WriteOutcome::Planned => println!("Outcome: planned (dry run, nothing written)"),
+        opentune_coding::WriteOutcome::Planned => {
+            println!("Outcome: planned (dry run, nothing written)")
+        }
         opentune_coding::WriteOutcome::NoChange => println!("Outcome: no change (nothing written)"),
         opentune_coding::WriteOutcome::Verified => println!("Outcome: written and verified"),
         opentune_coding::WriteOutcome::Unverified => println!("Outcome: written (verify skipped)"),
@@ -2276,7 +2305,9 @@ fn print_coding_report(rep: &opentune_coding::WriteReport) {
         opentune_coding::WriteOutcome::WriteError {
             uncertain_did,
             message,
-        } => println!("Outcome: WRITE ERROR at block 0x{uncertain_did:04X} ({message}); backup retained"),
+        } => println!(
+            "Outcome: WRITE ERROR at block 0x{uncertain_did:04X} ({message}); backup retained"
+        ),
     }
 }
 

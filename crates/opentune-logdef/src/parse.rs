@@ -76,7 +76,11 @@ fn make_addressing(
             let length = length
                 .or_else(|| storagetype.map(|t| t.byte_len() as u8))
                 .unwrap_or(1);
-            Addressing::Memory { address: addr, length, bit }
+            Addressing::Memory {
+                address: addr,
+                length,
+                bit,
+            }
         }
     }
 }
@@ -146,9 +150,14 @@ fn parse_logger(root: Node) -> Result<LogDef> {
         return Err(Error::Empty);
     };
 
-    for proto in protocols_node.children().filter(|n| n.has_tag_name("protocol")) {
+    for proto in protocols_node
+        .children()
+        .filter(|n| n.has_tag_name("protocol"))
+    {
         let id = proto.attribute("id").unwrap_or("").to_string();
-        let baud = proto.attribute("baud").and_then(|b| b.trim().parse::<u32>().ok());
+        let baud = proto
+            .attribute("baud")
+            .and_then(|b| b.trim().parse::<u32>().ok());
         let mut std_params = Vec::new();
         let mut ecu_groups: Vec<EcuGroup> = Vec::new();
 
@@ -219,7 +228,9 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
     let id = p.attribute("id")?.to_string();
     let name = p.attribute("name").unwrap_or(&id).to_string();
     let desc = p.attribute("desc").unwrap_or("").to_string();
-    let enabled = p.attribute("enabled").map(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let enabled = p
+        .attribute("enabled")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"));
 
     let mut depends_on = Vec::new();
     let mut addressing = Addressing::Unknown;
@@ -237,22 +248,58 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
     let addresses: Vec<Node> = p.children().filter(|n| n.has_tag_name("address")).collect();
     if let Some(first) = addresses.first() {
         let addr = first.text().and_then(parse_address);
-        let length = first.attribute("length").and_then(|l| l.trim().parse::<u8>().ok());
-        let bit = first.attribute("bit").and_then(|b| b.trim().parse::<u8>().ok());
+        let length = first
+            .attribute("length")
+            .and_then(|l| l.trim().parse::<u8>().ok());
+        let bit = first
+            .attribute("bit")
+            .and_then(|b| b.trim().parse::<u8>().ok());
         let (conversions, st, endian) = logger_conversions(p, &mut depends_on);
-        addressing = make_addressing(kind, addr, length, bit, st, &format!("parameter '{id}'"), warnings);
+        addressing = make_addressing(
+            kind,
+            addr,
+            length,
+            bit,
+            st,
+            &format!("parameter '{id}'"),
+            warnings,
+        );
         if addresses.len() > 1 {
             warnings.push(format!(
                 "parameter '{id}': {} multi-byte <address> fragments; only the first is modeled",
                 addresses.len()
             ));
         }
-        return Some(finish_param(id, name, desc, kind.clone(), addressing, st, endian, conversions, depends_on, None, enabled));
+        return Some(finish_param(
+            id,
+            name,
+            desc,
+            kind.clone(),
+            addressing,
+            st,
+            endian,
+            conversions,
+            depends_on,
+            None,
+            enabled,
+        ));
     }
 
     // depends-only parameter: no address of its own.
     let (conversions, st, endian) = logger_conversions(p, &mut depends_on);
-    Some(finish_param(id, name, desc, kind.clone(), addressing, st, endian, conversions, depends_on, None, enabled))
+    Some(finish_param(
+        id,
+        name,
+        desc,
+        kind.clone(),
+        addressing,
+        st,
+        endian,
+        conversions,
+        depends_on,
+        None,
+        enabled,
+    ))
 }
 
 /// Collect `<conversions><conversion>` for a parameter/ecuparam, returning the
@@ -287,17 +334,43 @@ fn logger_switch(sw: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) -> O
     let name = sw.attribute("name").unwrap_or(&id).to_string();
     let desc = sw.attribute("desc").unwrap_or("").to_string();
     let addr = sw.attribute("byte").and_then(parse_address);
-    let bit = sw.attribute("bit").and_then(|b| b.trim().parse::<u8>().ok());
-    let addressing = make_addressing(kind, addr, Some(1), bit, Some(DataType::U8), &format!("switch '{id}'"), warnings);
+    let bit = sw
+        .attribute("bit")
+        .and_then(|b| b.trim().parse::<u8>().ok());
+    let addressing = make_addressing(
+        kind,
+        addr,
+        Some(1),
+        bit,
+        Some(DataType::U8),
+        &format!("switch '{id}'"),
+        warnings,
+    );
     Some(finish_param(
-        id, name, desc, kind.clone(), addressing, Some(DataType::U8), None,
-        Vec::new(), Vec::new(), None, None,
+        id,
+        name,
+        desc,
+        kind.clone(),
+        addressing,
+        Some(DataType::U8),
+        None,
+        Vec::new(),
+        Vec::new(),
+        None,
+        None,
     ))
 }
 
 /// Parse an `<ecuparam>` into per-ECU parameters.
-fn logger_ecuparam(ep: Node, proto_id: &str, groups: &mut Vec<EcuGroup>, warnings: &mut Vec<String>) {
-    let Some(id) = ep.attribute("id").map(str::to_string) else { return };
+fn logger_ecuparam(
+    ep: Node,
+    proto_id: &str,
+    groups: &mut Vec<EcuGroup>,
+    warnings: &mut Vec<String>,
+) {
+    let Some(id) = ep.attribute("id").map(str::to_string) else {
+        return;
+    };
     let name = ep.attribute("name").unwrap_or(&id).to_string();
     let desc = ep.attribute("desc").unwrap_or("").to_string();
     let kind = classify(proto_id, None, warnings);
@@ -305,20 +378,40 @@ fn logger_ecuparam(ep: Node, proto_id: &str, groups: &mut Vec<EcuGroup>, warning
     let (conversions, st, endian) = logger_conversions(ep, &mut depends_on);
 
     for ecu in ep.children().filter(|n| n.has_tag_name("ecu")) {
-        let Some(ecu_id) = ecu.attribute("id").map(str::to_string) else { continue };
+        let Some(ecu_id) = ecu.attribute("id").map(str::to_string) else {
+            continue;
+        };
         let addr_node = ecu.children().find(|n| n.has_tag_name("address"));
         let addr = addr_node.and_then(|a| a.text()).and_then(parse_address);
         let length = addr_node
             .and_then(|a| a.attribute("length"))
             .and_then(|l| l.trim().parse::<u8>().ok());
         let addressing = make_addressing(
-            &kind, addr, length, None, st, &format!("ecuparam '{id}' / ecu '{ecu_id}'"), warnings,
+            &kind,
+            addr,
+            length,
+            None,
+            st,
+            &format!("ecuparam '{id}' / ecu '{ecu_id}'"),
+            warnings,
         );
         let param = finish_param(
-            id.clone(), name.clone(), desc.clone(), kind.clone(), addressing, st, endian,
-            conversions.clone(), depends_on.clone(), None, None,
+            id.clone(),
+            name.clone(),
+            desc.clone(),
+            kind.clone(),
+            addressing,
+            st,
+            endian,
+            conversions.clone(),
+            depends_on.clone(),
+            None,
+            None,
         );
-        match groups.iter_mut().find(|g| g.id.as_deref() == Some(ecu_id.as_str())) {
+        match groups
+            .iter_mut()
+            .find(|g| g.id.as_deref() == Some(ecu_id.as_str()))
+        {
             Some(g) => g.params.push(param),
             None => groups.push(EcuGroup {
                 id: Some(ecu_id),
@@ -339,7 +432,10 @@ fn parse_ecus(root: Node) -> Result<LogDef> {
     let mut convert_factors = Vec::new();
 
     if let Some(tools) = root.children().find(|n| n.has_tag_name("ecu_tools")) {
-        for cf in tools.children().filter(|n| n.has_tag_name("convert_factor")) {
+        for cf in tools
+            .children()
+            .filter(|n| n.has_tag_name("convert_factor"))
+        {
             let raw = cf.attribute("expr").unwrap_or("x");
             let (expr, fit) = fit_equation(raw);
             convert_factors.push(ConvertFactor {
@@ -357,12 +453,18 @@ fn parse_ecus(root: Node) -> Result<LogDef> {
     };
 
     let mut protocols = Vec::new();
-    for lp in logprotocols.children().filter(|n| n.has_tag_name("logprotocol")) {
+    for lp in logprotocols
+        .children()
+        .filter(|n| n.has_tag_name("logprotocol"))
+    {
         let id = lp.attribute("type").unwrap_or("").to_string();
         let kind = classify(&id, None, &mut warnings);
         let mut ecus = Vec::new();
         for ecu in lp.children().filter(|n| n.has_tag_name("ecu")) {
-            let ecu_id = ecu.attribute("id").filter(|s| !s.is_empty()).map(str::to_string);
+            let ecu_id = ecu
+                .attribute("id")
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
             let mut params = Vec::new();
             for p in ecu.children().filter(|n| n.has_tag_name("parameter")) {
                 if let Some(param) = ecus_parameter(p, &kind, &mut warnings) {
@@ -376,7 +478,12 @@ fn parse_ecus(root: Node) -> Result<LogDef> {
                 params,
             });
         }
-        protocols.push(ProtocolGroup { id, kind, baud: None, ecus });
+        protocols.push(ProtocolGroup {
+            id,
+            kind,
+            baud: None,
+            ecus,
+        });
     }
 
     Ok(LogDef {
@@ -401,7 +508,15 @@ fn ecus_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) -> O
         parsed
     });
     let addr = p.attribute("offset").and_then(parse_address);
-    let addressing = make_addressing(kind, addr, None, None, st, &format!("parameter '{id}'"), warnings);
+    let addressing = make_addressing(
+        kind,
+        addr,
+        None,
+        None,
+        st,
+        &format!("parameter '{id}'"),
+        warnings,
+    );
 
     let raw_expr = p.attribute("expr").unwrap_or("x");
     let depends_on = extract_dependencies(raw_expr);
@@ -419,16 +534,39 @@ fn ecus_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) -> O
     // <alt> alternates.
     let mut alternates = Vec::new();
     for alt in p.children().filter(|n| n.has_tag_name("alt")) {
-        let Some(alt_id) = alt.attribute("id").map(str::to_string) else { continue };
+        let Some(alt_id) = alt.attribute("id").map(str::to_string) else {
+            continue;
+        };
         let alt_addr = alt.attribute("offset").and_then(parse_address);
-        let alt_addressing = make_addressing(kind, alt_addr, None, None, st, &format!("alt '{alt_id}'"), warnings);
-        alternates.push(AltAddress { id: alt_id, addressing: alt_addressing });
+        let alt_addressing = make_addressing(
+            kind,
+            alt_addr,
+            None,
+            None,
+            st,
+            &format!("alt '{alt_id}'"),
+            warnings,
+        );
+        alternates.push(AltAddress {
+            id: alt_id,
+            addressing: alt_addressing,
+        });
     }
 
     let convert_group = p.attribute("type").map(str::to_string);
     Some(finish_param_full(
-        id, name, desc, kind.clone(), addressing, st, Endian::Big,
-        vec![conversion], depends_on, alternates, convert_group, None,
+        id,
+        name,
+        desc,
+        kind.clone(),
+        addressing,
+        st,
+        Endian::Big,
+        vec![conversion],
+        depends_on,
+        alternates,
+        convert_group,
+        None,
     ))
 }
 
@@ -453,8 +591,18 @@ fn finish_param(
     enabled: Option<bool>,
 ) -> LogParam {
     finish_param_full(
-        id, name, desc, protocol, addressing, storagetype, endian.unwrap_or(Endian::Big),
-        conversions, depends_on, Vec::new(), convert_group, enabled,
+        id,
+        name,
+        desc,
+        protocol,
+        addressing,
+        storagetype,
+        endian.unwrap_or(Endian::Big),
+        conversions,
+        depends_on,
+        Vec::new(),
+        convert_group,
+        enabled,
     )
 }
 
@@ -474,7 +622,10 @@ fn finish_param_full(
     enabled: Option<bool>,
 ) -> LogParam {
     let primary = conversions.first().cloned();
-    let units = primary.as_ref().map(|c| c.units.clone()).unwrap_or_default();
+    let units = primary
+        .as_ref()
+        .map(|c| c.units.clone())
+        .unwrap_or_default();
     let min = primary.as_ref().and_then(|c| c.gauge_min);
     let max = primary.as_ref().and_then(|c| c.gauge_max);
     LogParam {

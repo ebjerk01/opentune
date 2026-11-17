@@ -59,8 +59,8 @@ impl std::error::Error for AttestError {}
 pub fn attest_image(algo_id: &str, image: &[u8]) -> Result<ChecksumAttestation, AttestError> {
     let algo = opentune_checksum::get(algo_id)
         .ok_or_else(|| AttestError::UnknownAlgorithm(algo_id.to_string()))?;
-    let blocks =
-        opentune_checksum::report(&*algo, image).map_err(|e| AttestError::Checksum(e.to_string()))?;
+    let blocks = opentune_checksum::report(&*algo, image)
+        .map_err(|e| AttestError::Checksum(e.to_string()))?;
 
     if blocks.is_empty() {
         return Err(AttestError::NoBlocksFound(algo_id.to_string()));

@@ -127,9 +127,10 @@ impl Program {
 // --- operand readers -------------------------------------------------------
 
 fn read_u8(bytes: &[u8], pc: &mut usize, start: usize, opcode: u8) -> Sa2Result<u8> {
-    let b = *bytes
-        .get(*pc)
-        .ok_or(Sa2Error::Truncated { offset: start, opcode })?;
+    let b = *bytes.get(*pc).ok_or(Sa2Error::Truncated {
+        offset: start,
+        opcode,
+    })?;
     *pc += 1;
     Ok(b)
 }

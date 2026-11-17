@@ -8,8 +8,8 @@
 //! and anything non-linear is flagged rather than silently approximated.
 
 use crate::model::ConversionFit;
-use opentune_xdf::math::{linear_from_equation, LinearFit};
 use opentune_core::ecudef::DataType;
+use opentune_xdf::math::{linear_from_equation, LinearFit};
 
 /// Rewrite a conversion equation so the raw value is the uppercase variable
 /// `X`: the EcuFlash/FastECU `[value]` placeholder (any case, surrounding
@@ -115,7 +115,10 @@ mod tests {
     #[test]
     fn normalizes_value_placeholder() {
         assert_eq!(normalize_equation("[value]/4"), "X/4");
-        assert_eq!(normalize_equation("([value]-128)*100/128"), "(X-128)*100/128");
+        assert_eq!(
+            normalize_equation("([value]-128)*100/128"),
+            "(X-128)*100/128"
+        );
         assert_eq!(normalize_equation("[VALUE] * 2"), "X * 2");
         assert_eq!(normalize_equation("[ value ]+1"), "X+1");
     }
