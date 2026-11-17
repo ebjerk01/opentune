@@ -32,6 +32,7 @@
     dashboard: ["Detect the adapter, engine running", "Pick a preset or your own values", "Start: only values the ECU reports are shown"],
     obd: ["Detect the adapter", "Start with the ignition on", "Values read — when the ECU does not report them"],
     logging: ["Load a logger definition", "Pick parameters and Start", "Save the log as CSV"],
+    logview: ["Open a CSV log and tick channels to plot", "Zoom with the wheel, drag to pan, read values at the cursor", "Map overlay: definition, map, image, X/Y channels → Overlay"],
     candump: ["Detect a CAN-capable adapter on the right bus", "Choose format and file, then Start", "Stop to close the file; watch Dropped"],
     coding: ["Load a coding definition and set the target module", "Read, change a value, preview the diff", "Confirm and Write: backup first, read-back verify after"],
     adaptation: ["Load an adaptation definition and set the target", "Read channels before changing anything", "Routines and tests ask for confirmation"],
