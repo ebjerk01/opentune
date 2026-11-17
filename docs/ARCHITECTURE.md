@@ -86,7 +86,7 @@ a top-level command is added without a row here.
 | `opentune adaptation` | Adaptation channels (value / routine / actuator) |
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
-| `opentune log` | Poll live data from a RomRaider-style `logger.xml` to CSV |
+| `opentune log` | Log live data from a RomRaider-style `logger.xml` to CSV (`--fast`: UDS `0x2C` dynamic DIDs) |
 | `opentune obd` | Generic OBD-II: mode-01 live data, readiness, freeze frame, mode-09 info (VIN/CALID/CVN), stored/pending/permanent DTCs |
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
@@ -152,7 +152,7 @@ apps that need it.
 | `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests |
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
-| `opentune-logdef` | RomRaider-style `logger.xml` parser + live polling loop |
+| `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling and fast mode over UDS `0x2C` dynamic DIDs ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
 | `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
 | `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |
 | `opentune-recipe` | Portable tune recipes: anchored patches + source identity, strict/relocating apply |

@@ -15,7 +15,7 @@ they are here only to indicate relative reach, not to rank quality.
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
 |---|---|---|---|
-| [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) | ~450 | BSD-2-Clause | The reference for Simos/MEDC17 UDS flashing: security access, request-download/transfer-data sequencing, compression/encryption blocks and block checksums. Directly informed our UDS flash state machine and the `bench_boot` vs OBD `full_read` distinction. BSD → patterns are reusable. |
+| [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) | ~450 | BSD-2-Clause | The reference for Simos/MEDC17 UDS flashing: security access, request-download/transfer-data sequencing, compression/encryption blocks and block checksums. Directly informed our UDS flash state machine and the `bench_boot` vs OBD `full_read` distinction. Its `simos_hsl` logger (define an address list once, read it back in one request, slice by length) informed the `0x2C` fast-logging mode ([LIVE-LOGGING.md](LIVE-LOGGING.md)). BSD → patterns are reusable. |
 | [miikasyvanen/FastECU](https://github.com/miikasyvanen/FastECU) | ~250 | GPL-3.0 | A cross-platform open reflashing tool covering many OEM/protocol families; a model for how to structure a driver/protocol/definition split in a desktop tuning app. GPL-3.0 → compatible. |
 
 ## Checksums
