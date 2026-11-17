@@ -87,6 +87,26 @@ cargo test  --workspace
 cargo run -p opentune-cli -- --help
 ```
 
+## Live diagnostics (experimental)
+
+The engine subcommands drive a real adapter through a diagnostic transport.
+With an ELM327-class USB dongle use the `elm327obd` driver (defaults to
+`/dev/ttyUSB0 @38400`); point it at another port with `OPENTUNE_PORT` /
+`OPENTUNE_BAUD`:
+
+```sh
+# raw UDS exchange against the offline conformance simulator (no hardware)
+cargo run -p opentune-cli -- simulate --did F190=0102 22F190
+
+# live, over an ELM327 dongle
+OPENTUNE_PORT=/dev/ttyUSB0 \
+  cargo run -p opentune-cli -- autoscan --modules modules.json --driver elm327obd
+cargo run -p opentune-cli -- log --def logger.xml --driver elm327obd --rounds 20 --interval-ms 500
+```
+
+> These live paths are **not yet validated on a vehicle** — treat them as
+> experimental, read-only first, and keep a backup before any write.
+
 ## Safety
 
 - OpenTune **always** takes a verified backup before any write, checks battery voltage, and reads back and verifies afterwards — these rules live in the core, not in individual drivers — and the checksum and coding engines **refuse rather than guess** when a result isn't validated.
