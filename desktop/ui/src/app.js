@@ -936,6 +936,18 @@ $("btnPromote").onclick = async () => {
 
 // =================== ANALYZE BIN ===================
 function confPill(c) { const cls = c === "High" ? "ok" : c === "None" ? "bad" : "accent"; return `<span class="pill ${cls}">${esc(c)}</span>`; }
+function recFamily(r) {
+  const rc = r.recognition || {}, p = rc.primary;
+  if (!p) return `${esc(r.family)}${rc.image_kind && rc.image_kind !== "raw" ? ` <span class="muted small">(${esc(rc.image_kind)} — not a raw image)</span>` : ""}`;
+  const tier = p.confidence === "high" ? "ok" : p.confidence === "low" ? "bad" : "accent";
+  return `<b>${esc(p.supplier)} ${esc(p.family)}</b>${p.variant ? " · " + esc(p.variant) : ""} <span class="pill ${tier}">${esc(p.confidence)}</span>${rc.contested ? ' <span class="pill bad">contested</span>' : ""}`;
+}
+function recOthers(r) {
+  const o = ((r.recognition || {}).others || []).filter((d) => d.family !== "Unknown");
+  const id = r.identity || [];
+  return (o.length ? `<div class="k">other claims</div><div class="v">${o.map((d) => `${esc(d.supplier)} ${esc(d.family)}${d.variant ? " " + esc(d.variant) : ""} (${esc(d.confidence)})`).join("<br>")}</div>` : "") +
+    (id.length ? `<div class="k">identity (offset)</div><div class="v">${id.map((f) => `${esc(f.kind)}: <code>${esc(f.value)}</code> <span class="muted small">@0x${Number(f.offset).toString(16).toUpperCase()}</span>`).join("<br>")}</div>` : "");
+}
 function listOrDash(a) { return a && a.length ? a.map((x) => `<code>${esc(x)}</code>`).join(" ") : "—"; }
 async function runAnalyze(path) {
   if (!path) return toast("Open or pick an image first", true);
@@ -950,8 +962,9 @@ async function runAnalyze(path) {
     $("anResult").innerHTML =
       `<div class="banner ${r.confidence === "High" ? "ok" : "info"}">Assignment: <b>${esc(car)}</b> &nbsp; ${confPill(r.confidence)} <span class="muted small">basis: ${esc(a.basis || "—")}</span></div>
       <div class="meta-grid">
-        <div class="k">ECU family</div><div class="v">${esc(r.family)} ${r.family === "Unknown" ? "" : "(by structure)"} · ${esc(r.size_class)} · ${(r.size / 1024).toFixed(0)} KiB</div>
+        <div class="k">ECU family</div><div class="v">${recFamily(r)} · ${esc(r.size_class)} · ${(r.size / 1024).toFixed(0)} KiB</div>
         <div class="k">family signals</div><div class="v">${(r.family_how && r.family_how.length) ? r.family_how.map(esc).join("<br>") : "—"}</div>
+        ${recOthers(r)}
         <div class="k">VAG part #</div><div class="v">${listOrDash(r.part_numbers)}</div>
         <div class="k">Bosch #</div><div class="v">${listOrDash(r.bosch_numbers)}</div>
         <div class="k">Software #</div><div class="v">${listOrDash(r.sw_numbers)}</div>

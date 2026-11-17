@@ -1704,6 +1704,9 @@ fn family_to_algo(family: &str) -> Option<&'static str> {
         "EDC17" => Some("edc17"),
         "PCR2.1" => Some("pcr21"),
         "EDC15" => Some("edc15"),
+        // Recognised by signature (no structural family): ME7.x has a validated
+        // checksum engine that refuses images whose tables it cannot locate.
+        "ME7" => Some("me7"),
         _ => None,
     }
 }
@@ -1818,6 +1821,11 @@ fn analyze_image(
         "size_class": rec.size_class,
         "family": rec.ecu_family,
         "family_how": rec.family_how,
+        "supplier": rec.ecu_supplier,
+        "variant": rec.ecu_variant,
+        "family_confidence": rec.family_confidence,
+        "recognition": rec.recognition,
+        "identity": rec.identity,
         "part_numbers": rec.part_numbers,
         "bosch_numbers": rec.bosch_numbers,
         "sw_numbers": rec.sw_numbers,
@@ -2885,6 +2893,7 @@ mod tests {
         assert_eq!(family_to_algo("EDC17"), Some("edc17"));
         assert_eq!(family_to_algo("PCR2.1"), Some("pcr21"));
         assert_eq!(family_to_algo("EDC15"), Some("edc15"));
+        assert_eq!(family_to_algo("ME7"), Some("me7"));
         assert_eq!(family_to_algo("Unknown"), None);
     }
 
