@@ -784,6 +784,7 @@ dependencies = [
  "opentune-ecuflash",
  "opentune-flash",
  "opentune-logdef",
+ "opentune-mapfind",
  "opentune-ols",
  "opentune-packs",
  "opentune-scan",
@@ -978,6 +979,15 @@ dependencies = [
  "opentune-udssim",
  "opentune-xdf",
  "roxmltree",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-mapfind"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
  "serde",
  "serde_json",
 ]

@@ -173,6 +173,19 @@ occupies `rows * cols * data_type_width = 16 * 16 * 2 = 512` bytes
 A **scalar** is just `rows: 1, cols: 1` with no axes; a **1-D curve** is
 `rows: 1, cols: N` with only an `x_axis`.
 
+## Finding candidate maps in one image
+
+`opentune findmaps <image>` (single file) runs `opentune-mapfind`: it scans for
+Bosch-style count headers (`[n1][n2][axis1][axis2][data]`, `[n][axis][data]`;
+16-bit BE/LE and 8-bit), plus header-less adjacent axis pairs, and ranks each
+hit by header consistency, axis plausibility and data-surface smoothness. Each
+candidate carries its evidence and *hints* about what its raw axes look like
+(`rpm-like?`, `temperature-like?`, …) — never a claimed meaning. `--emit
+out.json` writes the top candidates as `MapDef`s named `candidate_0x…` with
+raw scaling and an "UNVERIFIED" note; `--def <id>` marks candidates that match
+a definition's maps and prints the recall. With two files (`findmaps stock
+tuned`) the older diff-clustering mode runs instead.
+
 ## Adding a map
 
 1. Add entries to the `maps` array of the relevant `ecudefs/*.json`.
