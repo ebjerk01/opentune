@@ -33,7 +33,8 @@ Everything here operates on a flash `.bin`.
 
 ### Core, CLI & project
 - [x] Rust workspace; `opentune-core` (Interface driver trait, protocol layer, ECU identity, flash orchestrator, safety rules); driver registry; `mock`/file driver
-- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · vin · decode-part · scan · dtc`
+- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · a2l2xdf · import-ecuflash · import-ols · packs · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`; `checksum attest` derives the flash-policy attestation from a real verification (`opentune-attest`), never from a caller claim
+- [x] **`opentune-image`** — addressed sparse-image model + Intel HEX / Motorola SREC read/write (checksums validated, holes and fill reported, never silently invented)
 - [x] GPL-3.0, README, CI (fmt + clippy + test + build), core unit tests
 
 ### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
@@ -78,7 +79,9 @@ Everything here operates on a flash `.bin`.
 | **ME7** (Motronic) | VAG/Porsche petrol | ✅ real-image | def | — | OBD/CAN |
 | **DQ381 TCU** (Bosch) | VAG 7-sp wet DSG | ✅ CAL, real-image | def | — | OBD/CAN |
 | **DQ250 TCU** (MQB) | VAG 6-sp DSG | 🔄 JAMCRC, synthetic-only | — | — | OBD/CAN |
-| **ZF-8HP TCU** | BMW/VAG 8-sp auto | ⚠️ CRC-CCITT primitive only | — | — | OBD/CAN |
+| **ZF-8HP TCU** (AL551) | BMW/VAG 8-sp auto | 🔄 CAL CRC-32, synthetic-only (`correct` needs a stock reference) | — | — | OBD/CAN |
+| **Haldex Gen5** | VAG 4Motion AWD | 🔄 word-sum, synthetic-only | — | — | OBD/CAN |
+| **Siemens MS41/42/43** | BMW petrol | — | def | ✅ imported (ms4x-net XDF, GPL-3) | OBD/K-line |
 
 **Validation states** (distinct — a primitive existing ≠ a family supported): *implemented* → *synthetic-tested* →
 *real-image-tested* (verify==stored + correct round-trip on a genuine dump) → 🔒 *bench-tested* → 🔒 *vehicle-tested*.
@@ -95,7 +98,7 @@ bench ECU are available.
 - [x] Protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
 - [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge, ESP32-S3, **generic J2534 PassThru** (Mongoose/VNCI/SVCI; Windows FFI gated), **gs_usb/candleLight USB-CAN**, **ELM327-over-WiFi/Bluetooth**
 - [ ] Verify cheap/clone adapters on real hardware (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
-- [~] **ELM327 OBD read driver** (`opentune-driver-elm327-obd`, CLI `elm327obd`) — serial ELM init (HS-CAN `SP6` / MS-CAN `SPB` + physical switch), ISO-TP, and a UDS read client: live identify (VIN 0xF190 + part/HW/SW/supplier DIDs), DTC read (0x19 sub 0x02) + decode, clear (0x14), OBD mode-01 live PIDs (RPM/coolant/speed) + mode-03 fallback, battery (`ATRV`). 15 tests vs scripted ELM responses; **read-only** (no ECU writes). *Adapter verified live on hp-elite-x2; driver not yet exercised on a car.*
+- [~] **ELM327 OBD read driver** (`opentune-driver-elm327-obd`, CLI `elm327obd`) — serial ELM init (HS-CAN `SP6` / MS-CAN `SPB` + physical switch), ISO-TP, and a UDS read client: live identify (VIN 0xF190 + part/HW/SW/supplier DIDs), DTC read (0x19 sub 0x02) + decode, clear (0x14), OBD mode-01 live PIDs (RPM/coolant/speed) + mode-03 fallback, battery (`ATRV`). 15 tests vs scripted ELM responses; **read-only** (no ECU writes). *First on-car session 2026-11-17 (auto-debug wizard): handshake, 13.2 V battery, live RPM + coolant PIDs **pass**; the transport-backed reads (supported PIDs, VIN, DTCs) failed with "no diagnostic transport" — a missing `Interface::diag()` override, fixed in `b0b7273`. Re-test pending with a rebuilt app.*
 - [~] **Live identify + full OBD read** (EDC16 first) — read path now exists in the ELM327 driver above; needs on-car verification
 - [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder + driver read path done, needs a live bus
 - [x] Battery-voltage read exposed as a safety gate
@@ -139,25 +142,27 @@ All `[ ]` = planned.
 - [ ] **Importer fidelity (XDF)** before more TCU maps: checked rebasing (refuse below-base underflow, not wrap),
   preserve categorical shift/mode axis labels (or report loss), import omitted scalar constants, explicit
   unsupported-layout reports, and verify swap-XY (0x04) semantics before changing storage order.
-- [ ] **Further family leads** (research-only until independent fixtures + provenance): Haldex Gen5 (descriptor-driven,
-  validate layout before correction), Subaru M32R/SH7055/MH8104 (avoid the reproduced old-source carry/order bugs),
+- [~] **ZF-8HP (AL551, method 0x22) CAL CRC-32** and **Haldex Gen5** per-block word-sum — implemented (refs: vag-tcu-tools MIT,
+  VW_Flash BSD-2), **algorithm-vector + synthetic only** (no real dumps); ZF-8HP `correct` needs a validating stock reference.
+- [ ] **Further family leads** (research-only until independent fixtures + provenance): Subaru M32R/SH7055/MH8104 (avoid the reproduced old-source carry/order bugs),
   Volvo/Aisin TF80-P2 (CRC-16/XMODEM) / AW55 (open) — keep each at its actual evidence level, no guessed correctors.
 - [ ] Cross-validate our EDC15/EDC16 correctors against a native-Rust implementation. Ref: **LeZed97/ZedSuite** (GPL-3, Rust — directly liftable).
 - [ ] Concrete VAG algos to compare/absorb: CRC32-VW, ECM3 64-bit summation, Simos counter-XOR. Ref: **dspl1236/simos-suite** (MIT; verify vs known-good dumps — AI-assisted).
 
 ### Seed/key (security access) — new plugin layer
+- [~] **SA2 bytecode VM** shipped (`opentune-sa2`, implements `SeedKey` as `sa2`) — runs a caller-supplied SA2 program; **no OEM bytecode bundled**. Still open below: any optional per-brand plugin set.
 - [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 attack path below.
 - [ ] **Ford/Mazda module flashing** uses the optional, user-enabled `SeedKey` plugin layer — OpenTune ships no OEM seed/key algorithm; security access takes a caller-supplied key provider. The open-source FoCCCus (GPLv3) is a reference for the on-wire handshake format only.
 
 ### Flash-container decode
 - [x] **FRF / ODX / ODX-F / SGO** unpack (`opentune-container`): FRF rolling-XOR → ZIP → ODX/SGO; LZSS10 / LZSS-DQ / ZF-8HP LZZ decompress; AES-CBC / repeating-XOR / SGO family-cipher block crypto — **caller supplies every key, none bundled** (`frf.key` legal caution respected). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD).
 - [x] **VBF (Ford / Volvo / Mazda Versatile Binary Format)** (`opentune-container::vbf`) — plaintext module-flash container: comment-aware header parse + typed fields, binary blocks, **per-block CRC-16/CCITT-FALSE + CRC-32 `file_checksum` verify** (const tables, standard check-vectors). Validated against **33 real Ford module VBFs** (1–6 blocks each). Pairs with the ELM327/Ford suite work. Key-free.
-- [ ] **a2l2xdf** converter path (A2L→XDF). Ref: VW_Flash.
-- [ ] **WinOLS `.ols`** import. Refs: ZedSuite, **TheFlashBold/tune-editor** (GPL-3).
+- [x] **a2l2xdf** converter path (A2L→XDF, with a loss report). Ref: VW_Flash.
+- [x] **WinOLS `.ols`** import (`opentune-ols`: ROM + maps; CLI `import-ols`). Refs: ZedSuite, **TheFlashBold/tune-editor** (GPL-3).
 
 ### DoIP — upgrade mock → real
-- [ ] Real **DoIP (ISO-13400)** transport: TCP core + routing activation + vehicle discovery (we currently have a mock round-trip only). Refs: **zeloscloud/zelos-extension-uds** (MIT), **life-challenge/DiagTools** (MIT).
-- [ ] Validate our UDS state machine against **pylessard/python-udsoncan** (MIT) service-by-service.
+- [~] Real **DoIP (ISO-13400)** transport: `DoIpTransport` client exercised against `opentune-udssim`'s loopback DoIP entity (routing activation, acks, interposed 0x78) — untested on a real vehicle; vehicle discovery still open. Refs: **zeloscloud/zelos-extension-uds** (MIT), **life-challenge/DiagTools** (MIT).
+- [~] Validate our UDS state machine against **pylessard/python-udsoncan** (MIT) service-by-service — **`opentune-udssim`** conformance server (ISO 14229 catalogue, cross-checked vs udsoncan + iso14229, no code copied) with fault injection; coding/adaptation/servicefn/autoscan/logdef engines tested against it. CLI `simulate`.
 
 ### Drivetrain control units — TCU + AWD/4WD (new target class)
 See `docs/IDEAS.md` "Drivetrain control units" for the per-brand target list. Each needs its own
@@ -189,16 +194,16 @@ data are never bundled — they are caller-supplied or left out of scope. Most e
 unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Coding & adaptation
-- [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Generic engine + 7 unit tests done (scripted transport). Next: adapt to core's `DiagTransport`, CLI/desktop surface, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
-- [ ] **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
-- [ ] **Actuator / output tests** — `InputOutputControlByIdentifier` (0x2F).
+- [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Engine runs over core's `RawDiag`/`CoreDiag`, tested against `opentune-udssim`; CLI `coding` + desktop alpha panel. Next: live test, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
+- [~] *(engine + CLI `adaptation` + desktop alpha panel, udssim-tested; live 🔒)* **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
+- [~] **Actuator / output tests** — `InputOutputControlByIdentifier` (0x2F) — available as a service-script step in `opentune-servicefn`; no dedicated actuator UI yet.
 
 ### Service & diagnostics
-- [ ] **Service functions** — declarative, safe UDS scripts (session → security → routine → verify): EPB, DPF regen, oil/service reset, SAS calibration, throttle align, injector coding, battery registration, brake bleed. Script library grows as data.
-- [ ] **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
+- [~] *(`opentune-servicefn` engine + CLI `service` (plan/dry-run) + desktop panel, udssim-tested; script library + live 🔒)* **Service functions** — declarative, safe UDS scripts (session → security → routine → verify): EPB, DPF regen, oil/service reset, SAS calibration, throttle align, injector coding, battery registration, brake bleed. Script library grows as data.
+- [~] *(`opentune-autoscan` + CLI `autoscan` + desktop panel: data-defined module list, ping → identity → DTCs, read-only; freeze-frame/readiness + live 🔒 open)* **Full-vehicle auto-scan** — enumerate all modules, read every module's DTCs + identity (ForScan/VCDS-style), freeze-frame + readiness.
 
 ### Live data & logging
-- [ ] **Datalogging engine** — periodic live data to file + dashboards/graphs + triggers, over OBD mode-01, UDS ReadDataByIdentifier (0x22 periodic), **UDS `mode23`/0x23 address logging**, and **Subaru SSM** — modelled on the Tactrix OpenPort logger (PID sorting, multi-request chunking). Reuse **RomRaider `logger.xml`** param definitions (data-defined, like coding). Ref: **RomRaider** (GPL-2), **FreeSSM** (GPL-3).
+- [~] *(`opentune-logdef`: RomRaider `<logger>` + EcuFlash `<ecus>` parsing; live loop over UDS DIDs, OBD mode-01 PIDs and 0x23 memory reads; CLI `log`. SSM transport, dashboards/triggers + live 🔒 open)* **Datalogging engine** — periodic live data to file + dashboards/graphs + triggers, over OBD mode-01, UDS ReadDataByIdentifier (0x22 periodic), **UDS `mode23`/0x23 address logging**, and **Subaru SSM** — modelled on the Tactrix OpenPort logger (PID sorting, multi-request chunking). Reuse **RomRaider `logger.xml`** param definitions (data-defined, like coding). Ref: **RomRaider** (GPL-2), **FreeSSM** (GPL-3).
 
 ### Flashing to modules (not just engine ECUs)
 - [ ] **UDS module flash** end-to-end — `0x34`/`0x36`/`0x37` + security + erase/checksum `RoutineControl`, **container-driven** (VBF/ODX/FRF/SGO/bin → RequestDownload address/length), behind the existing **flash-safety policy** (voltage → backup → write → read-back verify → recovery). 🔒 Ford module flashing (VBF + the user-supplied `SeedKey` plugin) is the first concrete target.
@@ -206,10 +211,10 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 - [ ] **Renesas SH boot mode** read/write (SH7055/SH7058/**SH725xx**) — bench/boot access for Subaru/Mitsubishi *and* the SH725xx DSG (DQ381) TCU. 🔒 bench. Refs: **fenugrec/npkern** (GPL-3, SH RAM kernel), EcuFlash SH boot-mode behavior, NefMoto loaders.
 
 ### Frontends (all local — no server)
-- [ ] Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
+- [~] *(alpha: adapter capability bar + Debug console + coding/adaptation/autoscan/service/logging/OBD panels behind the `alpha` feature)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
-- [ ] New data formats — **coding-label** (done, in `opentune-coding`), **adaptation-channel map**, **service-function script**. A **community** definition/pack library, versioned files the app loads locally (no hosting).
+- [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs, CLI `packs`). Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
 - [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. 6 tests + fixture-gated real-def test. **Next:** `<include>` base-def merging, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
 - [ ] **Subaru / Mitsubishi seed-key** tables as an optional, user-enabled plugin (published tables), same stance as the Ford/Daimler entries above.
 
@@ -223,13 +228,13 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 1. **ME7 checksum** — a whole new petrol family; `ME7Sum` (BSD) is directly liftable, validatable against dumps. Biggest coverage win.
 2. **FRF / ODX / SGO flash-container decode** — foundational for all VAG/DSG work (lets us open real flash containers); MIT refs.
 3. **TCU checksums** (CRC32-VW, CRC-CCITT, JAMCRC) — prerequisite for DSG/TCU; small and self-contained.
-4. **Definition-format breadth — EcuFlash/RomRaider XML + WinOLS `.ols` + `a2l2xdf`** — the EcuFlash/RomRaider importer unlocks the large community **Subaru/Mitsubishi** map + `logger.xml` set in one move (highest coverage win here, fully offline); `.ols` and `a2l2xdf` round out the map pipeline.
+4. ✅ **Definition-format breadth — EcuFlash/RomRaider XML + WinOLS `.ols` + `a2l2xdf`** — the EcuFlash/RomRaider importer unlocks the large community **Subaru/Mitsubishi** map + `logger.xml` set in one move (highest coverage win here, fully offline); `.ols` and `a2l2xdf` round out the map pipeline.
 5. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening/confidence of what already ships.
-6. **Validate UDS state machine vs `python-udsoncan`** — offline conformance of the protocol layer.
+6. 🔄 *(udssim conformance server done)* **Validate UDS state machine vs `python-udsoncan`** — offline conformance of the protocol layer.
 7. **Real DoIP (ISO-13400) transport** — code + mock-testable now; unblocks BMW/VAG-Ethernet later.
 8. **Generalized controller-def schema** — the data model that lets TCU/AWD units drop in.
 9. **Drivetrain defs** — VAG DSG + Haldex + Mercedes 722.6 maps/defs/checksums (the *def* groundwork; flashing is 🔒).
-10. **CBFParser port → Mercedes diagnostics** — CBF → DTC/diagnostic defs (OpenVehicleDiag, GPL-3 Rust).
+10. 🔄 *(`opentune-cbf` parser + normalised `CbfDiagnostics` done)* **CBFParser port → Mercedes diagnostics** — CBF → DTC/diagnostic defs (OpenVehicleDiag, GPL-3 Rust).
 11. **SA2 seed/key plugin port** — user-supplied, never auto-applied (sensitive; careful scoping).
 
 **🔒 Hardware-gated — later**
