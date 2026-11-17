@@ -115,3 +115,102 @@ Rust loader, `opentune_core::catalog::load_catalog`, which is exactly what
 `opentune identify --catalog catalog` uses at runtime. Brands whose opendbc
 `FW_VERSIONS` table is empty (currently `gm`, `byd`) and makes absent from
 opendbc entirely (BMW, Mercedes-Benz) produce no file.
+
+## Offline image recognition (`opentune-scan`)
+
+Everything above identifies an ECU over the bus. `opentune-scan` does the same
+from a **raw flash image** with no hardware: `opentune scan <dir|file>` (JSON,
+or `--human`), `opentune identify --driver mock --file <bin>` (prints an
+"Offline image recognition" block after the reported identity) and the desktop
+**Analyze** panel (`analyze_image`) all use it.
+
+### Families
+
+Recognition runs two kinds of detector and merges their claims:
+
+* **Checksum structure** (`crate::family`, unchanged): EDC15 / EDC16 / EDC17
+  / PCR2.1 checksum directories or located checksum fields.
+* **Signatures** (`crate::recognize`): markers the suppliers' toolchains leave
+  in every image.
+
+| Supplier | Family (`family`) | Main markers |
+| --- | --- | --- |
+| Bosch | any of the below | project descriptor `NN/1/<FAMILY>/…//<project>/…` (e.g. `41/1/ME7.5/51/4518.07//…`, `35/1/EDC17_CP14/…`, `53/1/VM17/147/ME17.9.11//…`) |
+| Bosch | `ME7` | `ZZ` ident block at 0x10000 (non-printable 3rd byte), `ME7.x` literal, `MOTRONIC ME7` label |
+| Bosch | `ME9` / `MED9` | `Bosch.Common.RamLoader.Me9` anchor; `MED9x` literal |
+| Bosch | `EDC17` / `MEDC17` / `MED17` / `MEVD17` / `ME17` / `MD1` / `MG1` | family literal + `SB_V…` / `Customer.` / `YYYYMMDDNR…` serial |
+| Bosch | `EDC16` | `DE CA FE` at active-section start + 0x3D (size table), SW at +0x10, `EDC16Cxx/…` string |
+| Bosch | `EDC15` | `TSW Vx.yy DDMMYY CCCC <token>` toolchain line (variant from `C7/ESB…` → `EDC15C7`), C167 `PP22..00` header + 0281 HW, VAG `… EDC  SG` ident on 512 KiB |
+| Bosch | `M7`, `MP3`/`MP7`/`MP9`, `M1.x`…`M5.x`, `ME1.5.5` | project descriptor only |
+| Siemens/Continental | `SIMOS` | `SIMOS…` literal, `5WP4…` part, `cas21`/`s21_` tags, VAG ident (`06A906033AT SIMOS72 1.6l 2V`) |
+| Siemens/Continental | `SID` | `SID80x`/`SID20x`/`SID30x` literal, `5WS4…-T` ident, `111PM3`/`CAPM3` (SID801), `111PO`+`CAPO` (SID803), `CA<pp>…111<pp>…` calibration header (low) |
+| Siemens/Continental | `PPD` | `PPD1.x` literal, `CASN` + `111SN`, VAG ident `03G906018xx R4 2.0l PPD1.2` |
+| Siemens/Continental | `PCR2.1` | checksum directory; `CASM…`/`111SM…` calibration header |
+| Siemens | `MS4x` | `5WK9…--<10 digits>MS4x` ident record; `MS4x` tag next to a `6577…` serial |
+| Siemens | `SIMTEC` | `SIMTECnn` literal (+ Siemens name / `5WK9` / `6577` serial) |
+| Delphi | `MT`, `DCM`, `Multec` | `MTnn.n` tag, `DCMn.n` literal, `0x11 "DEL"` header; `Delphi Technologies` copyright (supplier-only otherwise) |
+| Magneti Marelli | `MJD`, `IAW` | `MJD6JFHW01x`-style tag (+ `MAG  01246…`), lower-case `iawNN…` tag; `MARELLI`/byte-swapped `AMERLL` (supplier-only) |
+| Denso | `Denso SH` | `Copr.DENSO`/`Cpyr.DENSO`/`CopyrightDENSO` + SuperH reset-vector table (PC,SP,PC,SP with SP in 0xFFFFxxxx) |
+
+`DCM` is implemented from the family's naming convention but **no real DCM
+image was available to validate it**; treat its results accordingly.
+
+### Confidence tiers and evidence
+
+Every detection reports `supplier`, `family`, `variant` (only when a string
+in the image names it), `confidence` and `evidence` — the marker, the byte
+`offset` and the matched bytes. There are no numeric scores.
+
+* **high** — a family named inside a structured record (descriptor, ident
+  record, toolchain line), a checksum structure, or two independent detectors
+  agreeing at medium or better;
+* **medium** — one family literal or one supplier-specific anchor;
+* **low** — a weak anchor alone (e.g. `ZZ` at 0x10000, an SMS-Soft header
+  tag), or supplier-only knowledge (family `Unknown`).
+
+A purely structural claim (e.g. the EDC17 checksum directory, shared by the
+whole EDC17/MED17/ME17 generation) is folded into a string detection of the
+same generation. Two incompatible families at the same top tier set
+`contested: true`.
+
+Before any detector runs, the file is classified (`image_kind`): `raw`,
+`empty`, `blank`, `text` (DCM/DAMOS/A2L — ≥85 % printable), `winols-project`,
+`zip-archive`, `ecm-titanium-driver`, `sms-soft-container`. Only `raw` images
+are searched; an SMS-Soft header tag (`BschM797`) is reported at low.
+
+### Identity
+
+`identity` lists identifiers with the offset of their first occurrence:
+`bosch_hw` (0261/0281/0285…), `bosch_sw` (103…), `bosch_number`, `vag_part`
+(control-unit main groups 906/907/927/997/998), `mercedes_part`, `ford_part`
+(`6G91-12B684-DA` style), `continental_part` (`5WK9`/`5WS4…-T`/`5WP4`), `vin`
+(validated), and from structured records `bosch_descriptor`, `dataset`
+(`4420.01`), `calibration_id` (the project field after `//`),
+`oem_ident_block` and `engine` (`2.0l R4` — only what the ident block states).
+
+### JSON compatibility
+
+`ScanRecord` keeps every previous key. `ecu_family` still holds the
+checksum-structure family when one is found (it selects the checksum engine),
+otherwise the recognised family; new keys are `ecu_supplier`, `ecu_variant`,
+`family_confidence`, `recognition` (`image_kind`, `primary`, `others`,
+`contested`) and `identity`. The summary adds `family_by_checksum_structure`,
+`family_by_signature_only`, `supplier_only`, `contested`,
+`recognized_family_breakdown`, `family_confidence_breakdown` and
+`image_kind_breakdown` (`family_by_structure` now counts any known family).
+`analyze_image` adds `supplier`, `variant`, `family_confidence`,
+`recognition` and `identity`.
+
+### Testing
+
+`opentune_scan::synth` builds minimal synthetic images (synthetic numbers
+only) carrying each family's markers; `tests/recognize.rs` checks family,
+variant, tier, evidence offsets, contested handling and false positives
+(noise, blank, text, WinOLS). The real-dump check is `#[ignore]`d and reads
+`OPENTUNE_FIXTURES`. Dumps are never committed.
+
+### Attribution
+
+Part of the marker knowledge is re-implemented from
+[openremap-core](https://github.com/v-arapidis/openremap-core) (MIT) — see
+`crates/opentune-scan/NOTICE` for exactly what was and was not used.
