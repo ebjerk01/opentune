@@ -350,6 +350,36 @@ enum Command {
         #[command(subcommand)]
         action: ServiceAction,
     },
+    /// Poll live data defined by a RomRaider-style `logger.xml` and write CSV.
+    ///
+    /// Data-defined by `--def`. Only UDS `0x22` (DID) parameters are driven
+    /// today; OBD-II PID and raw-memory reads are reported as unsupported rather
+    /// than guessed. With the default `mock` driver it runs offline.
+    Log {
+        /// RomRaider-style `logger.xml` definition file.
+        #[arg(long)]
+        def: PathBuf,
+        /// Driver id (see `drivers`); must expose a diagnostic transport.
+        #[arg(long, default_value = "mock")]
+        driver: String,
+        /// For the `mock` driver: JSON UDS store backing the offline transport.
+        #[arg(long)]
+        store: Option<PathBuf>,
+        /// Per-request UDS timeout, milliseconds.
+        #[arg(long, default_value_t = 1000)]
+        timeout_ms: u64,
+        /// Number of polling rounds.
+        #[arg(long, default_value_t = 1)]
+        rounds: usize,
+        /// Sleep between rounds, milliseconds (0 = as fast as possible).
+        #[arg(long, default_value_t = 0)]
+        interval_ms: u64,
+        /// Write the CSV here (otherwise to stdout).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Only poll these parameter ids (default: all enabled).
+        params: Vec<String>,
+    },
     /// Run the in-memory UDS conformance server offline and exchange raw
     /// requests against it — no hardware, for testing and demos.
     Simulate {
@@ -1845,6 +1875,26 @@ fn main() -> Result<()> {
             require_security_write,
             requests,
         } => run_simulate(&dids, require_security_write, &requests)?,
+        Command::Log {
+            def,
+            driver,
+            store,
+            timeout_ms,
+            rounds,
+            interval_ms,
+            out,
+            params,
+        } => run_log(
+            &reg,
+            &def,
+            &driver,
+            store.as_deref(),
+            timeout_ms,
+            rounds,
+            interval_ms,
+            out.as_deref(),
+            &params,
+        )?,
     }
     Ok(())
 }
@@ -1944,6 +1994,50 @@ fn hex_bytes(b: &[u8]) -> String {
         .map(|x| format!("{x:02X}"))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Dispatch the `log` subcommand: parse a logger.xml and poll live data to CSV.
+#[allow(clippy::too_many_arguments)]
+fn run_log(
+    reg: &Registry,
+    def_path: &std::path::Path,
+    driver: &str,
+    store: Option<&std::path::Path>,
+    timeout_ms: u64,
+    rounds: usize,
+    interval_ms: u64,
+    out: Option<&std::path::Path>,
+    params: &[String],
+) -> Result<()> {
+    use opentune_core::CoreDiag;
+
+    let raw = std::fs::read(def_path)
+        .with_context(|| format!("read logger def {}", def_path.display()))?;
+    let src = String::from_utf8_lossy(&raw);
+    let def = opentune_logdef::parse(&src)
+        .map_err(|e| anyhow!("parse logger def {}: {e:?}", def_path.display()))?;
+
+    let ids: Vec<&str> = params.iter().map(String::as_str).collect();
+
+    let mut drv = open_diag_driver(reg, driver, store)?;
+    let transport = drv
+        .diag()
+        .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
+    let mut diag = CoreDiag::new(transport, timeout_ms);
+
+    match out {
+        Some(path) => {
+            let mut f = std::fs::File::create(path)
+                .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
+            opentune_logdef::poll_to_csv(&mut diag, &def, &ids, rounds, interval_ms, &mut f)?;
+            println!("Logged {rounds} round(s) to {}", path.display());
+        }
+        None => {
+            let mut stdout = std::io::stdout().lock();
+            opentune_logdef::poll_to_csv(&mut diag, &def, &ids, rounds, interval_ms, &mut stdout)?;
+        }
+    }
+    Ok(())
 }
 
 /// Dispatch the `adaptation` subcommand.

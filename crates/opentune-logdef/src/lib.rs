@@ -70,6 +70,9 @@ pub use model::{
 };
 pub use parse::parse;
 
+pub mod live;
+pub use live::{poll_once, poll_to_csv, Sample};
+
 /// Error parsing a RomRaider-style logger document.
 #[derive(Debug)]
 pub enum Error {

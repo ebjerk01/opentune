@@ -112,14 +112,14 @@ short version:
 - ✅ **Adaptation** channels and actuator / output tests
 - ✅ Declarative **service functions** — DPF regen, service reset, SAS calibration, …
 - ✅ Full-vehicle **auto-scan** — every module, DTCs, identities, freeze-frame, readiness
-- ✅ **Datalogging** definitions — OBD/UDS, address-based and Subaru-SSM *(parsing; the live polling loop is in progress)*
+- ✅ **Datalogging** — logger.xml definitions + a live UDS-DID polling loop to CSV *(OBD-II PID and raw-memory/SSM reads still pending)*
 - ✅ Protocol stack — ISO-TP, UDS, KWP2000, VW TP2.0, OBD-II, CAN-FD, DoIP
 - ✅ Diagnostics driver — ELM327 / OBD, with a UDS conformance simulator for offline tests
 - ✅ SecurityAccess SA2 bytecode VM (runs caller-supplied bytecode)
 - ✅ Mercedes CBF diagnostic descriptions
 
 **Next**
-- 🔲 Live **datalogging** loop — periodic polling over a transport to file/CSV
+- 🔲 Extend live **datalogging** to OBD-II PID and raw-memory/SSM reads
 - 🔲 On-car validation of the live diagnostic, adaptation and logging paths
 - 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
 - 🔲 Desktop & Android UX — guided wizards over the engines

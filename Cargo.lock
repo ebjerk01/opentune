@@ -711,6 +711,7 @@ dependencies = [
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
+ "opentune-logdef",
  "opentune-ols",
  "opentune-packs",
  "opentune-scan",
@@ -891,6 +892,7 @@ name = "opentune-logdef"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-udssim",
  "opentune-xdf",
  "roxmltree",
  "serde",
