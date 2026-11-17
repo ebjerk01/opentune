@@ -33,6 +33,7 @@
       "../../ecudefs": "ecudefs",
       "../../catalog": "catalog",
       "../../database": "database",
+      "../../packs": "packs",
       "guide": "guide"
     },
     "icon": [

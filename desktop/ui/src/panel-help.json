@@ -106,7 +106,7 @@
   },
   "logging": {
     "title": "Live log",
-    "summary": "Stream ECU values from a RomRaider-style logger.xml into a live table and save them as CSV. Only UDS 0x22 parameters are read today.",
+    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven.",
     "needs": ["Adapter: CAN", "logger.xml", "Ignition on"],
     "risk": "read-only",
     "guide": "25-live-log"

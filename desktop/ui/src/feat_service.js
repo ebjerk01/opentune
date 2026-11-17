@@ -132,7 +132,7 @@
 
     q("#svcPick").addEventListener("click", async () => {
       try {
-        const r = TAURI.dialog ? await TAURI.dialog.open({ multiple: false, directory: false, filters: [{ name: "Service script", extensions: ["json"] }] }) : null;
+        const r = TAURI.dialog ? await TAURI.dialog.open({ multiple: false, directory: false, filters: [{ name: "Service script", extensions: ["json"] }], defaultPath: (window.OT && window.OT.packsDir) || undefined }) : null;
         const p = Array.isArray(r) ? r[0] : r;
         if (p) {
           scriptPath = p;

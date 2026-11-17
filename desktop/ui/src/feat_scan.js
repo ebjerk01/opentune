@@ -170,7 +170,7 @@
   // ---- wiring --------------------------------------------------------------
   $("scanPick").addEventListener("click", async () => {
     try {
-      const r = await dialog().open({ filters: [{ name: "Modules", extensions: ["json"] }] });
+      const r = await dialog().open({ filters: [{ name: "Modules", extensions: ["json"] }], defaultPath: (window.OT && window.OT.packsDir) || undefined });
       if (!r) return;
       state.modulesPath = Array.isArray(r) ? r[0] : r;
       $("scanFile").textContent = baseName(state.modulesPath);

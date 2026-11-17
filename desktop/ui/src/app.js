@@ -1561,7 +1561,10 @@ async function boot() {
   if (!TAURI.core) { document.body.innerHTML = '<p style="padding:2rem">Tauri API unavailable — run inside the OpenTune app.</p>'; return; }
   try {
     const dp = await invoke("data_paths");
-    $("dataStatus").innerHTML = `ecudefs: ${dp.ecudefs ? "✓" : "✗"} · catalog: ${dp.catalog ? "✓" : "✗"} · guide: ${dp.guide ? "✓" : "✗"}`;
+    $("dataStatus").innerHTML = `ecudefs: ${dp.ecudefs ? "✓" : "✗"} · catalog: ${dp.catalog ? "✓" : "✗"} · guide: ${dp.guide ? "✓" : "✗"} · packs: ${dp.packs ? "✓" : "✗"}`;
+    // Feature panels open their file pickers in the bundled definition packs.
+    window.OT = window.OT || {};
+    window.OT.packsDir = dp.packs || null;
   } catch (e) { $("dataStatus").textContent = "data resolve failed"; }
   await initDrivers();
   await populateMapDefs();

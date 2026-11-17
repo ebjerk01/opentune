@@ -112,6 +112,9 @@ pub struct AppData {
     pub guide: Option<PathBuf>,
     /// Control-unit reference database (`database/units/*.json`).
     pub database: Option<PathBuf>,
+    /// Definition packs (`packs/<id>/pack.json` + module lists, loggers,
+    /// service scripts…); the panels' file pickers open here.
+    pub packs: Option<PathBuf>,
 }
 
 fn first_existing(cands: &[PathBuf]) -> Option<PathBuf> {
@@ -527,6 +530,7 @@ fn data_paths(state: tauri::State<AppData>) -> Value {
         "catalog": state.catalog.as_ref().map(|p| p.display().to_string()),
         "guide": state.guide.as_ref().map(|p| p.display().to_string()),
         "database": state.database.as_ref().map(|p| p.display().to_string()),
+        "packs": state.packs.as_ref().map(|p| p.display().to_string()),
     })
 }
 
@@ -2498,6 +2502,7 @@ fn resolve_data<R: tauri::Runtime>(app: &tauri::AppHandle<R>, extra_roots: &[Pat
         catalog: find("catalog"),
         guide: find("guide"),
         database: find("database"),
+        packs: find("packs"),
     }
 }
 
@@ -2524,7 +2529,8 @@ fn resolve_data<R: tauri::Runtime>(app: &tauri::AppHandle<R>, extra_roots: &[Pat
 pub struct DesktopConfig {
     /// Channel reported to the UI and used to gate debug commands.
     pub channel: BuildChannel,
-    /// Extra directories searched for `ecudefs/`, `catalog/` and `guide/`.
+    /// Extra directories searched for `ecudefs/`, `catalog/`, `guide/`,
+    /// `database/` and `packs/`.
     pub data_roots: Vec<PathBuf>,
     /// Extra checksum algorithm resolvers, consulted before the public set.
     pub checksums: Vec<ChecksumResolver>,
