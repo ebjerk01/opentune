@@ -35,6 +35,9 @@ vendor/
 ecudumps/
 backups/
 
+# Claude Code session scaffolding (agent worktrees etc.)
+.claude/
+
 # Local notes, secrets, scratch
 *-PRIVATE-*.md
 .env
