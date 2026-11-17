@@ -156,6 +156,120 @@ driver is a good reference for the patterns above:
 Use it to test an engine or a panel end to end without hardware. See
 [`VIRTUAL-CAR.md`](VIRTUAL-CAR.md).
 
+## 3d. `elm327obd`: block read over a USB ELM327
+
+`crates/drivers/elm327` (crate `opentune-driver-elm327-obd`) drives a USB
+ELM327 on CAN with `ATCAF1`, so the adapter does the ISO-TP framing. That has
+one hard limit that shapes everything below: **an ELM327 can only transmit a
+single ISO-TP frame**, so every request must fit in 7 bytes
+(`protocol::elm::MAX_CAN_REQUEST`). Replies can be multi-frame. The driver
+checks every request format against this limit before it sends anything, and
+refuses with a clear error when a format does not fit. It does not truncate.
+
+**Read: recommended.** `read_memory` runs:
+
+1. Flow-control pacing: `ATFCSD 30 00 <STmin>` asks the ECU to wait between
+   consecutive frames. The default STmin comes from the serial baud: 6 ms at
+   38400. Without the pacing, long replies overrun the clone's UART and the
+   adapter prints `BUFFER FULL`. The init flow control (`30 00 00`) is put back
+   after the read.
+2. A session (`0x10`). Default: extended (`03`). Set it with option
+   `session=none|default|extended|programming|<byte>`.
+3. SecurityAccess (`0x27`). It runs when a handler was given through
+   `set_seed_key`. The handler works through the trait too, so a
+   registry-opened `Box<dyn Interface>` accepts one. The driver makes exactly
+   one attempt:
+   - An all-zero seed means the ECU is already unlocked, and no key is sent.
+   - NRC 0x35 (invalid key) and 0x36 (too many attempts) stop with
+     `SecurityDenied`. Nothing more is sent.
+   - NRC 0x37 (delay not expired) is reported with an explanation and is never
+     retried.
+   - If the config marks the ECU as needing security (`seedkey=<id>` or
+     `security=required`) and no handler is set, the read is refused before
+     anything goes on the bus.
+   - Option `seedkey_level` sets the level (odd, default 0x11).
+4. The transfer:
+   - `read_mode=rmba` (default): `ReadMemoryByAddress 0x23` with format `0x14`
+     (4-byte address, 1-byte size). It reads 128 bytes per request, or 32 if
+     the adapter refused user flow control. Change the size with
+     `read_chunk`; the 1-byte size field caps it at 255.
+   - `read_mode=upload`: `RequestUpload 0x35` + `TransferData 0x36` (counter
+     from 01, wrapping FF→00) + `RequestTransferExit 0x37`. After `3x <dfi>
+     <alfid>` only 4 bytes remain for address + size, so the format is `0x22`
+     (16-bit address) or `0x13` (24-bit address, 255-byte windows, one
+     request/exit cycle per window). **A 32-bit address cannot be uploaded
+     through an ELM327.** Use `rmba` for those.
+   - Option `alfid` overrides the format, and option `data_format` sets the
+     `dataFormatIdentifier`.
+
+Progress is reported for each step:
+
+- `Connect` before the session.
+- `SecurityAccess` before and after the unlock.
+- `Read` at 0 and after every chunk or block, with the region length as the
+  total.
+
+Errors from a timeout or an adapter error line (`NO DATA`, `BUFFER FULL`, ...)
+name the address and the bytes read so far. Some negative responses get a hint:
+
+- 0x33 (security denied) when no handler was set: "supply a seed/key handler".
+- 0x11/0x7F on 0x23: "try `read_mode=upload`".
+- 0x12/0x22/0x7E on the session request: "check ignition, or pick another
+  session".
+
+Each memory request waits 3 s (option `timeout_ms`), longer than the 2 s UDS
+default, because the ELM adds its own latency. `responsePending` (0x78) is
+handled in the ELM reply parser with the P2* budget.
+
+**Dry run.** `Elm327Obd::plan_read_memory(region)` lists, without sending
+anything, every line the read would write, in order: the `AT` pacing and each
+hex request, each with its purpose. A send-key appears as `2712<key>`, and an
+upload's blocks appear as a counter range. The dry run fails where the real
+read would fail before reaching the bus. `memory::dry_run_read` is the same
+planner without an opened adapter.
+
+**Write: bench-only, discouraged.** `capabilities().write_memory` is `false`.
+The ELM cannot send multi-frame ISO-TP, so `write_memory` does the following:
+
+- It refuses unless option `elm_write=single-frame` is set.
+- It then uses `RequestDownload 0x34` with the same 16/24-bit formats as upload.
+- It sends `TransferData` in blocks of **5 bytes** (7 minus the service id and
+  the counter), with the counter wrapping FF→00, and ends with
+  `RequestTransferExit`.
+
+Every block costs one serial round trip, and a dropped USB link in the middle
+of a download can leave an ECU unbootable. Flashing over an ELM327 is **not
+recommended**. Use it only on a bench ECU, behind the flash-safety policy that
+callers enforce. Use slcan, gs_usb, SocketCAN or J2534 for real flashing.
+
+**Clone quirks** were measured on a v1.5 clone (PIC18F25K80 + CH340, HS/MS
+switch) at 38400 baud, with only `AT` commands and no vehicle attached:
+
+- `ATI` reports `ELM327 v1.5`, `AT@1` reports `OBDII to RS232 Interpreter`,
+  and `ATRV` reads `0.0V` with no car attached.
+- The reply to the first `ATE0` after `ATZ` still carries the echo
+  (`ATE0`/`OK`).
+- Accepted: `ATCAF0/1`, `ATAL`, `ATSH 7E0`, `ATCRA 7E8`, `ATCF`/`ATCM`,
+  `ATCFC1`, `ATFCSH`, `ATFCSD 30 00 00`, `ATFCSD 30 00 06`, `ATFCSD 30 08 06`,
+  `ATFCSM 0/1`, `ATST 64`/`FF`, `ATAT0/1/2`, `ATR0/1`, `ATCEA`, `ATTA`,
+  `ATD0/1`, `ATV0/1`, `ATH0/1`, `ATPC` and `ATWS`. User flow control works,
+  so block reads are paced.
+- `ATSPB` + `ATPB C1 04` reports `USER1 (CAN 11/125)`. This confirms the
+  MS-CAN divisor formula.
+- **Rejected (`?`):**
+  - `AT@2`.
+  - `ATCRA` with no argument. A filter cannot be reset that way; the driver
+    always passes an id.
+  - `ATCSM1`/`ATCSM0`. With no silent monitoring, `ATMA` capture is
+    `NotGuaranteed` passive.
+  - A 4-byte `ATSH 18DA10F1`. 29-bit addressing is out of scope here anyway.
+- `ATSP` is stored in the adapter's EEPROM. The probe left it at protocol 6,
+  which is where it started.
+
+Not yet validated against a real ECU. The first car session (read-only, see
+[`FIRST-CAR-TEST.md`](FIRST-CAR-TEST.md)) should start with
+`plan_read_memory` and a small region.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware

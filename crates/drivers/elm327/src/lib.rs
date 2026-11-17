@@ -1,13 +1,22 @@
-//! ELM327 **serial** read-diagnostics driver for OpenTune.
+//! ELM327 **serial** diagnostics driver for OpenTune.
 //!
 //! This driver targets a genuine or clone ELM327 USB adapter (CH340 serial) for
-//! the **READ** side of diagnostics over ISO 15765-4 (UDS/OBD-II on CAN). It is
-//! deliberately scoped to reading: identify the ECU, read and decode Diagnostic
-//! Trouble Codes, read live OBD-II PIDs, and clear stored DTCs. It performs **no**
-//! ECU reprogramming — there is no `WriteDataByIdentifier`, `SecurityAccess`,
-//! `RequestDownload`/`TransferData`, or `RoutineControl`. For firmware
-//! read/flash over an ELM327 see the sibling crates `opentune-driver-elm327`
-//! (K-line/CAN, memory oriented) and `opentune-driver-elm327net` (WiFi/Bluetooth).
+//! diagnostics over ISO 15765-4 (UDS/OBD-II on CAN): identify the ECU, read and
+//! decode Diagnostic Trouble Codes, read live OBD-II PIDs, clear stored DTCs,
+//! and expose the UDS transport via [`Interface::diag`] for the service engines.
+//!
+//! It also has a **block read** path ([`Interface::read_memory`]): optional
+//! session, SecurityAccess with a caller-supplied [`SeedKey`], then
+//! `ReadMemoryByAddress` (0x23) or `RequestUpload`/`TransferData`/
+//! `RequestTransferExit` (0x35/0x36/0x37). See [`memory`] for how each request
+//! is fitted into the single frame an ELM327 can transmit.
+//!
+//! **Flashing over an ELM327 is not recommended.** The adapter cannot transmit
+//! multi-frame ISO-TP, so [`Interface::write_memory`] downloads in 5-byte
+//! single-frame blocks (one serial round trip each), only to 16/24-bit
+//! addresses, and only with the bench opt-in `elm_write=single-frame`;
+//! [`Capabilities::write_memory`] stays `false`. Use a raw-CAN interface
+//! (slcan, gs_usb, SocketCAN, J2534) for real flashing.
 //!
 //! The ELM firmware performs ISO-TP (ISO 15765-2) segmentation itself when CAN
 //! auto-formatting is on (`ATCAF1`), so this driver implements
@@ -28,11 +37,29 @@
 //! - `tx_id`/`rx_id` come from [`ConnectConfig`] (default 0x7E0/0x7E8). A
 //!   functional request to 0x7DF also works when set as `tx_id`.
 //!
+//! Block read/write options (all optional):
+//! - `session`: `none`, `default`, `extended`, `programming` or a session byte.
+//!   Default: extended (0x03) for reads, programming (0x02) for writes.
+//! - `seedkey` (an algorithm id) or `security=required`: the ECU needs
+//!   SecurityAccess; the operation is refused before anything is sent unless a
+//!   handler was given with [`Elm327Obd::set_seed_key`].
+//! - `seedkey_level`: odd request-seed level (default 0x11).
+//! - `read_mode`: `rmba` (0x23, default) or `upload` (0x35/0x36/0x37).
+//! - `read_chunk`: bytes per 0x23 request (default 128 when the adapter
+//!   accepted user flow control, else 32; capped by the size field).
+//! - `alfid`: `addressAndLengthFormatIdentifier` override (hex, e.g. `14`);
+//!   must fit the 7-byte single frame.
+//! - `data_format`: `dataFormatIdentifier` for 0x34/0x35 (hex, default `00`).
+//! - `fc_stmin`: STmin in ms the ELM asks the ECU for during a block read
+//!   (default: derived from the serial baud so the UART keeps up).
+//! - `elm_write=single-frame`: bench opt-in for the slow download path.
+//!
 //! ## Validation status
-//! Compiles and is unit-tested against scripted ELM responses (see the tests
-//! module); it has **not** yet been validated against real hardware. The MS-CAN
-//! protocol-B programming bytes (`ATPB`) in particular are derived from the
-//! ELM327 datasheet formula and need bench confirmation on the medium-speed bus.
+//! Unit-tested against scripted ELM responses (see the tests module). The AT
+//! init (including `ATCAF1`, `ATFCSH`/`ATFCSD`/`ATFCSM`, `ATST`, `ATCRA` and
+//! `ATSPB`/`ATPB C1 04`, which the clone reports as `USER1 (CAN 11/125)`) has
+//! been checked on a v1.5 PIC18F25K80 + CH340 clone with no vehicle attached;
+//! nothing has been exchanged with a real ECU yet.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -40,15 +67,17 @@
 use opentune_core::protocol::diag::check_response;
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::elm;
+use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
-    Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Progress,
-    Result,
+    Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
+    Progress, Result,
 };
 use opentune_dtc::{decode_uds, format_code, lookup, Dtc, DtcRecord, System};
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+pub mod memory;
 pub mod monitor;
 
 /// Default serial device for a USB ELM327.
@@ -136,6 +165,11 @@ struct ElmTransport {
     version: String,
     /// `AT@1` device description captured at init.
     device: String,
+    /// The adapter accepted user-defined flow control (`ATFCSH`, `ATFCSD`,
+    /// `ATFCSM 1`) at init, so a block read can pace the ECU with an STmin.
+    fc_user: bool,
+    /// Serial baud, used to derive the block-read STmin.
+    baud: u32,
 }
 
 impl ElmTransport {
@@ -144,7 +178,25 @@ impl ElmTransport {
             stream,
             version: String::new(),
             device: String::new(),
+            fc_user: false,
+            baud: DEFAULT_BAUD,
         }
+    }
+
+    /// Ask the ECU for `stmin` ms between consecutive frames during a block
+    /// read, so a long multi-frame reply does not overrun the adapter's UART
+    /// (`BUFFER FULL`). Returns whether the pacing is in effect.
+    fn pace_flow_control(&mut self, stmin: u8) -> Result<bool> {
+        if !self.fc_user {
+            return Ok(false);
+        }
+        let reply = self.at(&format!("ATFCSD 30 00 {stmin:02X}"))?;
+        Ok(!elm::at_rejected(&reply))
+    }
+
+    /// Put the init flow control (CTS, BS 0, STmin 0) back after a block read.
+    fn restore_flow_control(&mut self) {
+        let _ = self.at("ATFCSD 30 00 00");
     }
 
     /// Read characters until the ELM command prompt `>` or the deadline.
@@ -271,9 +323,16 @@ impl ElmTransport {
         // ISO-TP flow control: answer the ECU's first frame with CTS, 0 block
         // size, 0 separation time, using our tx header. `ATFCSM 1` tells the ELM
         // to use these user-set values rather than auto.
-        let _ = self.at(&format!("ATFCSH {tx:03X}"));
-        let _ = self.at("ATFCSD 30 00 00");
-        let _ = self.at("ATFCSM 1");
+        // Not fatal when refused (older clones), but remembered: without it a
+        // block read cannot pace the ECU and uses small chunks instead.
+        let fc = [
+            self.at(&format!("ATFCSH {tx:03X}")),
+            self.at("ATFCSD 30 00 00"),
+            self.at("ATFCSM 1"),
+        ];
+        self.fc_user = fc
+            .iter()
+            .all(|r| matches!(r, Ok(reply) if !elm::at_rejected(reply)));
 
         // Response timeout: ATST units are 4 ms; 0x64 => ~400 ms, the ceiling
         // adaptive timing (ATAT1) works under.
@@ -355,11 +414,12 @@ pub struct AdapterIdentity {
     pub device: String,
 }
 
-/// Serial ELM327 read-diagnostics driver.
+/// Serial ELM327 diagnostics driver.
 ///
 /// Opens via [`Interface::open`] with the options documented at the crate root,
 /// or in tests via [`Elm327Obd::with_stream`]. Beyond the [`Interface`] trait
-/// (identify + battery), the read-side diagnostics live on the inherent methods:
+/// (identify, battery, block read, bench-only block write), the read-side
+/// diagnostics live on the inherent methods:
 /// [`read_dtcs`](Elm327Obd::read_dtcs)/[`read_obd_dtcs`](Elm327Obd::read_obd_dtcs),
 /// [`clear_dtcs`](Elm327Obd::clear_dtcs), [`read_pid`](Elm327Obd::read_pid) and
 /// the `live_*` helpers, plus [`diagnostic_session`](Elm327Obd::diagnostic_session)
@@ -371,6 +431,11 @@ pub struct Elm327Obd {
     injected: Option<Box<dyn ElmStream>>,
     /// `ATMA` full-bus capture (independent of `open`).
     monitor: monitor::ElmMonitor,
+    /// The configuration `open` was given (memory options live in it).
+    cfg: Option<ConnectConfig>,
+    /// Caller-supplied seed/key handler for SecurityAccess (0x27). OpenTune
+    /// ships no OEM algorithms.
+    seed_key: Option<Box<dyn SeedKey>>,
 }
 
 impl Default for Elm327Obd {
@@ -380,8 +445,24 @@ impl Default for Elm327Obd {
             bus: CanBus::HsCan,
             injected: None,
             monitor: monitor::ElmMonitor::new(),
+            cfg: None,
+            seed_key: None,
         }
     }
+}
+
+/// Why [`Interface::write_memory`] is refused without the bench opt-in.
+const WRITE_REFUSAL: &str = "flashing over an ELM327 is not recommended: the adapter cannot \
+     transmit multi-frame ISO-TP, so a download crawls in 5-byte single-frame blocks and a \
+     dropped serial link mid-download can leave the ECU unbootable. Use a raw-CAN interface \
+     (slcan/gs_usb/SocketCAN/J2534). For a bench ECU only, set option elm_write=single-frame";
+
+/// STmin (ms) that lets the UART drain one consecutive frame before the next:
+/// an ELM prints a 7-byte CF as about 17 characters (`N:` + 14 hex + CR), 10
+/// bits each, plus 1 ms of slack.
+fn default_stmin(baud: u32) -> u8 {
+    let ms = 170_000u32.div_ceil(baud.max(1)) + 1;
+    ms.min(0x7F) as u8
 }
 
 impl Elm327Obd {
@@ -401,6 +482,63 @@ impl Elm327Obd {
     /// The CAN bus this driver was opened against.
     pub fn bus(&self) -> CanBus {
         self.bus
+    }
+
+    /// Install the seed/key handler used for SecurityAccess (0x27) before a
+    /// block read or write. Without it, an ECU marked as needing security
+    /// (`seedkey`/`security=required`) is refused before anything is sent.
+    /// OpenTune ships no OEM algorithms; the caller or a plugin supplies one.
+    pub fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) {
+        self.seed_key = Some(seed_key);
+    }
+
+    /// Session + security for a memory operation. Returns whether an unlock
+    /// was performed.
+    fn prepare_memory_access(
+        &mut self,
+        opts: &memory::MemOptions,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<bool> {
+        let sk = self.seed_key.as_deref();
+        let t = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        progress(Progress {
+            phase: Phase::Connect,
+            done: 0,
+            total: 1,
+        });
+        memory::enter_session(t, opts.session, opts.timeout_ms)?;
+        progress(Progress {
+            phase: Phase::SecurityAccess,
+            done: 0,
+            total: 1,
+        });
+        let unlocked = memory::security_access(
+            t,
+            sk,
+            opts.seed_level,
+            opts.security_required,
+            opts.timeout_ms,
+        )?;
+        progress(Progress {
+            phase: Phase::SecurityAccess,
+            done: 1,
+            total: 1,
+        });
+        Ok(unlocked)
+    }
+
+    /// Dry run of [`Interface::read_memory`] on the opened adapter: every line
+    /// it would write (adapter `AT` pacing and the hex UDS requests, in order),
+    /// with what each is for. **Sends nothing.** Fails exactly where the real
+    /// read would fail before touching the bus (bad options, a request format
+    /// that does not fit an ELM single frame, security required without a
+    /// handler).
+    pub fn plan_read_memory(&self, region: MemoryRegion) -> Result<Vec<memory::PlannedRequest>> {
+        let cfg = self.cfg.as_ref().ok_or(Error::NotConnected)?;
+        let t = self.transport.as_ref().ok_or(Error::NotConnected)?;
+        let opts = memory::MemOptions::from_config(cfg, memory::Op::Read)?;
+        let stmin = opts.fc_stmin.unwrap_or_else(|| default_stmin(t.baud));
+        memory::dry_run_read(&opts, region, t.fc_user, stmin, self.seed_key.is_some())
     }
 
     fn transport(&mut self) -> Result<&mut ElmTransport> {
@@ -615,11 +753,18 @@ impl Interface for Elm327Obd {
         Capabilities {
             can: true,
             battery_voltage: true,
-            // Read-diagnostics only: no firmware memory read/write here.
-            read_memory: false,
+            // Block read via 0x23 or 0x35/0x36/0x37 (see `memory`).
+            read_memory: true,
+            // No multi-frame transmit: downloads are 5-byte single-frame blocks
+            // behind a bench opt-in, which is not a flashing capability.
             write_memory: false,
             ..Default::default()
         }
+    }
+
+    fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) -> bool {
+        Elm327Obd::set_seed_key(self, seed_key);
+        true
     }
 
     /// Expose the UDS/OBD diagnostic transport so the coding/adaptation/auto-scan/
@@ -633,13 +778,20 @@ impl Interface for Elm327Obd {
         let bus = CanBus::from_option(cfg.options.get("bus").map(String::as_str));
         let stream = self.connect_stream(cfg)?;
         let mut transport = ElmTransport::new(stream);
+        transport.baud = cfg
+            .options
+            .get("baud")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_BAUD);
         transport.init(cfg, bus)?;
         self.transport = Some(transport);
         self.bus = bus;
+        self.cfg = Some(cfg.clone());
         Ok(())
     }
 
     fn close(&mut self) -> Result<()> {
+        self.cfg = None;
         if let Some(mut t) = self.transport.take() {
             let _ = t.at("ATPC"); // protocol close
         }
@@ -683,28 +835,73 @@ impl Interface for Elm327Obd {
         Ok(id)
     }
 
-    /// Unsupported: this is a read-diagnostics driver, not a firmware reader. Use
-    /// `opentune-driver-elm327` / `opentune-driver-elm327net` for memory reads.
+    /// Block read: session, SecurityAccess (when a handler is set or the config
+    /// requires it), then 0x23 chunks or a 0x35/0x36/0x37 upload. Every request
+    /// format is validated against the ELM's 7-byte single-frame limit before
+    /// anything is sent.
     fn read_memory(
         &mut self,
-        _region: MemoryRegion,
-        _progress: &mut dyn FnMut(Progress),
+        region: MemoryRegion,
+        progress: &mut dyn FnMut(Progress),
     ) -> Result<Vec<u8>> {
-        Err(Error::Unsupported(
-            "ELM327 OBD driver reads diagnostics (DTCs/PIDs/IDs), not ECU memory".into(),
-        ))
+        let cfg = self.cfg.as_ref().ok_or(Error::NotConnected)?;
+        let opts = memory::MemOptions::from_config(cfg, memory::Op::Read)?;
+        if region.length == 0 {
+            return Ok(Vec::new());
+        }
+        let t = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        let plan = opts.plan_read(region, t.fc_user)?;
+        if opts.security_required && self.seed_key.is_none() {
+            return Err(memory::missing_handler());
+        }
+        let stmin = opts.fc_stmin.unwrap_or_else(|| default_stmin(t.baud));
+        let paced = t.pace_flow_control(stmin)?;
+        let result = self
+            .prepare_memory_access(&opts, progress)
+            .and_then(|unlocked| {
+                let t = self.transport.as_mut().ok_or(Error::NotConnected)?;
+                memory::read(t, plan, &opts, unlocked, region, progress)
+            });
+        if paced {
+            if let Some(t) = self.transport.as_mut() {
+                t.restore_flow_control();
+            }
+        }
+        result
     }
 
-    /// Unsupported: this driver never writes to the ECU.
+    /// Bench-only download (0x34/0x36/0x37) in 5-byte single-frame blocks,
+    /// refused unless `elm_write=single-frame` is set. **Not recommended**: see
+    /// the crate docs. The flash-safety policy (voltage, backup, verify) is the
+    /// caller's, as for every driver.
     fn write_memory(
         &mut self,
-        _region: MemoryRegion,
-        _data: &[u8],
-        _progress: &mut dyn FnMut(Progress),
+        region: MemoryRegion,
+        data: &[u8],
+        progress: &mut dyn FnMut(Progress),
     ) -> Result<()> {
-        Err(Error::Unsupported(
-            "ELM327 OBD driver is read-only; it does not write ECU memory".into(),
-        ))
+        let cfg = self.cfg.as_ref().ok_or(Error::NotConnected)?;
+        let opts = memory::MemOptions::from_config(cfg, memory::Op::Write)?;
+        if !opts.bench_write {
+            return Err(Error::Unsupported(WRITE_REFUSAL.into()));
+        }
+        if data.len() as u64 != u64::from(region.length) {
+            return Err(Error::Config(format!(
+                "write of {} bytes does not match the region length {}",
+                data.len(),
+                region.length
+            )));
+        }
+        if data.is_empty() {
+            return Ok(());
+        }
+        let (alfid, window) = opts.plan_write(region)?;
+        if opts.security_required && self.seed_key.is_none() {
+            return Err(memory::missing_handler());
+        }
+        self.prepare_memory_access(&opts, progress)?;
+        let t = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        memory::write(t, (alfid, window), &opts, region, data, progress)
     }
 }
 
@@ -1082,5 +1279,430 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["P0101"]
         );
+    }
+
+    // --- Block read/write ---------------------------------------------------
+
+    /// DEMO ONLY - not an OEM algorithm. XOR 0x5A then +1 per byte.
+    struct DemoKey;
+    impl SeedKey for DemoKey {
+        fn id(&self) -> &str {
+            "demo-xor-add"
+        }
+        fn compute(&self, seed: &[u8], _level: u8) -> Result<Vec<u8>> {
+            Ok(seed.iter().map(|b| (b ^ 0x5A).wrapping_add(1)).collect())
+        }
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02X}")).collect()
+    }
+
+    /// A response as an ELM prints it with `ATCAF1 ATH0 ATS0`: single frame as
+    /// plain hex, multi-frame as a 3-digit length line plus `N:` frame lines.
+    fn elm_reply(bytes: &[u8]) -> String {
+        if bytes.len() <= 7 {
+            return hex(bytes);
+        }
+        let mut s = format!("{:03X}\r0:{}\r", bytes.len(), hex(&bytes[..6]));
+        for (i, c) in bytes[6..].chunks(7).enumerate() {
+            s.push_str(&format!("{:X}:{}\r", (i + 1) & 0x0F, hex(c)));
+        }
+        s
+    }
+
+    fn pattern(len: usize) -> Vec<u8> {
+        (0..len).map(|i| (i * 7 + 3) as u8).collect()
+    }
+
+    fn cfg_with(pairs: &[(&str, &str)]) -> ConnectConfig {
+        let mut c = ConnectConfig::default();
+        for (k, v) in pairs {
+            c.options.insert((*k).into(), (*v).into());
+        }
+        c
+    }
+
+    /// Open over a mock with scripted diagnostic replies; returns the driver
+    /// and the shared write log.
+    fn open_with(
+        replies: &[String],
+        cfg: &ConnectConfig,
+        reject: &[&str],
+    ) -> (Elm327Obd, Arc<Mutex<Vec<u8>>>) {
+        let refs: Vec<&str> = replies.iter().map(String::as_str).collect();
+        let mut mock = MockElm::new(&refs);
+        mock.reject = reject.iter().map(|s| s.to_string()).collect();
+        let written = mock.written();
+        let mut d = Elm327Obd::with_stream(Box::new(mock));
+        d.open(cfg).unwrap();
+        written.lock().unwrap().clear(); // keep only post-open traffic
+        (d, written)
+    }
+
+    /// Every line written since open, in order.
+    fn lines(written: &Arc<Mutex<Vec<u8>>>) -> Vec<String> {
+        String::from_utf8(written.lock().unwrap().clone())
+            .unwrap()
+            .split('\r')
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Only the hex diagnostic requests (what goes on the bus).
+    fn bus_requests(written: &Arc<Mutex<Vec<u8>>>) -> Vec<String> {
+        lines(written)
+            .into_iter()
+            .filter(|l| !l.starts_with("AT"))
+            .collect()
+    }
+
+    fn seed_reply() -> String {
+        "671111223344".to_string()
+    }
+
+    fn demo_key_req() -> String {
+        let key: Vec<u8> = [0x11u8, 0x22, 0x33, 0x44]
+            .iter()
+            .map(|b| (b ^ 0x5A).wrapping_add(1))
+            .collect();
+        format!("2712{}", hex(&key))
+    }
+
+    #[test]
+    fn capabilities_report_block_read_but_not_flashing() {
+        let caps = Elm327Obd::new().capabilities();
+        assert!(caps.read_memory);
+        assert!(!caps.write_memory);
+        assert!(!caps.bench_boot);
+    }
+
+    #[test]
+    fn trait_object_accepts_a_seed_key() {
+        let mut d: Box<dyn Interface> = Box::new(Elm327Obd::new());
+        assert!(d.set_seed_key(Box::new(DemoKey)));
+    }
+
+    #[test]
+    fn rmba_read_runs_session_and_security_then_chunks_and_reassembles() {
+        let image = pattern(300);
+        let mut replies = vec!["5003003201F4".to_string(), seed_reply(), "6712".to_string()];
+        for c in image.chunks(0x80) {
+            let mut r = vec![0x63];
+            r.extend_from_slice(c);
+            replies.push(elm_reply(&r));
+        }
+        let cfg = cfg_with(&[("seedkey", "demo-xor-add")]);
+        let (mut d, written) = open_with(&replies, &cfg, &[]);
+        d.set_seed_key(Box::new(DemoKey));
+        let mut seen = Vec::new();
+        let got = d
+            .read_memory(MemoryRegion::new(0x0001_0000, 300), &mut |p| seen.push(p))
+            .unwrap();
+        assert_eq!(got, image);
+        assert_eq!(
+            bus_requests(&written),
+            vec![
+                "1003".to_string(),
+                "2711".to_string(),
+                demo_key_req(),
+                "23140001000080".to_string(),
+                "23140001008080".to_string(),
+                "2314000101002C".to_string(),
+            ]
+        );
+        // Every bus request fits one ELM single frame.
+        assert!(bus_requests(&written)
+            .iter()
+            .all(|r| r.len() <= 2 * elm::MAX_CAN_REQUEST));
+        // Paced flow control around the read, restored afterwards.
+        let all = lines(&written);
+        assert_eq!(all.first().map(String::as_str), Some("ATFCSD 30 00 06"));
+        assert_eq!(all.last().map(String::as_str), Some("ATFCSD 30 00 00"));
+        // Progress: security reported, then per chunk up to the total.
+        assert!(seen.iter().any(|p| p.phase == Phase::SecurityAccess));
+        let reads: Vec<u64> = seen
+            .iter()
+            .filter(|p| p.phase == Phase::Read)
+            .map(|p| p.done)
+            .collect();
+        assert_eq!(reads, vec![0, 128, 256, 300]);
+        assert!(seen
+            .iter()
+            .all(|p| p.phase != Phase::Read || p.total == 300));
+    }
+
+    #[test]
+    fn plan_read_memory_matches_what_read_sends_and_sends_nothing() {
+        let image = pattern(0x90);
+        let mut replies = vec!["5003".to_string()];
+        for c in image.chunks(0x80) {
+            let mut r = vec![0x63];
+            r.extend_from_slice(c);
+            replies.push(elm_reply(&r));
+        }
+        let (mut d, written) = open_with(&replies, &ConnectConfig::default(), &[]);
+        let region = MemoryRegion::new(0x8000_0000, 0x90);
+        let plan = d.plan_read_memory(region).unwrap();
+        assert!(lines(&written).is_empty(), "a dry run writes nothing");
+        d.read_memory(region, &mut |_| {}).unwrap();
+        let planned: Vec<String> = plan.iter().map(|p| p.line.clone()).collect();
+        assert_eq!(planned, lines(&written));
+    }
+
+    #[test]
+    fn invalid_key_nrc_35_stops_without_retry() {
+        let replies = ["5003".to_string(), seed_reply(), "7F2735".to_string()];
+        let (mut d, written) = open_with(&replies, &cfg_with(&[("seedkey", "x")]), &[]);
+        d.set_seed_key(Box::new(DemoKey));
+        let err = d
+            .read_memory(MemoryRegion::new(0, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(matches!(err, Error::SecurityDenied), "{err:?}");
+        assert_eq!(
+            bus_requests(&written),
+            vec!["1003".to_string(), "2711".to_string(), demo_key_req()],
+            "one key attempt, no read after a rejected key"
+        );
+    }
+
+    #[test]
+    fn security_delay_nrc_37_is_reported_not_retried() {
+        let replies = ["5003".to_string(), "7F2737".to_string()];
+        let (mut d, written) = open_with(&replies, &cfg_with(&[("seedkey", "x")]), &[]);
+        d.set_seed_key(Box::new(DemoKey));
+        let err = d
+            .read_memory(MemoryRegion::new(0, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Protocol(m) if m.contains("0x37") && m.contains("does not retry")),
+            "{err:?}"
+        );
+        assert_eq!(
+            bus_requests(&written),
+            vec!["1003".to_string(), "2711".to_string()]
+        );
+    }
+
+    #[test]
+    fn missing_seed_key_is_refused_before_anything_is_sent() {
+        let (mut d, written) = open_with(&[], &cfg_with(&[("security", "required")]), &[]);
+        let err = d
+            .read_memory(MemoryRegion::new(0, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Config(m) if m.contains("seed/key")),
+            "{err:?}"
+        );
+        assert!(lines(&written).is_empty(), "{:?}", lines(&written));
+    }
+
+    #[test]
+    fn security_denied_without_handler_explains_what_is_missing() {
+        let replies = ["5003".to_string(), "7F2333".to_string()];
+        let (mut d, _) = open_with(&replies, &ConnectConfig::default(), &[]);
+        let err = d
+            .read_memory(MemoryRegion::new(0, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Config(m) if m.contains("0x33") && m.contains("set_seed_key")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn rmba_not_supported_suggests_upload() {
+        let replies = ["5003".to_string(), "7F2311".to_string()];
+        let (mut d, _) = open_with(&replies, &ConnectConfig::default(), &[]);
+        let err = d
+            .read_memory(MemoryRegion::new(0, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Unsupported(m) if m.contains("read_mode=upload")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn no_data_mid_read_names_the_address() {
+        let mut first = vec![0x63];
+        first.extend(pattern(0x20));
+        let replies = [elm_reply(&first), "NO DATA".to_string()];
+        let (mut d, _) = open_with(&replies, &cfg_with(&[("session", "none")]), &["ATFCSD"]);
+        let err = d
+            .read_memory(MemoryRegion::new(0x1000, 0x40), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Protocol(m) if m.contains("0x00001020") && m.contains("32 of 64")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn without_user_flow_control_reads_use_small_chunks_and_no_pacing() {
+        let image = pattern(0x30);
+        let mut replies = Vec::new();
+        for c in image.chunks(0x20) {
+            let mut r = vec![0x63];
+            r.extend_from_slice(c);
+            replies.push(elm_reply(&r));
+        }
+        let (mut d, written) = open_with(&replies, &cfg_with(&[("session", "none")]), &["ATFCSD"]);
+        let got = d
+            .read_memory(MemoryRegion::new(0x2000, 0x30), &mut |_| {})
+            .unwrap();
+        assert_eq!(got, image);
+        assert_eq!(lines(&written), vec!["23140000200020", "23140000202010"]);
+    }
+
+    #[test]
+    fn upload_path_uses_35_36_37() {
+        let image = pattern(20);
+        let mut b1 = vec![0x76, 0x01];
+        b1.extend_from_slice(&image[..14]);
+        let mut b2 = vec![0x76, 0x02];
+        b2.extend_from_slice(&image[14..]);
+        let replies = [
+            "75200010".to_string(),
+            elm_reply(&b1),
+            elm_reply(&b2),
+            "77".to_string(),
+        ];
+        let cfg = cfg_with(&[("read_mode", "upload"), ("session", "none")]);
+        let (mut d, written) = open_with(&replies, &cfg, &[]);
+        let mut done = Vec::new();
+        let got = d
+            .read_memory(MemoryRegion::new(0x8000, 20), &mut |p| {
+                if p.phase == Phase::Read {
+                    done.push(p.done)
+                }
+            })
+            .unwrap();
+        assert_eq!(got, image);
+        assert_eq!(
+            bus_requests(&written),
+            vec!["35002280000014", "3601", "3602", "37"]
+        );
+        assert_eq!(done, vec![0, 14, 20]);
+    }
+
+    #[test]
+    fn upload_block_counter_wraps_ff_to_00() {
+        // maxNumberOfBlockLength 3 => one data byte per block => 300 blocks.
+        let image = pattern(300);
+        let mut replies = vec!["751003".to_string()];
+        let mut seq = 1u8;
+        for b in &image {
+            replies.push(hex(&[0x76, seq, *b]));
+            seq = seq.wrapping_add(1);
+        }
+        replies.push("77".to_string());
+        let cfg = cfg_with(&[("read_mode", "upload"), ("session", "none")]);
+        let (mut d, written) = open_with(&replies, &cfg, &[]);
+        let got = d
+            .read_memory(MemoryRegion::new(0x0100, 300), &mut |_| {})
+            .unwrap();
+        assert_eq!(got, image);
+        let reqs = bus_requests(&written);
+        let ff = reqs.iter().position(|r| r == "36FF").unwrap();
+        assert_eq!(reqs[ff + 1], "3600");
+        assert_eq!(reqs[ff + 2], "3601");
+    }
+
+    #[test]
+    fn upload_of_a_32_bit_address_is_refused_before_sending() {
+        let cfg = cfg_with(&[("read_mode", "upload")]);
+        let (mut d, written) = open_with(&[], &cfg, &[]);
+        let err = d
+            .read_memory(MemoryRegion::new(0x8000_0000, 0x10), &mut |_| {})
+            .unwrap_err();
+        assert!(matches!(err, Error::Unsupported(_)), "{err:?}");
+        assert!(lines(&written).is_empty());
+    }
+
+    #[test]
+    fn write_is_refused_without_the_bench_opt_in() {
+        let (mut d, written) = open_with(&[], &ConnectConfig::default(), &[]);
+        let err = d
+            .write_memory(MemoryRegion::new(0x4000, 4), &[1, 2, 3, 4], &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Unsupported(m) if m.contains("not recommended")),
+            "{err:?}"
+        );
+        assert!(lines(&written).is_empty());
+    }
+
+    #[test]
+    fn bench_write_downloads_in_single_frame_blocks() {
+        let data = pattern(12);
+        let replies = [
+            "5002".to_string(),
+            seed_reply(),
+            "6712".to_string(),
+            "74200FFF".to_string(),
+            "7601".to_string(),
+            "7602".to_string(),
+            "7603".to_string(),
+            "77".to_string(),
+        ];
+        let cfg = cfg_with(&[("elm_write", "single-frame"), ("seedkey", "demo")]);
+        let (mut d, written) = open_with(&replies, &cfg, &[]);
+        d.set_seed_key(Box::new(DemoKey));
+        let mut done = Vec::new();
+        d.write_memory(MemoryRegion::new(0x4000, 12), &data, &mut |p| {
+            if p.phase == Phase::Write {
+                done.push(p.done)
+            }
+        })
+        .unwrap();
+        assert_eq!(
+            bus_requests(&written),
+            vec![
+                "1002".to_string(),
+                "2711".to_string(),
+                demo_key_req(),
+                "3400224000000C".to_string(),
+                format!("3601{}", hex(&data[..5])),
+                format!("3602{}", hex(&data[5..10])),
+                format!("3603{}", hex(&data[10..])),
+                "37".to_string(),
+            ]
+        );
+        assert!(bus_requests(&written)
+            .iter()
+            .all(|r| r.len() <= 2 * elm::MAX_CAN_REQUEST));
+        assert_eq!(done, vec![0, 5, 10, 12]);
+    }
+
+    #[test]
+    fn bench_write_block_counter_wraps() {
+        // 1300 bytes in 5-byte blocks = 260 blocks: counter 01..FF, 00, 01..
+        let data = pattern(1300);
+        let mut replies = vec!["741007".to_string()];
+        let mut seq = 1u8;
+        for _ in 0..260 {
+            replies.push(hex(&[0x76, seq]));
+            seq = seq.wrapping_add(1);
+        }
+        replies.push("77".to_string());
+        let cfg = cfg_with(&[("elm_write", "single-frame"), ("session", "none")]);
+        let (mut d, written) = open_with(&replies, &cfg, &[]);
+        d.write_memory(MemoryRegion::new(0x4000, 1300), &data, &mut |_| {})
+            .unwrap();
+        let reqs = bus_requests(&written);
+        assert_eq!(reqs[0], "34002240000514");
+        let ff = reqs.iter().position(|r| r.starts_with("36FF")).unwrap();
+        assert!(reqs[ff + 1].starts_with("3600"));
+        assert!(reqs[ff + 2].starts_with("3601"));
+        assert_eq!(reqs.last().map(String::as_str), Some("37"));
+    }
+
+    #[test]
+    fn default_stmin_keeps_the_uart_ahead() {
+        assert_eq!(default_stmin(38_400), 6);
+        assert_eq!(default_stmin(115_200), 3);
+        assert_eq!(default_stmin(9_600), 19);
     }
 }
