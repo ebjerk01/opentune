@@ -9,9 +9,9 @@ concrete service clients in `opentune-core`:
 - KWP2000 (ISO 14230): `core::protocol::kwp2000::Kwp2000Client` — EDC15/EDC16
   over K-line or VW TP2.0.
 
-The flow below is cross-checked against the reference projects studied under
-`/opt/nvme-fw/opentune-refs/` (read-only): **VW_Flash** (`lib/flash_uds.py` —
-the end-to-end VAG UDS flash), **FastECU**, and **OpenVehicleDiag**. Nothing is
+The flow below is cross-checked against the reference projects studied locally
+(read-only): **VW_Flash** (`lib/flash_uds.py` — the end-to-end VAG UDS flash),
+**FastECU**, and **OpenVehicleDiag**. Nothing is
 copied from them; they are used only to confirm the service order and the
 concepts summarised here.
 

@@ -1206,7 +1206,7 @@ mod tests {
     /// bytes of this stock file — a brick. It must now keep only genuine blocks
     /// (each summing to the constant) and leave the stock dump byte-for-byte
     /// unchanged. CI has no access, so `#[ignore]`d:
-    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
     #[ignore = "needs owner EDC16 fixtures via OPENTUNE_FIXTURES"]

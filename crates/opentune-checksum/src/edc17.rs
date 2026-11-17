@@ -589,7 +589,7 @@ mod tests {
     // Enabled only when OPENTUNE_FIXTURES points at a dir holding the harvested
     // EDC17 pairs `edc17/<name>_ori.bin` / `_mod.bin`. CI has no access, so this
     // is #[ignore]d. Run with:
-    //   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    //   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     //     cargo test -p edc17-checksum -- --ignored --nocapture
 
     const FIXTURES: &[&str] = &[

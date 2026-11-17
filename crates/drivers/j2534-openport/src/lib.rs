@@ -3,7 +3,7 @@
 //! The OpenPort 2.0 (OP2) enumerates as a USB CDC-ACM serial device
 //! (`/dev/ttyACM*`, USB id `0403:cc4d`), so it needs no kernel driver on Linux.
 //! It speaks a line-oriented ASCII protocol documented in
-//! `/opt/nvme-fw/tactrix-op2/FINDINGS.md` (recovered by the roffe/bisak
+//! the OpenPort 2.0 protocol notes (recovered by the roffe/bisak
 //! clean-room projects): commands are `at<letter> ... <seq>` with a wrapping
 //! sequence number, acknowledged by `aro <seq>` (ok) / `are <seq> <code>`
 //! (error), and received CAN frames arrive as a binary record

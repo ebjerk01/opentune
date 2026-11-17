@@ -61,9 +61,9 @@ range. The standard EDC16 injected-quantity LSB is **0.01 mg/stroke**; air-mass
 axes decode with **0.1 mg/stroke**; engine speed is **1.0 rpm**.
 
 No EDC16U34-specific TunerPro **XDF** or ASAM **A2L** was available in the
-owner's tuning library (`ssh stream01:/opt/pool/ecu/tuning` holds many EDC16U34
-PD *binaries* but no matching `.xdf`/`.a2l`/DAMOS), so the definitions are header-
-and diff-derived rather than XDF-imported. This is called out in each map's
+reference tuning library (which holds many EDC16U34 PD *binaries* but no matching
+`.xdf`/`.a2l`/DAMOS), so the definitions are header- and diff-derived rather than
+XDF-imported. This is called out in each map's
 `notes`.
 
 ## The maps

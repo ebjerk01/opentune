@@ -1,113 +1,72 @@
 # OpenTune
 
-**Open-source ECU reading, flashing and calibration for people who want to tune their own cars with cheap, open hardware.**
+**An open-source car diagnostics, coding and tuning suite — read fault codes, live data, code and adapt modules, flash ECUs and edit calibrations, over cheap and open hardware you already own.**
 
-> ⚠️ **Early alpha — not ready for use on a real car.** OpenTune is in active, early development.
-> The offline calibration tooling (on a `.bin`) works today (see below); the hardware drivers are
-> implemented but **unproven on a car** and the desktop/Android apps are **unreleased alpha builds**
-> that have not been runtime-hardened. Reading, writing or reflashing an engine or transmission
-> control unit can permanently damage it — **do not flash a real vehicle with this yet.** Expect
-> breaking changes. Use entirely at your own risk — see [Safety](#safety).
+> ⚠️ **Early alpha — not ready for use on a real car.** The offline tooling (working on a `.bin` or a definition file) is solid and tested; the on-car paths — live diagnostics, coding, adaptation and flashing — are **implemented but unproven on a vehicle**, and the desktop/Android apps are **unreleased alpha builds**. Reading, coding, or reflashing a control unit can permanently damage it. **Do not use this on a real vehicle yet.** Expect breaking changes. Use entirely at your own risk — see [Safety](#safety).
 
-## What works today (offline, on a `.bin`)
+---
 
-- **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **1034-entry
-  catalog** (998 from comma.ai opendbc + 36 hand-curated European entries across
-  VAG/Mercedes/BMW/Ford/PSA/Opel/Fiat/Volvo/Renault, with VAG part-number match keys).
-- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore) and
-  Continental Simos PCR2.1 solved** (directory-walking verify + correct, validated against real
-  full dumps) plus **VAG EDC15** (verify + correct, clean-room from GPL sources; Mercedes EDC15C6
-  proven *not* derivable from the application dump — its checksum runs in the tester-uploaded flash
-  programming driver, not the flash itself — so the module **refuses** it); `fix` corrects an uncorrected tune, `fix --reference`
-  bootstraps EDC17's firmware-specific constant from your own stock dump, and it refuses to
-  guess on anything unvalidated (anti-brick).
-- **Find maps** by clustering the diff of a stock/tuned pair into candidate calibration regions.
-- **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, with a
-  backup vault, all exercised through the mock/file driver.
-- **Compare** two calibrations **map-by-map** through a definition's `MapDef`s — decoded to
-  physical units (mg/stroke, °, …) with a before→after grid, not just a byte diff.
-- **Import and export** the large community library of **TunerPro XDF** definitions
-  (`import-xdf` / `export-xdf`, modern XML, round-trip validated).
-- **Import factory ASAM A2L** calibration descriptions (`import-a2l`) — precise map
-  addresses/axes/scaling straight from the OEM description; validated at scale on real
-  EDC15 / Siemens PPD / BMW MSV80 files (thousands of maps each), linear scaling recovered
-  from RAT_FUNC and non-linear conversions flagged, never guessed.
-- A **CLI** (`opentune`): `drivers`, `info`, `identify`, `read`, `dump`, `diff`, `findmaps`,
-  `compare`, `checksum verify|fix`, `flash`, `vault`, `ecudefs`, `import-xdf`, `export-xdf`,
-  `import-a2l`, `export-a2l`, `vin`, `decode-part`, `scan`, `dtc`.
+## What OpenTune is
 
-OpenTune is a Rust core with pluggable **interface drivers** (so it works with hardware you
-already own), a desktop app, and — later — an Android app, all sharing one engine. It aims to
-cover the whole honest-tuning workflow: identify an ECU, make a verified backup, read it, edit
-the calibration, correct the checksums, write it back, and verify.
+OpenTune began as a clean-room ECU **calibration + checksum** toolkit. It's growing into a complete, local, open-source **diagnostics and tuning suite** — the kind of thing people reach for a mix of closed tools to do today — built on one Rust core:
 
-## Design in one picture
+> **identify → scan → read fault codes → live data → code → adapt → service functions → flash → tune**
+
+Every feature is a *service* built on a shared protocol layer, so it works across every supported interface; new vehicles are added as **data** (definitions, label packs), not new code. The whole thing is GPL-3.0, ships **no manufacturer firmware or keys**, and refuses to guess where guessing could brick a module.
+
+## Capabilities
+
+### Working today (offline — on a `.bin` or definition file, fully tested)
+
+- **Identify** an ECU from its reported part/SW numbers against ECU definitions + a **1034-entry catalog** (comma.ai opendbc + hand-curated European entries across VAG / Mercedes / BMW / Ford / PSA / Opel / Fiat / Volvo / Renault).
+- **Checksums** — a `ChecksumAlgo` engine with **Bosch EDC16 (MPC56x), EDC17 (TriCore), Continental Simos PCR2.1, VAG EDC15, Bosch ME7, and the VAG DQ381 DSG (TCU)** solved and validated against real full dumps. `fix` corrects an uncorrected tune; `fix --reference` bootstraps a firmware-specific constant from your own stock dump; it **refuses to guess** on anything unvalidated (anti-brick), and reports *recognised* vs merely *mathematically consistent* results honestly.
+- **Flash containers** — decode **FRF / ODX / ODX-F / SGO** (VAG) and **VBF** (Ford / Volvo / Mazda), with per-block and file checksums verified. Caller supplies any keys; none are bundled.
+- **Calibration maps** — map-by-map **compare** in physical units, auto **map-finder** from a stock/tuned diff, and import/export of the big community definition libraries: **TunerPro XDF**, **ASAM A2L**, and **EcuFlash / RomRaider XML** (Subaru/Mitsubishi) — with lossy conversions flagged, never guessed.
+- **Module coding** — a data-driven coding engine: read a module's configuration, decode it to human-readable parameters via coding-label definitions, edit a parameter (range/option validated), preview the before→after diff, and write it back safely (read-fresh → merge → read-back verify, with dry-run).
+- **Diagnostics data** — an **11,140-code DTC database + decoder**, VIN and VAG/Bosch part-number decoders, and an ECU-library scanner.
+- A **CLI** (`opentune`) exposing all of the above: `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash · coding · vault · ecudefs · import-xdf|a2l|ecuflash · export-xdf|a2l · vin · decode-part · scan · dtc · container`.
+
+### Implemented, awaiting on-car validation
+
+- **Live diagnostics over ELM327** — a serial ELM327 OBD driver (HS-CAN / MS-CAN): identify, **read/clear DTCs** (UDS `0x19` + OBD mode 03), and **live data** (OBD PIDs) — unit-tested against scripted responses, not yet run on a vehicle.
+- **Interface drivers** — OpenPort 2.0 (J2534/CDC-ACM), generic J2534 PassThru, SocketCAN, slcan, gs_usb/candleLight, KKL 409.1 (raw K-line), an Arduino K-line bridge and an ESP32-S3 open interface (both with OpenTune firmware).
+- **Protocol layer** — ISO-TP (hardened), UDS, KWP2000, VW TP2.0, CAN-FD (+ ISO-TP-FD) and **DoIP** (ISO 13400), with security access (`0x27`) wired into every write path — *you supply the seed/key algorithm; OpenTune ships none*.
+- **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, resumable/recoverable, with a backup vault and a full session transcript.
+- **Apps** — a Tauri **desktop** app (identify, checksums, map viewer/editor, compare, flash, vault) and an **Android** app over the same core (UniFFI).
+
+## Architecture
+
+One core, many interfaces, data-driven features:
 
 ```
-            ┌──────────────────────────────────────────────┐
-            │  Apps:  CLI  ·  Desktop (Tauri)  ·  Android    │
-            └───────────────────────┬──────────────────────┘
-                                    │
-            ┌───────────────────────┴──────────────────────┐
-            │  opentune-core                                │
-            │   Interface trait · protocols (UDS/KWP/ISOTP) │
-            │   ECU definitions · flash orchestrator        │
-            │   checksum engine · safety rules              │
-            └───────────────────────┬──────────────────────┘
-                                    │  one driver trait
-     ┌──────────────┬───────────────┼───────────────┬──────────────┐
-   mock/file   OpenPort 2.0      SocketCAN      K-line (ELM327   …future:
-   (offline)   (J2534/CDC-ACM)   (CANable/…)    + own firmware)  J2534 generic
+  Apps        CLI  ·  Desktop (Tauri)  ·  Android            ← one shared core
+  ───────────────────────────────────────────────────────
+  Services    Diagnostics · Live data · Coding · Adaptation ·
+              Service functions · Flashing · Tuning          ← features, written once
+  ───────────────────────────────────────────────────────
+  Knowledge   ECU defs · coding labels · adaptation maps ·
+  (DATA)      DTC DB · map packs · checksum & container defs ← new vehicles = new data
+  ───────────────────────────────────────────────────────
+  Protocol    ISO-TP · UDS · KWP2000 · TP2.0 · OBD-II · DoIP
+  ───────────────────────────────────────────────────────
+  Transport   ELM327 · J2534/OpenPort · SocketCAN · K-line ·
+              gs_usb · slcan · ESP32-S3 / Arduino (open HW)
 ```
 
-## Interface drivers
-
-| Driver | Hardware | Status |
-|---|---|---|
-| **mock/file** | none — operates on local `.bin` files | **working** |
-| **OpenPort 2.0** | Tactrix OpenPort 2.0 (genuine or clone), CDC-ACM | implemented · awaiting hardware |
-| **SocketCAN** | any Linux CAN (CANable, PCAN, …) | implemented · awaiting hardware |
-| **K-line (ELM327)** | ELM327 (USB) | implemented · awaiting hardware |
-| **KKL (raw K-line)** | FTDI/CH340 KKL 409.1 cable + transceiver | implemented · awaiting hardware |
-| **Arduino K-line bridge** | an Arduino + L9637D running OpenTune firmware (`hardware/firmware/`) | implemented · awaiting hardware |
-| **slcan** | CANable / CANtact USB-CAN | implemented · awaiting hardware |
-
-See [`docs/CHEAP-INTERFACES.md`](docs/CHEAP-INTERFACES.md) for which cheap/clone adapters map to which driver.
-
-## ECU coverage (first targets)
-
-OpenTune is **calibration-focused**. First targets are the well-understood Bosch families:
-
-| ECU | Example engines | Checksum | Bus |
-|---|---|---|---|
-| Bosch **EDC16** (MPC56x) | VAG 1.9/2.0 TDI PD (03G906…), BMW/KIA diesels | **solved** (verify + correct) | OBD/CAN |
-| Bosch **EDC15 / EDC15C6** | VAG 1.9 TDI (EDC15), Mercedes CDI (EDC15C6) | VAG EDC15 **solved** (verify + correct, clean-room from GPL-3.0 sources); Mercedes CR1 located-only and **refuses** (never guesses) | K-line/OBD |
-| Bosch **EDC17** (TriCore) | later common-rail diesels (incl. VAG) | **solved** — verify + correct; a firmware-specific VAG block constant is bootstrapped from your own stock dump (`checksum fix --reference`) | OBD (bench/boot for full read) |
-| Continental/Siemens **Simos PCR2.1** | VAG 1.6 TDI CR | **solved** (verify + correct; self-contained on-image directory) | OBD (bench/boot) |
-
-The checksums are validated against real full dumps. Checksum work derived from any
-proprietary tool is re-derived and validated independently before it ships here. EDC17's
-per-block target constant is firmware-specific; rather than guess, OpenTune recovers it from
-a known-good reference image (your own untouched read) and refuses when the reference doesn't
-match — so a wrong file can never silently corrupt the image.
-
-The OBD-only interfaces move data in and out; obtaining a complete original from a
-readout-protected ECU may require a bench/boot tool, which OpenTune does not provide.
+Because a feature is a service over the protocol layer, it works on any interface; because coverage is data, the suite grows by contributing definitions, not by editing code.
 
 ## Where it's heading
 
-OpenTune is expanding beyond engine ECUs. Planned, reference-driven directions (see
-[ROADMAP.md](ROADMAP.md) *Phase 4* and [`docs/IDEAS.md`](docs/IDEAS.md)):
+The next phase turns the suite's remaining pillars on, mostly buildable and testable offline, with the live paths gated on a vehicle. See **[ROADMAP.md](ROADMAP.md)** for the full plan.
 
-- **Drivetrain control units** — transmission (TCU) and AWD/4WD controllers as first-class targets:
-  VAG DSG (DQ250/DQ381/DL382) + Haldex, Mercedes 722.6 (NAG1), then a generalized controller-def
-  schema so BMW/Ford/Mitsubishi/Volvo units drop in.
-- **More checksum families** — Bosch **ME7** (petrol) and the VAG TCU schemes (CRC32-VW, JAMCRC, …).
-- **Security access** — an optional, *user-enabled* seed/key (SA2) plugin set (never auto-applied).
-- **Real transports** — **DoIP** (ISO-13400) beyond today's mock, and **FRF / ODX / SGO** flash-container decode.
+- **Full-vehicle diagnostics** — auto-scan every module, read all fault codes + identities, freeze-frame and readiness.
+- **Adaptation & service functions** — adaptation channels and actuator/output tests (`0x31`/`0x2F`), and declarative, safe service-function scripts (DPF regen, service reset, SAS calibration, injector coding, …) — all data-driven.
+- **Datalogging** — OBD/UDS periodic data + address-based and Subaru-SSM logging, to file and dashboards.
+- **Module & ECU flashing** — finish the UDS flash path (`0x34`/`0x36`/`0x37` + security + erase/checksum) end-to-end, container-driven, behind the flash-safety policy.
+- **Broader coverage** — drivetrain/TCU and AWD controllers, more checksum and definition formats (WinOLS `.ols`, logger definitions, HEX/SREC), real DoIP on hardware, and a growing community definition & map library.
+- **Interfaces to the max** — CAN-FD, DoIP and J2534 flashing, validated on hardware.
 
-These build on a survey of 43 open-source projects. OpenTune reuses only license-compatible code,
-re-derives anything that came from proprietary tools, and ships no manufacturer firmware or keys.
+Sensitive, brick- or security-adjacent capabilities (OEM seed/key algorithms, protected calibration data) are **never bundled** — OpenTune takes them as caller-supplied inputs or leaves them out of scope, so the open project stays clean and hostable.
 
 ## Scope — what OpenTune will *not* do
 
@@ -117,23 +76,21 @@ To stay a legitimate, hostable project, OpenTune deliberately leaves out:
 - odometer manipulation
 - emissions-control defeat (DPF/EGR/AdBlue "off")
 
-No manufacturer firmware or security files are included in this repository.
+No manufacturer firmware, calibration data or security keys are included in this repository.
 
 ## Building
 
 ```sh
 # Rust stable (see rust-toolchain.toml)
 cargo build --workspace
-cargo test --workspace
+cargo test  --workspace
 cargo run -p opentune-cli -- --help
 ```
 
 ## Safety
 
-- OpenTune **always** takes a verified backup before any write, checks battery voltage, and
-  reads back and verifies after writing. These rules live in the core, not in individual drivers.
-- A failed flash can leave an ECU non-functional. Keep a battery charger connected, never
-  interrupt a write, and keep your original backup safe.
+- OpenTune **always** takes a verified backup before any write, checks battery voltage, and reads back and verifies afterwards — these rules live in the core, not in individual drivers — and the checksum and coding engines **refuse rather than guess** when a result isn't validated.
+- A failed flash or a wrong coding can leave a module non-functional. Keep a battery charger connected, never interrupt a write, and keep your original backup safe.
 - You are responsible for complying with the vehicle, emissions and road-traffic laws where you live.
 
 ## Licence
@@ -143,4 +100,4 @@ cargo run -p opentune-cli -- --help
 
 ## Status & roadmap
 
-See [ROADMAP.md](ROADMAP.md) — progress is tracked there.
+Early alpha, moving fast. Progress is tracked in **[ROADMAP.md](ROADMAP.md)**.

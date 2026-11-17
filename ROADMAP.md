@@ -15,9 +15,10 @@ units — most of it buildable offline; see the **build order** at the end.
 **Suite direction (Phase 5):** OpenTune is growing from a tuning toolkit into a full **diagnostic
 & service suite** — one local app that does, over any interface: identify → auto-scan → fault codes
 → live data → **coding** → **adaptation** → service functions → **flashing** → tuning (ForScan +
-VCDS + OpenPort + WinOLS in one). It ships as **two local builds**: a **public** (clean-room, open
-standards, user-supplied keys) and a **private "Bench"** (public *plus* brand seed-keys, private
-checksums and protected definition packs). Every feature is a *service* on the shared protocol
+VCDS + OpenPort + WinOLS in one). It's a single, local, open-source tool, built clean-room on open
+standards: it ships no OEM keys or protected calibration data — sensitive seed/key algorithms are
+caller-supplied, and anything that can't be implemented cleanly is left out of scope. Every feature
+is a *service* on the shared protocol
 layer, so it works across every interface; new vehicles are new **data** (defs/label packs), not
 new code. See **Phase 5** below.
 
@@ -38,7 +39,7 @@ Everything here operates on a flash `.bin`.
 ### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
 - [x] `ChecksumAlgo` engine (verify + correct) + generic CRC32 helper
 - [x] **EDC16 (MPC56x), EDC17 (TriCore, + `--reference` bootstrap), Simos PCR2.1, VAG EDC15** — all solved and validated against real dumps
-- [ ] **Mercedes EDC15C6 (CR1)** — *not derivable from the application dump (proven); module refuses.* Full clean-room C166/C167 Ghidra RE completed (keyhana module, 540 functions seeded from genuine call targets). The **block format is fully characterized** — each checksummed block = 16-bit magic (`0x5555` cal-dir / `0xA5A5` code-patch / `0xAAAA` program-main) + data + halfword `0xC058` + 32-bit LE checksum (`0xC3` fill); 15 slots, full oracle captured (e.g. `[0x94000,0xe3ffc)→60A63BFD`). But **no resident checksum compute loop exists in the flash**: every C166 far-flash-read mechanism was searched (only 2 EXTS/EXTP+accumulate loops, both engine-control; the one SHA-1-like hash is the seed/key over RAM, off-limits). This matches Bosch EDC15 architecture — the block checksum is verified by the **tester-uploaded flash programming driver** during reflash, which is **not present in the application flash**. All standard algorithms (sum16/32, xor, CRC16/32 + poly scan, Adler-32, Fletcher-32, rotate-accumulate, and the VAG EDC15 loop) were **empirically ruled out across ≥3 independent blocks**. **To solve:** obtain the Bosch EDC15 flash programming driver / flashdaten for ECU `1037351686`, or dynamically capture the verify on a bench ECU during a reflash. Module **refuses** Mercedes (never guesses). Findings: `/opt/nvme-fw/edc15-cleanroom/work/edc15_RE_FINDINGS.txt` (217 lines).
+- [ ] **Mercedes EDC15C6 (CR1)** — *not derivable from the application dump (proven); module refuses.* Full clean-room C166/C167 Ghidra RE completed (keyhana module, 540 functions seeded from genuine call targets). The **block format is fully characterized** — each checksummed block = 16-bit magic (`0x5555` cal-dir / `0xA5A5` code-patch / `0xAAAA` program-main) + data + halfword `0xC058` + 32-bit LE checksum (`0xC3` fill); 15 slots, full oracle captured (e.g. `[0x94000,0xe3ffc)→60A63BFD`). But **no resident checksum compute loop exists in the flash**: every C166 far-flash-read mechanism was searched (only 2 EXTS/EXTP+accumulate loops, both engine-control; the one SHA-1-like hash is the seed/key over RAM, off-limits). This matches Bosch EDC15 architecture — the block checksum is verified by the **tester-uploaded flash programming driver** during reflash, which is **not present in the application flash**. All standard algorithms (sum16/32, xor, CRC16/32 + poly scan, Adler-32, Fletcher-32, rotate-accumulate, and the VAG EDC15 loop) were **empirically ruled out across ≥3 independent blocks**. **To solve:** obtain the Bosch EDC15 flash programming driver / flashdaten for ECU `1037351686`, or dynamically capture the verify on a bench ECU during a reflash. Module **refuses** Mercedes (never guesses). Full clean-room RE findings documented separately.
 
 ### Maps & calibration
 - [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
@@ -146,7 +147,7 @@ All `[ ]` = planned.
 
 ### Seed/key (security access) — new plugin layer
 - [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 attack path below.
-- [ ] 🔒 **Ford/Mazda seed→key** (24-bit LFSR + per-module secret table) — algorithm recovered from the open-source FoCCCus; it is the write-enabler, so it lives in the **private Bench** build only. Needs **one live bench seed/key capture** (the ELM327 can do it) to bit-validate the LFSR port before use. Public build keeps the user-supplies-the-algorithm stance.
+- [ ] **Ford/Mazda module flashing** uses the optional, user-enabled `SeedKey` plugin layer — OpenTune ships no OEM seed/key algorithm; security access takes a caller-supplied key provider. The open-source FoCCCus (GPLv3) is a reference for the on-wire handshake format only.
 
 ### Flash-container decode
 - [x] **FRF / ODX / ODX-F / SGO** unpack (`opentune-container`): FRF rolling-XOR → ZIP → ODX/SGO; LZSS10 / LZSS-DQ / ZF-8HP LZZ decompress; AES-CBC / repeating-XOR / SGO family-cipher block crypto — **caller supplies every key, none bundled** (`frf.key` legal caution respected). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD).
@@ -180,12 +181,12 @@ programming driver. Concrete route to obtain/observe it:
 
 ---
 
-## Phase 5 — Full diagnostic & service suite (public + private Bench)
+## Phase 5 — Full diagnostic & service suite
 Turn the toolkit into a complete suite. Every pillar is a **service engine** (code, written once)
 over the existing protocol layer + **data-defined packs** (defs/labels/scripts), so brands/vehicles
-drop in as data. Engines are **public**; sensitive data (brand seed-keys, protected label/map packs)
-lives in the **private Bench** build. Most engines are buildable + unit-testable offline; the live
-paths are 🔒 (need the car/adapter we now have).
+drop in as data. Everything here is open and clean-room; OEM seed/keys and protected calibration
+data are never bundled — they are caller-supplied or left out of scope. Most engines are buildable +
+unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Coding & adaptation
 - [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Generic engine + 7 unit tests done (scripted transport). Next: adapt to core's `DiagTransport`, CLI/desktop surface, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
@@ -200,17 +201,17 @@ paths are 🔒 (need the car/adapter we now have).
 - [ ] **Datalogging engine** — periodic live data to file + dashboards/graphs + triggers, over OBD mode-01, UDS ReadDataByIdentifier (0x22 periodic), **UDS `mode23`/0x23 address logging**, and **Subaru SSM** — modelled on the Tactrix OpenPort logger (PID sorting, multi-request chunking). Reuse **RomRaider `logger.xml`** param definitions (data-defined, like coding). Ref: **RomRaider** (GPL-2), **FreeSSM** (GPL-3).
 
 ### Flashing to modules (not just engine ECUs)
-- [ ] **UDS module flash** end-to-end — `0x34`/`0x36`/`0x37` + security + erase/checksum `RoutineControl`, **container-driven** (VBF/ODX/FRF/SGO/bin → RequestDownload address/length), behind the existing **flash-safety policy** (voltage → backup → write → read-back verify → recovery). 🔒 Ford module flashing (VBF + Bench seed-key) is the first concrete target.
+- [ ] **UDS module flash** end-to-end — `0x34`/`0x36`/`0x37` + security + erase/checksum `RoutineControl`, **container-driven** (VBF/ODX/FRF/SGO/bin → RequestDownload address/length), behind the existing **flash-safety policy** (voltage → backup → write → read-back verify → recovery). 🔒 Ford module flashing (VBF + the user-supplied `SeedKey` plugin) is the first concrete target.
 - [ ] 🔒 **Validate the J2534 drivers on an OpenPort 2.0** — `opentune-driver-j2534`/`j2534-openport` are written but hardware-unproven; the Tactrix OpenPort 2.0 is the reference PassThru box and the right interface for real engine-ECU flashing (vs the read-only ELM327). Target: EDC16/Subaru SH flash end-to-end on the bench.
 - [ ] **Renesas SH boot mode** read/write (SH7055/SH7058/**SH725xx**) — bench/boot access for Subaru/Mitsubishi *and* the SH725xx DSG (DQ381) TCU. 🔒 bench. Refs: **fenugrec/npkern** (GPL-3, SH RAM kernel), EcuFlash SH boot-mode behavior, NefMoto loaders.
 
 ### Frontends (all local — no server)
-- [ ] Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Public **OpenTune** AppImage + private **Bench** AppImage.
+- [ ] Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
-- [ ] New data formats — **coding-label** (done, in `opentune-coding`), **adaptation-channel map**, **service-function script**, **seed-key DB** (private). Public **community** pack + private **premium** pack, versioned files the app loads locally (no hosting).
+- [ ] New data formats — **coding-label** (done, in `opentune-coding`), **adaptation-channel map**, **service-function script**. A **community** definition/pack library, versioned files the app loads locally (no hosting).
 - [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. 6 tests + fixture-gated real-def test. **Next:** `<include>` base-def merging, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
-- [ ] **Subaru / Mitsubishi seed-key** tables as an optional user-enabled plugin (published tables; Bench), same stance as the Ford/Daimler entries above.
+- [ ] **Subaru / Mitsubishi seed-key** tables as an optional, user-enabled plugin (published tables), same stance as the Ford/Daimler entries above.
 
 ---
 

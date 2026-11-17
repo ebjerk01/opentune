@@ -730,7 +730,7 @@ mod tests {
 
     /// Fixture regression against the real `DQ381 full.bin`. CI has no access, so
     /// `#[ignore]`d:
-    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
     #[ignore = "needs owner TCU fixtures via OPENTUNE_FIXTURES"]

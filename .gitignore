@@ -1,4 +1,4 @@
-# Rust build output (OpenTune builds into /opt/nvme-fw via CARGO_TARGET_DIR)
+# Rust build output (set CARGO_TARGET_DIR to build elsewhere)
 /target
 **/target
 Cargo.lock.bak

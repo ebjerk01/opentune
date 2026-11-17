@@ -522,7 +522,7 @@ mod tests {
 
     /// Fixture regression against real owner dumps. Requires ME7 bins under
     /// `OPENTUNE_FIXTURES/me7/`. CI has no access, so it is `#[ignore]`d:
-    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     ///
     /// Each real stock dump must verify (every block OK); wiping the stored main

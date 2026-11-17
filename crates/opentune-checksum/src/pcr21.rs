@@ -382,7 +382,7 @@ mod tests {
 
     // ---- Real-fixture tests (private PCR2.1 dumps via OPENTUNE_FIXTURES) ----
     //
-    //   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    //   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     //     cargo test -p pcr21-checksum -- --ignored
 
     #[test]

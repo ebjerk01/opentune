@@ -65,8 +65,7 @@ emissions defeat, odometer fraud, or theft.
 ## Apps & ecosystem
 - `[L]` **Android app** — reuse the Rust core via UniFFI; USB-OTG / BLE adapters; same safety
   rules and ECU defs.
-- `[M]` **Public desktop app** (OSS edition) — the calibration-only counterpart of the private
-  bench build.
+- `[M]` **Desktop app** (Tauri) — the calibration, diagnostics and tuning GUI over the shared core.
 - `[S]` **Structured logging** across core/flash/drivers with a session transcript.
 - `[M]` **Signed, reproducible releases** for Linux/Windows/macOS + desktop auto-update *(in progress)*.
 - `[M]` **In-app guide / wiki** *(in progress)*.

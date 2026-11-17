@@ -459,7 +459,7 @@ mod tests {
     /// Fixtures regression against the real owner dumps. Requires the EDC15
     /// pairs under `OPENTUNE_FIXTURES/edc15/`. CI has no access, so it is
     /// `#[ignore]`d. Run with:
-    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
     #[ignore = "needs owner EDC15 fixtures via OPENTUNE_FIXTURES"]
@@ -537,7 +537,7 @@ mod tests {
     /// signatures sit at the classic positions (0x50001/0x60001/0x70001). Before
     /// the layout gate, `correct()` rewrote 16 bytes of this valid file; it must
     /// now be refused. CI has no access, so `#[ignore]`d:
-    ///   OPENTUNE_FIXTURES=/opt/nvme-fw/opentune-fixtures \
+    ///   OPENTUNE_FIXTURES=/path/to/opentune-fixtures \
     ///     cargo test -p opentune-checksum -- --ignored --nocapture
     #[test]
     #[ignore = "needs owner EDC15 fixtures via OPENTUNE_FIXTURES"]
