@@ -43,7 +43,7 @@
   },
   "flash": {
     "title": "Flash",
-    "summary": "Run the safety-gated write sequence (voltage gate, backup, write, read-back verify) through the offline file driver. It changes the target file on disk.",
+    "summary": "Run the safety-gated write sequence (backup to the vault, write, read-back verify) into an image file. File target only in this build: no driver choice, no voltage gate.",
     "needs": ["Target image file", "Data file"],
     "risk": "writes-file",
     "guide": "16-flash"

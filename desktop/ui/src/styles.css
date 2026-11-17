@@ -293,7 +293,7 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
 .guide-body .mdquote { margin: 0 0 11px; padding: 9px 13px; border-left: 3px solid var(--accent); background: rgba(232, 113, 26, 0.06); border-radius: 0 6px 6px 0; color: var(--ink-soft); }
 .guide-body .mdtable { margin: 0 0 14px; }
 .guide-body .mdtable td { font-size: 12.5px; vertical-align: top; }
-.guide-body .mdlink { color: var(--accent); text-decoration: underline dotted; cursor: help; }
+.guide-body .mdlink { color: var(--accent); text-decoration: underline; cursor: pointer; }
 .guide-body hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 
 .toast {

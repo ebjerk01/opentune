@@ -24,7 +24,7 @@ by hand.
 
 ## Common errors
 
-- **SW # shows a byte count** — offline, the file driver only knows the file name and size, so it reports the size where a real ECU would report its software number. Use **Match a part / software number** with the numbers from the ECU label, or use **Analyze bin**, which reads identity strings from inside the image.
+- **SW # shows —** — offline, the file driver only knows the file name and size; it has no software number to report. Use **Match a part / software number** with the numbers from the ECU label, or use **Analyze bin**, which reads identity strings from inside the image.
 - **"Open an image first"** — open a dump in **Image**.
 
 ## Safety

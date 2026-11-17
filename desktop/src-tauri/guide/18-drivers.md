@@ -25,8 +25,9 @@ panels it can drive:
 | `slcan` | slcan USB-CAN (CANable / CANtact) | CAN, memory read/write |
 | `gsusb` | gs_usb / candleLight USB-CAN | CAN, memory read/write |
 | `kkl` | KKL 409.1 K-line cable | K-line, memory read/write |
-| `kline-bridge` | Arduino K-line bridge | K-line, memory read/write |
-| `esp32-opentune` | OpenTune ESP32-S3 interface | CAN, K-line, memory read/write, battery |
+
+The Arduino K-line bridge and the OpenTune ESP32-S3 interface have drivers in
+the source tree but are not in the desktop build yet.
 
 The list in the panel is the authority for your build. A declared capability
 means the driver supports it in principle; it does not mean every operation

@@ -45,19 +45,39 @@
         <input class="inp" id="codName" placeholder="Parameter name (click a row)" style="min-width:220px" />
         <input class="inp" id="codValue" placeholder="New value (e.g. 1 or 0x02)" style="min-width:160px" />
         <button class="btn" id="codPreview">Preview</button>
-        <button class="btn warn" id="codWrite">Write</button>
       </div>
       <div id="codResult" class="result" style="margin-top:10px"></div>
+      <div class="row tight" id="codConfirmRow" hidden style="margin-top:8px">
+        <label class="confirm"><input type="checkbox" id="codAck" /> <span id="codAckText">I confirm writing this change to the module</span></label>
+        <button class="btn warn" id="codWrite" disabled>Write</button>
+      </div>
+      <p class="small muted" style="margin:6px 0 0">Write unlocks after a Preview of the same parameter and value, and needs the confirmation each time.</p>
     </div>`;
   document.getElementById("main").appendChild(sec);
 
   // --- Capability gate (needs CAN) ------------------------------------------
   window.OT.gate(sec, ["can"], "module coding", {
-    disable: ["#codRead", "#codPreview", "#codWrite"],
+    disable: ["#codRead", "#codPreview"],
   });
 
   // --- State -----------------------------------------------------------------
   let defPath = null;
+  // The last successful preview with changes: { name, value }. Write is only
+  // allowed for exactly that edit, after the confirm box is ticked.
+  let previewed = null;
+
+  function syncWrite() {
+    const capsOk = window.OT && window.OT.has ? window.OT.has(["can"]) : true;
+    const same = previewed && previewed.name === $("codName").value.trim() &&
+      previewed.value === parseValue($("codValue").value);
+    $("codConfirmRow").hidden = !same;
+    $("codWrite").disabled = !(capsOk && same && $("codAck").checked);
+  }
+  function invalidatePreview() {
+    previewed = null;
+    $("codAck").checked = false;
+    syncWrite();
+  }
 
   const result = () => $("codResult");
   function showErr(msg) {
@@ -106,6 +126,7 @@
     $("codTableWrap").querySelectorAll("tr[data-name]").forEach((tr) => {
       tr.addEventListener("click", () => {
         $("codName").value = tr.getAttribute("data-name");
+        syncWrite();
         $("codValue").focus();
       });
     });
@@ -217,23 +238,41 @@
     if (!name) return showErr("Enter (or click) a parameter name.");
     const value = parseValue($("codValue").value);
     if (value == null) return showErr("Enter a numeric value, e.g. 1 or 0x02.");
+    const isWrite = cmd === "coding_write";
+    if (isWrite) {
+      if (!previewed || previewed.name !== name || previewed.value !== value) {
+        invalidatePreview();
+        return showErr("Preview this exact change first.");
+      }
+      if (!$("codAck").checked) return showErr("Tick the confirmation — this writes to the module.");
+    }
+    // A write consumes the confirmation and the preview (its baseline is now stale).
+    if (isWrite) invalidatePreview();
     showNote(title + "…");
     try {
-      const rep = await invoke(cmd, {
-        ...window.OT.connArgs(),
-        defPath,
-        timeoutMs: 1000,
-        name,
-        value,
-      });
+      const args = { ...window.OT.connArgs(), defPath, timeoutMs: 1000, name, value };
+      if (isWrite) args.ack = true;
+      const rep = await invoke(cmd, args);
       renderReport(rep, title);
+      if (!isWrite) {
+        const changes = (rep.paramChanges || []).length + (rep.byteChanges || []).length;
+        previewed = changes && rep.outcome && rep.outcome.kind === "planned" ? { name, value } : null;
+        $("codAck").checked = false;
+        $("codAckText").textContent = `I confirm writing ${name} = ${value} to the module`;
+        syncWrite();
+      }
     } catch (e) {
+      if (!isWrite) invalidatePreview();
       showErr(String(e));
     }
   }
 
-  $("codPick").addEventListener("click", pickDef);
+  $("codPick").addEventListener("click", () => { invalidatePreview(); pickDef(); });
   $("codRead").addEventListener("click", doRead);
   $("codPreview").addEventListener("click", () => doEdit("coding_set_preview", "Preview"));
   $("codWrite").addEventListener("click", () => doEdit("coding_write", "Write"));
+  $("codAck").addEventListener("change", syncWrite);
+  $("codName").addEventListener("input", syncWrite);
+  $("codValue").addEventListener("input", syncWrite);
+  if (window.OT && window.OT.onCaps) window.OT.onCaps(syncWrite);
 })();

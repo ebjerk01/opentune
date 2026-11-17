@@ -157,10 +157,11 @@
                 <option value="crc32-tail">crc32-tail</option>
               </select>
               <button class="btn primary" id="btnCsVerify">Verify</button>
-              <button class="btn warn" id="btnCsFix">Fix &amp; save</button>
-              <button class="btn" id="btnCsFixAs">Fix → Save as…</button>
+              <button class="btn warn" id="btnCsFix">Fix → Save as…</button>
+              <button class="btn" id="btnCsFixInPlace" title="Overwrite the opened file; the original is archived to opentune-vault first">Overwrite original…</button>
               <span id="csPathHint" class="muted small">no image opened</span>
             </div>
+            <div class="muted small">Fix writes a corrected copy (<code>&lt;name&gt;.fixed.bin</code>) by default. Overwriting a file first archives it to the <code>opentune-vault</code> folder beside it.</div>
             <div class="muted small">edc16 = Bosch EDC16 block/additive checksum · edc17 = Bosch/VAG forward CRC-32 · pcr21 = Simos PCR2.1 cal CRC (RSA block untouched) · crc32-tail = generic tail CRC-32.</div>
             <div id="csResult" class="result"></div>
           </div>
@@ -324,12 +325,10 @@
         <section class="panel" id="panel-flash">
           <header class="panel-head">
             <h1>Flash</h1>
-            <p>Safety-gated write through the mock driver: voltage gate → verified backup → write → read-back verify.</p>
+            <p>Safety-gated write into an image file: backup to the vault → write → read-back verify.</p>
           </header>
           <div class="card">
-            <div class="row">
-              <label>Driver</label><select class="inp" id="flDriver"></select>
-            </div>
+            <div class="note"><b>File target only in this build.</b> Writing to a real ECU is not validated, so this panel always writes into an image file through the file driver. There is no battery to measure, so the voltage gate is skipped. The whole target file is archived to the <code>opentune-vault</code> folder beside it before the write.</div>
             <div class="row">
               <button class="btn" id="flTarget">Target image…</button>
               <span id="flTargetName" class="muted small mono">uses opened image</span>
@@ -340,8 +339,7 @@
             </div>
             <div class="row tight">
               <label>Address</label><input class="inp sm mono" id="flAddr" value="0x00070000" />
-              <label>min mV</label><input class="inp sm" id="flMv" value="12000" />
-              <button class="btn warn" id="btnFlash">Run flash</button>
+              <button class="btn warn" id="btnFlash">Write to file</button>
             </div>
             <p class="muted small">The data file length must equal the region length. Reads the whole file, writes it at the address.</p>
             <div id="flResult" class="result"></div>

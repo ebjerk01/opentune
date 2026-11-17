@@ -46,7 +46,7 @@ After a write the card shows how many cells changed, the output file, the
 **safety backup** path, and the checksum result.
 
 - Values are clamped to the definition's min/max where it has them, then rounded and clamped to the data type on write. A value you typed may be stored slightly differently.
-- For a bundled definition the checksum family comes from the definition. For an imported or promoted map it comes from the **Algorithm** selected in the **Checksum** panel, so set that first.
+- For a bundled definition the checksum family comes from the definition. For an imported or promoted map it comes from the bundled definition the image matches; only when none matches is the **Algorithm** selected in the **Checksum** panel used. The result says which family was used and where it came from.
 
 ## Common errors
 
