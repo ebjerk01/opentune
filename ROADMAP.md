@@ -40,7 +40,7 @@ Everything here operates on a flash `.bin`.
 ### Checksums (anti-brick: `correct` refuses to guess) — *see the coverage matrix*
 - [x] `ChecksumAlgo` engine (verify + correct) + generic CRC32 helper
 - [x] **EDC16 (MPC56x), EDC17 (TriCore, + `--reference` bootstrap), Simos PCR2.1, VAG EDC15** — all solved and validated against real dumps
-- [ ] **Mercedes EDC15C6 (CR1)** — *not derivable from the application dump (proven); module refuses.* Full clean-room C166/C167 Ghidra RE completed (keyhana module, 540 functions seeded from genuine call targets). The **block format is fully characterized** — each checksummed block = 16-bit magic (`0x5555` cal-dir / `0xA5A5` code-patch / `0xAAAA` program-main) + data + halfword `0xC058` + 32-bit LE checksum (`0xC3` fill); 15 slots, full oracle captured (e.g. `[0x94000,0xe3ffc)→60A63BFD`). But **no resident checksum compute loop exists in the flash**: every C166 far-flash-read mechanism was searched (only 2 EXTS/EXTP+accumulate loops, both engine-control; the one SHA-1-like hash is the seed/key over RAM, off-limits). This matches Bosch EDC15 architecture — the block checksum is verified by the **tester-uploaded flash programming driver** during reflash, which is **not present in the application flash**. All standard algorithms (sum16/32, xor, CRC16/32 + poly scan, Adler-32, Fletcher-32, rotate-accumulate, and the VAG EDC15 loop) were **empirically ruled out across ≥3 independent blocks**. **To solve:** obtain the Bosch EDC15 flash programming driver / flashdaten for ECU `1037351686`, or dynamically capture the verify on a bench ECU during a reflash. Module **refuses** Mercedes (never guesses). Full clean-room RE findings documented separately.
+- [x] **Mercedes EDC15C6 (CR1)** — *solved (clean-room) and self-correcting.* Same loop structure as the public VAG EDC15 algorithm, Mercedes constants: seed `(0,0)` for every block, mid-loop add `0x3962`, finalisation `a += 0x8432`, `b ^= 0x4711`, stored LE as `(b<<16)|a`. Constants derived by exhaustive search against the owner's own stock and tuned dumps; exactly one parameter set reproduces all 15 slots of the Sprinter 2.2 CDI (`1037351686`) stock **and** ECU-flashed tuned image (incl. the four tune-changed calibration blocks) and all blocks of three further Mercedes stock/tuned pairs not used in the search (133/133 blocks). Block chain discovered from the data: each block = data (often opened by a `0x5555`/`0xA5A5`/`0xAAAA` magic) + halfword `0xC058` + 32-bit LE checksum ending on a 256-byte boundary; a block starts right after the previous stored word, or after fill at the next 4 KiB-aligned non-fill offset. Refuses unrecognised images and ambiguous block boundaries.
 
 ### Maps & calibration
 - [x] Map-definition format (`docs/MAP-DEFS.md`) + **real EDC16U34 map library** validated vs dumps
@@ -75,7 +75,7 @@ Everything here operates on a flash `.bin`.
 | **EDC17** (TriCore) | later CR diesels incl. VAG | ✅ solved (+`--reference`) | def | — | OBD (bench/boot for full read) |
 | **Simos PCR2.1** | VAG 1.6 TDI CR | ✅ solved | def | — | OBD (bench/boot) |
 | **EDC15** (VAG TDI) | VAG 1.9 TDI | ✅ solved (clean-room) | — | — | K-line/OBD |
-| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ❌ not in app flash (needs flash driver) | def | — | K-line |
+| **EDC15C6** (Merc CR1) | Mercedes CDI (OM6xx) | ✅ solved (clean-room) | def | — | K-line |
 | **ME7** (Motronic) | VAG/Porsche petrol | ✅ real-image | def | — | OBD/CAN |
 | **DQ381 TCU** (Bosch) | VAG 7-sp wet DSG | ✅ CAL, real-image | def | — | OBD/CAN |
 | **DQ250 TCU** (MQB) | VAG 6-sp DSG | 🔄 JAMCRC, synthetic-only | — | — | OBD/CAN |
@@ -152,7 +152,7 @@ All `[ ]` = planned.
 
 ### Seed/key (security access) — new plugin layer
 - [~] **SA2 bytecode VM** shipped (`opentune-sa2`, implements `SeedKey` as `sa2`) — runs a caller-supplied SA2 program; **no OEM bytecode bundled**. Still open below: any optional per-brand plugin set.
-- [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 attack path below.
+- [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 programming-access follow-ups below.
 - [ ] **Ford/Mazda module flashing** uses the optional, user-enabled `SeedKey` plugin layer — OpenTune ships no OEM seed/key algorithm; security access takes a caller-supplied key provider. The open-source FoCCCus (GPLv3) is a reference for the on-wire handshake format only.
 
 ### Flash-container decode
@@ -173,13 +173,11 @@ defs + checksum; the flash/UDS transport is shared.
 - [ ] **Mercedes 722.6 (NAG1) TCU** — control logic + maps (shift profiles, clutch-fill adaptation, per-gear TCC pressure) from **rnd-ash/ultimate-nag52-fw** (GPL-3, C++ — mine the logic/maps); reusable **Rust** crates (`egs_can`, `diag_common`, `flasher`, KWP2000-over-CAN `bootloader`) from **ultimate-nag52-fw-rs** / **-config-app** (GPL-3 — directly liftable).
 - [ ] Generalize the controller-def schema so BMW ZF 8HP, Ford, Mitsubishi, Volvo TCUs/AWD drop in.
 
-### EDC15C6 — open-source attack path 🔒 (supersedes "parked")
-The checksum isn't in the application dump (proven); it runs in the tester-uploaded flash
-programming driver. Concrete route to obtain/observe it:
+### EDC15C6 — follow-ups (checksum solved)
+The block checksum is solved from the dumps (see above). Remaining, optional:
 - [ ] (1) **Daimler SA2 seed/key** → enter programming mode: **jglim/UnlockECU**.
 - [ ] (2) **C167/ST10 bootstrap-mode** read of internal ROM/flash (has EDC15VM/P+ chip-select presets): **EcuProg7/C167BootTool** (GPL-3) + **NefMoto** C167/C166 loaders (GPL-3).
-- [ ] (3) understand the **RAM flash-kernel** that computes the checksum: **fenugrec/npkern** (GPL-3) as the architectural model.
-- [ ] (4) cross-reference adjacent-family real dumps/maps/seed-key: **Jeep WJ 2.7 CRD** repo (Bosch **EDC15C2**, not C6 — a data point, not a direct solve).
+- [ ] (3) Validate on more EDC15C6 software versions / other Mercedes CDI variants as dumps become available.
 
 ### Hardware 🔒 (mostly)
 - [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch. *(porting is offline; compile/flash/on-bench is 🔒)*
@@ -251,5 +249,5 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 - Verify cheap/clone adapters on real hardware
 - DSG / Haldex / 722.6 **bench flashing**
 - ESP32-S3 compile/flash + KiCad board; flash the Switchleg firmware
-- EDC15C6 attack path (bootstrap / flash-driver / bench capture)
+- EDC15C6 programming access (seed/key, bootstrap read)
 - Android USB-OTG / BLE adapter support

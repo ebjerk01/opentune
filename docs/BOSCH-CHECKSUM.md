@@ -139,18 +139,41 @@ fixed family constant. Each block's **last dword** is the compensation word
 "clean field" earlier EDC16 analysis found is just the calibration block's
 last-dword compensation word, read **big-endian**.
 
-## EDC15C6 (CR1, Infineon C167): field located, algorithm open
+## EDC15C6 (CR1, Infineon C167): solved
 
-One real EDC15C6 pair (MB Sprinter 2.2 CDI, `1037351686`, 1 MiB) isolates a lone
-4-byte checksum field at `0xFBFFC` (two 16-bit LE words, `0xC3` fill, constant
-`0xC058` prefix) that changes stock→tuned. It is **not** reproduced by any
-contiguous 16-/32-bit sum, is **not** a `{sum, ~sum}` complement pair, and has no
-"sum to a constant" invariant like the MPC56x EDC16 above. The expected EDC15
-scheme from the references is a 16-bit additive block sum stored with its
-complement, but the block map (and any C6 CRC/obfuscation layer) could not be
-pinned from a single pair. Per the project rule, `crate::edc15::Edc15C6`
-**surfaces** the field and **refuses** to correct it (`Algo`-less, like the EDC16
-cal-only fallback) rather than guess. See `crates/opentune-checksum/src/edc15.rs`.
+The Mercedes EDC15C6 (e.g. MB Sprinter 2.2 CDI, `1037351686`, 1 MiB) uses the
+**same dual 16-bit accumulator loop** as the VAG EDC15 algorithm
+(`crate::edc15`), with Mercedes constants:
+
+| parameter | VAG TDI v4.1v2 | Mercedes EDC15C6 |
+|---|---|---|
+| seed `(a, b)` | first region `(0,0)`, rest `(0x8631, 0xEFCD)` | `(0, 0)` for every block |
+| mid-loop add | `0xDAAC` | `0x3962` |
+| finalisation | `a += 0xDAAC − 0x8631`, `b ^= 0xDF9B` | `a += 0x8432`, `b ^= 0x4711` |
+| stored | `(b << 16) \| a`, little-endian | same |
+
+**Block chain.** Each protected block ends with the halfword `0xC058` and a 4-byte
+stored checksum; the byte after the stored word is 256-byte aligned. The checksum
+covers `[start, slot)` (marker included, stored word excluded). A block starts right
+after the previous block's stored word (chained, e.g. a calibration header and its
+body), or, when `0xC3`/`0xFF` fill follows, at the next 4 KiB-aligned offset whose
+first halfword is not fill. Blocks usually open with a magic halfword (`0x5555`
+calibration, `0xA5A5` code patch, `0xAAAA` program), but discovery doesn't depend on it.
+The Sprinter image has 15 blocks (four calibration header+body pairs, three code
+patches, an ID/program-header block pair, the main program, and one data block).
+
+**Provenance.** Constants derived by exhaustive search against the owner's own
+stock and tuned dumps; loop structure = the public VAG EDC15 algorithm in this
+crate. The seeds, mid-loop add and finalisation were treated as unknowns (the
+finalisation solved analytically per block). Exactly one parameter set reproduces
+every slot of the stock **and** the independently ECU-flashed tuned image, including
+the four calibration blocks the tune changed, plus every block of three further
+Mercedes stock/tuned pairs that were not used in the search (133/133 blocks).
+
+`crate::edc15::Edc15C6` verifies and corrects these blocks. It refuses images it
+does not recognise (wrong size, malformed walk, no block already verifying) and
+refuses correction when two chained blocks both fail, because the boundary between
+them is then ambiguous.
 
 ## Engine mapping in this crate
 

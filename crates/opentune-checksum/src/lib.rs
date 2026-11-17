@@ -330,9 +330,10 @@ pub fn algorithms() -> Vec<AlgoInfo> {
             name: "Bosch EDC15 (VAG TDI v4.1v2 / EDC15C6)",
             family: "edc15",
             needs_reference: false,
-            notes: "Alias: edc15. VAG TDI v4.1v2 (512 KiB) fully solved and \
-                    self-correcting; Mercedes EDC15C6 (1 MiB) is located-only and \
-                    refused (algorithm not yet reverse-engineered — never guessed).",
+            notes: "Alias: edc15. VAG TDI v4.1v2 (512 KiB) and Mercedes EDC15C6 \
+                    (1 MiB, 0xC058-marked block chain) both validated against real \
+                    stock+tuned dumps and self-correcting; anything unrecognised is \
+                    refused (never guessed).",
         },
         AlgoInfo {
             id: "me7",

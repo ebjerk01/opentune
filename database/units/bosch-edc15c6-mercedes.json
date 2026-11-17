@@ -96,7 +96,7 @@
     "A6121",
     "A6131"
   ],
-  "notes": "First-generation Mercedes common-rail CDI (Mercedes calls the ECU CR1.x / CR2.x). Part numbers are Mercedes prefixes per engine (A611.../A612.../A613...). Checksum: OpenTune's edc15c6 module LOCATES the Mercedes 1 MiB layout but refuses to correct it (algorithm not public) - verify-only. Ground pin is disputed between sources (see bench.notes).",
+  "notes": "First-generation Mercedes common-rail CDI (Mercedes calls the ECU CR1.x / CR2.x). Part numbers are Mercedes prefixes per engine (A611.../A612.../A613...). Checksum: OpenTune's edc15c6 module verifies and corrects the Mercedes 1 MiB block chain (validated on real stock and tuned dumps); unrecognised images are refused. Ground pin is disputed between sources (see bench.notes).",
   "connectors": [
     {
       "name": "1",
