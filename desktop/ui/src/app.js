@@ -174,30 +174,41 @@ $("btnCsVerify").onclick = async () => {
   try { renderChecksum(await invoke("checksum_verify", { path: state.imagePath, algo: $("csAlgo").value })); }
   catch (e) { $("csResult").innerHTML = errBanner(e); }
 };
+// Fix writes a NEW file by default; overwriting archives the original first.
 async function doFix(outPath) {
   if (!state.imagePath) return toast("Open an image first", true);
   try {
     const r = await invoke("checksum_fix", { path: state.imagePath, algo: $("csAlgo").value, outPath: outPath || null });
     const savedElsewhere = r.out_path !== state.imagePath;
+    const where = `<div class="meta-grid" style="margin-top:8px">` +
+      (savedElsewhere ? `<div class="k">saved to</div><div class="v">${esc(r.out_path)}</div>` : "") +
+      `<div class="k">backup</div><div class="v">${r.backup ? esc(r.backup) + " (the file as it was before this fix)" : "none needed — no existing file was overwritten"}</div></div>`;
     $("csResult").innerHTML = (r.fixes.length
-      ? `<div class="banner ok">Applied ${r.fixes.length} fix(es)${savedElsewhere ? " and saved a copy" : " and saved"}.</div><pre class="hexview">${esc(r.fixes.join("\n"))}</pre>`
+      ? `<div class="banner ok">Applied ${r.fixes.length} fix(es)${savedElsewhere ? " and saved a copy" : " and saved in place"}.</div><pre class="hexview">${esc(r.fixes.join("\n"))}</pre>`
       : `<div class="banner info">Nothing to fix — checksums already correct.${savedElsewhere ? " (Copy written.)" : ""}</div>`)
-      + (savedElsewhere ? `<div class="meta-grid" style="margin-top:8px"><div class="k">saved to</div><div class="v">${esc(r.out_path)}</div></div>` : "");
+      + where;
     // If we wrote a copy, switch to it so re-verify reflects the corrected file.
     if (savedElsewhere) { await loadImage(r.out_path); showPanel("checksum"); }
     else if (state.imagePath) renderHex(state.hexOffset || 0);
   } catch (e) {
     const msg = typeof e === "string" ? e : (e && e.message) || "";
     $("csResult").innerHTML = errBanner(e) + (/permission denied|read-only/i.test(msg)
-      ? `<div class="note">The image can't be written in place. Use <b>Fix → Save as…</b> to write a corrected copy you own.</div>` : "");
+      ? `<div class="note">That file can't be written. Use <b>Fix → Save as…</b> and pick a folder you own.</div>` : "");
   }
 }
-$("btnCsFix").onclick = () => doFix(null);
-$("btnCsFixAs").onclick = async () => {
+// Default: Save As a new file next to the original (<name>.fixed.bin). The
+// save dialog may also be pointed at the original; the backend then archives
+// it to the vault before overwriting.
+$("btnCsFix").onclick = async () => {
   if (!state.imagePath) return toast("Open an image first", true);
-  const def = baseName(state.imagePath).replace(/\.(\w+)$/, "") + "-fixed.bin";
+  const def = state.imagePath.replace(/\.[^.\\/]+$/, "") + ".fixed.bin";
   const out = await pickSave("Save corrected image as", def);
   if (out) doFix(out);
+};
+$("btnCsFixInPlace").onclick = () => {
+  if (!state.imagePath) return toast("Open an image first", true);
+  if (!window.confirm(`Overwrite ${baseName(state.imagePath)} with the corrected image?\n\nThe original is archived to the opentune-vault folder beside it first.`)) return;
+  doFix(null);
 };
 
 // =================== MAPS: findmaps ===================
@@ -507,10 +518,13 @@ async function edDoWrite(outPath) {
           newCells: ed.cells, outPath: outPath || null, fixChecksum: $("edFixCs").checked,
         });
     let cs = "";
-    if (r.checksum && r.checksum.error) cs = `<div class="note">checksum: ${esc(r.checksum.error)}</div>`;
+    // Which checksum family was used and where it came from (the matched
+    // definition, or the Checksum panel as a fallback for imported maps).
+    const csWho = esc(r.checksum_algo || "") + (r.checksum_source ? `, from ${esc(r.checksum_source)}` : "");
+    if (r.checksum && r.checksum.error) cs = `<div class="note">checksum${r.checksum_source ? " (" + csWho + ")" : ""}: ${esc(r.checksum.error)}</div>`;
     else if (r.checksum && r.checksum.fixes) cs = r.checksum.fixes.length
-      ? `<div class="banner ok">Checksum (${esc(r.checksum_algo || "")}): ${r.checksum.fixes.length} fix(es) applied.</div><pre class="hexview">${esc(r.checksum.fixes.join("\n"))}</pre>`
-      : `<div class="banner info">Checksum (${esc(r.checksum_algo || "")}): already correct.</div>`;
+      ? `<div class="banner ok">Checksum (${csWho}): ${r.checksum.fixes.length} fix(es) applied.</div><pre class="hexview">${esc(r.checksum.fixes.join("\n"))}</pre>`
+      : `<div class="banner info">Checksum (${csWho}): already correct.</div>`;
     $("mvResult").insertAdjacentHTML("afterbegin",
       `<div class="banner ok">Wrote ${r.cells_changed} changed cell(s) to <b>${esc(baseName(r.out_path))}</b>${r.in_place ? " (in place)" : " (copy)"}.</div>
        <div class="meta-grid"><div class="k">safety backup</div><div class="v">${esc(r.backup)}</div><div class="k">output</div><div class="v">${esc(r.out_path)}</div></div>${cs}`);
@@ -604,15 +618,17 @@ $("btnFlash").onclick = async () => {
   if (!path) return toast("Pick a target image", true);
   if (!state.flData) return toast("Pick a data file", true);
   try {
-    const r = await invoke("flash", { path, addr: $("flAddr").value, dataPath: state.flData, minMv: +$("flMv").value || 0 });
-    $("flResult").innerHTML = `<div class="banner ${r.verified ? "ok" : "info"}">Flash complete${r.verified ? " — read-back verified ✓" : ""}</div>
+    const r = await invoke("flash", { path, addr: $("flAddr").value, dataPath: state.flData });
+    $("flResult").innerHTML = `<div class="banner ${r.verified ? "ok" : "info"}">Write to file complete${r.verified ? " — read-back verified ✓" : ""}</div>
       <div class="meta-grid">
+        <div class="k">target</div><div class="v">${esc(path)}</div>
         <div class="k">region</div><div class="v">${esc(r.region)}</div>
         <div class="k">bytes written</div><div class="v">${r.bytes_written.toLocaleString()}</div>
-        <div class="k">battery</div><div class="v">${r.battery_mv != null ? r.battery_mv + " mV" : "—"}</div>
-        <div class="k">backup</div><div class="v">${r.backup_len.toLocaleString()} bytes saved</div>
+        <div class="k">voltage gate</div><div class="v">${esc(r.voltage_gate || "—")}</div>
+        <div class="k">backup</div><div class="v">${esc(r.backup)} (${r.backup_len.toLocaleString()} bytes, the whole file before the write)</div>
         <div class="k">verified</div><div class="v">${r.verified}</div>
       </div>`;
+    if (path === state.imagePath) renderHex(state.hexOffset || 0);
   } catch (e) { $("flResult").innerHTML = errBanner(e); }
 };
 
@@ -637,23 +653,47 @@ async function initDrivers() {
     const rows = list.map((d) => `<tr><td class="mono">${esc(d.id)}</td><td>${esc(d.name)}</td><td>${d.id === "mock" ? '<span class="pill ok">offline</span>' : '<span class="pill neutral">hardware</span>'}</td></tr>`).join("");
     $("driversResult").innerHTML = `<div class="banner info">${list.length} driver(s) registered. Offline work uses <code>mock</code>.</div>
       <table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Mode</th></tr></thead><tbody>${rows}</tbody></table>`;
-    const sel = $("flDriver"); sel.innerHTML = "";
-    list.forEach((d) => { const o = el("option"); o.value = d.id; o.textContent = `${d.name} (${d.id})`; sel.appendChild(o); });
-    sel.value = "mock";
   } catch (e) { $("driversResult").innerHTML = errBanner(e); }
 }
 
 // =================== GUIDE (offline markdown) ===================
 // Minimal, dependency-free Markdown → HTML: headings, bold/italic/code,
-// fenced code, lists, tables, blockquotes, hr, paragraphs.
+// links, fenced code, lists (with continuation lines), tables, blockquotes,
+// hr, paragraphs. Everything is escaped; only http(s) and #/guide/<id> links
+// become anchors, any other link target renders as plain text.
+function mdHref(url) {
+  const u = String(url).trim();
+  if (/^https?:\/\/[^\s"'<>`]+$/i.test(u)) return { href: u, external: true };
+  const g = u.match(/^#\/guide\/([A-Za-z0-9_-]+)$/);
+  if (g) return { href: u, guide: g[1] };
+  return null;
+}
 function mdInline(s) {
-  let t = esc(s);
-  t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
-  t = t.replace(/\*\*([^*]+)\*\*/g, (_, c) => `<strong>${c}</strong>`);
-  t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, (_, p, c) => `${p}<em>${c}</em>`);
-  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => `<span class="mdlink" title="${esc(url)}">${txt}</span>`);
+  // Code spans and links are cut out into placeholders first, so their text is
+  // not re-interpreted as emphasis, then restored after escaping the rest.
+  const slots = [];
+  const keep = (html) => "\u0000" + (slots.push(html) - 1) + "\u0000";
+  const emph = (t) => t
+    .replace(/\*\*([^*]+)\*\*/g, (_, c) => `<strong>${c}</strong>`)
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, (_, p, c) => `${p}<em>${c}</em>`);
+  let t = String(s == null ? "" : s).replace(/\u0000/g, "");
+  t = t.replace(/`([^`]+)`/g, (_, c) => keep(`<code>${esc(c)}</code>`));
+  t = t.replace(/\[([^\]]+)\]\(([^()\s]+)\)/g, (m, txt, url) => {
+    const h = mdHref(url);
+    const inner = emph(esc(txt));
+    if (!h) return keep(inner);
+    return keep(h.guide
+      ? `<a class="mdlink" href="${esc(h.href)}" data-guide="${esc(h.guide)}">${inner}</a>`
+      : `<a class="mdlink" href="${esc(h.href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`);
+  });
+  t = emph(esc(t));
+  for (let n = 0; n < 4 && t.indexOf("\u0000") >= 0; n++) t = t.replace(/\u0000(\d+)\u0000/g, (_, i) => slots[+i]);
   return t;
 }
+// Does `line` start a block other than a paragraph (so it ends a list item)?
+const mdBlockStart = (line) =>
+  /^```/.test(line) || /^#{1,4}\s/.test(line) || /^\s*---+\s*$/.test(line) ||
+  /^\s*>\s?/.test(line) || /^\s*\|.*\|\s*$/.test(line);
 function renderMarkdown(md) {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   let html = "", i = 0;
@@ -687,7 +727,15 @@ function renderMarkdown(md) {
       flushPara();
       const ordered = /^\s*\d+\.\s+/.test(line);
       let items = [];
-      while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, "")); i++; }
+      // An item runs until a blank line, the next item or another block; lines
+      // in between (indented or not) continue the current item.
+      while (i < lines.length) {
+        const l = lines[i];
+        if (/^\s*([-*+]|\d+\.)\s+/.test(l)) items.push(l.replace(/^\s*([-*+]|\d+\.)\s+/, ""));
+        else if (/^\s*$/.test(l) || mdBlockStart(l)) break;
+        else items[items.length - 1] += " " + l.trim();
+        i++;
+      }
       html += `<${ordered ? "ol" : "ul"} class="mdlist">${items.map((it) => `<li>${mdInline(it)}</li>`).join("")}</${ordered ? "ol" : "ul"}>`;
       continue;
     }
@@ -706,6 +754,14 @@ async function loadGuideSection(id) {
     $("guideBody").scrollTop = 0;
   } catch (e) { $("guideBody").innerHTML = errBanner(e); }
 }
+// In-guide links: #/guide/<id> switches section; external links open outside.
+$("guideBody").addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("a[data-guide]");
+  if (!a) return;
+  e.preventDefault();
+  if (state.guideSections.some((s) => s.id === a.dataset.guide)) loadGuideSection(a.dataset.guide);
+  else toast("No guide page " + a.dataset.guide, true);
+});
 async function initGuide() {
   try {
     state.guideSections = await invoke("guide_list");

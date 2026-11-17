@@ -274,9 +274,21 @@ pub async fn coding_set_preview(
     Ok(v)
 }
 
+/// A coding write changes the module: refuse it unless the UI passed an
+/// explicit `ack = true` (the same pattern as adaptation routines / actuator
+/// tests, service runs and clearing DTCs).
+fn require_ack(ack: Option<bool>) -> Result<(), String> {
+    if ack == Some(true) {
+        Ok(())
+    } else {
+        Err("coding write refused: preview the change and confirm it (ack required)".into())
+    }
+}
+
 /// Apply a single `NAME=VALUE` edit to the module.
 ///
-/// Refuses unless the target module's address is known (UI `tx_id`/`rx_id` or
+/// ACK-GATED: refuses unless `ack` is true (the UI asks for it after showing
+/// the previewed diff). Refuses unless the target module's address is known (UI `tx_id`/`rx_id` or
 /// the def's `req_id`/`resp_id`). In one adapter binding: enters the extended
 /// session, re-reads a fresh backup, merges only the changed bytes, writes the
 /// affected block(s), reads back to verify, and returns to the default session.
@@ -296,8 +308,10 @@ pub async fn coding_write(
     timeout_ms: u64,
     name: String,
     value: u64,
+    ack: Option<bool>,
     hub: tauri::State<'_, AdapterHub>,
 ) -> Result<Value, String> {
+    require_ack(ack)?;
     let (def, text) = load_def(&def_path)?;
     let addr = adapter::write_addr(
         adapter::resolve(tx_id.as_deref(), rx_id.as_deref(), Some(&text))?,
@@ -381,6 +395,14 @@ mod tests {
         let v = report_json(&r);
         assert_eq!(v["backup"][0]["did"], "0x0600");
         assert_eq!(v["backup"][0]["hex"], "00 11");
+    }
+
+    #[test]
+    fn write_needs_explicit_ack() {
+        assert!(require_ack(None).is_err());
+        assert!(require_ack(Some(false)).is_err());
+        assert!(require_ack(None).unwrap_err().contains("ack required"));
+        assert!(require_ack(Some(true)).is_ok());
     }
 
     #[test]

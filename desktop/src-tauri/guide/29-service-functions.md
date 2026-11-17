@@ -30,7 +30,7 @@ steps.
 
 ## Common errors
 
-- **Plan and Run disabled** — no CAN adapter is detected. Connect and detect one first.
+- **Run disabled** — no CAN adapter is detected, or the confirm box is not ticked. Plan works without an adapter.
 - **Refusing to run: tick the confirmation box** — tick it.
 - **Target unknown** — set tx/rx or add the module address to the script.
 - **Failed @ step N** with a negative response — the module refused, often because a precondition is not met (engine state, temperature, speed).

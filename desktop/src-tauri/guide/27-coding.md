@@ -18,7 +18,7 @@ preview a change, and write it back with a backup and read-back verify.
 2. Press **Read coding**. The table lists each parameter: kind, current value, decoded label, and the allowed options.
 3. Click a row to put its name in the edit box. Type the new value (decimal, or hex such as `0x02`).
 4. Press **Preview**. Nothing is written. The report shows the parameter change and the exact bytes that would change.
-5. If the preview is what you want, press **Write**.
+5. If the preview is what you want, tick **I confirm writing this change to the module** under the preview and press **Write**. Write stays disabled until a preview has been shown for the same parameter and value.
 6. Read the outcome. Press **Read coding** again to confirm.
 
 ## Reading the results
@@ -42,4 +42,4 @@ preview a change, and write it back with a backup and read-back verify.
 - **A wrong coding can disable functions or immobilise a module.** Always Preview first.
 - Before writing, OpenTune reads a fresh backup of the coding blocks and shows it under **Backup before write**. Copy those bytes somewhere before you continue. After a failed write or verify the backup opens automatically: these are the bytes to restore.
 - Write only with a healthy battery or a charger connected. Do not switch the ignition off during a write.
-- Write is not behind a confirmation prompt. Check the module, bus and value before you press it.
+- Write needs a preview of the exact change and an explicit confirmation; the app refuses a write without it. Each write needs a fresh confirmation. Still check the module, bus and value before you confirm.

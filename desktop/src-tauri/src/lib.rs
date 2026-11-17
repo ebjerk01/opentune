@@ -617,11 +617,21 @@ fn cat_matches(entries: &[CatalogEntry], id: &EcuId) -> Vec<CatMatch> {
         .collect()
 }
 
+/// The offline file driver has no software number to report, so it puts the
+/// image size (`"<n> bytes"`) in `sw_number`. That is not an identity: drop it
+/// so the UI shows the SW # as unknown and the size only as the size.
+fn drop_file_size_sw(id: &mut EcuId, size: u64) {
+    if id.sw_number.as_deref() == Some(format!("{size} bytes").as_str()) {
+        id.sw_number = None;
+    }
+}
+
 #[tauri::command]
 fn identify(path: String, state: tauri::State<AppData>) -> Result<Value, String> {
     let mut drv = open_file(&path)?;
-    let id: EcuId = drv.read_ecu_id().map_err(|e| e.to_string())?;
+    let mut id: EcuId = drv.read_ecu_id().map_err(|e| e.to_string())?;
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    drop_file_size_sw(&mut id, size);
 
     let defs = load_defs(&state.ecudefs);
     let matched = ecudef::match_ecu(&defs, &id).map(def_match);
@@ -713,9 +723,47 @@ fn checksum_verify(
         .collect())
 }
 
-/// Recompute and write correct checksums. Writes back to `out_path` when given
-/// (Save-As fallback), otherwise in place over `path`. Returns the output path so
-/// the UI can re-open the corrected copy.
+/// The flash vault beside `path`: `<dir of path>/opentune-vault`. Map
+/// write-back, checksum fix and the (file) flash all archive there.
+fn vault_dir_for(path: &str) -> PathBuf {
+    Path::new(path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("opentune-vault")
+}
+
+/// Archive `data` (the whole current contents of `path`) into the vault beside
+/// `path` as a `.bin` + `.meta` pair. Callers abort their write if this fails,
+/// so a file is never changed without a backup on disk.
+fn vault_backup(path: &str, ecu: &EcuId, data: &[u8]) -> Result<PathBuf, String> {
+    let dir = vault_dir_for(path);
+    let whole = MemoryRegion::new(0, data.len() as u32);
+    opentune_flash::vault::save_backup(&dir, ecu, whole, data).map_err(|e| {
+        format!(
+            "could not write the safety backup to {} — aborting before any edit: {e}",
+            dir.display()
+        )
+    })
+}
+
+/// A vault label for a file: `"<what> <file name>"`.
+fn file_label(what: &str, path: &str) -> EcuId {
+    let name = Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    EcuId {
+        ecu_name: Some(format!("{what} {name}")),
+        ..Default::default()
+    }
+}
+
+/// Recompute and write correct checksums. Writes to `out_path` when given (the
+/// UI's default: a new `<name>.fixed.bin`), otherwise in place over `path`.
+/// Whenever an existing file is about to be overwritten — the opened image, or
+/// an existing Save-As target — its current contents are first archived to the
+/// vault beside it (same vault as map write-back); the result's `backup` names
+/// that file (`null` when nothing existing was overwritten).
 #[tauri::command]
 fn checksum_fix(
     path: String,
@@ -723,24 +771,45 @@ fn checksum_fix(
     out_path: Option<String>,
     checksums: tauri::State<'_, Checksums>,
 ) -> Result<Value, String> {
-    fix_checksums(path, &algo, out_path, &checksums)
+    fix_checksums(path, &algo, out_path, &checksums, true)
 }
 
-/// [`checksum_fix`] without the Tauri state wrapper (shared with map write-back).
+/// [`checksum_fix`] without the Tauri state wrapper (shared with map write-back,
+/// which has already archived the original and passes `archive = false`).
 fn fix_checksums(
     path: String,
     algo: &str,
     out_path: Option<String>,
     checksums: &Checksums,
+    archive: bool,
 ) -> Result<Value, String> {
     let a = checksums.require(algo)?;
     let mut img = std::fs::read(&path).map_err(|e| e.to_string())?;
     let fixes = a.correct(&mut img).map_err(|e| e.to_string())?;
-    let target = out_path.unwrap_or_else(|| path.clone());
+    let target = out_path
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or_else(|| path.clone());
+    let mut backup = None;
     if !fixes.is_empty() || target != path {
-        std::fs::write(&target, &img).map_err(|e| write_error(&target, &e))?;
+        if archive && Path::new(&target).exists() {
+            let old = std::fs::read(&target).map_err(|e| e.to_string())?;
+            backup = Some(vault_backup(
+                &target,
+                &file_label("before checksum fix", &target),
+                &old,
+            )?);
+        }
+        std::fs::write(&target, &img).map_err(|e| {
+            let mut m = write_error(&target, &e);
+            if let Some(b) = &backup {
+                m.push_str(&format!(" — the original is backed up at {}", b.display()));
+            }
+            m
+        })?;
     }
     Ok(json!({
+        "in_place": target == path,
+        "backup": backup.map(|b| b.display().to_string()),
         "out_path": target,
         "fixes": fixes
             .into_iter()
@@ -1198,18 +1267,7 @@ fn write_map_core(
 
     // (4) BACKUP FIRST: archive the whole original image into the flash vault,
     // beside the file being edited. If this fails we abort before any edit.
-    let vault_dir = Path::new(path)
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("opentune-vault");
-    let whole = MemoryRegion::new(0, img.len() as u32);
-    let backup =
-        opentune_flash::vault::save_backup(&vault_dir, &ecu, whole, &img).map_err(|e| {
-            format!(
-                "could not write the safety backup to {} — aborting before any edit: {e}",
-                vault_dir.display()
-            )
-        })?;
+    let backup = vault_backup(path, &ecu, &img)?;
 
     // (5) Apply the edit: inverse scaling, clamp, write only the map's bytes.
     let mut cells_changed = 0usize;
@@ -1238,7 +1296,7 @@ fn write_map_core(
     let mut checksum = Value::Null;
     if fix_checksum {
         checksum = match &algo {
-            Some(a) => match fix_checksums(target.clone(), a, None, checksums) {
+            Some(a) => match fix_checksums(target.clone(), a, None, checksums, false) {
                 Ok(v) => v,
                 Err(e) => json!({ "algo": a, "error": e }),
             },
@@ -1292,7 +1350,7 @@ fn map_write(
         sw_number: def.identify.sw_numbers.first().cloned(),
         ..Default::default()
     };
-    write_map_core(
+    let mut v = write_map_core(
         &path,
         map,
         &new_cells,
@@ -1302,13 +1360,36 @@ fn map_write(
         ecu,
         Some(def.flash_size / 1024),
         &checksums,
-    )
+    )?;
+    v["checksum_source"] = json!(format!("definition {}", def.name));
+    Ok(v)
+}
+
+/// Pick the checksum family for an ad-hoc map write-back: the matched ECU
+/// definition's `checksum` first, then the caller's (Checksum panel) choice only
+/// when no definition names one. Returns `(algo, source)`; `source` says which
+/// one was used so the UI can show it.
+fn adhoc_checksum_algo(
+    matched: Option<&EcuDef>,
+    panel: Option<String>,
+) -> (Option<String>, String) {
+    if let Some(d) = matched {
+        if let Some(a) = d.checksum.as_ref().filter(|a| !a.trim().is_empty()) {
+            return (Some(a.clone()), format!("matched definition {}", d.name));
+        }
+    }
+    match panel.filter(|a| !a.trim().is_empty()) {
+        Some(a) => (Some(a), "Checksum panel selection".into()),
+        None => (None, "none known".into()),
+    }
 }
 
 /// Write-back for an **ad-hoc** `MapDef` (imported/promoted, not in any bundled
-/// definition). Same full safety sequence as [`map_write`]; the checksum family
-/// is supplied by the caller (`checksum_algo`) since an ad-hoc map has no
-/// definition to read one from.
+/// definition). Same full safety sequence as [`map_write`]. The checksum family
+/// comes from the ECU definition the image matches (structural/identity scan,
+/// as in Analyze bin); the caller's `checksum_algo` (the Checksum panel) is only
+/// a fallback when no definition with a checksum matches. The result's
+/// `checksum_source` says which was used.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn mapdef_write(
@@ -1318,6 +1399,7 @@ fn mapdef_write(
     out_path: Option<String>,
     fix_checksum: Option<bool>,
     checksum_algo: Option<String>,
+    state: tauri::State<AppData>,
     guard: tauri::State<OpGuard>,
     checksums: tauri::State<Checksums>,
 ) -> Result<Value, String> {
@@ -1327,9 +1409,22 @@ fn mapdef_write(
         ecu_name: Some(format!("ad-hoc map '{}'", map.name)),
         ..Default::default()
     };
-    // Normalise an empty string to "no algorithm".
-    let algo = checksum_algo.filter(|a| !a.trim().is_empty());
-    write_map_core(
+    let defs = load_defs(&state.ecudefs);
+    let matched = if fix_checksum.unwrap_or(false) && !defs.is_empty() {
+        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+        let p = Path::new(&path);
+        let ctx = opentune_scan::ScanContext {
+            catalog: Vec::new(),
+            ecudefs: defs.clone(),
+        };
+        let rec = opentune_scan::scan_file(&ctx, p.parent().unwrap_or(Path::new(".")), p, &bytes);
+        rec.ecudef_match
+            .and_then(|hit| defs.iter().find(|d| d.id == hit.id).cloned())
+    } else {
+        None
+    };
+    let (algo, source) = adhoc_checksum_algo(matched.as_ref(), checksum_algo);
+    let mut v = write_map_core(
         &path,
         &map,
         &new_cells,
@@ -1339,7 +1434,9 @@ fn mapdef_write(
         ecu,
         None,
         &checksums,
-    )
+    )?;
+    v["checksum_source"] = json!(source);
+    Ok(v)
 }
 
 /// Compare two images map-by-map through an ECU definition, mirroring the CLI
@@ -1443,31 +1540,57 @@ fn compare_maps(
 // Flash (safety-gated, mock)
 // ---------------------------------------------------------------------------
 
+/// Run the safety-gated write sequence into an image **file** (file target
+/// only in this build: real-ECU flashing is not validated, so there is no
+/// driver choice). The whole target file is archived to the vault beside it
+/// before anything is written (same vault as map write-back); the battery gate
+/// is skipped because a file target has no battery to measure.
 #[tauri::command]
 fn flash(
     path: String,
     addr: String,
     data_path: String,
-    min_mv: u32,
     guard: tauri::State<OpGuard>,
 ) -> Result<Value, String> {
     // Hold the long-operation slot for the whole flash so a software update
     // cannot replace the binary mid-write (freed automatically on return/error).
     let _op = guard.begin("flash")?;
-    let addr = parse_u32(&addr)?;
-    let bytes = std::fs::read(&data_path).map_err(|e| e.to_string())?;
+    flash_file(&path, &addr, &data_path)
+}
+
+/// [`flash`] without the Tauri state wrapper.
+fn flash_file(path: &str, addr: &str, data_path: &str) -> Result<Value, String> {
+    let addr = parse_u32(addr)?;
+    let bytes = std::fs::read(data_path).map_err(|e| e.to_string())?;
+    if bytes.is_empty() {
+        return Err("the data file is empty — nothing to write".into());
+    }
     let region = MemoryRegion::new(addr, bytes.len() as u32);
-    let mut drv = open_file(&path)?;
+    // BACKUP FIRST, to disk: abort before opening the target if this fails.
+    let original = std::fs::read(path).map_err(|e| e.to_string())?;
+    let end = addr as u64 + bytes.len() as u64;
+    if end > original.len() as u64 {
+        return Err(format!(
+            "write past end of image: 0x{addr:08X} + {} bytes ends at 0x{end:08X}, the image is 0x{:08X} bytes",
+            bytes.len(),
+            original.len()
+        ));
+    }
+    let backup = vault_backup(path, &file_label("before flash", path), &original)?;
+    let mut drv = open_file(path)?;
     let safety = opentune_flash::SafetyConfig {
-        min_millivolts: min_mv,
+        // A file has no battery: the voltage gate is skipped (0 disables it).
+        min_millivolts: 0,
         ..Default::default()
     };
     let rep = opentune_flash::flash_calibration(drv.as_mut(), region, &bytes, &safety, &mut |_| {})
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("{e} — the original is backed up at {}", backup.display()))?;
     Ok(json!({
+        "target": "file",
         "bytes_written": rep.bytes_written,
-        "battery_mv": rep.battery_millivolts,
-        "backup_len": rep.backup.len(),
+        "voltage_gate": "skipped — file target, no battery to measure",
+        "backup": backup.display().to_string(),
+        "backup_len": original.len(),
         "verified": rep.verified,
         "region": format!("0x{:08X} +{} (0x{:08X})", region.address, region.length, region.length),
     }))
@@ -2995,6 +3118,159 @@ mod tests {
         // While an update holds the slot, a flash is refused too (no destructive
         // write can race an in-place binary replacement).
         assert!(g.begin("flash").is_err());
+    }
+
+    // --- vault backups before overwriting (checksum fix, flash) ----------
+
+    fn vault_bins(dir: &TmpDir) -> Vec<PathBuf> {
+        let v = dir.join("opentune-vault");
+        let mut out: Vec<PathBuf> = std::fs::read_dir(&v)
+            .map(|rd| rd.flatten().map(|e| e.path()).collect())
+            .unwrap_or_default();
+        out.retain(|p| p.extension().and_then(|s| s.to_str()) == Some("bin"));
+        out
+    }
+
+    fn ramp(n: usize) -> Vec<u8> {
+        (0..n).map(|i| (i * 7 + 3) as u8).collect()
+    }
+
+    #[test]
+    fn checksum_fix_in_place_archives_the_original_first() {
+        let dir = TmpDir::new("csfix-inplace");
+        let img = dir.join("stock.bin");
+        let original = ramp(1024);
+        std::fs::write(&img, &original).unwrap();
+        let p = img.to_string_lossy().into_owned();
+
+        let r = fix_checksums(p.clone(), "crc32-tail", None, &Checksums::default(), true)
+            .expect("fix ok");
+        assert!(!r["fixes"].as_array().unwrap().is_empty(), "{r}");
+        assert_eq!(r["in_place"], true);
+        let backup = PathBuf::from(r["backup"].as_str().expect("backup path reported"));
+        assert!(backup.starts_with(dir.join("opentune-vault")));
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        assert_ne!(std::fs::read(&img).unwrap(), original, "file was fixed");
+    }
+
+    #[test]
+    fn checksum_fix_save_as_leaves_original_and_needs_no_backup() {
+        let dir = TmpDir::new("csfix-saveas");
+        let img = dir.join("stock.bin");
+        let original = ramp(1024);
+        std::fs::write(&img, &original).unwrap();
+        let out = dir.join("stock.fixed.bin");
+
+        let r = fix_checksums(
+            img.to_string_lossy().into_owned(),
+            "crc32-tail",
+            Some(out.to_string_lossy().into_owned()),
+            &Checksums::default(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(r["in_place"], false);
+        assert!(r["backup"].is_null(), "new file: nothing overwritten");
+        assert_eq!(std::fs::read(&img).unwrap(), original);
+        assert!(out.exists());
+        assert!(vault_bins(&dir).is_empty());
+
+        // Overwriting an existing Save-As target archives what was there.
+        std::fs::write(&out, b"old contents").unwrap();
+        let r2 = fix_checksums(
+            img.to_string_lossy().into_owned(),
+            "crc32-tail",
+            Some(out.to_string_lossy().into_owned()),
+            &Checksums::default(),
+            true,
+        )
+        .unwrap();
+        let b = PathBuf::from(r2["backup"].as_str().unwrap());
+        assert_eq!(std::fs::read(b).unwrap(), b"old contents");
+    }
+
+    #[test]
+    fn flash_file_archives_target_and_skips_voltage_gate() {
+        let dir = TmpDir::new("flash");
+        let img = dir.join("target.bin");
+        let original = ramp(256);
+        std::fs::write(&img, &original).unwrap();
+        let data = dir.join("data.dat");
+        std::fs::write(&data, [0xA5u8; 16]).unwrap();
+
+        let r =
+            flash_file(&img.to_string_lossy(), "0x10", &data.to_string_lossy()).expect("flash ok");
+        assert_eq!(r["verified"], true);
+        assert_eq!(r["bytes_written"], 16);
+        assert!(r["voltage_gate"].as_str().unwrap().contains("skipped"));
+        let now = std::fs::read(&img).unwrap();
+        assert_eq!(&now[0x10..0x20], &[0xA5u8; 16]);
+        assert_eq!(&now[..0x10], &original[..0x10]);
+        let backup = PathBuf::from(r["backup"].as_str().unwrap());
+        assert_eq!(
+            std::fs::read(backup).unwrap(),
+            original,
+            "pre-write image on disk"
+        );
+    }
+
+    #[test]
+    fn flash_file_past_end_is_refused_before_any_backup_or_write() {
+        let dir = TmpDir::new("flash-end");
+        let img = dir.join("target.bin");
+        std::fs::write(&img, ramp(64)).unwrap();
+        let data = dir.join("data.dat");
+        std::fs::write(&data, [0u8; 32]).unwrap();
+        let e = flash_file(&img.to_string_lossy(), "0x30", &data.to_string_lossy()).unwrap_err();
+        assert!(e.contains("past end"), "{e}");
+        assert_eq!(std::fs::read(&img).unwrap(), ramp(64));
+        assert!(vault_bins(&dir).is_empty());
+    }
+
+    // --- ad-hoc map checksum source ---------------------------------------
+
+    fn def_with_checksum(cs: Option<&str>) -> EcuDef {
+        serde_json::from_value(json!({
+            "id": "t", "name": "Test ECU", "maker": "x", "family": "EDC16",
+            "protocol": "iso_tp", "diag_layer": "uds", "bitrate": 500000,
+            "checksum": cs,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn adhoc_checksum_prefers_matched_definition_over_panel() {
+        let d = def_with_checksum(Some("edc16"));
+        let (a, src) = adhoc_checksum_algo(Some(&d), Some("crc32-tail".into()));
+        assert_eq!(a.as_deref(), Some("edc16"));
+        assert!(src.contains("matched definition Test ECU"), "{src}");
+
+        // A matched def without a checksum, or no match: the panel is the fallback.
+        let none = def_with_checksum(None);
+        let (a, src) = adhoc_checksum_algo(Some(&none), Some("crc32-tail".into()));
+        assert_eq!(a.as_deref(), Some("crc32-tail"));
+        assert_eq!(src, "Checksum panel selection");
+        let (a, _) = adhoc_checksum_algo(None, Some("pcr21".into()));
+        assert_eq!(a.as_deref(), Some("pcr21"));
+        let (a, src) = adhoc_checksum_algo(None, Some("  ".into()));
+        assert!(a.is_none());
+        assert_eq!(src, "none known");
+    }
+
+    #[test]
+    fn identify_drops_the_file_size_posing_as_sw_number() {
+        let mut id = EcuId {
+            sw_number: Some("2048 bytes".into()),
+            ..Default::default()
+        };
+        drop_file_size_sw(&mut id, 2048);
+        assert!(id.sw_number.is_none());
+        let mut real = EcuId {
+            sw_number: Some("1037370634".into()),
+            ..Default::default()
+        };
+        drop_file_size_sw(&mut real, 2048);
+        assert_eq!(real.sw_number.as_deref(), Some("1037370634"));
     }
 }
 
