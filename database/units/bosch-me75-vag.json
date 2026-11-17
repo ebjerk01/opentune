@@ -1,0 +1,213 @@
+{
+  "id": "bosch-me75-vag",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "ME7",
+  "name": "Bosch ME7.5 (VAG 1.8T 20V, 121-pin)",
+  "aliases": [
+    "ME7.5",
+    "Motronic ME7.5"
+  ],
+  "cpu": "C16x / ST10 family",
+  "flash_kib": 512,
+  "eeprom": null,
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "read+write",
+    "bench": true,
+    "boot": true,
+    "notes": "Read and flash over K-line (OBD or bench, no auxiliary signals - ecupinouts). Nefmoto documents a board-level boot mode for recovery / EEPROM access."
+  },
+  "checksum": "me7",
+  "ecudef": "bosch-me7",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk4 (GTI/1.8T)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat (B5/B5.5)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "Audi",
+      "model": "A3 (8L)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "Audi",
+      "model": "A4 (B5/B6)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "Audi",
+      "model": "TT (8N)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "SEAT",
+      "model": "Leon Cupra (1M)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    },
+    {
+      "make": "Skoda",
+      "model": "Octavia vRS (1U)",
+      "engine": "1.8T 20V (ME7.5)",
+      "years": "1997-2006"
+    }
+  ],
+  "part_number_examples": [
+    "06A906032",
+    "06A906018"
+  ],
+  "notes": "The classic VAG 1.8 T 20V Motronic (Golf IV, A3 8L, TT 8N, Leon I, Octavia I). OpenTune's me7 checksum (main ROMSYS word-sum + multipoint block) is validated on real ME7.5 dumps. CAN pins 58/60 are listed with opposite polarity by two sources, so they are marked unverified.",
+  "connectors": [
+    {
+      "name": "T121",
+      "description": "121-pin Bosch connector (81 + 40)",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "2",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "3",
+          "function": "+12 V supply (terminal 30 per Nefmoto)",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "21",
+          "function": "+12 V supply (per Transpondery)",
+          "signal": "12v_perm",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "43",
+          "function": "K-line (OBD pin 7)",
+          "signal": "kline",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "58",
+          "function": "CAN (polarity disputed)",
+          "signal": "other",
+          "note": "Transpondery: CAN-L. Nefmoto (ME7.1.1 table): CAN-H. Not needed for K-line bench work.",
+          "confidence": "unverified",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "60",
+          "function": "CAN (polarity disputed)",
+          "signal": "other",
+          "note": "Transpondery: CAN-H. Nefmoto (ME7.1.1 table): CAN-L. Not needed for K-line bench work.",
+          "confidence": "unverified",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "62",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "121",
+          "function": "Ignition, terminal 15 (per Nefmoto)",
+          "signal": "12v_ign",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T121-3",
+      "T121-62"
+    ],
+    "ground": [
+      "T121-1"
+    ],
+    "ign": [],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "T121-43"
+    ],
+    "boot": [],
+    "notes": "Minimal, multi-source wiring: +12 V to pins 3 and 62, ground pin 1, K-line pin 43. Nefmoto additionally grounds pin 2 and feeds pin 121 (terminal 15); Transpondery also lists pin 21 as a supply. Boot mode is board-level (see Nefmoto).",
+    "resistor_notes": "K-line only; no CAN termination needed."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Nefmoto wiki: ECU pin outs (ME7.x bench tables)",
+      "url": "https://nefariousmotorsports.com/wiki/ECU_pin_outs"
+    },
+    {
+      "title": "Transpondery: VAG ME7.x pinout",
+      "url": "https://www.transpondery.com/pinouts/vag/me7x_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch ME7.5 bench pinout",
+      "url": "https://ecupinouts.com/en/me75/"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

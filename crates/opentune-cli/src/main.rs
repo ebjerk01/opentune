@@ -122,6 +122,11 @@ enum Command {
         #[arg(long)]
         catalog: Option<PathBuf>,
     },
+    /// Control-unit reference database (ECU / TCU / AWD): list, show, validate.
+    Db {
+        #[command(subcommand)]
+        action: DbAction,
+    },
     /// Look up a diagnostic trouble code (e.g. P0101).
     Dtc { code: String },
     /// Decode a 17-character VIN (WMI, country, year, check digit).
@@ -516,6 +521,34 @@ enum SgoCipherArg {
     Progressive,
     /// Early 02EA "feedback" cipher (previous-stored-byte feedback).
     Feedback,
+}
+
+#[derive(Subcommand)]
+enum DbAction {
+    /// List units, optionally filtered by kind (ecu/tcu/awd) and a search query.
+    List {
+        #[arg(long)]
+        kind: Option<String>,
+        /// Free-text query (name, family, maker, part number, vehicle).
+        q: Option<String>,
+        /// Database directory.
+        #[arg(long, default_value = "database")]
+        dir: PathBuf,
+    },
+    /// Print one unit as stored (JSON).
+    Show {
+        id: String,
+        #[arg(long, default_value = "database")]
+        dir: PathBuf,
+    },
+    /// Validate every unit (schema, unique ids, checksum/ecudef refs, pinout
+    /// honesty rules). Exits non-zero on any issue.
+    Validate {
+        #[arg(long, default_value = "database")]
+        dir: PathBuf,
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1197,6 +1230,40 @@ fn main() -> Result<()> {
             }
             drv.close()?;
         }
+        Command::Db { action } => match action {
+            DbAction::List { kind, q, dir } => {
+                let db = opentune_db::Database::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
+                let rows = db.list(kind.as_deref(), q.as_deref());
+                println!("{} unit(s):", rows.len());
+                for r in rows {
+                    println!(
+                        "  {:<24} {:<4} {:<44} {:<10} pinout: {}",
+                        r.id,
+                        r.kind.as_str(),
+                        r.name,
+                        r.checksum.as_deref().unwrap_or("-"),
+                        r.pinout_confidence.map_or("none", |c| c.as_str())
+                    );
+                }
+            }
+            DbAction::Show { id, dir } => {
+                let db = opentune_db::Database::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
+                let v = db.get(&id).ok_or_else(|| anyhow!("unknown unit '{id}'"))?;
+                println!("{}", serde_json::to_string_pretty(v)?);
+            }
+            DbAction::Validate { dir, ecudefs } => {
+                let db = opentune_db::Database::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
+                let ids = opentune_db::ecudef_ids(&ecudefs).map_err(|e| anyhow!("{e}"))?;
+                let issues = db.validate(Some(&ids));
+                for i in &issues {
+                    println!("  {i}");
+                }
+                if !issues.is_empty() {
+                    return Err(anyhow!("{} issue(s)", issues.len()));
+                }
+                println!("{} unit(s) OK", db.entries().len());
+            }
+        },
         Command::Dtc { code } => match opentune_dtc::lookup(&code) {
             Some(d) => println!("{}  [{:?}]  {}", d.code, d.system, d.description),
             None => println!("{code}: malformed code"),

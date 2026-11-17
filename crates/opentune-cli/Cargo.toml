@@ -43,6 +43,7 @@ opentune-ols = { path = "../opentune-ols" }
 opentune-udssim = { path = "../opentune-udssim" }
 opentune-attest = { path = "../opentune-attest" }
 opentune-logdef = { path = "../opentune-logdef" }
+opentune-db = { path = "../opentune-db" }
 
 [dev-dependencies]
 # Re-import the generated XDF in the a2l2xdf round-trip integration test.

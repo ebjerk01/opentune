@@ -1,0 +1,234 @@
+{
+  "id": "bosch-edc16c3x-bmw",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "EDC16",
+  "name": "Bosch EDC16C31 / EDC16C35 (BMW diesel, DDE5/DDE6)",
+  "aliases": [
+    "EDC16C31",
+    "EDC16C35",
+    "EDC16CP35",
+    "DDE5",
+    "DDE6"
+  ],
+  "cpu": "Freescale MPC5xx family",
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can",
+    "kline"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "Bench over K-line per ecupinouts (with auxiliary GPT lines for some tools). OBD read/write capability is not documented in the cited public sources."
+  },
+  "checksum": "edc16",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "BMW",
+      "model": "1 Series (E87)",
+      "engine": "M47TU / M47TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "3 Series (E46/E90)",
+      "engine": "M47TU / M47TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "5 Series (E60)",
+      "engine": "M47TU / M47TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "X3 (E83)",
+      "engine": "M47TU / M47TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "3 Series (E90)",
+      "engine": "M57TU / M57TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "5 Series (E60)",
+      "engine": "M57TU / M57TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "7 Series (E65)",
+      "engine": "M57TU / M57TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    },
+    {
+      "make": "BMW",
+      "model": "X5 (E70)",
+      "engine": "M57TU / M57TU2 (EDC16C31/C35)",
+      "years": "2004-2010"
+    }
+  ],
+  "part_number_examples": [
+    "0281010565",
+    "0281012091",
+    "0281012190"
+  ],
+  "notes": "BMW four- and six-cylinder diesel ECU of the E46/E60/E87/E90 era. OpenTune's edc16 checksum is the EDC16 (MPC56x) family algorithm; validate per software variant before trusting a correction. The CAN pins come from a single site.",
+  "connectors": [
+    {
+      "name": "X2412",
+      "description": "Vehicle-side block (Transpondery: socket K)",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ignition, terminal 15",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "2",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "7",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "8",
+          "function": "K-line",
+          "signal": "kline",
+          "sources": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "33",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "note": "Both citations are from the same site.",
+          "confidence": "community",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "46",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "note": "Both citations are from the same site.",
+          "confidence": "community",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "X2411",
+      "description": "Engine-side block",
+      "pins": [
+        {
+          "pin": "62",
+          "function": "GPT1 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Both citations are from the same site. Never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "87",
+          "function": "GPT2 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Both citations are from the same site. Never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "X2412-7",
+      "X2412-1"
+    ],
+    "ground": [
+      "X2412-2"
+    ],
+    "ign": [
+      "X2412-1"
+    ],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "X2412-8"
+    ],
+    "boot": [],
+    "notes": "+12 V to X2412-7 (terminal 30) and X2412-1 (terminal 15), ground X2412-2, K-line X2412-8.",
+    "resistor_notes": "K-line bench connection; no CAN termination needed for it."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Transpondery: BMW EDC16C31 pinout",
+      "url": "https://www.transpondery.com/pinouts/bmw/edc16c31_pinout.html"
+    },
+    {
+      "title": "Transpondery: BMW EDC16C35 pinout",
+      "url": "https://www.transpondery.com/pinouts/bmw/edc16c35_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC16C31 bench pinout",
+      "url": "https://ecupinouts.com/en/edc16c31/"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC16CP35 bench pinout",
+      "url": "https://ecupinouts.com/en/edc16cp35/"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

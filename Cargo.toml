@@ -37,6 +37,7 @@ members = [
     "crates/opentune-ols",
     "crates/opentune-udssim",
     "crates/opentune-attest",
+    "crates/opentune-db",
 ]
 
 [workspace.package]

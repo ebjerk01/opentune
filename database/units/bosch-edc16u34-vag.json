@@ -1,0 +1,218 @@
+{
+  "id": "bosch-edc16u34-vag",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "EDC16",
+  "name": "Bosch EDC16U34 (VAG 1.9 / 2.0 TDI PD)",
+  "aliases": [
+    "EDC16U34",
+    "EDC16U31"
+  ],
+  "cpu": "MPC562",
+  "flash_kib": 2048,
+  "eeprom": "ST95320 (4 KiB, SPI)",
+  "bus": [
+    "can",
+    "kline"
+  ],
+  "protocols": [
+    "kwp2000",
+    "uds"
+  ],
+  "read_methods": {
+    "obd": "read+write",
+    "bench": true,
+    "boot": false,
+    "notes": "Full read over OBD/CAN per OpenTune's bosch-edc16u34 definition (some cars answer KWP2000, others UDS). Diag-Prof lists a 512 KiB processor area plus 2 MiB external flash. Bench over K-line; ecupinouts notes some bench tools also drive two auxiliary programming-mode lines (GPT1/GPT2). No serial boot mode is documented in the cited sources."
+  },
+  "checksum": "edc16",
+  "ecudef": "bosch-edc16u34",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk5",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat (B6)",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Touran (1T)",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "Audi",
+      "model": "A3 (8P)",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "Audi",
+      "model": "A4 (B7)",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "SEAT",
+      "model": "Leon (1P)/Altea",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    },
+    {
+      "make": "Skoda",
+      "model": "Octavia (1Z)",
+      "engine": "1.9 / 2.0 TDI PD",
+      "years": "2003-2010"
+    }
+  ],
+  "part_number_examples": [
+    "03G906"
+  ],
+  "notes": "Second-generation VAG unit-injector (PD) diesel ECU, roughly 2004-2009 (Golf V, Touran, A3 8P, Octavia II, Leon II). Part number shown is the VAG prefix (03G906xxx). EDC16U31 shares the same vehicle-side pin assignment per Diag-Prof.",
+  "connectors": [
+    {
+      "name": "T94",
+      "description": "94-pin vehicle-side block of the 154-pin (60 + 94) Bosch connector",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Ignition, terminal 15 (switched)",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "18",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "66",
+          "function": "CAN-Low (500 kbit/s)",
+          "signal": "can_l",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "72",
+          "function": "K-line",
+          "signal": "kline",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "89",
+          "function": "CAN-High (500 kbit/s)",
+          "signal": "can_h",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "T60",
+      "description": "60-pin engine-side block",
+      "pins": [
+        {
+          "pin": "58",
+          "function": "GPT1 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Only needed by bench tools that use GPT/PWD signals; never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            2
+          ]
+        },
+        {
+          "pin": "28",
+          "function": "GPT2 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Only needed by bench tools that use GPT/PWD signals; never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T94-18",
+      "T94-5"
+    ],
+    "ground": [
+      "T94-1"
+    ],
+    "ign": [
+      "T94-5"
+    ],
+    "can_h": [
+      "T94-89"
+    ],
+    "can_l": [
+      "T94-66"
+    ],
+    "kline": [
+      "T94-72"
+    ],
+    "boot": [],
+    "notes": "+12 V to T94-18 (terminal 30) and T94-5 (terminal 15), ground T94-1. K-line on T94-72 is the usual bench path; CAN is on T94-89/66.",
+    "resistor_notes": "If you use CAN on the bench, make sure the bus is terminated (about 60 ohm across CAN-H/CAN-L)."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Diag-Prof: VAG Bosch EDC16U34 (pin assignment, memory)",
+      "url": "http://www.diagprof.com/ecu_tips_and_tricks/manufacturer-vag/ecudomain-pcm_powertrain_control_module/supplier-bosch/ecutt-edc16u34"
+    },
+    {
+      "title": "Transpondery: VAG EDC16 pinout",
+      "url": "https://www.transpondery.com/pinouts/vag/edc16_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC16U34 (VAG) bench pinout",
+      "url": "https://ecupinouts.com/en/bosch-edc16u34-vag/"
+    },
+    {
+      "title": "Diag-Prof: VAG Bosch EDC16U31",
+      "url": "http://www.diagprof.com/ecu_tips_and_tricks/manufacturer-vag/ecudomain-pcm_powertrain_control_module/supplier-bosch/ecutt-edc16u31"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

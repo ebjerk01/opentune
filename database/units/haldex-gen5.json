@@ -1,0 +1,142 @@
+{
+  "id": "haldex-gen5",
+  "kind": "awd",
+  "maker": "BorgWarner (Haldex)",
+  "family": "Haldex",
+  "name": "Haldex Generation 5 AWD coupling controller (MQB)",
+  "aliases": [
+    "Haldex Gen5",
+    "0CQ"
+  ],
+  "cpu": null,
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": false,
+    "boot": false,
+    "notes": "No public read/flash procedure found. The controller plug carries terminals 15 and 30, ground and a dedicated Haldex CAN pair (OpenHaldex)."
+  },
+  "checksum": "haldex",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk7 R",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Audi",
+      "model": "A3 / S3 (8V) quattro",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Audi",
+      "model": "TT / TTS (8S)",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Audi",
+      "model": "RS3 (8V)",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Tiguan (AD)",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Fifth-generation Haldex on MQB AWD cars (pump/kit part prefix 0CQ). OpenTune's haldex checksum (per-block 16-bit word-sum) is synthetic/vector-validated only. These are the pins of the in-line harness plug that mates with the Haldex controller, as documented by the OpenHaldex project (single source).",
+  "connectors": [
+    {
+      "name": "1J0973713",
+      "description": "6-pin Haldex-side harness plug (1J0 973 713), Gen5",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Terminal 15 (ignition)",
+          "signal": "12v_ign",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "2",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "3",
+          "function": "Terminal 30 (permanent)",
+          "signal": "12v_perm",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Haldex CAN-Low",
+          "signal": "can_l",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "6",
+          "function": "Haldex CAN-High",
+          "signal": "can_h",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "1J0973713-3",
+      "1J0973713-1"
+    ],
+    "ground": [
+      "1J0973713-2"
+    ],
+    "ign": [
+      "1J0973713-1"
+    ],
+    "can_h": [
+      "1J0973713-6"
+    ],
+    "can_l": [
+      "1J0973713-5"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "Terminal 30 on 3, terminal 15 on 1, ground 2, Haldex CAN-H 6 / CAN-L 5 (OpenHaldex).",
+    "resistor_notes": "Termination of the Haldex CAN segment is not documented; measure the resistance between CAN-H and CAN-L on the unit first."
+  },
+  "pinout_confidence": "community",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "OpenHaldex: installation (Gen1-4 and Gen5 connector pinouts)",
+      "url": "https://openhaldex.com/install/"
+    },
+    {
+      "title": "VAG Parts: Gen 5 Haldex pump 0CQ598549 (MQB applications)",
+      "url": "https://www.vagparts.com.au/products/0cq598549-haldex-pump"
+    }
+  ]
+}

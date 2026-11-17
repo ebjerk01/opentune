@@ -1,0 +1,239 @@
+{
+  "id": "bosch-edc15c6-mercedes",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "EDC15",
+  "name": "Bosch EDC15C6 (Mercedes CDI, CR1 / CR2)",
+  "aliases": [
+    "EDC15C6",
+    "EDC15C5",
+    "CR1",
+    "CR2",
+    "CDI-2"
+  ],
+  "cpu": null,
+  "flash_kib": 1024,
+  "eeprom": null,
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "read+write",
+    "bench": true,
+    "boot": false,
+    "notes": "Diagnostics/programming over K-line (ISO 14230 KWP2000, per OpenTune's bosch-edc15c6 definition). No boot-mode procedure is documented in the cited sources."
+  },
+  "checksum": "edc15c6",
+  "ecudef": "bosch-edc15c6",
+  "vehicles": [
+    {
+      "make": "Mercedes-Benz",
+      "model": "C-Class (W202/W203)",
+      "engine": "OM611 CDI",
+      "years": "1997-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "E-Class (W210)",
+      "engine": "OM611 CDI",
+      "years": "1997-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "Sprinter (T1N)",
+      "engine": "OM611 CDI",
+      "years": "1997-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "Vito (W638)",
+      "engine": "OM611 CDI",
+      "years": "1997-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "E-Class (W210/W211)",
+      "engine": "OM612 CDI",
+      "years": "1999-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "ML (W163)",
+      "engine": "OM612 CDI",
+      "years": "1999-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "Sprinter (T1N)",
+      "engine": "OM612 CDI",
+      "years": "1999-2003"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "E-Class (W210/W211)",
+      "engine": "OM613 CDI",
+      "years": "1999-2005"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "S-Class (W220)",
+      "engine": "OM613 CDI",
+      "years": "1999-2005"
+    },
+    {
+      "make": "Mercedes-Benz",
+      "model": "ML (W163)",
+      "engine": "OM613 CDI",
+      "years": "1999-2005"
+    }
+  ],
+  "part_number_examples": [
+    "A6111",
+    "A6121",
+    "A6131"
+  ],
+  "notes": "First-generation Mercedes common-rail CDI (Mercedes calls the ECU CR1.x / CR2.x). Part numbers are Mercedes prefixes per engine (A611.../A612.../A613...). Checksum: OpenTune's edc15c6 module LOCATES the Mercedes 1 MiB layout but refuses to correct it (algorithm not public) - verify-only. Ground pin is disputed between sources (see bench.notes).",
+  "connectors": [
+    {
+      "name": "1",
+      "description": "Connector block 1 (Transpondery: S1)",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ignition, terminal 15 / +12 V",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Ground (per Transpondery)",
+          "signal": "gnd",
+          "note": "Disputed: ecupinouts gives ground on 1-6 instead. Do not wire without checking continuity.",
+          "confidence": "unverified",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "6",
+          "function": "Ground (per ecupinouts)",
+          "signal": "gnd",
+          "note": "Disputed: Transpondery gives ground on 1-5 instead. Do not wire without checking continuity.",
+          "confidence": "unverified",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "7",
+          "function": "Terminal 15 (per Transpondery)",
+          "signal": "12v_ign",
+          "note": "ecupinouts lists 1-8 as the second +12 V pin instead; single conflicting source.",
+          "confidence": "unverified",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "8",
+          "function": "+12 V (per ecupinouts)",
+          "signal": "12v_ign",
+          "note": "Transpondery lists 1-7 as the second terminal-15 pin instead; single conflicting source.",
+          "confidence": "unverified",
+          "sources": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2",
+      "description": "Connector block 2 (Transpondery: S2)",
+      "pins": [
+        {
+          "pin": "11",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "12",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "13",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3",
+      "description": "Connector block 3 (Transpondery: S3)",
+      "pins": [
+        {
+          "pin": "28",
+          "function": "K-line (diagnostics)",
+          "signal": "kline",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "2-13",
+      "1-1"
+    ],
+    "ground": [],
+    "ign": [
+      "1-1"
+    ],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "3-28"
+    ],
+    "boot": [],
+    "notes": "Supply (2-13 terminal 30, 1-1 terminal 15) and K-line (3-28) agree between sources. The GROUND pin is deliberately left out: Transpondery says 1-5, ecupinouts says 1-6. Identify ground on your unit by continuity to the housing/other ground pins before powering.",
+    "resistor_notes": "K-line programming; CAN termination not needed for it."
+  },
+  "pinout_confidence": "community",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Transpondery: Mercedes EDC15C5 / EDC15C6 pinout",
+      "url": "https://www.transpondery.com/pinouts/mercedes/edc15_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC15C6 (Mercedes) bench pinout",
+      "url": "https://ecupinouts.com/en/edc15c6-mercedes/"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

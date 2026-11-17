@@ -1,0 +1,149 @@
+{
+  "id": "mercedes-egs52-7226",
+  "kind": "tcu",
+  "maker": "Siemens",
+  "family": "EGS5x",
+  "name": "Mercedes 722.6 5-speed TCU (EGS52)",
+  "aliases": [
+    "722.6",
+    "EGS52",
+    "EGS51",
+    "EGS53",
+    "NAG52"
+  ],
+  "cpu": null,
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "Bench connection: supply, ground and K-line on C1 (ecupinouts); CAN is on the C2 connector (ATSG). OBD programming capability is not documented in the cited sources."
+  },
+  "checksum": null,
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Mercedes-Benz",
+      "model": "722.6 5-speed automatic applications",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Chrysler",
+      "model": "722.6 5-speed automatic applications",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "External (body-mounted) TCU for the Mercedes 722.6 5-speed automatic, also used by Chrysler. Per ATSG, 1996-1999 units read the range switch on C1-25..28 while 2000+ units use CAN. The open-source ultimate_nag52 project is a drop-in replacement TCU for EGS51/52/53 cars. No OpenTune checksum applies.",
+  "connectors": [
+    {
+      "name": "C1",
+      "description": "TCU connector C1 (vehicle side)",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Diagnosis line to the data-link connector (K-line)",
+          "signal": "kline",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "29",
+          "function": "TCU voltage supply",
+          "signal": "12v_perm",
+          "note": "Sources do not say whether this is switched; feed +12 V on the bench.",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "30",
+          "function": "TCU ground",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C2",
+      "description": "TCU connector C2 (gearbox side)",
+      "pins": [
+        {
+          "pin": "H",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "L",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "38",
+          "function": "Battery supply to all solenoids",
+          "signal": "other",
+          "note": "Solenoid feed - not needed to talk to the TCU on the bench.",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "C1-29"
+    ],
+    "ground": [
+      "C1-30"
+    ],
+    "ign": [],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "C1-1"
+    ],
+    "boot": [],
+    "notes": "+12 V to C1-29, ground C1-30, K-line C1-1. CAN-H/L are on C2 (pins labelled H and L) if your tool uses CAN.",
+    "resistor_notes": "For CAN on the bench a forum thread recommends terminating the bus (about 60 ohm across CAN-H/CAN-L)."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "ATSG 722.6 service manual: TCM connectors and terminal identification",
+      "url": "https://www.manualslib.com/manual/1373460/Atsg-722-6.html?page=22"
+    },
+    {
+      "title": "ecupinouts.com: Siemens EGS52 / EGS53 bench pinout",
+      "url": "https://ecupinouts.com/en/siemens-egs5x/"
+    },
+    {
+      "title": "ultimate_nag52: open-source 722.6 TCU",
+      "url": "https://github.com/rnd-ash/ultimate_nag52"
+    }
+  ]
+}

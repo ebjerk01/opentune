@@ -1,0 +1,267 @@
+{
+  "id": "siemens-ms42",
+  "kind": "ecu",
+  "maker": "Siemens",
+  "family": "MS4x",
+  "name": "Siemens MS42 (BMW M52TU)",
+  "aliases": [
+    "MS42",
+    "MS42.0"
+  ],
+  "cpu": "Infineon C167CR (20 MHz)",
+  "flash_kib": 512,
+  "eeprom": "On-board EEPROM (size not documented)",
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "read+write",
+    "bench": true,
+    "boot": true,
+    "notes": "ms4x.net: read/write over the OBD K-line (in the car or on the bench); boot mode (C167 bootstrap) gives full 1:1 access including the bootloader."
+  },
+  "checksum": null,
+  "ecudef": "bmw-ms4x-ms42",
+  "vehicles": [
+    {
+      "make": "BMW",
+      "model": "5 Series (E39)",
+      "engine": "M52TU",
+      "years": null
+    },
+    {
+      "make": "BMW",
+      "model": "3 Series (E46)",
+      "engine": "M52TU",
+      "years": null
+    },
+    {
+      "make": "BMW",
+      "model": "Z3",
+      "engine": "M52TU",
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Siemens DME for the BMW M52TU inline-6 (predecessor of MS43). Flash is an AM29F400BB (512 KiB). ms4x.net describes three CRC16 checksums (boot/program/calibration); OpenTune has no MS4x checksum module yet (checksum null).",
+  "connectors": [
+    {
+      "name": "X60001",
+      "description": "9-pin power/diagnosis module",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ignition, terminal 15",
+          "signal": "12v_ign",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "3",
+          "function": "K-line (diagnostic TxD)",
+          "signal": "kline",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "4",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "6",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "7",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "8",
+          "function": "Main-relay supply, terminal 87",
+          "signal": "12v_ign",
+          "note": "Relay-switched in the car; ms4x feeds +12 V here on the bench. Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "name": "X60002",
+      "description": "24-pin module",
+      "pins": [
+        {
+          "pin": "3",
+          "function": "Gearbox CAN-Low (AT/SMG only)",
+          "signal": "can_l",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "4",
+          "function": "Gearbox CAN-High (AT/SMG only)",
+          "signal": "can_h",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "23",
+          "function": "Main relay control (output)",
+          "signal": "other",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "X60004",
+      "description": "40-pin vehicle module",
+      "pins": [
+        {
+          "pin": "26",
+          "function": "Ignition, terminal 15",
+          "signal": "12v_ign",
+          "sources": [
+            1,
+            3
+          ]
+        },
+        {
+          "pin": "32",
+          "function": "Engine diagnostic TxD (OBD-II connector)",
+          "signal": "kline",
+          "sources": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "pin": "33",
+          "function": "EWS immobiliser link",
+          "signal": "other",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "36",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "37",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "note": "Both citations are from the ms4x.net wiki.",
+          "confidence": "community",
+          "sources": [
+            1,
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "X60001-7",
+      "X60004-26"
+    ],
+    "ground": [
+      "X60001-4"
+    ],
+    "ign": [
+      "X60004-26"
+    ],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "X60004-32"
+    ],
+    "boot": [],
+    "notes": "Multi-source minimum: +12 V to X60001-7 and X60004-26, ground X60001-4. ms4x.net's bench recipe instead feeds X60001-1, -7 and -8, grounds X60001-4/5/6 and uses K-line X60001-3 (X60004-32 as fallback). Boot mode is board-level: the C167's pin 104 is grounded while powering up, then released (ms4x 'How to connect'); never write a 512 KiB OBD read back in boot mode - it erases the unit-specific bootloader keys.",
+    "resistor_notes": "K-line programming; CAN (X60004-36/37) is for development only per ms4x."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "ms4x.net wiki: Siemens MS42",
+      "url": "https://www.ms4x.net/index.php?title=Siemens_MS42"
+    },
+    {
+      "title": "ms4x.net wiki: Siemens MS42 pinout",
+      "url": "https://www.ms4x.net/index.php?title=Siemens_MS42_Pinout"
+    },
+    {
+      "title": "ms4x.net wiki: How to connect (MS42/MS43 OBD, bench and boot mode)",
+      "url": "https://www.ms4x.net/index.php?title=How_to_connect"
+    },
+    {
+      "title": "ecupinouts.com: Siemens MS42 bench pinout",
+      "url": "https://ecupinouts.com/en/ms42/"
+    }
+  ]
+}
