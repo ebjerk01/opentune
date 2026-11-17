@@ -1,0 +1,135 @@
+{
+  "id": "bosch-dq381-vag",
+  "kind": "tcu",
+  "maker": "Bosch",
+  "family": "DQ381",
+  "name": "VAG DQ381 / 0GC 7-speed DSG TCU",
+  "aliases": [
+    "DQ381",
+    "DQ380",
+    "0GC",
+    "DSG7 wet"
+  ],
+  "cpu": "Renesas SH725xx",
+  "flash_kib": 1568,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [
+    "uds"
+  ],
+  "read_methods": {
+    "obd": "write-only",
+    "bench": true,
+    "boot": true,
+    "notes": "Per OpenTune's bosch-dq381 definition: a complete original needs a bench/boot read (the 0x188000-byte full read the checksum was validated on); calibration flashing may be possible over OBD (UDS on CAN)."
+  },
+  "checksum": "dq381",
+  "ecudef": "bosch-dq381",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Arteon",
+      "engine": null,
+      "years": "2017-"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "MQB-platform models (various)",
+      "engine": null,
+      "years": "2017-"
+    }
+  ],
+  "part_number_examples": [
+    "0GC927373K"
+  ],
+  "notes": "Seven-speed wet-clutch DSG (refined DQ380, 2017+) used across MQB models (Wikipedia names the Arteon). OpenTune's dq381 checksum (BOOT/ASW/CAL CRC-32) is validated on a real full dump. The pinout below comes from one source whose connector description is internally inconsistent (it calls the plug 10-pin but numbers pins up to 16), so the unit-level confidence is 'unverified' - check every pin.",
+  "connectors": [
+    {
+      "name": "TCU",
+      "description": "Gearbox (mechatronic) connector as drawn by ecupinouts ('VAG DQ500' connector)",
+      "pins": [
+        {
+          "pin": "6",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "7",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "9",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "15",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "16",
+          "function": "Ground",
+          "signal": "gnd",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "TCU-9",
+      "TCU-15"
+    ],
+    "ground": [
+      "TCU-16"
+    ],
+    "ign": [],
+    "can_h": [
+      "TCU-6"
+    ],
+    "can_l": [
+      "TCU-7"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "ecupinouts: +12 V to 9 and 15, ground 16, CAN-H 6 / CAN-L 7. Single source with an inconsistent connector description - verify on the unit.",
+    "resistor_notes": "Put a 120 ohm resistor across CAN-H/CAN-L if your interface does not terminate."
+  },
+  "pinout_confidence": "unverified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "ecupinouts.com: Bosch DQ381 (DQ500 connector) bench pinout",
+      "url": "https://ecupinouts.com/en/vag-dq500-dq381/"
+    },
+    {
+      "title": "Wikipedia: Direct-shift gearbox (DQ381 / 0GC)",
+      "url": "https://en.wikipedia.org/wiki/Direct-shift_gearbox"
+    }
+  ]
+}

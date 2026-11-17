@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ebjerk01/opentune/docs/database-unit.schema.json",
+  "title": "OpenTune control-unit database record (database/units/<id>.json)",
+  "description": "One ECU / TCU / AWD family or variant. Rules beyond this schema (source counts, bench wiring honesty) are enforced by opentune-db's validator; see docs/DATABASE.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id", "kind", "maker", "family", "name", "cpu", "flash_kib", "eeprom", "bus", "protocols",
+    "read_methods", "checksum", "ecudef", "vehicles", "part_number_examples", "notes",
+    "connectors", "bench", "pinout_confidence", "safety_note", "sources"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "Unique; equals the file name without .json." },
+    "kind": { "enum": ["ecu", "tcu", "awd"] },
+    "maker": { "type": "string", "minLength": 1 },
+    "family": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "cpu": { "type": ["string", "null"], "description": "Processor, e.g. MPC562, TC1796, C167CR. null when no source states it." },
+    "flash_kib": { "type": ["integer", "null"], "minimum": 1 },
+    "eeprom": { "type": ["string", "null"] },
+    "bus": { "type": "array", "minItems": 1, "items": { "enum": ["can", "kline"] } },
+    "protocols": { "type": "array", "items": { "enum": ["kwp2000", "uds", "tp20", "kwp1281"] } },
+    "read_methods": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obd", "bench", "boot", "notes"],
+      "properties": {
+        "obd": { "enum": ["read+write", "write-only", "none", "unknown"], "description": "'unknown' = no public source either way (never guessed)." },
+        "bench": { "type": "boolean" },
+        "boot": { "type": "boolean" },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "checksum": { "type": ["string", "null"], "description": "An opentune_checksum::get() id (edc15, edc15c6, edc16, edc17, pcr21, me7, dq250, dq381, zf8hp, haldex, tcu-ccitt, crc32-tail) or null." },
+    "ecudef": { "type": ["string", "null"], "description": "The id of a definition in ecudefs/, or null." },
+    "vehicles": { "type": "array", "items": { "$ref": "#/$defs/vehicle" } },
+    "part_number_examples": { "type": "array", "items": { "type": "string" } },
+    "notes": { "type": "string", "minLength": 1, "description": "Must explain a missing pinout when connectors is empty." },
+    "connectors": { "type": "array", "items": { "$ref": "#/$defs/connector" } },
+    "bench": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/bench" }] },
+    "pinout_confidence": { "enum": ["verified", "community", "unverified", null] },
+    "safety_note": { "type": ["string", "null"], "description": "Required whenever a pinout is given." },
+    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } }
+  },
+  "$defs": {
+    "vehicle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["make", "model"],
+      "properties": {
+        "make": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "engine": { "type": ["string", "null"] },
+        "years": { "type": ["string", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https?://" }
+      }
+    },
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pin", "function", "signal", "sources"],
+      "properties": {
+        "pin": { "type": "string", "minLength": 1 },
+        "function": { "type": "string", "minLength": 1 },
+        "signal": { "enum": ["12v_perm", "12v_ign", "gnd", "can_h", "can_l", "kline", "boot", "other"] },
+        "note": { "type": ["string", "null"] },
+        "confidence": { "enum": ["verified", "community", "unverified", null], "description": "Defaults to the unit's pinout_confidence. 'verified' needs 2+ distinct sources." },
+        "sources": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 }, "description": "Indices into the unit's sources." }
+      }
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "pins"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "pins": { "type": "array", "items": { "$ref": "#/$defs/pin" } }
+      }
+    },
+    "pinref": { "type": "string", "pattern": "^.+-.+$", "description": "'<connector name>-<pin>'" },
+    "bench": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notes"],
+      "properties": {
+        "power": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "ground": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "ign": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "can_h": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "can_l": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "kline": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "boot": { "type": "array", "items": { "$ref": "#/$defs/pinref" } },
+        "notes": { "type": "string", "minLength": 1 },
+        "resistor_notes": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

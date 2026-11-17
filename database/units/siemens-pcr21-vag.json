@@ -1,0 +1,166 @@
+{
+  "id": "siemens-pcr21-vag",
+  "kind": "ecu",
+  "maker": "Siemens/Continental",
+  "family": "Simos PCR",
+  "name": "Continental Simos PCR2.1 (VAG 1.6 / 2.0 TDI common rail)",
+  "aliases": [
+    "PCR2.1",
+    "SIMOS PCR2.1"
+  ],
+  "cpu": "Infineon TC1796 (TriCore)",
+  "flash_kib": 2048,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [
+    "uds"
+  ],
+  "read_methods": {
+    "obd": "write-only",
+    "bench": true,
+    "boot": true,
+    "notes": "Per OpenTune's siemens-pcr21 definition: calibration flashing over OBD, complete original via bench/boot read. Bench over CAN (ecupinouts)."
+  },
+  "checksum": "pcr21",
+  "ecudef": "siemens-pcr21",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk6",
+      "engine": "1.6 TDI CR (EA189)",
+      "years": "2009-2015"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Polo (6R)",
+      "engine": "1.6 TDI CR (EA189)",
+      "years": "2009-2015"
+    },
+    {
+      "make": "Audi",
+      "model": "A3 (8P)",
+      "engine": "1.6 TDI CR (EA189)",
+      "years": "2009-2015"
+    },
+    {
+      "make": "SEAT",
+      "model": "Leon (1P)/Ibiza (6J)",
+      "engine": "1.6 TDI CR (EA189)",
+      "years": "2009-2015"
+    },
+    {
+      "make": "Skoda",
+      "model": "Octavia (1Z)/Fabia (5J)",
+      "engine": "1.6 TDI CR (EA189)",
+      "years": "2009-2015"
+    }
+  ],
+  "part_number_examples": [
+    "03L906"
+  ],
+  "notes": "Continental unit for EA189 1.6 TDI (and some 2.0 TDI) common rail, alternative to the Bosch EDC17C46. Processor per a programming-module vendor's compatibility list (TC1796, 2 MB internal flash); OpenTune's ecudef flash_size is still a family placeholder. Pinout comes from a single source.",
+  "connectors": [
+    {
+      "name": "T94",
+      "description": "94-pin vehicle-side block of the 154-pin (60 + 94) connector",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "+12 V supply",
+          "signal": "12v_ign",
+          "note": "Source labels it only '+12 V'; on the related VAG units T94-5 is terminal 15.",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "87",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "92",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "67",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "68",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T94-5",
+      "T94-87",
+      "T94-92"
+    ],
+    "ground": [
+      "T94-1"
+    ],
+    "ign": [
+      "T94-5"
+    ],
+    "can_h": [
+      "T94-68"
+    ],
+    "can_l": [
+      "T94-67"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "ecupinouts: tie +12 V to T94-5, T94-87 and T94-92, ground T94-1, CAN-H T94-68 / CAN-L T94-67.",
+    "resistor_notes": "Put a 120 ohm resistor across CAN-H/CAN-L if your interface does not terminate."
+  },
+  "pinout_confidence": "community",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "ecupinouts.com: Continental SIMOS PCR2.1 bench pinout",
+      "url": "https://ecupinouts.com/en/simos-pcr21/"
+    },
+    {
+      "title": "Bitbox: VAG Continental Simos 12/16/18/PCR2 module (PCR2.1 on TC1796, 2 MB flash)",
+      "url": "https://bitbox.ru/frontend_dev.php/en/catalog/59"
+    },
+    {
+      "title": "Actronics: Continental Simos PCR2.1",
+      "url": "https://www.actronics.co.uk/news/continental-simos-pcr2-1"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

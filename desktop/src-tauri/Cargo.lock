@@ -2545,6 +2545,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-db"
+version = "0.1.0"
+dependencies = [
+ "opentune-checksum",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2554,6 +2564,7 @@ dependencies = [
  "opentune-checksum",
  "opentune-coding",
  "opentune-core",
+ "opentune-db",
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",

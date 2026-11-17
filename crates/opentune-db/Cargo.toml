@@ -1,0 +1,18 @@
+# Control-unit reference database (ECU / TCU / AWD) for OpenTune.
+#
+# Loads the hand-curated `database/units/*.json` files, validates them against
+# the honesty rules in docs/DATABASE.md and serves list/get queries for the CLI
+# and the desktop "Database" menu.
+[package]
+name = "opentune-db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Control-unit reference database: what an ECU/TCU is, how to read it, checksum family, vehicles and sourced bench pinouts."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+opentune-checksum = { path = "../opentune-checksum" }

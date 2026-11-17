@@ -1,0 +1,147 @@
+{
+  "id": "bosch-me7510-vag",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "ME7",
+  "name": "Bosch ME7.5.10 (VAG small petrol, 80-pin)",
+  "aliases": [
+    "ME7.5.10",
+    "ME7.5B"
+  ],
+  "cpu": "Bosch-marked B59233 (C16x family)",
+  "flash_kib": 512,
+  "eeprom": "ST95040 (512 B, SPI)",
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "Bench over K-line (ecupinouts). OBD and boot procedures are not documented in the cited sources."
+  },
+  "checksum": "me7",
+  "ecudef": "bosch-me7",
+  "vehicles": [],
+  "part_number_examples": [],
+  "notes": "Cost-reduced ME7.5 variant with an 80-pin connector. The ME7 checksum family applies, but OpenTune validated it on ME7.5/ME7.1 images - verify per variant. No vehicle list is given because the cited sources do not name specific applications. CAN polarity and a second ground pin are disputed between sources.",
+  "connectors": [
+    {
+      "name": "T80",
+      "description": "80-pin connector (Diag-Prof: T80; ecupinouts draws it as T94 of a 154-pin layout - pin numbers agree)",
+      "pins": [
+        {
+          "pin": "2",
+          "function": "Ground (per Transpondery only)",
+          "signal": "gnd",
+          "note": "Diag-Prof and ecupinouts give ground on pin 28.",
+          "confidence": "unverified",
+          "sources": [
+            2
+          ]
+        },
+        {
+          "pin": "15",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "27",
+          "function": "Ignition, terminal 15",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "28",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "29",
+          "function": "K-line",
+          "signal": "kline",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "31",
+          "function": "CAN (polarity disputed)",
+          "signal": "other",
+          "note": "Diag-Prof: CAN-High (not for diagnostics). Transpondery: CAN-L (or pin 17).",
+          "confidence": "unverified",
+          "sources": [
+            0,
+            2
+          ]
+        },
+        {
+          "pin": "32",
+          "function": "CAN (polarity disputed)",
+          "signal": "other",
+          "note": "Diag-Prof: CAN-Low (not for diagnostics). Transpondery: CAN-H (or pin 18).",
+          "confidence": "unverified",
+          "sources": [
+            0,
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T80-15",
+      "T80-27"
+    ],
+    "ground": [
+      "T80-28"
+    ],
+    "ign": [
+      "T80-27"
+    ],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "T80-29"
+    ],
+    "boot": [],
+    "notes": "+12 V to 15 (terminal 30) and 27 (terminal 15), ground 28, K-line 29.",
+    "resistor_notes": "K-line only; no CAN termination needed."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Diag-Prof: VAG Bosch ME7.5.10 (pin assignment, memory)",
+      "url": "http://www.diagprof.com/ecu_tips_and_tricks/manufacturer-vag/ecudomain-pcm_powertrain_control_module/supplier-bosch/ecutt-me7p5p10"
+    },
+    {
+      "title": "ecupinouts.com: Bosch ME7.5.10 (VAG) bench pinout",
+      "url": "https://ecupinouts.com/en/bosch-me7-5-10-vag/"
+    },
+    {
+      "title": "Transpondery: VAG ME7.x pinout (ME7.5B / ME7.5.10 80-pin)",
+      "url": "https://www.transpondery.com/pinouts/vag/me7x_pinout.html"
+    }
+  ]
+}

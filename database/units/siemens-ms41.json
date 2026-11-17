@@ -1,0 +1,124 @@
+{
+  "id": "siemens-ms41",
+  "kind": "ecu",
+  "maker": "Siemens",
+  "family": "MS4x",
+  "name": "Siemens MS41 (BMW M52 / S52)",
+  "aliases": [
+    "MS41",
+    "MS41.0",
+    "MS41.1",
+    "MS41.2"
+  ],
+  "cpu": "Infineon C166 (20 MHz)",
+  "flash_kib": 256,
+  "eeprom": null,
+  "bus": [
+    "kline"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "ms4x.net: reading via a chip programmer after desoldering the 28F200 flash (for unbricking / virginising) or with a solderless third-party tool. ecupinouts gives a K-line bench connection. OBD read/write is not documented in the cited sources."
+  },
+  "checksum": null,
+  "ecudef": "bmw-ms4x-ms41",
+  "vehicles": [
+    {
+      "make": "BMW",
+      "model": "3 Series (E36)",
+      "engine": "M52 (MS41.0 / MS41.1)",
+      "years": null
+    },
+    {
+      "make": "BMW",
+      "model": "5 Series (E39)",
+      "engine": "M52 (MS41.0 / MS41.1)",
+      "years": null
+    },
+    {
+      "make": "BMW",
+      "model": "M3 (E36, US)",
+      "engine": "S52 (MS41.2)",
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Siemens DME for the BMW M52 (MS41.0, MS41.1 OBD-II) and US S52 (MS41.2). OpenTune has no MS4x checksum module yet (checksum null). Pinout from a single source.",
+  "connectors": [
+    {
+      "name": "X6000",
+      "description": "88-pin BMW DME connector",
+      "pins": [
+        {
+          "pin": "26",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "28",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "49",
+          "function": "+12 V supply",
+          "signal": "12v_perm",
+          "note": "Source labels it only '+12 V'.",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "88",
+          "function": "K-line",
+          "signal": "kline",
+          "sources": [
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "X6000-26",
+      "X6000-49"
+    ],
+    "ground": [
+      "X6000-28"
+    ],
+    "ign": [],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "X6000-88"
+    ],
+    "boot": [],
+    "notes": "ecupinouts: tie +12 V to 26 and 49, ground 28, K-line 88.",
+    "resistor_notes": "K-line only."
+  },
+  "pinout_confidence": "community",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "ms4x.net wiki: Siemens MS41",
+      "url": "https://www.ms4x.net/index.php?title=Siemens_MS41"
+    },
+    {
+      "title": "ecupinouts.com: Siemens MS41 bench pinout",
+      "url": "https://ecupinouts.com/en/ms41/"
+    }
+  ]
+}

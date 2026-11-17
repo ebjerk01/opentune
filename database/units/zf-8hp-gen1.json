@@ -1,0 +1,138 @@
+{
+  "id": "zf-8hp-gen1",
+  "kind": "tcu",
+  "maker": "ZF",
+  "family": "8HP",
+  "name": "ZF 8HP (first generation) EGS / TCU",
+  "aliases": [
+    "8HP",
+    "8HP45",
+    "8HP70",
+    "8HP90",
+    "8HP55",
+    "AL551",
+    "EGS"
+  ],
+  "cpu": "Renesas SH725xx",
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "Bench over CAN. MaxxECU documents reflashing Gen1 units with its own software; OEM OBD read/write capability is not documented in the cited sources."
+  },
+  "checksum": "zf8hp",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "BMW",
+      "model": "F-series (8HP applications)",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Dodge",
+      "model": "8HP Gen1 applications",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Eight-speed ZF automatic, TCU integrated in the gearbox. MaxxECU's table lists SH725xx processors for every supported unit and marks the '2048 KB memory area' units as unsupported; Gen2/Gen3 (TriCore) are different hardware. OpenTune's zf8hp checksum covers the AL551-generation CAL block (e.g. 4G0/4H1 software) and needs a stock reference dump to correct. Pin numbers are from the Dodge Gen1 connector per MaxxECU; confirm for other brands.",
+  "connectors": [
+    {
+      "name": "TCU",
+      "description": "16-pin gearbox connector (8HP Gen1)",
+      "pins": [
+        {
+          "pin": "5",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "6",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "9",
+          "function": "+12 V wake-up (ignition)",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "13",
+          "function": "+12 V main supply",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "14",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "TCU-13",
+      "TCU-9"
+    ],
+    "ground": [
+      "TCU-14"
+    ],
+    "ign": [
+      "TCU-9"
+    ],
+    "can_h": [
+      "TCU-5"
+    ],
+    "can_l": [
+      "TCU-6"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "Main supply 13, wake-up 9, ground 14, CAN-H 5 / CAN-L 6. MaxxECU: apply the main supply for 10-15 s BEFORE the wake-up line, or part of the TCU does not initialise.",
+    "resistor_notes": "The 8HP TCU has NO internal termination (MaxxECU): fit 120 ohm at the TCU end in addition to the interface's own termination."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "MaxxECU: 8HP gearbox wiring",
+      "url": "https://maxxecu.com/webhelp/wirings-8hp_gearbox.html"
+    },
+    {
+      "title": "ecupinouts.com: ZF 8HP bench pinout",
+      "url": "https://ecupinouts.com/en/zf-8hp/"
+    },
+    {
+      "title": "MaxxECU: advanced 8HP installation and wiring (CPU / supported units)",
+      "url": "https://www.maxxecu.com/webhelp/advanced-8hp-installation_and_wiring.html"
+    }
+  ]
+}

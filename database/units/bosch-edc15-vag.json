@@ -1,0 +1,260 @@
+{
+  "id": "bosch-edc15-vag",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "EDC15",
+  "name": "Bosch EDC15P / EDC15P+ / EDC15V (VAG 1.9 TDI)",
+  "aliases": [
+    "EDC15P",
+    "EDC15P+",
+    "EDC15V",
+    "EDC15VM+"
+  ],
+  "cpu": "C167 family (Bosch-marked, e.g. B59388 on EDC15P+)",
+  "flash_kib": 512,
+  "eeprom": "ST24C04 (512 B, I2C); some units 24C02",
+  "bus": [
+    "kline"
+  ],
+  "protocols": [
+    "kwp2000"
+  ],
+  "read_methods": {
+    "obd": "read+write",
+    "bench": true,
+    "boot": true,
+    "notes": "Programmed over K-line, without CAN (ecupinouts); the same K-line is on the OBD socket, so OBD and bench use the same protocol. The 121-pin connector also carries a powertrain CAN pair that Diag-Prof marks as not used for diagnostics. A board-level boot mode exists for recovery (obdii365 article)."
+  },
+  "checksum": "edc15",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk3/Mk4",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat (B5)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Audi",
+      "model": "A4 (B5)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Audi",
+      "model": "A6 (C5)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "SEAT",
+      "model": "Toledo (1M)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Skoda",
+      "model": "Octavia (1U)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Sharan (7M)",
+      "engine": "1.9 TDI VP37 (EDC15V)",
+      "years": "1996-2003"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Golf Mk4",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Bora",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat (B5.5)",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "Audi",
+      "model": "A3 (8L)",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "Audi",
+      "model": "A4 (B6)",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "SEAT",
+      "model": "Leon/Toledo (1M)",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    },
+    {
+      "make": "Skoda",
+      "model": "Octavia (1U)",
+      "engine": "1.9 TDI PD (EDC15P)",
+      "years": "1999-2004"
+    }
+  ],
+  "part_number_examples": [
+    "028906021",
+    "038906019"
+  ],
+  "notes": "Classic VAG TDI diesel ECU: EDC15V on the rotary-pump (VP37) 1.9 TDI, EDC15P/P+ on the unit-injector (PD) 1.9 TDI. Part numbers above are VAG prefixes (028906021xx / 038906019xx), not single software keys. OpenTune's edc15 checksum (alias of edc15c6) fully solves the VAG TDI 512 KiB layout and self-corrects.",
+  "connectors": [
+    {
+      "name": "T121",
+      "description": "121-pin Bosch connector (81 vehicle-side + 40 engine-side). Diag-Prof labels the vehicle block T81; pin numbers are the same.",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ignition, terminal 15 (switched)",
+          "signal": "12v_ign",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "2",
+          "function": "Ignition, terminal 15 (switched) / supply",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "4",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "6",
+          "function": "CAN-Low (powertrain CAN, 500 kbit/s)",
+          "signal": "can_l",
+          "note": "Diag-Prof: not used for diagnostics.",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "7",
+          "function": "CAN-High (powertrain CAN, 500 kbit/s)",
+          "signal": "can_h",
+          "note": "Diag-Prof: not used for diagnostics.",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "16",
+          "function": "K-line (diagnostics)",
+          "signal": "kline",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "pin": "37",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1,
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T121-37",
+      "T121-2"
+    ],
+    "ground": [
+      "T121-4",
+      "T121-5"
+    ],
+    "ign": [
+      "T121-2"
+    ],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "T121-16"
+    ],
+    "boot": [],
+    "notes": "K-line only: +12 V to pins 37 (terminal 30) and 2 (terminal 15), ground on 4 and 5, K-line on 16. Diag-Prof also lists pin 1 as terminal 15; feeding it too is harmless per that source.",
+    "resistor_notes": "No CAN termination needed: diagnostics and programming run over K-line."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Diag-Prof: VAG Bosch EDC15P / EDC15P+ (pin assignment, memory)",
+      "url": "http://www.diagprof.com/ecu_tips_and_tricks/manufacturer-vag/ecudomain-pcm_powertrain_control_module/supplier-bosch/ecutt-edc15p"
+    },
+    {
+      "title": "Transpondery: VAG EDC15 pinout",
+      "url": "https://www.transpondery.com/pinouts/vag/edc15_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC15P bench pinout",
+      "url": "https://ecupinouts.com/en/edc15p/"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC15V bench pinout",
+      "url": "https://ecupinouts.com/en/edc15p-edc15v/"
+    },
+    {
+      "title": "Diag-Prof: VAG Bosch EDC15P+",
+      "url": "http://www.diagprof.com/ecu_tips_and_tricks/manufacturer-vag/ecudomain-pcm_powertrain_control_module/supplier-bosch/ecutt-edc15p+"
+    },
+    {
+      "title": "obdii365: reading VAG Bosch EDC15P/EDC15P+ in boot mode",
+      "url": "https://blog.obdii365.com/2018/05/11/read-vag-bosch-edc15p-boot-with-mpps-fgtech-or-kess-v2/"
+    },
+    {
+      "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
+      "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    }
+  ]
+}

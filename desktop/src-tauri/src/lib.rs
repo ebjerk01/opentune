@@ -38,6 +38,7 @@ pub mod adapter;
 mod feat_adaptation;
 mod feat_coding;
 mod feat_dash;
+mod feat_db;
 mod feat_logging;
 mod feat_obd;
 mod feat_scan;
@@ -108,6 +109,8 @@ pub struct AppData {
     pub catalog: Option<PathBuf>,
     /// In-app guide (Markdown) directory.
     pub guide: Option<PathBuf>,
+    /// Control-unit reference database (`database/units/*.json`).
+    pub database: Option<PathBuf>,
 }
 
 fn first_existing(cands: &[PathBuf]) -> Option<PathBuf> {
@@ -522,6 +525,7 @@ fn data_paths(state: tauri::State<AppData>) -> Value {
         "ecudefs": state.ecudefs.as_ref().map(|p| p.display().to_string()),
         "catalog": state.catalog.as_ref().map(|p| p.display().to_string()),
         "guide": state.guide.as_ref().map(|p| p.display().to_string()),
+        "database": state.database.as_ref().map(|p| p.display().to_string()),
     })
 }
 
@@ -2492,6 +2496,7 @@ fn resolve_data<R: tauri::Runtime>(app: &tauri::AppHandle<R>, extra_roots: &[Pat
         ecudefs: find("ecudefs"),
         catalog: find("catalog"),
         guide: find("guide"),
+        database: find("database"),
     }
 }
 
@@ -2608,6 +2613,8 @@ macro_rules! core_command_list {
             feat_dash::obd_pid_table,
             feat_dash::obd_supported,
             feat_dash::obd_read,
+            feat_db::db_list,
+            feat_db::db_get,
             list_drivers,
             data_paths,
             image_info,

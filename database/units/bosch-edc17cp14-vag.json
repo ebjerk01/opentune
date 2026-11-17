@@ -1,0 +1,181 @@
+{
+  "id": "bosch-edc17cp14-vag",
+  "kind": "ecu",
+  "maker": "Bosch",
+  "family": "EDC17",
+  "name": "Bosch EDC17CP14 (VAG 2.0 TDI common rail)",
+  "aliases": [
+    "EDC17CP14",
+    "EDC17CP20"
+  ],
+  "cpu": "Infineon TC1796 (TriCore)",
+  "flash_kib": 2048,
+  "eeprom": "Emulated in the TC1796 128 KiB data flash",
+  "bus": [
+    "can"
+  ],
+  "protocols": [
+    "uds"
+  ],
+  "read_methods": {
+    "obd": "write-only",
+    "bench": true,
+    "boot": true,
+    "notes": "Per OpenTune's bosch-edc17cp14 definition: calibration flashing works over OBD, but a complete original needs a bench or boot read. Bench over CAN; ecupinouts notes some bench tools also drive two auxiliary GPT lines."
+  },
+  "checksum": "edc17",
+  "ecudef": "bosch-edc17cp14",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Golf VI GTD",
+      "engine": "2.0 TDI CR (EA189)",
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Scirocco",
+      "engine": "2.0 TDI CR (EA189)",
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat",
+      "engine": "2.0 TDI CR (EA189)",
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Higher-output VAG 2.0 TDI common-rail (EA189) ECU, about 2008-2013. The EDC17 checksum's VAG per-block constant is firmware-specific: OpenTune corrects it with the owner's stock dump as reference. ecupinouts documents a second hardware variant grounded on T94-2 instead of T94-1 - check continuity.",
+  "connectors": [
+    {
+      "name": "T94",
+      "description": "94-pin vehicle-side block of the 154-pin (60 + 94) Bosch connector (Transpondery: socket K)",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Ground, terminal 31",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "2",
+          "function": "Ground (ecupinouts variant 2)",
+          "signal": "gnd",
+          "note": "Only on the second hardware variant listed by ecupinouts.",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "5",
+          "function": "Ignition, terminal 15",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "67",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "68",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "87",
+          "function": "Permanent supply, terminal 30",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "T60",
+      "description": "60-pin engine-side block",
+      "pins": [
+        {
+          "pin": "52",
+          "function": "GPT1 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        },
+        {
+          "pin": "44",
+          "function": "GPT2 auxiliary programming-mode line (bench tools)",
+          "signal": "other",
+          "note": "Never connect +12 V here.",
+          "confidence": "community",
+          "sources": [
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T94-87",
+      "T94-5"
+    ],
+    "ground": [
+      "T94-1"
+    ],
+    "ign": [
+      "T94-5"
+    ],
+    "can_h": [
+      "T94-68"
+    ],
+    "can_l": [
+      "T94-67"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "+12 V to T94-87 (terminal 30) and T94-5 (terminal 15), ground T94-1 (T94-2 on some hardware), CAN-H T94-68 / CAN-L T94-67.",
+    "resistor_notes": "Put a 120 ohm resistor across CAN-H/CAN-L if your interface does not terminate (ecupinouts)."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "Transpondery: VAG EDC17CP14 / CP20 pinout",
+      "url": "https://www.transpondery.com/pinouts/vag/edc17/edc17_cp14_cp20_pinout.html"
+    },
+    {
+      "title": "ecupinouts.com: Bosch EDC17CP14 (VAG) bench pinout",
+      "url": "https://ecupinouts.com/en/bosch-edc17cp14-vag/"
+    },
+    {
+      "title": "ECUTools: Bosch EDC17CP14 TC1796 VAG bench manual (CPU identification)",
+      "url": "https://ecutools.vn/wp-content/uploads/2024/10/ECUTools-Vietnam-Pinout-Dimsport-Bench-Mode-Bosch-EDC17CP14-VAG.pdf"
+    },
+    {
+      "title": "Infineon TC1796 data sheet (2 MB program flash, 128 KB data flash)",
+      "url": "https://www.mouser.com/datasheet/2/196/Infineon_SAK_TC1796_256F150E_BE_DS_v01_00_EN-1732136.pdf"
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "id": "temic-dq250-vag",
+  "kind": "tcu",
+  "maker": "Temic",
+  "family": "DQ250",
+  "name": "VAG DQ250 / 02E DSG mechatronic (J743)",
+  "aliases": [
+    "DQ250",
+    "02E",
+    "DSG6",
+    "J743"
+  ],
+  "cpu": null,
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": false,
+    "notes": "Bench over CAN on the 20-pin T20e plug (ecupinouts lists a K-line variant on pin 1; MaxxECU marks pin 1 K-line as unused). OBD programming capability and protocol are not documented in the cited sources."
+  },
+  "checksum": "dq250",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Audi",
+      "model": "A3 (8P)",
+      "engine": "2.0 TFSI / 2.0 TDI",
+      "years": null
+    },
+    {
+      "make": "Audi",
+      "model": "S3 (8P)",
+      "engine": "2.0 TFSI",
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Golf V GTI / R32",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Golf VI R",
+      "engine": "2.0 TFSI",
+      "years": null
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Scirocco R",
+      "engine": "2.0 TFSI",
+      "years": null
+    },
+    {
+      "make": "SEAT",
+      "model": "Leon (1P)",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [
+    "02E927770AD",
+    "02E927770AE",
+    "02E927770AJ",
+    "02E927770AL",
+    "02E927770AM"
+  ],
+  "notes": "Six-speed wet-clutch DSG (02E) with the mechatronic/TCU (J743) inside the gearbox. Checksum: OpenTune's dq250 algorithm targets the later DQ250-MQB (0D9) CAL/ASW layout; it is not validated on 02E software, so expect it to refuse. Vehicle list and part numbers from MaxxECU's DQ250 integration notes (not exhaustive). Protocols left empty: not stated by the sources.",
+  "connectors": [
+    {
+      "name": "T20e",
+      "description": "20-pin gearbox (mechatronic) connector",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "K-line",
+          "signal": "kline",
+          "note": "MaxxECU: present but not used; ecupinouts: K-line on a second hardware variant.",
+          "confidence": "community",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "10",
+          "function": "CAN-High (powertrain)",
+          "signal": "can_h",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "11",
+          "function": "+12 V supply (MaxxECU: '30a')",
+          "signal": "12v_perm",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "13",
+          "function": "+12 V supply (MaxxECU: '15a')",
+          "signal": "12v_ign",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "15",
+          "function": "CAN-Low (powertrain)",
+          "signal": "can_l",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "16",
+          "function": "Ground",
+          "signal": "gnd",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "18",
+          "function": "+12 V supply (MaxxECU: '30a')",
+          "signal": "12v_perm",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "19",
+          "function": "Ground",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "T20e-11",
+      "T20e-13"
+    ],
+    "ground": [
+      "T20e-19"
+    ],
+    "ign": [
+      "T20e-13"
+    ],
+    "can_h": [
+      "T20e-10"
+    ],
+    "can_l": [
+      "T20e-15"
+    ],
+    "kline": [],
+    "boot": [],
+    "notes": "+12 V to 11 and 13, ground 19, CAN-H 10 / CAN-L 15 (both sources). MaxxECU additionally wires 18 (+12 V) and 16 (ground).",
+    "resistor_notes": "Put a 120 ohm resistor across CAN-H/CAN-L if your interface does not terminate (ecupinouts). Run CAN as a twisted pair."
+  },
+  "pinout_confidence": "verified",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions can differ from the sources. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations): add a 120 ohm resistor if neither the unit nor your interface terminates. Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit.",
+  "sources": [
+    {
+      "title": "MaxxECU: VAG DSG (DQ250) wiring and hardware requirements",
+      "url": "https://www.maxxecu.com/webhelp/wirings-vag_dsg_dq250.html"
+    },
+    {
+      "title": "ecupinouts.com: Temic DQ250 bench pinout",
+      "url": "https://ecupinouts.com/en/temic-dq250/"
+    }
+  ]
+}
