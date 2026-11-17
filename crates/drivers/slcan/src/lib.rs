@@ -16,6 +16,8 @@ use opentune_core::{
 use std::io::{Read, Write};
 use std::time::Duration;
 
+pub mod monitor;
+
 struct Slcan {
     port: Box<dyn serialport::SerialPort>,
     ext: bool,
@@ -122,6 +124,8 @@ pub struct SlcanDriver {
     /// Optional seed/key handler for UDS security access (service 0x27). No OEM
     /// algorithm ships with OpenTune; the application supplies one.
     seed_key: Option<Box<dyn SeedKey>>,
+    /// Listen-only full-bus capture (independent of `open`).
+    monitor: monitor::SlcanMonitor,
 }
 
 impl SlcanDriver {
@@ -157,6 +161,10 @@ impl Interface for SlcanDriver {
             firmware: None,
             serial: None,
         }
+    }
+
+    fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+        Some(&mut self.monitor)
     }
 
     fn capabilities(&self) -> Capabilities {

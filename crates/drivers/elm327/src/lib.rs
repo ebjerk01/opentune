@@ -48,6 +48,8 @@ use opentune_dtc::{decode_uds, format_code, lookup, Dtc, DtcRecord, System};
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+pub mod monitor;
+
 /// Default serial device for a USB ELM327.
 const DEFAULT_PORT: &str = "/dev/ttyUSB0";
 /// Default serial baud (verified for the v1.5 CH340 clones).
@@ -421,6 +423,8 @@ pub struct Elm327Obd {
     bus: CanBus,
     /// A pre-built stream injected for tests, used in place of opening serial.
     injected: Option<Box<dyn ElmStream>>,
+    /// `ATMA` full-bus capture (independent of `open`).
+    monitor: monitor::ElmMonitor,
 }
 
 impl Default for Elm327Obd {
@@ -429,6 +433,7 @@ impl Default for Elm327Obd {
             transport: None,
             bus: CanBus::HsCan,
             injected: None,
+            monitor: monitor::ElmMonitor::new(),
         }
     }
 }
@@ -653,6 +658,11 @@ impl Interface for Elm327Obd {
                 .filter(|v| !v.is_empty()),
             serial: None,
         }
+    }
+
+    /// Passive `ATMA` bus capture; see [`monitor`].
+    fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+        Some(&mut self.monitor)
     }
 
     fn capabilities(&self) -> Capabilities {

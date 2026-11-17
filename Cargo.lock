@@ -798,6 +798,7 @@ name = "opentune-driver-gsusb"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-driver-socketcan",
  "socketcan",
 ]
 

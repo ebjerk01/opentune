@@ -22,6 +22,7 @@
 //! host-frame codec are mock/round-trip tested.
 
 pub mod codec;
+pub mod monitor;
 
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
@@ -40,6 +41,8 @@ pub struct GsUsbDriver {
     /// Optional seed/key handler for UDS security access (service 0x27). No OEM
     /// algorithm ships with OpenTune; the application supplies one.
     seed_key: Option<Box<dyn SeedKey>>,
+    /// Passive full-bus capture (independent of `open`).
+    monitor: monitor::GsUsbMonitor,
 }
 
 impl GsUsbDriver {
@@ -97,6 +100,10 @@ impl Interface for GsUsbDriver {
             firmware: None,
             serial: None,
         }
+    }
+
+    fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+        Some(&mut self.monitor)
     }
 
     fn capabilities(&self) -> Capabilities {
