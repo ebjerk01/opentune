@@ -36,7 +36,11 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
 
 - **`opentune-cli`** — the reference app. Offline-capable operations (identify,
   read, diff, checksum) plus a safety-gated `flash`. With the `mock` driver
-  everything works against local files.
+  everything works against local files. A library (`opentune_cli`: clap tree,
+  driver registry, `commands/<area>.rs` handlers) plus a thin `opentune`
+  binary; other front ends embed it through `run_with(CliConfig)` to add
+  subcommands, drivers, checksum and seed-key resolvers (see
+  [`PLUGINS.md`](PLUGINS.md#cli-host-api)).
 - **`desktop/`** — a Tauri app (lives outside the workspace, builds on its own).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
