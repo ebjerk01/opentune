@@ -33,7 +33,7 @@ Everything here operates on a flash `.bin`.
 
 ### Core, CLI & project
 - [x] Rust workspace; `opentune-core` (Interface driver trait, protocol layer, ECU identity, flash orchestrator, safety rules); driver registry; `mock`/file driver
-- [x] **`opentune` CLI** — `identify · info · read · dump · diff · findmaps · compare · checksum verify|fix · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · a2l2xdf · import-ecuflash · import-ols · packs · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`; `checksum attest` derives the flash-policy attestation from a real verification (`opentune-attest`), never from a caller claim
+- [x] **`opentune` CLI** — `drivers · identify · info · read · dump · diff · findmaps · compare · checksum verify|fix|algos · flash` (mock, `+ --resume/--transcript`) `· vault · ecudefs · import-xdf · export-xdf · import-a2l · export-a2l · a2l2xdf · import-ecuflash · import-ols · packs · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`; `checksum attest` derives the flash-policy attestation from a real verification (`opentune-attest`), never from a caller claim
 - [x] **`opentune-image`** — addressed sparse-image model + Intel HEX / Motorola SREC read/write (checksums validated, holes and fill reported, never silently invented)
 - [x] GPL-3.0, README, CI (fmt + clippy + test + build), core unit tests
 
@@ -109,7 +109,7 @@ bench ECU are available.
 
 ## Phase 3 — Reach & ecosystem
 - [~] **Android app on a phone** — APK built + verified running on a real device (above); USB-OTG / BLE adapter support still needs hardware
-- [~] **Open hardware interface** — ESP32-S3 **firmware written** (`hardware/firmware/esp32-s3`: TWAI/CAN + ISO-TP + K-line + framed USB-CDC protocol; not yet compiled/flashed) **and its Rust host driver** (`crates/drivers/esp32-opentune`, 22 tests); Arduino K-line bridge firmware also written. Remaining: compile/flash + a KiCad board + on-bench test.
+- [~] **Open hardware interface** — ESP32-S3 **firmware written** (`hardware/firmware/esp32-s3`: TWAI/CAN + ISO-TP + K-line + framed USB-CDC protocol; compile-only CI job on pinned ESP-IDF v5.3.2, never flashed) **and its Rust host driver** (`crates/drivers/esp32-opentune`, 27 tests; not yet in the CLI registry); Arduino K-line bridge firmware also written (compile-only CI). Remaining: flash + a KiCad board + on-bench test.
 - [x] **CAN-FD** (+ ISO-TP-FD) **and DoIP** transport (`opentune-core`; ISO 15765-2:2016 FD + ISO 13400) — offline/mock-tested (incl. a localhost TCP DoIP round-trip); untested on real CAN-FD/DoIP silicon
 - [ ] **More ECU families** + a growing **community ECU-definition & map library** (contribution format + review)
 
@@ -194,8 +194,8 @@ data are never bundled — they are caller-supplied or left out of scope. Most e
 unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Coding & adaptation
-- [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Engine runs over core's `RawDiag`/`CoreDiag`, tested against `opentune-udssim`; CLI `coding` + desktop alpha panel. Next: live test, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
-- [~] *(engine + CLI `adaptation` + desktop alpha panel, udssim-tested; live 🔒)* **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
+- [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Engine runs over core's `RawDiag`/`CoreDiag`, tested against `opentune-udssim`; CLI `coding` + desktop panel. Next: live test, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
+- [~] *(engine + CLI `adaptation` + desktop panel, udssim-tested; live 🔒)* **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
 - [~] **Actuator / output tests** — `InputOutputControlByIdentifier` (0x2F) — available as a service-script step in `opentune-servicefn`; no dedicated actuator UI yet.
 
 ### Service & diagnostics
@@ -211,11 +211,11 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 - [ ] **Renesas SH boot mode** read/write (SH7055/SH7058/**SH725xx**) — bench/boot access for Subaru/Mitsubishi *and* the SH725xx DSG (DQ381) TCU. 🔒 bench. Refs: **fenugrec/npkern** (GPL-3, SH RAM kernel), EcuFlash SH boot-mode behavior, NefMoto loaders.
 
 ### Frontends (all local — no server)
-- [~] *(alpha: adapter capability bar + Debug console + coding/adaptation/autoscan/service/logging/OBD panels behind the `alpha` feature)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
+- [~] *(desktop: adapter capability bar + capability-gated coding/adaptation/autoscan/service/logging/OBD panels in the default build; only the Debug console is behind the `alpha` feature)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
 - [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs, CLI `packs`). Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
-- [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. 6 tests + fixture-gated real-def test. **Next:** `<include>` base-def merging, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
+- [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. `<include>` / `<rom base>` base-def merging in the library (`parse_ecuflash_with_bases`; the CLI does not resolve bases yet). 26 tests + fixture-gated real-def test. **Next:** base resolution in the CLI, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
 - [ ] **Subaru / Mitsubishi seed-key** tables as an optional, user-enabled plugin (published tables), same stance as the Ford/Daimler entries above.
 
 ---
