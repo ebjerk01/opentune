@@ -56,7 +56,7 @@
         rpm: 790 + p * 29 + j(10), engine_load: 14 + p * 0.82 + j(1), coolant_temp: Math.round(s.cool), oil_temp: Math.round(s.cool + 4),
         intake_air_temp: Math.round(26 + p * 0.16), intake_map: map, baro_pressure: baro, boost_kpa: map - baro,
         maf: 9 + p * 1.45 + j(0.6), throttle_pos: 80 + j(0.5), fuel_rail_pressure: 29000 + p * 1520 + j(400),
-        fuel_level: 62, commanded_egr: Math.max(0, 42 - p * 0.5), egt_b1: [s.egt1 + j(3), s.egt2 + j(3)], dpf_temp: s.dpf,
+        fuel_level: 62, commanded_egr: Math.max(0, 42 - p * 0.5), egt_b1: [s.egt1 + j(3), s.egt2 + j(3), null, null], dpf_temp: s.dpf,
         accel_pedal_d: p, speed: Math.round(s.spd), ambient_temp: 9, module_voltage: 14.05 + j(0.05),
       },
       errors: {},

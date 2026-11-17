@@ -31,7 +31,7 @@
   let pUnit = store.get("punit", "bar");
   const hist = {};
   const mm = {};
-  const arrayLen = {}; // key -> sensor count for multi-sensor PIDs (EGT)
+  const sensors = {}; // key -> sorted sensor indexes that have reported a value (EGT)
 
   // ---- units ---------------------------------------------------------------
   function shown(key, v) {
@@ -155,7 +155,7 @@
   function tileKeys() {
     const out = [];
     selection().forEach((k) => {
-      if (arrayLen[k]) for (let i = 0; i < arrayLen[k]; i++) out.push(k + "#" + i);
+      if (sensors[k] && sensors[k].length) sensors[k].forEach((i) => out.push(k + "#" + i));
       else out.push(k);
     });
     return out;
@@ -247,8 +247,14 @@
     Object.keys(vals).forEach((k) => {
       const v = vals[k];
       if (Array.isArray(v)) {
-        if (arrayLen[k] !== v.length) { arrayLen[k] = v.length; reshape = true; }
-        v.forEach((x, i) => push(k + "#" + i, x));
+        // Backends report fixed sensor slots with null for absent sensors; tile
+        // only the sensors that have ever answered.
+        const seen = (sensors[k] = sensors[k] || []);
+        v.forEach((x, i) => {
+          if (x == null) return;
+          if (!seen.includes(i)) { seen.push(i); seen.sort((a, b) => a - b); reshape = true; }
+          push(k + "#" + i, x);
+        });
       } else push(k, v);
     });
     if (reshape) drawTiles();
