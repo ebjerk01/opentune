@@ -31,6 +31,7 @@ members = [
     "crates/opentune-logdef",
     "crates/opentune-servicefn",
     "crates/opentune-autoscan",
+    "crates/opentune-image",
 ]
 
 [workspace.package]

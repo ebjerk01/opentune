@@ -1,0 +1,17 @@
+# opentune-image — addressed sparse-image model + Intel HEX / Motorola SREC I/O.
+#
+# Zero external dependencies on purpose: this crate does byte/record parsing and
+# an in-memory address map only, so it must stay trivially auditable (the same
+# rule as opentune-vin). The error type and hex/ascii helpers are hand-rolled.
+[package]
+name = "opentune-image"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ebjerk01/opentune"
+authors = ["OpenTune contributors"]
+rust-version = "1.75"
+publish = false
+description = "Addressed sparse-image model with Intel HEX and Motorola SREC readers/writers."
+
+[dependencies]
