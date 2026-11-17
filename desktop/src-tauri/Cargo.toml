@@ -37,6 +37,9 @@ opentune-driver-socketcan = { path = "../../crates/drivers/socketcan" }
 opentune-driver-slcan = { path = "../../crates/drivers/slcan" }
 opentune-driver-elm327 = { path = "../../crates/drivers/kline-elm327" }
 opentune-driver-elm327-obd = { path = "../../crates/drivers/elm327" }
+opentune-driver-elm327net = { path = "../../crates/drivers/elm327net" }
+opentune-driver-gsusb = { path = "../../crates/drivers/gsusb" }
+opentune-driver-j2534 = { path = "../../crates/drivers/j2534" }
 opentune-driver-kkl = { path = "../../crates/drivers/kkl" }
 
 # Service engines + conformance sim, wired into the (alpha) Debug panel.

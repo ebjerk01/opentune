@@ -38,6 +38,10 @@
           <div class="nav-group-label">Tools</div>
           <button class="nav-item" data-panel="utils"><span class="ni-ico">🧰</span> Utilities</button>
 
+          <div class="nav-divider debug-only" id="debugNavDiv" hidden></div>
+          <div class="nav-group-label debug-only" id="debugNavLabel" hidden>Debug <span class="bench-note">alpha</span></div>
+          <button class="nav-item debug-only" id="debugNavBtn" data-panel="debug" hidden><span class="ni-ico">⚙</span> Debug</button>
+
           <div class="nav-divider"></div>
           <div class="nav-group-label">Help</div>
           <button class="nav-item" data-panel="guide"><span class="ni-ico">❔</span> Guide</button>
@@ -46,7 +50,7 @@
 
         <div class="sidebar-foot">
           <div id="dataStatus" class="data-status">resolving data…</div>
-          <div class="offline-badge">● offline · mock driver</div>
+          <div id="adapterBadge" class="offline-badge" title="adapter status">● no adapter</div>
         </div>
       </aside>
 
@@ -488,10 +492,75 @@
             <p class="muted small" style="margin-top:14px">An update replaces only the OpenTune application. Your flash dumps, <code>.otproj</code> projects and <code>opentune-vault</code> backups live in your own files and are never touched; the recent-projects list is kept in local storage and survives too.</p>
           </div>
         </section>
+
+        <!-- DEBUG (alpha only) -->
+        <section class="panel" id="panel-debug">
+          <header class="panel-head">
+            <h1>Debug <span class="bench-note">alpha — live hardware + all engines</span></h1>
+          </header>
+          <div class="panel-body">
+            <section class="card">
+              <h2>Connection</h2>
+              <div class="row">
+                <label>Driver <select id="dbgDriver"></select></label>
+                <label>Port <input id="dbgPort" placeholder="/dev/ttyUSB0"></label>
+                <label>Baud <input id="dbgBaud" placeholder="38400" style="width:7ch"></label>
+                <label>CAN bus
+                  <select id="dbgBus" class="inp">
+                    <option value="hs">HS-CAN (500k)</option>
+                    <option value="ms">MS-CAN (125k)</option>
+                  </select>
+                </label>
+                <label>Timeout ms <input id="dbgTimeout" value="1000" style="width:7ch"></label>
+                <button id="dbgDetect" class="btn">Detect adapter</button>
+              </div>
+              <div class="row"><span id="dbgAdapter" class="mono">adapter: unknown</span></div>
+              <p class="hint muted small">elm327obd defaults to /dev/ttyUSB0 @38400. openport2 ignores port/baud. <b>Match the CAN bus to your dongle's physical HS/MS-CAN switch</b> and the target module's bus (powertrain=HS, body/comfort often MS).</p>
+            </section>
+
+            <section class="card">
+              <h2>Raw UDS / OBD request</h2>
+              <div class="row">
+                <input id="dbgReq" placeholder="22 F1 90" style="flex:1">
+                <button id="dbgSend" class="btn">Send</button>
+              </div>
+              <div class="row"><code id="dbgResp" class="mono"></code></div>
+            </section>
+
+            <section class="card">
+              <h2>Offline UDS simulator</h2>
+              <div class="row">
+                <label>Seed DIDs <input id="dbgSimDids" placeholder="F190=0102, F1A0=AA" style="flex:1"></label>
+              </div>
+              <div class="row">
+                <input id="dbgSimReqs" placeholder="22F190, 22F1A0" style="flex:1">
+                <button id="dbgSimRun" class="btn">Run sim</button>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2>Session log</h2>
+              <div class="row">
+                <button id="dbgLogRefresh" class="btn">Refresh</button>
+                <button id="dbgLogClear" class="btn">Clear</button>
+                <button id="dbgLogSave" class="btn">Save…</button>
+              </div>
+              <pre id="dbgLog" class="mono log"></pre>
+            </section>
+          </div>
+        </section>
       </main>
     </div>
 
     <div id="toast" class="toast"></div>
+    <script src="./src/ot-caps.js"></script>
     <script src="./src/app.js"></script>
+    <script src="./src/feat_coding.js"></script>
+    <script src="./src/feat_scan.js"></script>
+    <script src="./src/feat_adaptation.js"></script>
+    <script src="./src/feat_service.js"></script>
+    <script src="./src/feat_logging.js"></script>
+    <script src="./src/feat_obd.js"></script>
+    <script src="./src/feat_autodebug.js"></script>
   </body>
 </html>

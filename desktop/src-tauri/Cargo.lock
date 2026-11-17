@@ -2566,6 +2566,9 @@ dependencies = [
  "opentune-core",
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
+ "opentune-driver-elm327net",
+ "opentune-driver-gsusb",
+ "opentune-driver-j2534",
  "opentune-driver-kkl",
  "opentune-driver-mock",
  "opentune-driver-openport2",
@@ -2602,6 +2605,29 @@ dependencies = [
  "opentune-core",
  "opentune-dtc",
  "serialport",
+]
+
+[[package]]
+name = "opentune-driver-elm327net"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-gsusb"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "socketcan",
+]
+
+[[package]]
+name = "opentune-driver-j2534"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
 ]
 
 [[package]]

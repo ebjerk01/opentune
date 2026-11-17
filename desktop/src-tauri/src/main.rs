@@ -25,6 +25,16 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
+// Live-diagnostics feature panels (each self-contained; they reuse the shared
+// adapter opener `debug_open_diag` and the public engine crates). The guided
+// Auto-debug wizard is UI-only (it orchestrates these commands from the browser).
+mod feat_adaptation;
+mod feat_coding;
+mod feat_logging;
+mod feat_obd;
+mod feat_scan;
+mod feat_service;
+
 // ---------------------------------------------------------------------------
 // Long-operation guard
 // ---------------------------------------------------------------------------
@@ -122,6 +132,15 @@ fn registry() -> Registry {
     r.register("elm327obd", "ELM327 serial (OBD diagnostics)", || {
         Box::new(opentune_driver_elm327_obd::Elm327Obd::new())
     });
+    r.register("elm327net", "ELM327 over WiFi / Bluetooth", || {
+        Box::new(opentune_driver_elm327net::Elm327NetDriver::new())
+    });
+    r.register("gsusb", "gs_usb / candleLight USB-CAN", || {
+        Box::new(opentune_driver_gsusb::GsUsbDriver::new())
+    });
+    r.register("j2534", "J2534 PassThru (generic)", || {
+        Box::new(opentune_driver_j2534::J2534Driver::new())
+    });
     r
 }
 
@@ -186,12 +205,15 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// Open a driver that exposes a diagnostic transport, applying an optional
-/// serial port/baud (for e.g. `elm327obd`).
-fn debug_open_diag(
+/// Open a driver that exposes a diagnostic transport, applying an optional serial
+/// port/baud (for e.g. `elm327obd`) and CAN bus select (`hs`/`ms`). For a switched
+/// ELM327 the `bus` sets the CAN speed, which must match the dongle's physical
+/// HS/MS-CAN switch. Shared by the probe, the Debug tab, and every feature panel.
+pub(crate) fn debug_open_diag(
     driver: &str,
     port: Option<&str>,
     baud: Option<&str>,
+    bus: Option<&str>,
 ) -> Result<Box<dyn Interface>, String> {
     let reg = registry();
     let mut drv = reg
@@ -208,24 +230,31 @@ fn debug_open_diag(
             cfg.options.insert("baud".into(), b.to_string());
         }
     }
+    if let Some(bus) = bus {
+        if !bus.trim().is_empty() {
+            cfg.options.insert("bus".into(), bus.to_string());
+        }
+    }
     drv.open(&cfg).map_err(|e| format!("open {driver}: {e}"))?;
     Ok(drv)
 }
 
 /// Send one raw UDS/OBD request to a live (or mock) adapter and return the hex
-/// response. The exchange is appended to the session log.
+/// response. The exchange is appended to the session log. Async so the blocking
+/// serial I/O never runs on the UI thread (a sync command would freeze the app).
 #[tauri::command]
-fn debug_raw_request(
+async fn debug_raw_request(
     driver: String,
     port: Option<String>,
     baud: Option<String>,
+    bus: Option<String>,
     request: String,
     timeout_ms: u64,
-    log: tauri::State<DebugLog>,
+    log: tauri::State<'_, DebugLog>,
 ) -> Result<String, String> {
     alpha_only()?;
     let req = parse_hex(&request)?;
-    let mut drv = debug_open_diag(&driver, port.as_deref(), baud.as_deref())?;
+    let mut drv = debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref())?;
     let transport = drv
         .diag()
         .ok_or_else(|| format!("driver '{driver}' has no diagnostic transport"))?;
@@ -241,6 +270,55 @@ fn debug_raw_request(
             let m = format!("{e}");
             log.push(format!("-> {}  ERR {m}", hexs(&req)));
             Err(m)
+        }
+    }
+}
+
+/// Probe for an adapter: open the selected driver (which, for `elm327obd`, runs
+/// the ELM327 handshake) and report whether it answered, its firmware banner,
+/// battery voltage and capabilities. A general app-wide command (not debug-only):
+/// the sidebar shows the adapter status everywhere, and the Debug tab shows the
+/// detail. Async so the handshake never blocks the UI thread.
+#[tauri::command]
+async fn probe_adapter(
+    driver: String,
+    port: Option<String>,
+    baud: Option<String>,
+    bus: Option<String>,
+    log: tauri::State<'_, DebugLog>,
+) -> Result<Value, String> {
+    match debug_open_diag(&driver, port.as_deref(), baud.as_deref(), bus.as_deref()) {
+        Ok(mut drv) => {
+            let info = drv.info();
+            let caps = drv.capabilities();
+            let battery_mv = drv.battery_millivolts().ok().flatten();
+            log.push(format!(
+                "probe {driver}: FOUND {} {}",
+                info.display_name,
+                info.firmware.clone().unwrap_or_default()
+            ));
+            Ok(json!({
+                "connected": true,
+                "driver": info.id,
+                "name": info.display_name,
+                "firmware": info.firmware,
+                "serial": info.serial,
+                "battery_mv": battery_mv,
+                "capabilities": {
+                    "can": caps.can,
+                    "can_fd": caps.can_fd,
+                    "kline": caps.kline,
+                    "read_memory": caps.read_memory,
+                    "write_memory": caps.write_memory,
+                    "bench_boot": caps.bench_boot,
+                    "battery_voltage": caps.battery_voltage,
+                    "programming_voltage": caps.programming_voltage,
+                },
+            }))
+        }
+        Err(e) => {
+            log.push(format!("probe {driver}: {e}"));
+            Ok(json!({ "connected": false, "error": e }))
         }
     }
 }
@@ -2096,10 +2174,25 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             build_channel,
+            probe_adapter,
             debug_raw_request,
             debug_simulate,
             debug_log_dump,
             debug_log_clear,
+            feat_coding::coding_read,
+            feat_coding::coding_set_preview,
+            feat_coding::coding_write,
+            feat_scan::autoscan_run,
+            feat_scan::autoscan_clear,
+            feat_adaptation::adaptation_list,
+            feat_adaptation::adaptation_read,
+            feat_adaptation::adaptation_actuator,
+            feat_adaptation::adaptation_routine,
+            feat_service::service_plan,
+            feat_service::service_run,
+            feat_logging::log_params,
+            feat_logging::log_poll_once,
+            feat_obd::obd_live,
             list_drivers,
             data_paths,
             image_info,
