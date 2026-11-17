@@ -99,7 +99,13 @@ def main(out_path: str) -> None:
     body = re.sub(r'\s*<script src="[^"]+"></script>', "", body)
     css = theme_aware((UI / "src" / "styles.css").read_text())
 
-    data = {"guides": guides(), "ecudefs": ecudefs()}
+    units = []
+    for p in sorted((REPO / "database" / "units").glob("*.json")):
+        try:
+            units.append(json.loads(p.read_text()))
+        except ValueError:
+            pass
+    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units}
     hj = HELP_JSON or UI / "src" / "panel-help.json"
     help_data = json.loads(hj.read_text()) if hj.is_file() else None
     parts = [

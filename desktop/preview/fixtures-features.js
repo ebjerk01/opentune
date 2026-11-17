@@ -83,7 +83,7 @@
       return { id, ext: false, count, hz: hz * (0.98 + Math.random() * 0.04), dlc: 8, last: frameData(id, count) };
     });
     const frames = ids.reduce((a, r) => a + r.count, 0);
-    return { running: cap.running, path: cap.path, format: cap.format, frames, bytes: frames * 41, fps: el ? frames / el : 0, elapsed_s: el, dropped: 0, ids, error: null, adapter: "ELM327 v1.5 (demo)" };
+    return { running: cap.running, listen_only: "not-guaranteed", path: cap.path, format: cap.format, frames, bytes: frames * 41, fps: el ? frames / el : 0, elapsed_s: el, dropped: 0, ids, error: null, adapter: "ELM327 v1.5 (demo)" };
   }
   F.candump_start = async (a) => { await wait(200); Object.assign(cap, { running: true, t0: Date.now(), path: a.path, format: a.format }); return { ok: true }; };
   F.candump_status = () => snap();
@@ -101,7 +101,8 @@
       { pin: "F", function: "K-line (placeholder)", signal: "kline", note: "Preview data — not a real pin" },
     ],
   };
-  const UNITS = [
+  const REAL = (window.__PREVIEW__ || {}).units || [];
+  const DEMO = [
     { id: "bosch-edc16u34", kind: "ecu", maker: "Bosch", family: "EDC16", name: "EDC16U34", cpu: "MPC561/562", flash_kib: 2048, eeprom: "95080 SPI",
       bus: ["can", "kline"], protocols: ["kwp2000", "tp20"], read_methods: { obd: "read + write", bench: true, boot: true, notes: "Full read over OBD on most variants." },
       checksum: "edc16", ecudef: "bosch-edc16u34", vehicles: ["VW Golf V 1.9 TDI", "VW Passat B6 2.0 TDI PD", "Audi A3 8P 1.9 TDI"], part_number_examples: ["03G906021"],
@@ -117,9 +118,11 @@
       read_methods: { obd: "read + write", bench: true, boot: false }, checksum: "dq250", ecudef: null, vehicles: ["VW Golf GTI", "VW Passat 2.0 TDI DSG"],
       part_number_examples: ["02E927770"], notes: "Preview demo entry.", connectors: [], bench: {}, pinout_confidence: null, sources: [] },
   ];
+  // Prefer the real database files bundled by build.py; fall back to the demo.
+  const UNITS = REAL.length ? REAL : DEMO;
   const brief = (u) => ({ id: u.id, kind: u.kind, maker: u.maker, family: u.family, name: u.name, cpu: u.cpu, flash_kib: u.flash_kib, bus: u.bus,
-    read_methods: u.read_methods, checksum: u.checksum, ecudef: u.ecudef, vehicle_count: u.vehicles.length,
-    has_pinout: u.connectors.length > 0, pinout_confidence: u.pinout_confidence });
+    read_methods: u.read_methods, checksum: u.checksum, ecudef: u.ecudef, vehicle_count: (u.vehicles || []).length,
+    has_pinout: (u.connectors || []).some((c) => c.pins && c.pins.length), pinout_confidence: u.pinout_confidence });
   F.db_list = ({ kind, q }) => {
     const n = (q || "").toLowerCase();
     return UNITS.filter((u) => (!kind || u.kind === kind) && (!n || JSON.stringify(u).toLowerCase().includes(n))).map(brief);
