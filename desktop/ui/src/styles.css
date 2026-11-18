@@ -506,6 +506,10 @@ table.heat.ts-heat td.cell.ro { cursor: default; opacity: .8; }
 table.heat.lv-heat td.cell { cursor: default; }
 table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted); font-weight: 400; }
 
+/* ---- Sidebar DoIP discovery list (app-boot.js) --------------------------- */
+.conn-doip-list { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; font-size: 11px; overflow-wrap: anywhere; }
+.conn-doip-list .conn-doip-entity { text-align: left; font-size: 11px; white-space: normal; }
+
 /* ---- Definition-pack picker (pack-picker.js) ----------------------------- */
 .pack-picker { margin-bottom: 10px; }
 .pack-picker .row { margin-bottom: 6px; }

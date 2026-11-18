@@ -113,14 +113,14 @@
     const planBtn = q("#svcPlan");
     const runBtn = q("#svcRun");
 
-    const capsOk = () => (window.OT && window.OT.has ? window.OT.has(["can"]) : true);
+    const capsOk = () => (window.OT && window.OT.has ? window.OT.has(["diag"]) : true);
     const syncRun = () => { runBtn.disabled = !(capsOk() && ackCb.checked); };
     // Plan sends nothing and never opens the adapter: it is never caps-gated.
     const syncPlan = () => { planBtn.disabled = false; };
 
     // Capability gate: banner + disable Run when the adapter can't do CAN.
     if (window.OT && window.OT.gate) {
-      window.OT.gate(sec, ["can"], "running service functions", { disable: ["#svcRun"] });
+      window.OT.gate(sec, ["diag"], "running service functions", { disable: ["#svcRun"] });
     }
     // Combine the gate with the ack checkbox for Run; re-run on every caps change.
     if (window.OT && window.OT.onCaps) window.OT.onCaps(() => { syncPlan(); syncRun(); });

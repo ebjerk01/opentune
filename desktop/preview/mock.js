@@ -39,6 +39,8 @@
     slcan: { name: "SLCAN (serial CAN)", firmware: "demo", caps: { can: true } },
     socketcan: { name: "SocketCAN", firmware: null, caps: { can: true, can_fd: true } },
     gsusb: { name: "gs_usb / candleLight USB-CAN", firmware: "demo", caps: { can: true } },
+    // DoIP has no battery reading and no raw CAN (see fixtures-doip.js).
+    doip: { name: "DoIP (ISO 13400, UDS over Ethernet)", firmware: "192.0.2.10:13400 → 0x0010", caps: { doip: true, read_memory: true }, noBattery: true },
   };
 
   // Session log shown by the Debug tab; fixtures push their exchanges here.
@@ -62,6 +64,7 @@
       ["gsusb", "gs_usb / candleLight USB-CAN"], ["j2534", "J2534 PassThru (generic)"], ["efp02c", "EFI EFP02C USB-CAN (unverified)"], ["vcar", "Virtual car (offline simulator)"], ["udssim", "UDS simulator (offline)"],
       // alpha builds only (Bench tier)
       ["isotp-ble", "ESP32 ISO-TP BLE bridge (Switchleg1 fw, unverified)"],
+      ["doip", "DoIP (ISO 13400, UDS over Ethernet)"],
     ].map(([id, name]) => ({ id, name })),
     data_paths: () => ({ ecudefs: "ecudefs/", catalog: "catalog/", guide: "guide/", packs: "packs/" }),
     list_ecudefs: () => P.ecudefs || [],
@@ -81,7 +84,8 @@
       }
       log(`probe ${driver}: FOUND ${a.name} ${a.firmware || ""}`);
       const caps = Object.assign({}, CAPS_ELM, { can: false, battery_voltage: false }, a.caps);
-      return { connected: true, driver, name: a.name, firmware: a.firmware, serial: null, battery_mv: engine().battery_mv + (driver === "vcar" ? 200 : 0), capabilities: caps };
+      const battery_mv = a.noBattery ? null : engine().battery_mv + (driver === "vcar" ? 200 : 0);
+      return { connected: true, driver, name: a.name, firmware: a.firmware, serial: null, battery_mv, capabilities: caps };
     },
     obd_live: async () => { await wait(120); return engine(); },
     update_status: () => ({ current_version: VERSION, busy: null }),

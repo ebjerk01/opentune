@@ -2655,6 +2655,7 @@ dependencies = [
  "opentune-coding",
  "opentune-core",
  "opentune-db",
+ "opentune-driver-doip",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
@@ -2687,6 +2688,13 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
+]
+
+[[package]]
+name = "opentune-driver-doip"
+version = "0.5.0"
+dependencies = [
+ "opentune-core",
 ]
 
 [[package]]

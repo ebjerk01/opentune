@@ -63,6 +63,13 @@ pub(crate) fn registry() -> Registry {
         opentune_driver_isotp_ble::DRIVER_NAME,
         || Box::new(opentune_driver_isotp_ble::IsoTpBleDriver::new()),
     );
+    // Bench tier: DoIP over Ethernet, tested against the simulated entity only.
+    #[cfg(feature = "alpha")]
+    r.register(
+        opentune_driver_doip::DRIVER_ID,
+        opentune_driver_doip::DRIVER_NAME,
+        || Box::new(opentune_driver_doip::DoipDriver::new()),
+    );
     r
 }
 
@@ -140,6 +147,7 @@ pub async fn probe_adapter(
                     "bench_boot": caps.bench_boot,
                     "battery_voltage": caps.battery_voltage,
                     "programming_voltage": caps.programming_voltage,
+                    "doip": caps.doip,
                 },
             }))
         }

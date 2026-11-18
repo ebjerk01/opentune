@@ -139,7 +139,7 @@
 
     // Gate the panel on CAN capability (live datalogging needs a bus adapter).
     if (window.OT && typeof window.OT.gate === "function") {
-      window.OT.gate(sec, ["can"], "live datalogging", { disable: ["#logLoad", "#logStart"] });
+      window.OT.gate(sec, ["diag"], "live datalogging", { disable: ["#logLoad", "#logStart"] });
     }
   }
 

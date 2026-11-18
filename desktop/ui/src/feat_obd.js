@@ -133,8 +133,8 @@
 
     // Capability gate: live OBD needs a CAN-capable adapter. Disables Start (and
     // re-enables it) as the adapter changes; stops polling if the cap is lost.
-    window.OT.gate(panel, ["can"], "live OBD data", { disable: ["#obdStart"] });
-    window.OT.onCaps(() => { if (!window.OT.has(["can"])) stop(); });
+    window.OT.gate(panel, ["diag"], "live OBD data", { disable: ["#obdStart"] });
+    window.OT.onCaps(() => { if (!window.OT.has(["diag"])) stop(); });
   }
 
   if (document.readyState === "loading") {

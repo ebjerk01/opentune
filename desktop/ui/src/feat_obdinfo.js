@@ -263,7 +263,7 @@
   panel.querySelectorAll("button[data-sec]").forEach((b) => b.addEventListener("click", () => read([b.dataset.sec])));
   $("inspAllEcus").addEventListener("change", (e) => store.set("allEcus", e.target.checked));
   if (window.OT && window.OT.gate) {
-    window.OT.gate(panel, ["can"], "the inspection readout", { disable: ["#inspAll", "button[data-sec]"] });
+    window.OT.gate(panel, ["diag"], "the inspection readout", { disable: ["#inspAll", "button[data-sec]"] });
   }
   render();
 })();
