@@ -218,7 +218,8 @@ disassembly with lints and computes the key for a seed, with an optional
 bounded step trace. In alpha / bench builds it can also **arm** the script as
 seed/key id `sa2` for the rest of the run (Bench tier until vehicle-tested):
 a service script naming `"seedkey": "sa2"` then unlocks with it. The desktop
-also resolves an inline `sa2:<hex>` id (not `sa2:@<file>`). Plugin resolvers
+also resolves an inline `sa2:<hex>` id and `sa2:@<file>` (raw bytes, hex or
+assembler; files over 1 MiB or scripts over 4096 bytes are refused). Plugin resolvers
 are asked first, so a plugin that provides `sa2` itself keeps precedence.
 
 ---

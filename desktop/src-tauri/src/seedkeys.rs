@@ -18,8 +18,10 @@
 //! (`opentune-sa2`), which computes nothing until the *user* supplies a
 //! script. After the plugin resolvers, `sa2` resolves to the script the user
 //! armed in the SA2 panel ([`SeedKeys::arm_sa2`], held in memory for this run
-//! only), and `sa2:<hex>` to the script given inline in the id (the CLI's
-//! `--seedkey sa2:<hex>` form). No script ships with OpenTune.
+//! only), `sa2:<hex>` to the script given inline in the id, and `sa2:@<file>`
+//! to a script file (raw bytes, hex or SA2 assembler, at most
+//! [`MAX_SCRIPT_FILE`](crate::feat_sa2::MAX_SCRIPT_FILE) bytes) — the CLI's
+//! `--seedkey sa2:<hex>` / `sa2:@<file>` forms. No script ships with OpenTune.
 
 use opentune_core::protocol::seedkey::SeedKey;
 use std::sync::{Arc, Mutex};
@@ -32,7 +34,7 @@ pub type SeedKeyResolver = fn(&str) -> Option<Box<dyn SeedKey>>;
 /// order, then the built-in SA2 interpreter over a user-supplied script. With
 /// no resolver and no armed script (the public app at startup),
 /// [`get`](SeedKeys::get) returns `None` for every id except an inline
-/// `sa2:<hex>`.
+/// `sa2:<hex>` or a readable `sa2:@<file>`.
 ///
 /// Clones share the armed SA2 script, so a clone taken into an adapter
 /// operation sees what the user armed.
@@ -62,13 +64,15 @@ impl SeedKeys {
 
     /// Resolve `id` (trimmed): the first plugin resolver that knows it, else
     /// the built-in SA2 interpreter (`sa2` = the armed script, `sa2:<hex>` =
-    /// the inline one). A blank id never resolves.
+    /// the inline one, `sa2:@<file>` = a script file). A blank id never
+    /// resolves.
     pub fn get(&self, id: &str) -> Option<Box<dyn SeedKey>> {
         let id = id.trim();
         if id.is_empty() {
             return None;
         }
-        self.plugin(id).or_else(|| self.builtin_sa2(id))
+        self.plugin(id)
+            .or_else(|| self.builtin_sa2(id).and_then(Result::ok))
     }
 
     /// Resolve `id` through the plugin resolvers only.
@@ -80,19 +84,34 @@ impl SeedKeys {
         self.resolvers.iter().find_map(|r| r(id))
     }
 
-    /// The built-in SA2 handler for `sa2` (the armed script) or `sa2:<hex>`.
-    fn builtin_sa2(&self, id: &str) -> Option<Box<dyn SeedKey>> {
+    /// The built-in SA2 handler for `sa2` (the armed script), `sa2:<hex>` or
+    /// `sa2:@<file>`. `None` when `id` is none of these (or `sa2` with nothing
+    /// armed); `Some(Err)` when it is one but the script cannot be used.
+    fn builtin_sa2(&self, id: &str) -> Option<Result<Box<dyn SeedKey>, String>> {
         let script = if id == SA2_ID {
-            self.armed_sa2()?.script
+            Ok(self.armed_sa2()?.script)
         } else {
-            opentune_sa2::parse_hex(id.strip_prefix("sa2:")?).ok()?
+            let spec = id.strip_prefix("sa2:")?;
+            match spec.strip_prefix('@') {
+                Some(path) => sa2_script_file(path),
+                None => opentune_sa2::parse_hex(spec).map_err(|e| e.to_string()),
+            }
         };
-        Some(Box::new(opentune_sa2::Sa2SeedKey::new(script)))
+        Some(script.map(|s| Box::new(opentune_sa2::Sa2SeedKey::new(s)) as Box<dyn SeedKey>))
     }
 
-    /// Like [`get`](SeedKeys::get), with the standard "not available" error.
+    /// Like [`get`](SeedKeys::get), with the standard "not available" error,
+    /// or why an `sa2:<hex>` / `sa2:@<file>` id could not be used.
     pub fn require(&self, id: &str) -> Result<Box<dyn SeedKey>, String> {
-        self.get(id).ok_or_else(|| unavailable(id))
+        let id = id.trim();
+        if let Some(h) = self.plugin(id) {
+            return Ok(h);
+        }
+        match self.builtin_sa2(id) {
+            Some(Ok(h)) => Ok(h),
+            Some(Err(e)) => Err(format!("seed/key '{id}': {e}")),
+            None => Err(unavailable(id)),
+        }
     }
 
     /// Whether no plugin resolver is registered (the public app).
@@ -114,8 +133,21 @@ impl SeedKeys {
     /// Whether `id` resolves to the built-in SA2 interpreter (not a plugin).
     pub fn is_builtin_sa2(&self, id: &str) -> bool {
         let id = id.trim();
-        self.plugin(id).is_none() && self.builtin_sa2(id).is_some()
+        self.plugin(id).is_none() && matches!(self.builtin_sa2(id), Some(Ok(_)))
     }
+}
+
+/// Read an `sa2:@<file>` script: size-capped, raw bytes or hex/assembler
+/// text, and no longer than any SA2 script.
+fn sa2_script_file(path: &str) -> Result<Vec<u8>, String> {
+    use crate::feat_sa2::{check_len, read_capped, script_from_file_bytes, MAX_SCRIPT_FILE};
+    if path.trim().is_empty() {
+        return Err("no file after 'sa2:@'".into());
+    }
+    let raw = read_capped(path, MAX_SCRIPT_FILE, "SA2 script")?;
+    let (script, _) = script_from_file_bytes(raw)?;
+    check_len(&script)?;
+    Ok(script)
 }
 
 /// The seed/key id the armed SA2 script answers to.
@@ -259,6 +291,55 @@ mod tests {
         assert_eq!(keys.get("sa2").unwrap().id(), "plugin-sa2");
         assert!(!keys.is_builtin_sa2("sa2"));
         assert!(keys.plugin("sa2:87FFFFFFFF4C").is_none());
+    }
+
+    #[test]
+    fn sa2_script_files_resolve_with_a_size_cap() {
+        let dir = std::env::temp_dir().join(format!("ot-seedkeys-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let keys = SeedKeys::default();
+        let want = [0xFF, 0xFF, 0xFF, 0xFE];
+        // Raw bytes, hex text and assembler source all load.
+        let cases: [(&str, &[u8]); 3] = [
+            ("raw.bin", NOT),
+            ("hex.txt", b"87 FF FF FF FF 4C\n"),
+            ("asm.sa2", b"eor 0xFFFFFFFF\nfinish\n"),
+        ];
+        for (name, body) in cases {
+            let p = dir.join(name);
+            std::fs::write(&p, body).unwrap();
+            let id = format!("sa2:@{}", p.display());
+            let h = keys.require(&id).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(h.compute(&[0, 0, 0, 1], 0x11).unwrap(), want, "{name}");
+            assert!(keys.is_builtin_sa2(&id));
+        }
+        // A missing file, an oversized file and a blank path are refused with
+        // a reason, and never resolve through get().
+        let missing = format!("sa2:@{}", dir.join("nope").display());
+        assert!(keys.get(&missing).is_none());
+        let e = keys.require(&missing).err().unwrap();
+        assert!(e.contains("SA2 script") && e.contains("nope"), "{e}");
+        let big = dir.join("big.bin");
+        std::fs::write(
+            &big,
+            vec![0x4Cu8; crate::feat_sa2::MAX_SCRIPT_FILE as usize + 1],
+        )
+        .unwrap();
+        let e = keys
+            .require(&format!("sa2:@{}", big.display()))
+            .err()
+            .unwrap();
+        assert!(e.contains("limit"), "{e}");
+        let long = dir.join("long.bin");
+        std::fs::write(&long, vec![0x87u8; crate::feat_sa2::MAX_SCRIPT + 1]).unwrap();
+        let e = keys
+            .require(&format!("sa2:@{}", long.display()))
+            .err()
+            .unwrap();
+        assert!(e.contains("longer than any SA2 script"), "{e}");
+        let e = keys.require("sa2:@ ").err().unwrap();
+        assert!(e.contains("no file"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
