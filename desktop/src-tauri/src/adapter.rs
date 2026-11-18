@@ -160,6 +160,8 @@ pub struct ConnKey {
     pub baud: Option<String>,
     pub bus: Option<String>,
     pub addr: Addr,
+    /// Extra driver options (e.g. `transport=tp20`), in insertion order.
+    pub options: Vec<(String, String)>,
 }
 
 impl ConnKey {
@@ -177,7 +179,15 @@ impl ConnKey {
             baud: nz(baud).map(str::to_string),
             bus: nz(bus).map(str::to_string),
             addr,
+            options: Vec::new(),
         }
+    }
+
+    /// The same connection with an extra driver option.
+    pub fn with_option(mut self, key: &str, value: &str) -> Self {
+        self.options.retain(|(k, _)| k != key);
+        self.options.push((key.to_string(), value.to_string()));
+        self
     }
 
     /// The same connection re-bound to another module address.
@@ -212,6 +222,9 @@ impl ConnKey {
             if let Some(v) = v {
                 cfg.options.insert(k.into(), v.clone());
             }
+        }
+        for (k, v) in &self.options {
+            cfg.options.insert(k.clone(), v.clone());
         }
         Ok(cfg)
     }
