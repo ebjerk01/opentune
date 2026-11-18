@@ -162,7 +162,14 @@ python3 -I desktop/preview/build.py /path/outside/repo/preview.html
 ```
 
 It inlines `desktop/ui` (unchanged) plus `desktop/preview/mock.js`, which stands
-in for the Tauri backend. Keep `mock.js` in step when a command's shape changes;
-its JS is syntax-checked by the `ui` gate. Never run `cargo tauri build` as a
+in for the Tauri backend, and the per-panel `desktop/preview/fixtures-*.js`.
+The vehicle panels answer from the `vcar` virtual car (its demo profile and
+`packs/vcar-demo`, bundled by `build.py`); the calibration panels work on a
+synthetic stock / tuned image pair and the log viewer on a synthetic 60 s log.
+Every command a panel invokes should have a fixture — a missing one shows as
+"Preview: '<cmd>' has no demo data yet". Keep the fixtures in step when a
+command's shape changes; their JS is syntax-checked by the `ui` gate. Demo data
+must be obviously fake (placeholder VINs such as `WVWZZZ00000000000`, the
+virtual car's `TESTVCAR…`), never taken from a real car or dump. Never run `cargo tauri build` as a
 routine check — the gates above cover compilation; bundles are built by the
 release workflow.
