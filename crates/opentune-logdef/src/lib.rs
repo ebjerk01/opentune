@@ -86,6 +86,11 @@ pub use parse::parse;
 pub mod live;
 pub use live::{decode_text, poll_once, poll_to_csv, Sample, CSV_HEADER};
 
+pub mod gps;
+pub use gps::{GpsLogger, GPS_CHANNELS, SPEED_ERROR_ID, SPEED_ERROR_MIN_KMH};
+/// The GPS source crate, re-exported for [`GpsLogger`] callers.
+pub use opentune_gps;
+
 pub mod fast;
 pub use fast::{
     DynamicDidInfo, FastLogConfig, LiveSession, LiveStatus, LogMode, DEFAULT_DYNAMIC_DID,

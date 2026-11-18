@@ -426,10 +426,31 @@ impl LiveSession {
         interval_ms: u64,
         out: &mut impl Write,
     ) -> std::io::Result<()> {
+        self.run_csv_gps(diag, rounds, interval_ms, None, out)
+    }
+
+    /// [`run_csv`](Self::run_csv) with an optional GPS source: after each
+    /// tick's channels, the round also gets the GPS channels (and the derived
+    /// speed error) from [`GpsLogger::samples`](crate::gps::GpsLogger::samples),
+    /// as more rows of the same round.
+    pub fn run_csv_gps(
+        &mut self,
+        diag: &mut dyn RawDiag,
+        rounds: usize,
+        interval_ms: u64,
+        mut gps: Option<&mut crate::gps::GpsLogger>,
+        out: &mut impl Write,
+    ) -> std::io::Result<()> {
         writeln!(out, "{}", crate::live::CSV_HEADER)?;
         for r in 0..rounds {
-            for s in self.tick(diag) {
-                crate::live::write_csv_row(out, r, &s)?;
+            let samples = self.tick(diag);
+            for s in &samples {
+                crate::live::write_csv_row(out, r, s)?;
+            }
+            if let Some(g) = gps.as_deref_mut() {
+                for s in g.samples(&samples) {
+                    crate::live::write_csv_row(out, r, &s)?;
+                }
             }
             if interval_ms > 0 && r + 1 < rounds {
                 std::thread::sleep(std::time::Duration::from_millis(interval_ms));
