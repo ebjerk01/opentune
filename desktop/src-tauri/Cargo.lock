@@ -2672,6 +2672,7 @@ dependencies = [
  "opentune-driver-vcar",
  "opentune-dtc",
  "opentune-flash",
+ "opentune-gps",
  "opentune-haldex",
  "opentune-logdef",
  "opentune-logview",
@@ -2821,6 +2822,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-gps"
+version = "0.5.0"
+dependencies = [
+ "serde",
+ "serialport",
+]
+
+[[package]]
 name = "opentune-haldex"
 version = "0.5.0"
 dependencies = [
@@ -2833,6 +2842,7 @@ name = "opentune-logdef"
 version = "0.5.0"
 dependencies = [
  "opentune-core",
+ "opentune-gps",
  "opentune-xdf",
  "roxmltree",
  "serde",

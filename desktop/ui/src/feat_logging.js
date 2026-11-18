@@ -31,7 +31,7 @@
     started: 0, // ticks since Start (for the status line)
     fast: false, // the running stream is a log_start session
   };
-  const { logModeBadge, fmtLogRate, liveLogRow, liveLogCsv, liveShown } = window.OTUtil;
+  const { logModeBadge, fmtLogRate, liveLogRow, liveLogCsv, liveShown, vehicleSpeedKmh } = window.OTUtil;
 
   // ---- build the nav item + panel -----------------------------------------
   function mount() {
@@ -103,6 +103,8 @@
       </div>
     `;
     main.appendChild(sec);
+    // Optional GPS source (feat_gps.js): its gps_* rows join the CSV.
+    if (window.OTGps) window.OTGps.mount(sec, { id: "logGps", speedError: true });
 
     // Wire controls. The logger definition comes from a definition pack, or a
     // loose logger.xml / LogDef JSON through the picker's File… button.
@@ -386,6 +388,11 @@
       }
       S.rows.push(liveLogRow(ts, s));
     });
+    // GPS card open: hand it the vehicle speed and log its latest channels.
+    if (window.OTGps && window.OTGps.isOpen()) {
+      window.OTGps.setVehicleKmh(vehicleSpeedKmh(samples));
+      window.OTGps.samples().forEach((g) => S.rows.push(liveLogRow(ts, g)));
+    }
     status(`live — ${S.started} tick(s), ${S.rows.length} row(s)`);
   }
 

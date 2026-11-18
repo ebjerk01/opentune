@@ -24,6 +24,8 @@ roxmltree = "0.20.0"
 serde = { workspace = true }
 opentune-core = { path = "../opentune-core" }
 opentune-xdf = { path = "../opentune-xdf" }
+# Optional GPS channels (src/gps.rs): parser + replay only, no serial port.
+opentune-gps = { path = "../opentune-gps", default-features = false }
 
 [dev-dependencies]
 # float_roundtrip makes the deserializer parse f64 back to the exact bits serde

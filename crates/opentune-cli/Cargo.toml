@@ -58,6 +58,8 @@ opentune-tsini = { path = "../opentune-tsini" }
 opentune-tsproto = { path = "../opentune-tsproto" }
 opentune-sa2 = { path = "../opentune-sa2" }
 opentune-c167bsl = { path = "../opentune-c167bsl" }
+# GPS/GNSS source for `log --gps` and `gps` (serial reader + NMEA replay).
+opentune-gps = { path = "../opentune-gps" }
 # Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
 ctrlc = "3"
 

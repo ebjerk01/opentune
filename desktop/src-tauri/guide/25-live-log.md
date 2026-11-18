@@ -69,6 +69,24 @@ Validation state: **synthetic-tested** (UDS simulator). Not yet tested on a car.
   `iso14229-identification` logger marks all its DIDs this way.
 - The CSV has one row per parameter per tick: timestamp (ms), parameter id, name, raw value, scaled value, units, note and text. A text channel leaves `raw` and `value` empty and fills `text`. The **Log viewer** opens the file; text channels are listed in its notes rather than plotted.
 
+## GPS (optional)
+
+The **GPS** card adds a GNSS receiver. A u-blox style USB receiver shows up as
+a serial port (`/dev/ttyACM0`, `COM5`); **Ports** lists them, likely receivers
+first. **File…** replays a recorded NMEA file instead (in a loop). Press
+**Open**: the tiles show position, GPS speed, altitude, course, satellites,
+fix and HDOP; the pill says **fix**, **no fix** or **stale**.
+
+While the card is open, each tick also logs `gps_lat`, `gps_lon`, `gps_alt_m`,
+`gps_speed_kmh`, `gps_course_deg`, `gps_sats`, `gps_fix` and `gps_hdop` to the
+CSV. Without a good fix the position and speed stay empty and the note says
+why. When a vehicle-speed channel is logged (an id like `vss` or a name with
+"vehicle speed"), **Speed error** shows vehicle minus GPS speed in km/h — only
+with a good fix above 5 km/h. Speedometers usually read a few percent high.
+
+Validation state: **synthetic-tested** (recorded NMEA). Not yet tested with a
+real receiver.
+
 ## Common errors
 
 - **Slow updates** — an ELM327 manages roughly 1–3 parameters per second. Log fewer parameters or use a faster adapter. Ticks are skipped while the adapter is still busy with the previous one.

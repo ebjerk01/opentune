@@ -65,6 +65,8 @@ opentune-adaptation = { path = "../../crates/opentune-adaptation" }
 opentune-autoscan = { path = "../../crates/opentune-autoscan" }
 opentune-servicefn = { path = "../../crates/opentune-servicefn" }
 opentune-logdef = { path = "../../crates/opentune-logdef" }
+# Optional GPS/GNSS source (NMEA serial reader + replay) for Live log / Dashboard.
+opentune-gps = { path = "../../crates/opentune-gps" }
 # Definition packs: the panels' pack picker lists them.
 opentune-packs = { path = "../../crates/opentune-packs" }
 opentune-udssim = { path = "../../crates/opentune-udssim" }

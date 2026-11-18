@@ -1,7 +1,7 @@
 //! The clap definitions of the public command tree.
 use crate::{
-    bsl_cmd, candump, ctrldef_cmd, doip_cmd, dsg_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd,
-    seedkey_cmd, ts_cmd,
+    bsl_cmd, candump, ctrldef_cmd, doip_cmd, dsg_cmd, gps_cmd, haldex_cmd, mapfind_cmd, obd_cmd,
+    recipe_cmd, seedkey_cmd, ts_cmd,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -454,6 +454,19 @@ pub enum Command {
         /// defining, e.g. 0x03 (--fast). Default: leave the session alone.
         #[arg(long, value_name = "SESSION")]
         fast_session: Option<String>,
+        /// Add GPS channels (gps_lat, gps_lon, …, and speed_error_kmh when a
+        /// vehicle-speed channel is logged) from an NMEA receiver port
+        /// (`/dev/ttyACM0`, `COM5`) or a recorded NMEA file (one epoch per
+        /// sample).
+        #[arg(long, value_name = "PORT|FILE")]
+        gps: Option<String>,
+        /// Baud rate of a UART GPS receiver (USB CDC-ACM ignores it).
+        #[arg(long, default_value_t = opentune_gps::DEFAULT_BAUD)]
+        gps_baud: u32,
+        /// Vehicle-speed channel for speed_error_kmh (default: detected, e.g.
+        /// OBD PID 0x0D or an id like `vss` / `vehicle_speed`).
+        #[arg(long, value_name = "ID")]
+        gps_speed_param: Option<String>,
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
     },
@@ -527,6 +540,9 @@ pub enum Command {
         #[command(subcommand)]
         action: ctrldef_cmd::ControllerAction,
     },
+    /// GPS/GNSS receiver (NMEA 0183 over serial / USB CDC-ACM): print fixes
+    /// and NMEA line counters, replay a recorded NMEA file, list ports.
+    Gps(gps_cmd::GpsArgs),
 }
 
 #[derive(Subcommand)]

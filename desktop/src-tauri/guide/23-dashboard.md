@@ -41,6 +41,16 @@ Press **■ Stop recording** to finish.
 - **MAP / boost** — manifold absolute pressure. Boost is the part above atmospheric pressure.
 - Update speed depends on the adapter. An ELM327 reads only a few values per second, so more gauges means slower updates per gauge.
 
+## GPS (optional)
+
+The **GPS** card below the gauges adds a GNSS receiver (a u-blox style USB
+receiver is a serial port such as `/dev/ttyACM0` or `COM5`; **Ports** lists
+them) or replays a recorded NMEA file. The tiles show position, GPS speed,
+altitude, course, satellites, fix and HDOP. With **Vehicle speed** among the
+polled values, **Speed error** shows the speedometer reading minus GPS speed
+(good fix above 5 km/h only). A recording then includes the `gps_*` channels.
+Validation state: **synthetic-tested**.
+
 ## Common errors
 
 - **No gauges / all blank** — ignition off, wrong bus, or no adapter.

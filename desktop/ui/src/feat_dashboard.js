@@ -135,6 +135,8 @@
     <p class="small muted" id="dashMissing"></p>`;
   document.getElementById("main").appendChild(panel);
   window.OTNav.register({ id: "dashboard", label: "Dashboard", icon: "◔", group: "vehicle", tier: "bench" });
+  // Optional GPS source (feat_gps.js): tiles + speed error against OBD speed.
+  if (window.OTGps) window.OTGps.mount(panel, { id: "dashGps", speedError: true });
 
   const $ = (id) => panel.querySelector("#" + id);
   const status = (cls, text) => { const p = $("dashStatus"); p.className = "pill " + cls; p.textContent = text; };
@@ -291,7 +293,7 @@
   // rec = { path, t0, samples, buf: rows not yet written, flushing, timer }.
   let rec = null;
   let failures = 0; // consecutive non-busy poll errors (a dropped connection)
-  const { liveLogCsv, dashLogRows, fmtElapsed, baseName } = window.OTUtil;
+  const { liveLogCsv, liveLogRow, dashLogRows, fmtElapsed, baseName } = window.OTUtil;
   function recInfo() {
     const b = $("dashRec");
     b.classList.toggle("rec-on", !!rec);
@@ -356,10 +358,17 @@
       const r = await invoke("obd_read", { ...window.OT.connArgs(), pids: pidsFor(selection()) });
       ingest(r);
       failures = 0;
+      const gps = window.OTGps && window.OTGps.isOpen() ? window.OTGps : null;
+      if (gps) {
+        const sp = r && r.values ? r.values.speed : null;
+        gps.setVehicleKmh(typeof sp === "number" ? sp : null);
+      }
       if (rec) {
         const vals = Object.assign({}, r && r.values);
         if (texts.vin != null) vals.vin = texts.vin;
-        rec.buf.push(...dashLogRows((r && r.t_ms) || Date.now(), vals, byKey, r && r.errors));
+        const ts = (r && r.t_ms) || Date.now();
+        rec.buf.push(...dashLogRows(ts, vals, byKey, r && r.errors));
+        if (gps) rec.buf.push(...gps.samples().map((g) => liveLogRow(ts, g)));
         rec.samples += 1;
       }
       status("ok", "live");
