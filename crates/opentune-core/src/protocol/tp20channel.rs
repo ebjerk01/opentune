@@ -18,12 +18,23 @@
 //! | `tp20_keepalive_ms` | send `A3` after this long idle; `0` = never | `1000` |
 //! | `tp20_timeout_ms` | wait per setup / parameter / keep-alive step | `1000` |
 //! | `tp20_block_size` | block size requested in our `A0` (frames the module sends before it waits for our ACK), 1..=15 | `15` |
+//! | `tp20_ack_retries` | times a block whose ACK does not arrive is re-sent (after an `A4` break), 0..=5 | `2` |
+//!
+//! ## Breaks and re-opening
+//!
+//! When an exchange fails mid-way (no ACK after the retries, a lost frame the
+//! module never resent, a reply timeout) or the module closes the channel
+//! (`A8`), that request fails and the channel is torn down; the **next**
+//! request transparently sets up a new channel ([`Tp20Channel::reopens`]
+//! counts them). The module's KWP session does not survive that, so callers
+//! restart it. A failed keep-alive (two unanswered `A3`s in a row) instead
+//! marks the channel lost: requests fail until [`Tp20Channel::reopen`].
 //!
 //! A `tp20_*` option without TP2.0 selected is refused, so a missing
 //! `transport=tp20` never silently falls back to ISO-TP.
 use crate::protocol::diag::DiagTransport;
 use crate::protocol::isotp::{CanLink, IsoTp};
-use crate::protocol::vwtp20::{VwTp20, BROADCAST_ID};
+use crate::protocol::vwtp20::{Tp20Stats, VwTp20, BROADCAST_ID};
 use crate::{ConnectConfig, Error, Protocol, Result};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -37,6 +48,11 @@ pub const DEFAULT_KEEPALIVE_MS: u64 = 1000;
 pub const DEFAULT_TIMEOUT_MS: u64 = 1000;
 /// Block size requested in the `A0`.
 pub const DEFAULT_BLOCK_SIZE: u8 = 0x0F;
+/// Retransmissions of an unacknowledged block.
+pub const DEFAULT_ACK_RETRIES: u8 = 2;
+/// Keep-alive attempts (each bounded by the step timeout) before the
+/// channel is declared lost.
+const KEEPALIVE_ATTEMPTS: u32 = 2;
 
 /// Which transport a raw-CAN driver builds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +74,8 @@ pub struct Tp20Options {
     pub timeout_ms: u64,
     /// Block size requested in our `A0`.
     pub block_size: u8,
+    /// Retransmissions of a block whose ACK does not arrive.
+    pub ack_retries: u8,
 }
 
 impl Tp20Options {
@@ -69,6 +87,7 @@ impl Tp20Options {
             keepalive_ms: DEFAULT_KEEPALIVE_MS,
             timeout_ms: DEFAULT_TIMEOUT_MS,
             block_size: DEFAULT_BLOCK_SIZE,
+            ack_retries: DEFAULT_ACK_RETRIES,
         }
     }
 
@@ -124,6 +143,9 @@ impl Tp20Options {
             if o.block_size == 0 {
                 return Err(Error::Config("tp20_block_size must be 1..=15".into()));
             }
+        }
+        if let Some(s) = cfg.options.get("tp20_ack_retries") {
+            o.ack_retries = parse_num("tp20_ack_retries", s, 5)? as u8;
         }
         Ok(Some(o))
     }
@@ -199,10 +221,11 @@ impl Shared {
 /// An open VW TP2.0 channel with a background keep-alive.
 ///
 /// Requests are serialised with the keep-alive through one lock, so an `A3`
-/// never lands in the middle of a telegram. If a keep-alive goes unanswered
-/// the channel is marked lost and the next request fails with the reason
-/// (re-open the driver to set up a new channel: the module's KWP session is
-/// gone with it). Dropping the channel stops the keep-alive and sends `A8`.
+/// never lands in the middle of a telegram. If keep-alives go unanswered
+/// the channel is marked lost and requests fail with the reason until
+/// [`reopen`](Self::reopen) (the module's KWP session is gone with it). A
+/// break during a request (see the module docs) instead re-opens on the next
+/// request. Dropping the channel stops the keep-alive and sends `A8`.
 pub struct Tp20Channel {
     shared: Arc<Shared>,
     worker: Option<JoinHandle<()>>,
@@ -217,6 +240,7 @@ impl Tp20Channel {
     pub fn open(link: Box<Link>, opts: &Tp20Options) -> Result<Self> {
         let mut tp: VwTp20<Link> = VwTp20::new(link, opts.addr, opts.rx_id);
         tp.block_size = opts.block_size;
+        tp.max_block_retries = opts.ack_retries;
         tp.open(opts.timeout_ms)?;
         let tester_tx_id = tp.tx_id;
         let shared = Arc::new(Shared {
@@ -229,24 +253,63 @@ impl Tp20Channel {
             stop: Mutex::new(false),
             wake: Condvar::new(),
         });
-        let worker = if opts.keepalive_ms > 0 {
-            let s = shared.clone();
-            let (interval, timeout) = (Duration::from_millis(opts.keepalive_ms), opts.timeout_ms);
-            Some(
-                std::thread::Builder::new()
-                    .name("tp20-keepalive".into())
-                    .spawn(move || keep_alive_loop(&s, interval, timeout))
-                    .map_err(Error::Io)?,
-            )
-        } else {
-            None
-        };
-        Ok(Self {
+        let mut ch = Self {
             shared,
-            worker,
+            worker: None,
             opts: opts.clone(),
             tester_tx_id,
-        })
+        };
+        ch.start_keep_alive()?;
+        Ok(ch)
+    }
+
+    fn start_keep_alive(&mut self) -> Result<()> {
+        if self.opts.keepalive_ms == 0 {
+            return Ok(());
+        }
+        if let Some(w) = self.worker.take() {
+            let _ = w.join();
+        }
+        let s = self.shared.clone();
+        let (interval, timeout) = (
+            Duration::from_millis(self.opts.keepalive_ms),
+            self.opts.timeout_ms,
+        );
+        self.worker = Some(
+            std::thread::Builder::new()
+                .name("tp20-keepalive".into())
+                .spawn(move || keep_alive_loop(&s, interval, timeout))
+                .map_err(Error::Io)?,
+        );
+        Ok(())
+    }
+
+    /// Set up a fresh channel after it was lost or closed (a no-op on an
+    /// open, healthy channel) and restart the keep-alive. The module's KWP
+    /// session starts over.
+    pub fn reopen(&mut self) -> Result<()> {
+        {
+            let mut g = self.shared.lock();
+            if g.lost.is_none() && g.tp.is_open() {
+                return Ok(());
+            }
+            g.tp.disconnect();
+            g.tp.open(self.opts.timeout_ms)?;
+            g.lost = None;
+            g.last_activity = Instant::now();
+            self.tester_tx_id = g.tp.tx_id;
+        }
+        self.start_keep_alive()
+    }
+
+    /// Channel set-ups after the first (automatic or via [`reopen`](Self::reopen)).
+    pub fn reopens(&self) -> u32 {
+        self.shared.lock().tp.stats.reopens
+    }
+
+    /// The transport's recovery counters.
+    pub fn stats(&self) -> Tp20Stats {
+        self.shared.lock().tp.stats.clone()
     }
 
     /// The parameters this channel was opened with.
@@ -310,19 +373,33 @@ fn keep_alive_loop(shared: &Shared, interval: Duration, timeout_ms: u64) {
             }
         }
         let mut g = shared.lock();
-        if g.lost.is_some() || !g.tp.is_open() {
+        if g.lost.is_some() {
             return;
+        }
+        if !g.tp.is_open() {
+            // Broken during a request: the next request re-opens it.
+            g.last_activity = Instant::now();
+            continue;
         }
         if g.last_activity.elapsed() < interval {
             continue; // a request ran meanwhile
         }
-        match g.tp.keep_alive(timeout_ms) {
+        let mut result = Ok(());
+        for _ in 0..KEEPALIVE_ATTEMPTS {
+            result = g.tp.keep_alive(timeout_ms);
+            // A closed channel is final; a lost A3 or A1 is worth a retry.
+            if result.is_ok() || !g.tp.is_open() {
+                break;
+            }
+        }
+        match result {
             Ok(()) => {
                 g.keep_alives += 1;
                 g.last_activity = Instant::now();
             }
             Err(e) => {
                 g.lost = Some(format!("keep-alive failed: {e}"));
+                g.tp.disconnect();
                 return;
             }
         }
@@ -340,18 +417,18 @@ impl DiagTransport for Tp20Channel {
         let mut g = self.shared.lock();
         if let Some(why) = &g.lost {
             return Err(Error::Protocol(format!(
-                "TP2.0 channel to 0x{:02X} is closed ({why}); re-open the adapter",
+                "TP2.0 channel to 0x{:02X} is closed ({why}); re-open it (reopen) or the \
+                 adapter",
                 self.opts.addr
             )));
         }
-        if !g.tp.is_open() {
-            return Err(Error::Protocol(format!(
-                "TP2.0 channel to 0x{:02X} was closed by the module; re-open the adapter",
-                self.opts.addr
-            )));
-        }
+        // A channel broken by an earlier request is set up again here
+        // (`VwTp20::request` opens lazily), each step bounded by the timeout.
         let r = g.tp.request(req, timeout_ms);
         g.last_activity = Instant::now();
+        let tx = g.tp.tx_id;
+        drop(g);
+        self.tester_tx_id = tx;
         r
     }
 }

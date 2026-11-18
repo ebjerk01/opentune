@@ -29,25 +29,61 @@
 //! | `0x2`       | data, more to follow, no ACK yet                      |
 //! | `0x3`       | data, **last** frame, no ACK expected                 |
 //! | `0x9`       | ACK — "block received, **not** ready for next" (a `0xB` follows) |
-//! | `0xA`       | channel params: `A0` request / `A1` response / `A3` test / `A8` disconnect |
+//! | `0xA`       | channel params: `A0` request / `A1` response / `A3` test / `A4` break / `A8` disconnect |
 //! | `0xB`       | ACK — "block received, ready for next" (low nibble = next expected seq) |
 //! | `0xC`       | broadcast channel-setup request (to CAN id `0x200`)   |
 //! | `0xD`       | broadcast channel-setup response (positive = `0xD0`)  |
 //!
-//! The `0x3`/`0x9` opcodes and the `A3`/`A8` replies follow the public
+//! The `0x3`/`0x9` opcodes and the `A3`/`A4`/`A8` frames follow the public
 //! protocol description "VW Transport Protocol 2.0 (TP 2.0) for CAN bus"
 //! (jazdw.net), which also documents the setup and parameter frames.
 //!
 //! The application telegram is `[len_hi, len_lo, payload…]` (length is the KWP
 //! payload length, big-endian), split across the data frames' bytes `1..`.
+//!
+//! ## Recovery rules (see `docs/PROTOCOL-NOTES.md`, "TP2.0 hardening")
+//!
+//! * **Sequence numbers** run continuously per direction for the channel's
+//!   life (4 bits, `0xF` wraps to `0x0`); the first data frame after a
+//!   (re-)open synchronises the receive counter.
+//! * **ACK loss on transmit.** After an ACK-requiring frame we wait the
+//!   module's `T1` (from its `A1`, at least [`ACK_WAIT_FLOOR_MS`], at most the
+//!   request timeout). Without the matching `0xB_` we send `A4` ("break:
+//!   receiver discards all data since the last ACK") and re-send the whole
+//!   block from its first frame with the same sequence numbers, at most
+//!   [`VwTp20::max_block_retries`] times. A `0x9_` ("received, not ready")
+//!   stops retransmission for that block. Module data arriving while we wait
+//!   for the ACK of our *last* frame is taken as the implicit ACK.
+//! * **Receive.** Frames with the expected sequence are accepted; an exact
+//!   repeat of the previous frame and, right after a block we ACKed, a replay
+//!   of that block (the module missed our ACK) are discarded (the block's ACK
+//!   is re-sent). A gap (lost frame) stops acceptance until the module's `A4`,
+//!   which rolls the telegram back to our last ACK; a gap in an
+//!   unacknowledged (`0x3`) tail is an error.
+//! * **After a failed exchange** the channel state is unknown (a late reply
+//!   could be mistaken for the next one), so the channel is torn down (`A8`)
+//!   and the next request sets up a new one. A module `A8` does the same.
+//!   Either way the module's KWP session is gone: callers restart it.
+//! * Every wait is bounded; no input makes this transport panic.
 use crate::protocol::diag::DiagTransport;
 use crate::protocol::isotp::CanLink;
 use crate::{Error, Result};
+use std::collections::VecDeque;
 
 /// CAN id every TP2.0 channel-setup broadcast is sent to.
 pub const BROADCAST_ID: u32 = 0x200;
 /// Application protocol id for the KWP2000 diagnostic application.
 pub const PROTOCOL_DIAGNOSTIC: u8 = 0x01;
+/// Shortest wait for a block ACK before retransmitting, whatever the module's
+/// `T1` says: USB CAN adapters add tens of ms of latency each way.
+pub const ACK_WAIT_FLOOR_MS: u64 = 100;
+/// Longest inter-frame separation we honour from a module's `T3`
+/// (the timing byte can encode up to 6.3 s).
+pub const MAX_SEPARATION_US: u64 = 100_000;
+/// Largest KWP payload one TP2.0 telegram can carry (12-bit length).
+pub const MAX_PAYLOAD: usize = 0x0FFF;
+/// Module break (`A4`) resynchronisations tolerated within one telegram.
+const MAX_RX_BREAKS: u32 = 8;
 
 mod op {
     pub const MASK: u8 = 0xF0;
@@ -56,7 +92,7 @@ mod op {
     pub const DATA_MORE: u8 = 0x20; // more data, no ACK
     pub const DATA_LAST_NO_ACK: u8 = 0x30; // last data frame, no ACK expected
     pub const ACK_NOT_READY: u8 = 0x90; // block received, not ready for the next
-    pub const PARAM: u8 = 0xA0; // A0/A1/A3/A8 channel management
+    pub const PARAM: u8 = 0xA0; // A0/A1/A3/A4/A8 channel management
     pub const ACK: u8 = 0xB0; // block acknowledge
     pub const SETUP_RESP: u8 = 0xD0; // positive broadcast setup response
 }
@@ -66,6 +102,7 @@ mod param {
     pub const REQ: u8 = 0xA0; // our parameter request
     pub const RESP: u8 = 0xA1; // ECU parameter response
     pub const TEST: u8 = 0xA3; // channel test / keep-alive
+    pub const BREAK: u8 = 0xA4; // receiver discards all data since the last ACK
     pub const DISCONNECT: u8 = 0xA8; // channel teardown
 }
 
@@ -73,10 +110,14 @@ fn next_seq(seq: u8) -> u8 {
     (seq + 1) & 0x0F
 }
 
+fn is_data(b0: u8) -> bool {
+    b0 & op::MASK <= op::DATA_LAST_NO_ACK
+}
+
 /// Encode a duration (in microseconds) into a TP2.0 timing byte: the top two
 /// bits select the unit (100 µs / 1 ms / 10 ms / 100 ms) and the low six bits
 /// the count (0..63).
-fn encode_timing(micros: u64) -> u8 {
+pub fn encode_timing(micros: u64) -> u8 {
     let (unit, value) = if micros < 6400 {
         (0u8, (micros / 100) as u8)
     } else if micros < 64_000 {
@@ -90,7 +131,7 @@ fn encode_timing(micros: u64) -> u8 {
 }
 
 /// Decode a TP2.0 timing byte back into microseconds.
-fn decode_timing(byte: u8) -> u64 {
+pub fn decode_timing(byte: u8) -> u64 {
     let value = (byte & 0x3F) as u64;
     match (byte >> 6) & 0x3 {
         0 => value * 100,
@@ -98,6 +139,89 @@ fn decode_timing(byte: u8) -> u64 {
         2 => value * 10_000,
         _ => value * 100_000,
     }
+}
+
+/// Counters of the recovery paths a channel took (for tests and logs).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Tp20Stats {
+    /// Channel set-ups after the first (re-opens after a break).
+    pub reopens: u32,
+    /// Blocks we re-sent after an ACK timeout (each preceded by an `A4`).
+    pub retransmissions: u32,
+    /// `A4` breaks the module sent us.
+    pub breaks_received: u32,
+    /// Received data frames discarded as duplicates / replays.
+    pub duplicates: u32,
+    /// Sequence gaps seen on receive.
+    pub gaps: u32,
+    /// ACKs ignored because their sequence did not match.
+    pub stray_acks: u32,
+    /// Replies taken as the implicit ACK of our last frame.
+    pub implicit_acks: u32,
+    /// `responsePending` (NRC 0x78) replies waited through.
+    pub response_pending: u32,
+}
+
+/// Receive-side sequence state, continuous across telegrams.
+#[derive(Debug, Default)]
+struct Rx {
+    /// Next sequence expected from the module; `None` = sync on the next frame.
+    expected: Option<u8>,
+    /// `expected` at our last ACK (the rollback point of an `A4`).
+    ack_seq: Option<u8>,
+    /// First sequence of the block being received.
+    block_start: Option<u8>,
+    /// The last block we ACKed: first sequence and frame count.
+    last_block: Option<(u8, u8)>,
+    /// The ACK we sent for `last_block` (re-sent when the block is replayed).
+    last_ack: Option<u8>,
+    /// Nothing accepted since the last ACK / telegram end / `A4`.
+    at_boundary: bool,
+    /// The last accepted frame (bus-duplicate detection).
+    last_frame: Vec<u8>,
+}
+
+impl Rx {
+    fn reset(&mut self) {
+        *self = Rx {
+            at_boundary: true,
+            ..Rx::default()
+        };
+    }
+
+    /// Whether `seq` belongs to the block we last ACKed.
+    fn in_last_block(&self, seq: u8) -> bool {
+        match self.last_block {
+            Some((start, n)) => (seq.wrapping_sub(start) & 0x0F) < n,
+            None => false,
+        }
+    }
+
+    /// A frame that is a duplicate (bus repeat) or a replay of the block we
+    /// last ACKed; returns `Some(re-ACK)` for it (the ACK to re-send, if any).
+    fn duplicate(&self, f: &[u8]) -> Option<Option<u8>> {
+        if !self.last_frame.is_empty() && f == self.last_frame.as_slice() {
+            return Some(None);
+        }
+        let seq = f[0] & 0x0F;
+        if self.at_boundary && self.in_last_block(seq) {
+            let (start, n) = self.last_block?;
+            let end = (start + n - 1) & 0x0F;
+            let kind = f[0] & op::MASK;
+            let reack = (seq == end && (kind == op::DATA_ACK_NOW || kind == op::DATA_LAST))
+                .then_some(self.last_ack)
+                .flatten();
+            return Some(reack);
+        }
+        None
+    }
+}
+
+/// Outcome of waiting for a block ACK.
+enum AckWait {
+    Acked,
+    /// No ACK within the window; carries what was seen instead (for the error).
+    Missing(String),
 }
 
 /// VW TP2.0 transport over a [`CanLink`]. Built and used like
@@ -121,16 +245,38 @@ pub struct VwTp20<L: CanLink + ?Sized = dyn CanLink> {
     /// Block size: before `open`, the one we *request* in our `A0` (the ECU
     /// should ACK-gate its transmissions to us every this many frames); after
     /// `open`, the one the ECU asked for in its `A1` (we wait for an ACK after
-    /// this many frames). 0 = only the last frame.
+    /// this many frames, clamped to 15 so the 4-bit sequence stays
+    /// unambiguous). 0 = only the last frame.
     pub block_size: u8,
-    /// ECU-requested inter-frame separation, as a raw timing byte.
+    /// ECU-requested inter-frame separation (`T3`), as a raw timing byte.
     pub st_min: u8,
+    /// ECU's ACK timeout (`T1`), as a raw timing byte: how long we wait for
+    /// a block ACK before retransmitting (see [`ACK_WAIT_FLOOR_MS`]).
+    pub t1: u8,
     /// Our outgoing sequence counter, continuous for the channel's life.
     tx_seq: u8,
     /// Whether the channel has been opened.
     opened: bool,
-    /// How many response-pending (NRC 0x78) replies to tolerate.
+    /// How many response-pending (NRC 0x78) replies to tolerate per request.
     pub max_response_pending: u32,
+    /// Wait for the next reply after a responsePending, ms (at least the
+    /// request timeout). ISO 14230 / ISO 14229 use 5000 ms for this P2* wait.
+    pub response_pending_timeout_ms: u64,
+    /// Times an unacknowledged block is re-sent (after an `A4`) before the
+    /// request fails. 0 = never retransmit.
+    pub max_block_retries: u8,
+    /// The block size we request in `A0`, kept across re-opens.
+    requested_bs: Option<u8>,
+    rx: Rx,
+    /// Module frames that arrived while we waited for an ACK (implicit ACK).
+    stash: VecDeque<Vec<u8>>,
+    /// Last ACK value accepted from the module (duplicates are ignored).
+    last_ack_in: Option<u8>,
+    setups: u32,
+    /// Why the channel was last torn down (module `A8`, failed exchange).
+    last_break: Option<String>,
+    /// Recovery counters.
+    pub stats: Tp20Stats,
 }
 
 impl<L: CanLink + ?Sized> VwTp20<L> {
@@ -147,9 +293,22 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
             tx_id: 0,
             block_size: 0x0F,
             st_min: 0,
+            t1: encode_timing(100_000),
             tx_seq: 0,
             opened: false,
             max_response_pending: 32,
+            response_pending_timeout_ms: 5000,
+            max_block_retries: 2,
+            requested_bs: None,
+            rx: Rx {
+                at_boundary: true,
+                ..Rx::default()
+            },
+            stash: VecDeque::new(),
+            last_ack_in: None,
+            setups: 0,
+            last_break: None,
+            stats: Tp20Stats::default(),
         }
     }
 
@@ -159,17 +318,32 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         self.opened
     }
 
+    /// Why the channel was last torn down (module disconnect or a failed
+    /// exchange), if it was.
+    pub fn last_break(&self) -> Option<&str> {
+        self.last_break.as_deref()
+    }
+
     /// Open the channel: broadcast setup → dynamic id assignment → parameter
-    /// handshake. Safe to call more than once (a no-op once open). Each step
-    /// waits at most `timeout_ms`; a failure names the step and the CAN ids
-    /// involved.
+    /// handshake. Safe to call more than once (a no-op once open); after a
+    /// break it sets up a fresh channel. Each step waits at most `timeout_ms`;
+    /// a failure names the step and the CAN ids involved.
     pub fn open(&mut self, timeout_ms: u64) -> Result<()> {
         if self.opened {
             return Ok(());
         }
+        let requested = *self.requested_bs.get_or_insert(self.block_size);
+        self.block_size = requested;
+        self.tx_seq = 0;
+        self.rx.reset();
+        self.stash.clear();
+        self.last_ack_in = None;
         self.setup_channel(timeout_ms)?;
         self.negotiate_params(timeout_ms)?;
-        self.tx_seq = 0;
+        if self.setups > 0 {
+            self.stats.reopens += 1;
+        }
+        self.setups += 1;
         self.opened = true;
         Ok(())
     }
@@ -190,19 +364,22 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         self.link.send_frame(BROADCAST_ID, &req)?;
 
         let resp_id = BROADCAST_ID + self.ecu_id as u32;
-        let data = match self.recv_on(resp_id, timeout_ms) {
-            Ok(d) => d,
-            Err(Error::Timeout(_)) => {
-                return Err(Error::Protocol(format!(
-                    "TP2.0 channel setup (step 1 of 2): logical address 0x{:02X} did not \
-                     answer on CAN id 0x{resp_id:03X} within {timeout_ms} ms (setup request \
-                     sent on 0x{BROADCAST_ID:03X}, asking the module to transmit on \
-                     0x{:03X}). Check the module address, ignition, that the adapter sits on \
-                     a bus the module is reachable from, and the bitrate",
-                    self.ecu_id, self.rx_id
-                )))
+        let deadline = Deadline::new(timeout_ms);
+        let data = loop {
+            match self.recv_on_until(resp_id, &deadline) {
+                Ok(d) => break d,
+                Err(Error::Timeout(_)) => {
+                    return Err(Error::Protocol(format!(
+                        "TP2.0 channel setup (step 1 of 2): logical address 0x{:02X} did not \
+                         answer on CAN id 0x{resp_id:03X} within {timeout_ms} ms (setup request \
+                         sent on 0x{BROADCAST_ID:03X}, asking the module to transmit on \
+                         0x{:03X}). Check the module address, ignition, that the adapter sits on \
+                         a bus the module is reachable from, and the bitrate",
+                        self.ecu_id, self.rx_id
+                    )))
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
         };
         if data.len() < 7 {
             return Err(Error::Protocol(format!(
@@ -213,7 +390,15 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         let why = match data[1] {
             op::SETUP_RESP => {
                 // tx id assigned by the ECU: data[4] low byte, data[5] low nibble high byte.
-                self.tx_id = (((data[5] & 0x0F) as u32) << 8) | data[4] as u32;
+                let tx = (((data[5] & 0x0F) as u32) << 8) | data[4] as u32;
+                if tx == self.rx_id || (BROADCAST_ID..=BROADCAST_ID + 0xFF).contains(&tx) {
+                    return Err(Error::Protocol(format!(
+                        "TP2.0 channel setup: logical address 0x{:02X} assigned an unusable \
+                         transmit id 0x{tx:03X}",
+                        self.ecu_id
+                    )));
+                }
+                self.tx_id = tx;
                 return Ok(());
             }
             0xD6 => "application not supported".to_string(),
@@ -227,19 +412,33 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         )))
     }
 
+    /// Our `A0`/`A1` parameter frame body (block size, T1, T3).
+    fn our_params(&self, op_byte: u8) -> [u8; 6] {
+        [
+            op_byte,
+            self.requested_bs.unwrap_or(self.block_size),
+            encode_timing(100_000), // T1: 100 ms ACK timeout
+            0xFF,
+            0x00, // T3: we need no separation between the module's frames
+            0xFF,
+        ]
+    }
+
+    /// Store the module's `A1` parameters (the ones we honour when sending).
+    fn take_params(&mut self, data: &[u8]) {
+        if data.len() >= 5 {
+            self.block_size = data[1].min(0x0F);
+            self.t1 = data[2];
+            self.st_min = data[4];
+        }
+    }
+
     /// Step 2 — parameter handshake (`A0` → `A1`). We request our desired
     /// timing/block-size; the ECU answers with the parameters *we* must honor
     /// when transmitting, which we store.
     fn negotiate_params(&mut self, timeout_ms: u64) -> Result<()> {
         // [0xA0, BS, T1(ack timeout), 0xFF, T3(separation), 0xFF]
-        let req = [
-            param::REQ,
-            self.block_size,
-            encode_timing(100_000), // T1: 100 ms ACK timeout
-            0xFF,
-            self.st_min,
-            0xFF,
-        ];
+        let req = self.our_params(param::REQ);
         self.link.send_frame(self.tx_id, &req)?;
 
         // Skip anything else on our receive id (a stale ACK or disconnect
@@ -259,17 +458,22 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
                 Err(e) => return Err(e),
             };
             if data[0] == param::RESP && data.len() >= 5 {
-                // Honor the ECU's block size and separation time for our transmits.
-                self.block_size = data[1];
-                self.st_min = data[4];
+                self.take_params(&data);
                 return Ok(());
             }
         }
     }
 
     /// Send a channel-test / keep-alive (`A3`) and wait for the ECU's `A1`
-    /// reply. Call while the channel is idle to keep it alive.
+    /// reply. Call while the channel is idle to keep it alive. Replayed data
+    /// from the module (it missed our last ACK) is re-ACKed meanwhile.
     pub fn keep_alive(&mut self, timeout_ms: u64) -> Result<()> {
+        if !self.opened {
+            return Err(Error::Protocol(format!(
+                "TP2.0 keep-alive: the channel to logical address 0x{:02X} is not open",
+                self.ecu_id
+            )));
+        }
         self.link.send_frame(self.tx_id, &[param::TEST])?;
         let deadline = Deadline::new(timeout_ms);
         loop {
@@ -286,18 +490,13 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
             };
             match data[0] {
                 param::RESP => {
-                    if data.len() >= 5 {
-                        self.block_size = data[1];
-                        self.st_min = data[4];
-                    }
+                    self.take_params(&data);
                     return Ok(());
                 }
-                param::DISCONNECT => {
-                    self.opened = false;
-                    return Err(Error::Protocol(format!(
-                        "logical address 0x{:02X} closed the TP2.0 channel (A8)",
-                        self.ecu_id
-                    )));
+                param::DISCONNECT => return Err(self.module_disconnected()),
+                b if b & op::MASK == op::PARAM => self.on_management(b)?,
+                b if is_data(b) => {
+                    self.absorb_idle_data(&data)?;
                 }
                 // A stale ACK or other channel frame: keep waiting for the A1.
                 _ => {}
@@ -313,13 +512,59 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         }
     }
 
-    /// Receive the next frame whose CAN id equals `want`, skipping others.
-    /// The whole wait is bounded by `timeout_ms`, also on a busy bus where
-    /// unrelated frames keep arriving.
-    fn recv_on(&mut self, want: u32, timeout_ms: u64) -> Result<Vec<u8>> {
-        self.recv_on_until(want, &Deadline::new(timeout_ms))
+    /// The module sent `A8`: the channel is gone.
+    fn module_disconnected(&mut self) -> Error {
+        self.opened = false;
+        let why = format!(
+            "logical address 0x{:02X} closed the TP2.0 channel (A8); the next request sets \
+             up a new channel and the module's diagnostic session must be restarted",
+            self.ecu_id
+        );
+        self.last_break = Some(why.clone());
+        Error::Protocol(why)
     }
 
+    /// Channel-management frames other than `A1`/`A8` seen while waiting:
+    /// answer a module channel test, note a module break.
+    fn on_management(&mut self, b: u8) -> Result<()> {
+        match b {
+            param::TEST => {
+                // ECU is testing the channel: answer with our params.
+                let reply = self.our_params(param::RESP);
+                self.link.send_frame(self.tx_id, &reply)
+            }
+            param::BREAK => {
+                // Outside a telegram there is nothing to discard; the block
+                // that follows replays the one we last ACKed.
+                self.stats.breaks_received += 1;
+                self.rx.at_boundary = true;
+                self.rx.expected = self.rx.ack_seq.or(self.rx.expected);
+                Ok(())
+            }
+            // A1 or other management: ignore.
+            _ => Ok(()),
+        }
+    }
+
+    /// A module data frame while no telegram is being received: a replay of
+    /// the block we last ACKed is re-ACKed and dropped. Returns `true` when
+    /// it was such a duplicate.
+    fn absorb_idle_data(&mut self, f: &[u8]) -> Result<bool> {
+        match self.rx.duplicate(f) {
+            Some(reack) => {
+                self.stats.duplicates += 1;
+                if let Some(a) = reack {
+                    self.link.send_frame(self.tx_id, &[op::ACK | a])?;
+                }
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
+    /// Receive the next frame whose CAN id equals `want`, skipping others.
+    /// The whole wait is bounded by the deadline, also on a busy bus where
+    /// unrelated frames keep arriving.
     fn recv_on_until(&mut self, want: u32, deadline: &Deadline) -> Result<Vec<u8>> {
         loop {
             let left = deadline
@@ -330,70 +575,95 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
                 Err(Error::Timeout(_)) => return Err(Error::Timeout(deadline.total_ms)),
                 Err(e) => return Err(e),
             };
-            if id == want {
-                if data.is_empty() {
-                    return Err(Error::Protocol("empty TP2.0 frame".into()));
-                }
+            if id == want && !data.is_empty() {
                 return Ok(data);
             }
         }
     }
 
-    /// Receive the next *data or ACK* frame on `rx_id`, transparently answering
-    /// a channel-test (`A3`) with an `A1`, absorbing stray `A1`s, and erroring
-    /// on an ECU disconnect (`A8`).
-    fn recv_channel_frame(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
-        let deadline = Deadline::new(timeout_ms);
-        loop {
-            let data = self.recv_on_until(self.rx_id, &deadline)?;
-            match data[0] & op::MASK {
-                op::DATA_ACK_NOW
-                | op::DATA_LAST
-                | op::DATA_MORE
-                | op::DATA_LAST_NO_ACK
-                | op::ACK
-                | op::ACK_NOT_READY => return Ok(data),
-                op::PARAM => match data[0] {
-                    param::TEST => {
-                        // ECU is testing the channel: answer with our params.
-                        let reply = [
-                            param::RESP,
-                            self.block_size,
-                            encode_timing(100_000),
-                            0xFF,
-                            self.st_min,
-                            0xFF,
-                        ];
-                        self.link.send_frame(self.tx_id, &reply)?;
-                    }
-                    param::DISCONNECT => {
-                        self.opened = false;
-                        return Err(Error::Protocol("ECU closed the TP2.0 channel".into()));
-                    }
-                    // A1 or other management: ignore and keep reading.
-                    _ => {}
-                },
-                _ => return Err(Error::Protocol("unexpected TP2.0 PCI".into())),
-            }
+    /// The next frame for the receive path: stashed frames first.
+    fn next_rx(&mut self, deadline: &Deadline) -> Result<Vec<u8>> {
+        if let Some(f) = self.stash.pop_front() {
+            return Ok(f);
         }
+        self.recv_on_until(self.rx_id, deadline)
     }
 
-    /// Wait for an ACK (`0xB_`) acknowledging a transmitted block. A
-    /// "not ready" ACK (`0x9_`) means the receiver got the block but needs
-    /// time: keep waiting for the `0xB_` that follows.
-    fn await_ack(&mut self, timeout_ms: u64) -> Result<()> {
+    /// How long to wait for a block ACK before retransmitting.
+    fn ack_wait_ms(&self, timeout_ms: u64) -> u64 {
+        (decode_timing(self.t1) / 1000)
+            .max(ACK_WAIT_FLOOR_MS)
+            .min(timeout_ms.max(1))
+    }
+
+    /// Wait for the ACK (`0xB<want>`) of a transmitted block. A
+    /// "not ready" ACK (`0x9<want>`) means the receiver got the block but
+    /// needs time: keep waiting (up to the full timeout) for the `0xB_`.
+    fn await_ack(&mut self, want: u8, last: bool, timeout_ms: u64) -> Result<AckWait> {
+        let mut deadline = Deadline::new(self.ack_wait_ms(timeout_ms));
+        let mut received = false;
+        let mut seen = String::from("nothing");
         loop {
-            let data = self.recv_channel_frame(timeout_ms)?;
-            match data[0] & op::MASK {
-                op::ACK => return Ok(()),
-                op::ACK_NOT_READY => continue,
-                _ => return Err(Error::Protocol("expected TP2.0 block ACK".into())),
+            let data = match self.recv_on_until(self.rx_id, &deadline) {
+                Ok(d) => d,
+                Err(Error::Timeout(_)) if received => return Err(Error::Timeout(timeout_ms)),
+                Err(Error::Timeout(_)) => return Ok(AckWait::Missing(seen)),
+                Err(e) => return Err(e),
+            };
+            let b = data[0];
+            match b & op::MASK {
+                op::ACK | op::ACK_NOT_READY => {
+                    let seq = b & 0x0F;
+                    if seq != want {
+                        // A duplicate of an earlier ACK, or a wrong one.
+                        if Some(seq) != self.last_ack_in {
+                            seen = format!("ACK 0x{b:02X}");
+                        }
+                        self.stats.stray_acks += 1;
+                        continue;
+                    }
+                    if b & op::MASK == op::ACK {
+                        self.last_ack_in = Some(want);
+                        return Ok(AckWait::Acked);
+                    }
+                    if !received {
+                        received = true;
+                        deadline = Deadline::new(timeout_ms);
+                    }
+                }
+                op::PARAM => match b {
+                    param::DISCONNECT => return Err(self.module_disconnected()),
+                    other => self.on_management(other)?,
+                },
+                k if k <= op::DATA_LAST_NO_ACK => {
+                    if self.absorb_idle_data(&data)? {
+                        continue;
+                    }
+                    if self.rx.expected.is_some_and(|e| e != b & 0x0F) {
+                        // A stale frame of an earlier telegram: not ours to take.
+                        self.stats.stray_acks += 1;
+                        continue;
+                    }
+                    if last {
+                        // The reply started: the module has our telegram.
+                        self.stats.implicit_acks += 1;
+                        self.last_ack_in = Some(want);
+                        self.stash.push_back(data);
+                        return Ok(AckWait::Acked);
+                    }
+                    return Err(Error::Protocol(format!(
+                        "TP2.0: logical address 0x{:02X} sent data (0x{b:02X}) while we were \
+                         still transmitting a telegram",
+                        self.ecu_id
+                    )));
+                }
+                _ => {}
             }
         }
     }
 
     fn sleep_st_min(&self) {
-        let micros = decode_timing(self.st_min);
+        let micros = decode_timing(self.st_min).min(MAX_SEPARATION_US);
         if micros > 0 {
             std::thread::sleep(std::time::Duration::from_micros(micros));
         }
@@ -401,22 +671,20 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
 
     /// Send one KWP application telegram as a sequence of TP2.0 data frames,
     /// honoring the negotiated block size (ACK every `block_size` frames) and
-    /// separation time.
+    /// separation time, retransmitting a block whose ACK does not arrive.
     fn send_telegram(&mut self, payload: &[u8], timeout_ms: u64) -> Result<()> {
-        if payload.is_empty() {
-            return Err(Error::Protocol("empty payload".into()));
-        }
-        if payload.len() > 0x0FFF {
-            return Err(Error::Protocol("payload too large for TP2.0".into()));
-        }
+        check_payload(payload)?;
         // Application layer: 2-byte big-endian length prefix, then the payload.
         let mut telegram = Vec::with_capacity(payload.len() + 2);
         telegram.push((payload.len() >> 8) as u8);
         telegram.push((payload.len() & 0xFF) as u8);
         telegram.extend_from_slice(payload);
 
+        let bs = self.block_size.min(0x0F) as u32;
         let mut idx = 0usize;
         let mut frames_in_block: u32 = 0;
+        let (mut block_idx, mut block_seq) = (0usize, self.tx_seq);
+        let mut retries = 0u8;
         while idx < telegram.len() {
             let end = (idx + 7).min(telegram.len());
             let is_last = end == telegram.len();
@@ -424,8 +692,7 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
                 (op::DATA_LAST | self.tx_seq, true)
             } else {
                 frames_in_block += 1;
-                if self.block_size != 0 && frames_in_block >= self.block_size as u32 {
-                    frames_in_block = 0;
+                if bs != 0 && frames_in_block >= bs {
                     (op::DATA_ACK_NOW | self.tx_seq, true)
                 } else {
                     (op::DATA_MORE | self.tx_seq, false)
@@ -438,58 +705,198 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
             self.tx_seq = next_seq(self.tx_seq);
             idx = end;
 
-            if ack_required {
-                self.await_ack(timeout_ms)?;
-            } else {
+            if !ack_required {
                 self.sleep_st_min();
+                continue;
+            }
+            match self.await_ack(self.tx_seq, is_last, timeout_ms)? {
+                AckWait::Acked => {
+                    frames_in_block = 0;
+                    retries = 0;
+                    (block_idx, block_seq) = (idx, self.tx_seq);
+                }
+                AckWait::Missing(seen) => {
+                    if retries >= self.max_block_retries {
+                        return Err(Error::Protocol(format!(
+                            "TP2.0: no ACK 0x{:02X} from logical address 0x{:02X} for the block \
+                             ending with frame 0x{op_byte:02X} (saw {seen}) after {retries} \
+                             retransmission(s)",
+                            op::ACK | self.tx_seq,
+                            self.ecu_id
+                        )));
+                    }
+                    // A4: the module discards what it got since its last ACK;
+                    // then the block again from its first frame.
+                    retries += 1;
+                    self.stats.retransmissions += 1;
+                    self.link.send_frame(self.tx_id, &[param::BREAK])?;
+                    (idx, self.tx_seq, frames_in_block) = (block_idx, block_seq, 0);
+                }
             }
         }
         Ok(())
     }
 
-    /// Receive one full KWP application telegram, ACKing blocks as required.
+    /// ACK a received block (`ack` = the next sequence we expect).
+    fn ack_block(&mut self, ack: u8, buf_len: usize, acked_len: &mut usize) -> Result<()> {
+        self.link.send_frame(self.tx_id, &[op::ACK | ack])?;
+        let start = self.rx.block_start.take().unwrap_or(ack);
+        let n = (ack.wrapping_sub(start) & 0x0F).max(1);
+        self.rx.last_block = Some((start, n));
+        self.rx.last_ack = Some(ack);
+        self.rx.ack_seq = Some(ack);
+        self.rx.at_boundary = true;
+        *acked_len = buf_len;
+        Ok(())
+    }
+
+    /// Receive one full KWP application telegram, ACKing blocks as required
+    /// and recovering from lost/duplicated frames per the module docs.
     fn recv_telegram(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
         let mut buf: Vec<u8> = Vec::new();
-        let mut expected_seq: Option<u8> = None;
+        let mut acked_len = 0usize;
+        let mut gap: Option<(u8, u8)> = None;
+        let mut breaks = 0u32;
+        self.rx.ack_seq = self.rx.expected;
+        self.rx.block_start = None;
+        let mut deadline = Deadline::new(timeout_ms);
         loop {
-            let frame = self.recv_channel_frame(timeout_ms)?;
-            let kind = frame[0] & op::MASK;
-            if kind == op::ACK || kind == op::ACK_NOT_READY {
-                return Err(Error::Protocol("unexpected ACK while receiving".into()));
-            }
-            let seq = frame[0] & 0x0F;
-            match expected_seq {
-                None => expected_seq = Some(next_seq(seq)),
-                Some(exp) => {
-                    if seq != exp {
-                        return Err(Error::Protocol(format!(
-                            "TP2.0 sequence error: expected {exp}, got {seq}"
-                        )));
+            let frame = match self.next_rx(&deadline) {
+                Ok(f) => f,
+                Err(Error::Timeout(t)) => {
+                    return Err(match gap {
+                        Some((exp, got)) => Error::Protocol(format!(
+                            "TP2.0 sequence error: expected {exp}, got {got} (a frame from \
+                             logical address 0x{:02X} was lost) and the module did not resend \
+                             (A4) within {t} ms",
+                            self.ecu_id
+                        )),
+                        None => Error::Timeout(t),
+                    })
+                }
+                Err(e) => return Err(e),
+            };
+            let b = frame[0];
+            let kind = b & op::MASK;
+            if kind == op::PARAM {
+                match b {
+                    param::DISCONNECT => return Err(self.module_disconnected()),
+                    param::BREAK => {
+                        // Discard everything since our last ACK and resync.
+                        breaks += 1;
+                        self.stats.breaks_received += 1;
+                        if breaks > MAX_RX_BREAKS {
+                            return Err(Error::Protocol(format!(
+                                "TP2.0: logical address 0x{:02X} broke its transmission (A4) \
+                                 {breaks} times in one telegram",
+                                self.ecu_id
+                            )));
+                        }
+                        buf.truncate(acked_len);
+                        self.rx.expected = self.rx.ack_seq;
+                        self.rx.block_start = None;
+                        self.rx.at_boundary = true;
+                        self.rx.last_frame.clear();
+                        gap = None;
+                        deadline = Deadline::new(timeout_ms);
                     }
-                    expected_seq = Some(next_seq(seq));
+                    other => self.on_management(other)?,
                 }
+                continue;
             }
-            buf.extend_from_slice(&frame[1..]);
-
-            match kind {
-                op::DATA_MORE => {
-                    // More data, no ACK; keep reading.
+            if !is_data(b) {
+                // A duplicated/stray ACK or an unknown opcode on our id.
+                self.stats.stray_acks += 1;
+                continue;
+            }
+            let seq = b & 0x0F;
+            let expected = *self.rx.expected.get_or_insert(seq);
+            if self.rx.ack_seq.is_none() {
+                self.rx.ack_seq = Some(seq);
+            }
+            if gap.is_none() && seq == expected {
+                // Accept.
+                if buf.len() + frame.len() - 1 > MAX_PAYLOAD + 2 + 7 {
+                    return Err(Error::Protocol(
+                        "TP2.0 telegram longer than 4095 bytes".into(),
+                    ));
                 }
-                op::DATA_ACK_NOW => {
-                    // Block boundary: ACK then keep reading.
-                    self.link
-                        .send_frame(self.tx_id, &[op::ACK | next_seq(seq)])?;
+                buf.extend_from_slice(&frame[1..]);
+                self.rx.block_start.get_or_insert(seq);
+                self.rx.expected = Some(next_seq(seq));
+                self.rx.at_boundary = false;
+                self.rx.last_frame = frame.clone();
+                deadline = Deadline::new(timeout_ms);
+                match kind {
+                    op::DATA_MORE => {}
+                    op::DATA_ACK_NOW => self.ack_block(next_seq(seq), buf.len(), &mut acked_len)?,
+                    op::DATA_LAST => {
+                        self.ack_block(next_seq(seq), buf.len(), &mut acked_len)?;
+                        break;
+                    }
+                    _ => {
+                        // 0x3: last frame, no ACK. Nothing to replay later.
+                        self.rx.block_start = None;
+                        self.rx.last_block = None;
+                        self.rx.last_ack = None;
+                        self.rx.ack_seq = self.rx.expected;
+                        self.rx.at_boundary = true;
+                        break;
+                    }
                 }
-                op::DATA_LAST => {
-                    self.link
-                        .send_frame(self.tx_id, &[op::ACK | next_seq(seq)])?;
-                    break;
+                continue;
+            }
+            if let Some(reack) = self.rx.duplicate(&frame) {
+                self.stats.duplicates += 1;
+                if let Some(a) = reack {
+                    self.link.send_frame(self.tx_id, &[op::ACK | a])?;
                 }
-                op::DATA_LAST_NO_ACK => break,
-                _ => return Err(Error::Protocol("unexpected TP2.0 data PCI".into())),
+                continue;
+            }
+            // A gap: a frame was lost. Accept nothing until the module's A4.
+            if gap.is_none() {
+                self.stats.gaps += 1;
+                gap = Some((expected, seq));
+            }
+            if kind == op::DATA_LAST_NO_ACK {
+                let (exp, got) = gap.unwrap_or((expected, seq));
+                return Err(Error::Protocol(format!(
+                    "TP2.0 sequence error: expected {exp}, got {got} in an unacknowledged \
+                     telegram from logical address 0x{:02X} (a frame was lost)",
+                    self.ecu_id
+                )));
             }
         }
         decode_telegram(&buf)
+    }
+
+    /// One request/response exchange on an open channel, waiting through
+    /// responsePending replies.
+    fn exchange(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        self.send_telegram(req, timeout_ms)?;
+        let mut wait = timeout_ms;
+        let mut pending = 0u32;
+        loop {
+            let resp = self.recv_telegram(wait)?;
+            // KWP/UDS responsePending (NRC 0x78) for *this* service: keep
+            // waiting, with the extended P2* timeout. A 0x78 echoing another
+            // service is returned for the client to flag as mis-correlated.
+            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 && resp[1] == req[0] {
+                pending += 1;
+                self.stats.response_pending += 1;
+                if pending > self.max_response_pending {
+                    return Err(Error::Protocol(format!(
+                        "logical address 0x{:02X} answered service 0x{:02X} with \
+                         responsePending (0x78) {pending} times without a final reply \
+                         (limit {})",
+                        self.ecu_id, req[0], self.max_response_pending
+                    )));
+                }
+                wait = self.response_pending_timeout_ms.max(timeout_ms);
+                continue;
+            }
+            return Ok(resp);
+        }
     }
 }
 
@@ -519,6 +926,20 @@ impl Deadline {
     }
 }
 
+/// A request payload one telegram can carry.
+fn check_payload(payload: &[u8]) -> Result<()> {
+    if payload.is_empty() {
+        return Err(Error::Protocol("empty payload".into()));
+    }
+    if payload.len() > MAX_PAYLOAD {
+        return Err(Error::Protocol(format!(
+            "payload of {} bytes too large for TP2.0 (max {MAX_PAYLOAD})",
+            payload.len()
+        )));
+    }
+    Ok(())
+}
+
 /// Strip and validate the 2-byte application length prefix.
 fn decode_telegram(buf: &[u8]) -> Result<Vec<u8>> {
     if buf.len() < 2 {
@@ -532,23 +953,35 @@ fn decode_telegram(buf: &[u8]) -> Result<Vec<u8>> {
             "TP2.0 telegram truncated: declared {declared}, have {available}"
         )));
     }
-    // Tolerate trailing padding from links that pad to DLC 8.
+    if declared == 0 {
+        return Err(Error::Protocol("TP2.0 telegram declares no payload".into()));
+    }
+    // Tolerate trailing padding from links that pad to DLC 8 (less than a frame).
+    if available - declared >= 7 {
+        return Err(Error::Protocol(format!(
+            "TP2.0 telegram declares {declared} bytes but carries {available}"
+        )));
+    }
     Ok(buf[2..2 + declared].to_vec())
 }
 
 impl<L: CanLink + ?Sized> DiagTransport for VwTp20<L> {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        check_payload(req)?;
         self.open(timeout_ms)?;
-        self.send_telegram(req, timeout_ms)?;
-        for _ in 0..self.max_response_pending {
-            let resp = self.recv_telegram(timeout_ms)?;
-            // KWP/UDS responsePending (NRC 0x78): keep waiting.
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
-                continue;
+        match self.exchange(req, timeout_ms) {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                // The channel state is unknown (a late reply could be taken
+                // for the next one): tear it down; the next request re-opens.
+                if self.opened {
+                    self.last_break = Some(format!("exchange failed: {e}"));
+                    self.disconnect();
+                }
+                self.stash.clear();
+                Err(e)
             }
-            return Ok(resp);
         }
-        Err(Error::Timeout(timeout_ms))
     }
 }
 
