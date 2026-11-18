@@ -173,6 +173,89 @@ occupies `rows * cols * data_type_width = 16 * 16 * 2 = 512` bytes
 A **scalar** is just `rows: 1, cols: 1` with no axes; a **1-D curve** is
 `rows: 1, cols: N` with only an `x_axis`.
 
+## Importing other definition formats
+
+The importers lower community definitions into `MapDef`s with one rule:
+**every object ends faithful, warned, or refused — never silently wrong.**
+Each table / function / constant gets a report (`opentune_xdf::report`):
+
+- **clean** — imported exactly;
+- **warned** — imported, but with an explicit loss written into the report
+  *and* the map's `notes` (`WARN[kind] …`): correct but incomplete, e.g.
+  pre-scaled because the equation is non-linear;
+- **refused** — not imported, with the reason, whenever the only possible
+  import would place or decode cells wrongly.
+
+Object classes OpenTune does not model as maps (bit flags, patches, checksum
+blocks, switch/selection tables, separator/info entries) are refused as
+*out of scope* and listed. `--strict` (`import-xdf`, `import-fastecu`)
+refuses the whole file — and writes nothing — if any table, function or
+constant is warned or refused; out-of-scope objects do not trip it. `-o
+out.json` writes `{maps, constants, report}`.
+
+### TunerPro XDF (`import-xdf`)
+
+| Construct | Outcome |
+|---|---|
+| `<XDFTABLE>` z data: address, rows/cols, 8/16/32-bit int, 32-bit float, sign / LSB-first flags | faithful |
+| `mmedtypeflags 0x04` (column-major) on a 2-D table | faithful: imported transposed (rows/cols and x/y axes exchanged) — identical bytes, noted |
+| `<BASEOFFSET offset subtract>`, text `<baseoffset>-49152</baseoffset>` (signed) | faithful; under/overflow → refused |
+| header `REGION` (whole-file size) | data past it → refused (`address-outside-image`) |
+| `CATEGORY` / `CATEGORYMEM` | faithful (`category: …` in notes) |
+| `<XDFFUNCTION>` | faithful: a 1×N curve, input vector as stored x axis |
+| `<XDFCONSTANT>` | faithful scalar constant (separate list) |
+| linear `<MATH>` in `X` (incl. `^` constant powers, hex) | faithful (`factor`/`offset`) |
+| non-linear `<MATH>`; `VAR`s other than `X` (`type=address`/`link`), `ROW()`/`COL()` | warned, pre-scaled (`math-nonlinear`, `math-foreign-var`) |
+| axis `embedinfo type=1` (embedded) | stored axis; address 0 / unusable storage → warned, count only |
+| axis `embedinfo type=3 linkobjid` | resolved to the linked 1-D table's storage; unresolvable → warned |
+| axis `LABEL`s | numeric → inline values; text → warned (`axis-categorical`); wrong count → warned |
+| no `mmedtypeflags` | header `DEFAULTS` used; warned (`endian-defaulted`) only where that changes decoding |
+| no `mmedelementsizebits` | header default → warned; none → refused |
+| 24/64-bit cells, non-32-bit float | refused (`element-size-unsupported`) |
+| unknown `mmedtypeflags` bits | warned |
+| `mmedmajor/minorstridebits` that are not plain packing (interleaved, strided, negative) | refused (`stride-noncontiguous` / `stride-reversed`) |
+| `<XDFFLAG>` (bit mask), `<XDFPATCH>`, `<XDFCHECKSUM>`, entries without any address | refused, out of scope |
+| legacy text XDF | imported; every table warned (`legacy-cell-type`: the format has no storage type) |
+| binary (pre-XML) XDF | file refused — re-save as XML in TunerPro |
+
+### EcuFlash / RomRaider XML as FastECU reads it (`import-fastecu`)
+
+[FastECU](https://github.com/miikasyvanen/FastECU) has no format of its own:
+it reads EcuFlash and RomRaider XML (and converts WinOLS MapPack CSV).
+`import-fastecu` applies FastECU's interpretation with the same discipline
+(`import-ecuflash` remains the plain EcuFlash/RomRaider importer):
+
+| Construct | Outcome |
+|---|---|
+| `<include>` / `<rom base=>` inheritance (same file, then `--base-dir` by xmlid) | faithful; child attributes override base per table and per axis (EcuFlash positional `X`/`Y` axis overrides matched); missing base → file warning |
+| base tables the calibration never mentions (no address) | not part of the ROM; counted, not listed |
+| `startpos` (hex) with `interval` 1 | faithful address shift |
+| `interval` > 1 | refused (interleaved) |
+| `Switch` / `Selectable` / `MultiSelectable` / `bloblist` | refused, out of scope |
+| `uint24` / `int24`, unknown `storagetype` | refused |
+| scaling reference not found (storage unknown) | refused (`reference-missing`) |
+| float with `endian="little"` | big-endian (FastECU); clean on a big-endian `memmodel` (SH/HC16/M32R/PPC), else warned |
+| `wrx02` address past the ROM (`filesize`, else FastECU's 160 KiB) | folded by `0x8000`, warned (`address-folded`); still outside → refused |
+| static axes (`<data>`) | inline values; text → warned |
+| non-linear `toexpr`/`expression` | warned, pre-scaled |
+| MapPack CSV `DataOrg` `eByte`/`eHiLo`/`eLoHi`/`eHiLoHiLo`/`eLoHiLoHi`/`eFloatHiLo`/`eFloatLoHi` | faithful; unknown `DataOrg` → refused (FastECU would default to `uint8`); `Fieldvalues.Offset` honoured; no signedness column → warned |
+
+`import-ecuflash` additionally warns when a float declares `endian="little"`
+on a big-endian memory model (it keeps the declared order).
+
+**Corpus (2026-11-18, definition files only, offline — no images):** 219
+unique public community XDFs: 202 parsed (14 binary, 2 malformed XML, 1 empty
+refused as files); 171 941 objects clean, 6 582 warned, 228 refused, 3 176 out
+of scope. Top warnings: text axis labels (4 091), non-linear MATH (2 033),
+label/count mismatches (514), MATH with foreign VARs (225); refusals are
+interleaved strides (204), data past the declared region (22) and unparsable
+addresses. Subaru defs through `import-fastecu`: 331 EcuFlash calibration
+roms (with `--base-dir`) — 32 512 clean, 20 563 warned, 0 refused; 332
+RomRaider `ecu_defs.xml` roms — 42 376 clean, 10 868 warned, 0 refused
+(switch tables out of scope). Warnings are text axes, non-linear equations
+and, for EcuFlash `wrx02` roms, the address fold. Re-run with the ignored
+corpus tests (`OPENTUNE_XDF_CORPUS`, `OPENTUNE_FASTECU_CORPUS`).
+
 ## Finding candidate maps in one image
 
 `opentune findmaps <image>` (single file) runs `opentune-mapfind`: it scans for
