@@ -18,6 +18,7 @@ members = [
     "crates/drivers/elm327net",
     "crates/drivers/elm327",
     "crates/drivers/vcar",
+    "crates/drivers/isotp-ble-bridge",
     "crates/opentune-dtc",
     "crates/opentune-xdf",
     "crates/opentune-a2l",
