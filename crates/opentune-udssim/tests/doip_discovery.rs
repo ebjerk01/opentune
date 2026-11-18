@@ -54,14 +54,21 @@ fn identify_all_by_eid_and_by_vin() {
     let other_eid = c
         .identify(dest, &VehicleIdRequest::ByEid([9; 6]), 150)
         .unwrap();
-    assert!(other_eid.entities.is_empty(), "a non-matching EID is silent");
+    assert!(
+        other_eid.entities.is_empty(),
+        "a non-matching EID is silent"
+    );
 
     let by_vin = c
         .identify_first(dest, &VehicleIdRequest::ByVin(*SIM_VIN), 1000)
         .unwrap();
     assert_eq!(by_vin.entities.len(), 1);
     let other_vin = c
-        .identify(dest, &VehicleIdRequest::by_vin("XXXXXXXXXXXXXXXXX").unwrap(), 150)
+        .identify(
+            dest,
+            &VehicleIdRequest::by_vin("XXXXXXXXXXXXXXXXX").unwrap(),
+            150,
+        )
         .unwrap();
     assert!(other_vin.entities.is_empty());
     assert_eq!(ent.entity().request_count(), 5);
@@ -133,7 +140,9 @@ fn entity_nacks_a_bad_request_header() {
     assert_eq!(d.nacks, vec![(dest, generic_nack::INCORRECT_PATTERN)]);
     // The default version 0xFF is fine for identification requests.
     c.set_protocol_version(0xFF);
-    let d = c.identify_first(dest, &VehicleIdRequest::All, 1000).unwrap();
+    let d = c
+        .identify_first(dest, &VehicleIdRequest::All, 1000)
+        .unwrap();
     assert_eq!(d.entities.len(), 1);
 }
 
@@ -164,7 +173,10 @@ fn discovered_entity_connects_in_one_call() {
     let mut tp = connect_entity(found, &opts).unwrap();
     assert!(tp.is_activated());
     assert_eq!(tp.entity_address(), Some(ECU));
-    assert_eq!(tp.target_address, ECU, "target defaults to the announced address");
+    assert_eq!(
+        tp.target_address, ECU,
+        "target defaults to the announced address"
+    );
     let mut uds = UdsClient::new(&mut tp);
     assert_eq!(uds.read_data_by_id(0xF190).unwrap(), SIM_VIN.to_vec());
 }
@@ -188,20 +200,23 @@ fn central_security_further_action_selects_activation_type() {
         tcp_port: tcp.local_addr().port(),
         ..ConnectOptions::default()
     };
-    assert!(connect_entity(&d.entities[0], &opts).unwrap().is_activated());
+    assert!(connect_entity(&d.entities[0], &opts)
+        .unwrap()
+        .is_activated());
 }
 
 #[test]
 fn ipv6_loopback_when_available() {
     let bind: SocketAddr = "[::1]:0".parse().unwrap();
-    let Ok(ent) = UdpEntityServer::spawn(bind, DoIpUdpEntity::new(EntityIdentity::new(ECU)))
-    else {
+    let Ok(ent) = UdpEntityServer::spawn(bind, DoIpUdpEntity::new(EntityIdentity::new(ECU))) else {
         eprintln!("skipping: no IPv6 loopback on this host");
         return;
     };
     let dest = ent.local_addr().unwrap();
     let c = DoIpUdpClient::for_destination(dest).unwrap();
-    let d = c.identify_first(dest, &VehicleIdRequest::All, 1000).unwrap();
+    let d = c
+        .identify_first(dest, &VehicleIdRequest::All, 1000)
+        .unwrap();
     assert_eq!(d.entities.len(), 1);
     assert!(d.entities[0].addr.is_ipv6());
     assert_eq!(c.power_mode(dest, 1000).unwrap(), PowerMode::Ready);

@@ -291,7 +291,10 @@ pub fn parse_datagram(data: &[u8]) -> std::result::Result<(u8, DoIpMessage), u8>
     if data.len() != HEADER_LEN + plen || payload_len_valid(ptype, plen) == Some(false) {
         return Err(generic_nack::INVALID_PAYLOAD_LENGTH);
     }
-    Ok((version, DoIpMessage::new(ptype, data[HEADER_LEN..].to_vec())))
+    Ok((
+        version,
+        DoIpMessage::new(ptype, data[HEADER_LEN..].to_vec()),
+    ))
 }
 
 /// One entity found by discovery: where its answer came from, and what it said.
@@ -621,9 +624,7 @@ pub fn connect_entity(
     let timeout = Duration::from_millis(opts.timeout_ms.max(1));
     let stream = TcpStream::connect_timeout(&addr, timeout)?;
     stream.set_nodelay(true)?;
-    let target = opts
-        .target_address
-        .unwrap_or(entity.info.logical_address);
+    let target = opts.target_address.unwrap_or(entity.info.logical_address);
     let kind = opts.activation_type.unwrap_or(
         if entity.info.further_action == further_action::CENTRAL_SECURITY {
             routing_activation::TYPE_CENTRAL_SECURITY
@@ -639,7 +640,7 @@ pub fn connect_entity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::doip::{DEFAULT_PROTOCOL_VERSION, VehicleInfo};
+    use crate::protocol::doip::{VehicleInfo, DEFAULT_PROTOCOL_VERSION};
 
     fn info(addr: u16, eid: [u8; 6]) -> VehicleInfo {
         VehicleInfo {
@@ -660,7 +661,10 @@ mod tests {
             VehicleIdRequest::by_vin("SIMVIN00000000001").unwrap(),
         ] {
             let msg = req.to_message();
-            assert_eq!(payload_len_valid(msg.payload_type, msg.payload.len()), Some(true));
+            assert_eq!(
+                payload_len_valid(msg.payload_type, msg.payload.len()),
+                Some(true)
+            );
             assert_eq!(VehicleIdRequest::from_message(&msg).unwrap(), req);
         }
         assert_eq!(
@@ -681,8 +685,12 @@ mod tests {
         assert!(VehicleIdRequest::All.matches(&i));
         assert!(VehicleIdRequest::ByEid([2, 0, 0, 0, 0, 0x10]).matches(&i));
         assert!(!VehicleIdRequest::ByEid([9; 6]).matches(&i));
-        assert!(VehicleIdRequest::by_vin("SIMVIN00000000001").unwrap().matches(&i));
-        assert!(!VehicleIdRequest::by_vin("SIMVIN00000000002").unwrap().matches(&i));
+        assert!(VehicleIdRequest::by_vin("SIMVIN00000000001")
+            .unwrap()
+            .matches(&i));
+        assert!(!VehicleIdRequest::by_vin("SIMVIN00000000002")
+            .unwrap()
+            .matches(&i));
     }
 
     #[test]
@@ -731,10 +739,20 @@ mod tests {
         // Inverse mismatch, unsupported version, short header: pattern (0x00).
         let mut bad = ok.clone();
         bad[1] = 0x00;
-        assert_eq!(check_header(&bad, MAX_UDP_PAYLOAD), Err(generic_nack::INCORRECT_PATTERN));
-        let v9 = DoIpMessage::new(payload_type::ENTITY_STATUS_REQUEST, vec![]).encode_with_version(9);
-        assert_eq!(check_header(&v9, MAX_UDP_PAYLOAD), Err(generic_nack::INCORRECT_PATTERN));
-        assert_eq!(check_header(&ok[..5], MAX_UDP_PAYLOAD), Err(generic_nack::INCORRECT_PATTERN));
+        assert_eq!(
+            check_header(&bad, MAX_UDP_PAYLOAD),
+            Err(generic_nack::INCORRECT_PATTERN)
+        );
+        let v9 =
+            DoIpMessage::new(payload_type::ENTITY_STATUS_REQUEST, vec![]).encode_with_version(9);
+        assert_eq!(
+            check_header(&v9, MAX_UDP_PAYLOAD),
+            Err(generic_nack::INCORRECT_PATTERN)
+        );
+        assert_eq!(
+            check_header(&ok[..5], MAX_UDP_PAYLOAD),
+            Err(generic_nack::INCORRECT_PATTERN)
+        );
         // 0xFF is the default version for vehicle identification requests only.
         let vid = VehicleIdRequest::All
             .to_message()
@@ -742,11 +760,17 @@ mod tests {
         assert!(check_header(&vid, MAX_UDP_PAYLOAD).is_ok());
         let st = DoIpMessage::new(payload_type::ENTITY_STATUS_REQUEST, vec![])
             .encode_with_version(DEFAULT_PROTOCOL_VERSION);
-        assert_eq!(check_header(&st, MAX_UDP_PAYLOAD), Err(generic_nack::INCORRECT_PATTERN));
+        assert_eq!(
+            check_header(&st, MAX_UDP_PAYLOAD),
+            Err(generic_nack::INCORRECT_PATTERN)
+        );
         // Too large: 0x02.
         let mut big = ok.clone();
         big[4..8].copy_from_slice(&(MAX_UDP_PAYLOAD as u32 + 1).to_be_bytes());
-        assert_eq!(check_header(&big, MAX_UDP_PAYLOAD), Err(generic_nack::MESSAGE_TOO_LARGE));
+        assert_eq!(
+            check_header(&big, MAX_UDP_PAYLOAD),
+            Err(generic_nack::MESSAGE_TOO_LARGE)
+        );
     }
 
     #[test]
@@ -756,14 +780,20 @@ mod tests {
         // Trailing junk / truncated payload: invalid length (0x04).
         let mut long = req.clone();
         long.push(0);
-        assert_eq!(parse_datagram(&long), Err(generic_nack::INVALID_PAYLOAD_LENGTH));
+        assert_eq!(
+            parse_datagram(&long),
+            Err(generic_nack::INVALID_PAYLOAD_LENGTH)
+        );
         assert_eq!(
             parse_datagram(&req[..req.len() - 1]),
             Err(generic_nack::INVALID_PAYLOAD_LENGTH)
         );
         // A consistent header with the wrong fixed length for its type.
         let wrong = DoIpMessage::new(payload_type::POWER_MODE_RESPONSE, vec![1, 2]).encode();
-        assert_eq!(parse_datagram(&wrong), Err(generic_nack::INVALID_PAYLOAD_LENGTH));
+        assert_eq!(
+            parse_datagram(&wrong),
+            Err(generic_nack::INVALID_PAYLOAD_LENGTH)
+        );
         // Unknown types pass; the caller decides.
         let unknown = DoIpMessage::new(0x7777, vec![1]).encode();
         assert_eq!(parse_datagram(&unknown).unwrap().1.payload_type, 0x7777);

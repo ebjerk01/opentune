@@ -34,8 +34,8 @@
 //! stdout. The UDP side ([`UdpEntityServer`]) answers vehicle identification
 //! (all / EID / VIN), entity status and power mode.
 
-use opentune_core::protocol::DoIpStream;
 use opentune_core::protocol::doip_discovery::{PowerMode, VehicleIdRequest};
+use opentune_core::protocol::DoIpStream;
 use opentune_udssim::{
     DoIpSimStream, DoIpUdpEntity, EntityIdentity, FlashConfig, ServerConfig, UdpEntityServer,
     UdpFault, UdsServer,

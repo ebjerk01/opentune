@@ -294,10 +294,7 @@ pub fn payload_len_valid(ptype: u16, len: usize) -> Option<bool> {
 /// Returns `(version, payload type, payload length)`, or the generic NACK code
 /// to answer with. Payload-type and payload-length checks (0x01 / 0x04) depend
 /// on the transport and are left to the caller ([`payload_len_valid`]).
-pub fn check_header(
-    hdr: &[u8],
-    max_payload: usize,
-) -> std::result::Result<(u8, u16, usize), u8> {
+pub fn check_header(hdr: &[u8], max_payload: usize) -> std::result::Result<(u8, u16, usize), u8> {
     if hdr.len() < HEADER_LEN || hdr[1] != !hdr[0] {
         return Err(generic_nack::INCORRECT_PATTERN);
     }

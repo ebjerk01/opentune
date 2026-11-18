@@ -100,9 +100,9 @@ impl std::str::FromStr for UdpFault {
             "no-reply" => Ok(Self::NoReply),
             "bad-version" => Ok(Self::BadVersion),
             _ => {
-                let code = s
-                    .strip_prefix("nack:")
-                    .ok_or_else(|| format!("unknown UDP fault {s:?} (no-reply|bad-version|nack:CODE)"))?;
+                let code = s.strip_prefix("nack:").ok_or_else(|| {
+                    format!("unknown UDP fault {s:?} (no-reply|bad-version|nack:CODE)")
+                })?;
                 let v = match code.strip_prefix("0x").or_else(|| code.strip_prefix("0X")) {
                     Some(h) => u8::from_str_radix(h, 16),
                     None => code.parse(),
@@ -274,7 +274,12 @@ impl UdpEntityServer {
 
     /// Send `count` unsolicited vehicle announcements to `to`, `interval`
     /// apart (ISO: 3 at 500 ms after start-up), from the entity's own port.
-    pub fn announce(&self, to: SocketAddr, count: usize, interval: Duration) -> std::io::Result<()> {
+    pub fn announce(
+        &self,
+        to: SocketAddr,
+        count: usize,
+        interval: Duration,
+    ) -> std::io::Result<()> {
         if to.ip().is_ipv4() && to.ip() != std::net::Ipv4Addr::LOCALHOST {
             self.sock.set_broadcast(true)?;
         }
@@ -351,7 +356,11 @@ impl Drop for TcpEntityServer {
 }
 
 /// Bridge one TCP connection to `entity` until the peer closes or `stop`.
-fn serve_tcp(mut sock: TcpStream, mut entity: DoIpSimStream, stop: &AtomicBool) -> std::io::Result<()> {
+fn serve_tcp(
+    mut sock: TcpStream,
+    mut entity: DoIpSimStream,
+    stop: &AtomicBool,
+) -> std::io::Result<()> {
     sock.set_nonblocking(false)?;
     sock.set_nodelay(true)?;
     sock.set_read_timeout(Some(POLL))?;
@@ -393,7 +402,9 @@ mod tests {
     #[test]
     fn identification_by_all_eid_and_vin() {
         let mut e = entity();
-        let all = e.handle(&VehicleIdRequest::All.to_message().encode()).unwrap();
+        let all = e
+            .handle(&VehicleIdRequest::All.to_message().encode())
+            .unwrap();
         let info = VehicleInfo::parse(&decode(&all).payload).unwrap();
         assert_eq!(info, e.identity().info);
         assert!(e
@@ -422,7 +433,10 @@ mod tests {
             .unwrap();
         let m = decode(&s);
         assert_eq!(m.payload_type, payload_type::ENTITY_STATUS_RESPONSE);
-        assert_eq!(EntityStatus::parse(&m.payload).unwrap(), e.identity().status);
+        assert_eq!(
+            EntityStatus::parse(&m.payload).unwrap(),
+            e.identity().status
+        );
         e.identity_mut().power_mode = PowerMode::NotReady;
         let p = e
             .handle(&DoIpMessage::new(payload_type::POWER_MODE_REQUEST, vec![]).encode())
@@ -440,18 +454,36 @@ mod tests {
         };
         let mut bad = VehicleIdRequest::All.to_message().encode();
         bad[1] = 0;
-        assert_eq!(nack_code(e.handle(&bad).unwrap()), generic_nack::INCORRECT_PATTERN);
+        assert_eq!(
+            nack_code(e.handle(&bad).unwrap()),
+            generic_nack::INCORRECT_PATTERN
+        );
         let v9 = VehicleIdRequest::All.to_message().encode_with_version(9);
-        assert_eq!(nack_code(e.handle(&v9).unwrap()), generic_nack::INCORRECT_PATTERN);
+        assert_eq!(
+            nack_code(e.handle(&v9).unwrap()),
+            generic_nack::INCORRECT_PATTERN
+        );
         let mut big = DoIpMessage::new(0x4001, vec![]).encode();
         big[4..8].copy_from_slice(&0x10_0000u32.to_be_bytes());
-        assert_eq!(nack_code(e.handle(&big).unwrap()), generic_nack::MESSAGE_TOO_LARGE);
+        assert_eq!(
+            nack_code(e.handle(&big).unwrap()),
+            generic_nack::MESSAGE_TOO_LARGE
+        );
         let badlen = DoIpMessage::new(payload_type::VEHICLE_ID_REQUEST_VIN, vec![1; 3]).encode();
-        assert_eq!(nack_code(e.handle(&badlen).unwrap()), generic_nack::INVALID_PAYLOAD_LENGTH);
+        assert_eq!(
+            nack_code(e.handle(&badlen).unwrap()),
+            generic_nack::INVALID_PAYLOAD_LENGTH
+        );
         let tcp_only = DoIpMessage::new(payload_type::ALIVE_CHECK_REQUEST, vec![]).encode();
-        assert_eq!(nack_code(e.handle(&tcp_only).unwrap()), generic_nack::UNKNOWN_PAYLOAD_TYPE);
+        assert_eq!(
+            nack_code(e.handle(&tcp_only).unwrap()),
+            generic_nack::UNKNOWN_PAYLOAD_TYPE
+        );
         let unknown = DoIpMessage::new(0x7777, vec![]).encode();
-        assert_eq!(nack_code(e.handle(&unknown).unwrap()), generic_nack::UNKNOWN_PAYLOAD_TYPE);
+        assert_eq!(
+            nack_code(e.handle(&unknown).unwrap()),
+            generic_nack::UNKNOWN_PAYLOAD_TYPE
+        );
         // Another entity's announcement / a NACK is ignored.
         assert!(e.handle(&e.announcement()).is_none());
         assert!(e
