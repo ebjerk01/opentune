@@ -1,0 +1,19 @@
+# Serial protocol for TunerStudio-compatible aftermarket ECUs (Speeduino,
+# rusEFI, MegaSquirt): command strings come from the INI (opentune-tsini),
+# framed either as the CRC32 "msEnvelope" or as plain bytes. Includes an
+# in-memory simulated ECU for tests and offline demos.
+[package]
+name = "opentune-tsproto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Read/write/burn pages and stream realtime data from TunerStudio-compatible ECUs over serial, with a simulated ECU."
+
+[dependencies]
+opentune-tsini = { path = "../opentune-tsini" }
+serialport = { workspace = true }
+thiserror = { workspace = true }

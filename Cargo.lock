@@ -1098,6 +1098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-tsproto"
+version = "0.1.0"
+dependencies = [
+ "opentune-tsini",
+ "serialport",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-udssim"
 version = "0.1.0"
 dependencies = [

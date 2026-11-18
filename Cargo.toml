@@ -44,6 +44,7 @@ members = [
     "crates/opentune-mapfind",
     "crates/opentune-recipe",
     "crates/opentune-tsini",
+    "crates/opentune-tsproto",
 ]
 
 [workspace.package]
