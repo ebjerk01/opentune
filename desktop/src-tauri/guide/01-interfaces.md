@@ -12,6 +12,7 @@ lists them and is the authority for your build):
 | `socketcan` | Linux SocketCAN (`can0`) | CAN (ISO-TP / TP2.0) |
 | `slcan` | serial-line CAN (CANable / CANtact, CH340 USB-CAN) | CAN |
 | `gsusb` | gs_usb / candleLight USB-CAN | CAN |
+| `efp02c` | EFI Technology EFP02C USB-CAN, direct USB (WinUSB on Windows); unverified | CAN at 1 Mbit/s only |
 | `elm327` | ELM327 AT commands over serial | CAN **and** K-line |
 | `elm327obd` | ELM327 over serial, read diagnostics only | CAN |
 | `elm327net` | ELM327 over Wi-Fi (TCP) or Bluetooth | CAN **and** K-line |
