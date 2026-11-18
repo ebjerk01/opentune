@@ -382,21 +382,19 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
 
         let resp_id = BROADCAST_ID + self.ecu_id as u32;
         let deadline = Deadline::new(timeout_ms);
-        let data = loop {
-            match self.recv_on_until(resp_id, &deadline) {
-                Ok(d) => break d,
-                Err(Error::Timeout(_)) => {
-                    return Err(Error::Protocol(format!(
-                        "TP2.0 channel setup (step 1 of 2): logical address 0x{:02X} did not \
+        let data = match self.recv_on_until(resp_id, &deadline) {
+            Ok(d) => d,
+            Err(Error::Timeout(_)) => {
+                return Err(Error::Protocol(format!(
+                    "TP2.0 channel setup (step 1 of 2): logical address 0x{:02X} did not \
                          answer on CAN id 0x{resp_id:03X} within {timeout_ms} ms (setup request \
                          sent on 0x{BROADCAST_ID:03X}, asking the module to transmit on \
                          0x{:03X}). Check the module address, ignition, that the adapter sits on \
                          a bus the module is reachable from, and the bitrate",
-                        self.ecu_id, self.rx_id
-                    )))
-                }
-                Err(e) => return Err(e),
+                    self.ecu_id, self.rx_id
+                )))
             }
+            Err(e) => return Err(e),
         };
         if data.len() < 7 {
             return Err(Error::Protocol(format!(
