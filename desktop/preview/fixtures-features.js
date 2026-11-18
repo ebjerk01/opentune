@@ -36,7 +36,8 @@
     T(0x42, "module_voltage", "Module voltage", "V", 0, 65, "electrical"),
   ];
   const DIESEL = [0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x10, 0x11, 0x23, 0x2c, 0x2f, 0x33, 0x42, 0x46, 0x49, 0x5c, 0x78, 0x7c];
-  F.obd_supported = async () => { await wait(400); return { pids: DIESEL, vin: null }; };
+  // Placeholder VIN (never a real one): shown as the dashboard's text tile.
+  F.obd_supported = async () => { await wait(400); return { pids: DIESEL, vin: "WVWZZZ00000000000" }; };
 
   const s = { egt1: 210, egt2: 190, dpf: 240, spd: 0, cool: 72 };
   F.obd_read = async () => {

@@ -16,6 +16,9 @@
     { id: "iat", name: "Intake air temperature", units: "°C", did: 0x1003 },
     { id: "inj_qty", name: "Injection quantity", units: "mg/str", did: 0x1004 },
     { id: "obd_load", name: "Calculated load (OBD 01 04)", units: "%", did: null },
+    // Text channels (identification DIDs): decoded text, no value.
+    { id: "uds_f190_vin", name: "VIN (F190)", units: "text", did: 0xf190, text: "WVWZZZ00000000000" },
+    { id: "uds_f199_programming_date", name: "Programming date (F199)", units: "bcd", did: 0xf199, text: "241118" },
   ];
   F.log_params = ({ defPath }) => ({
     path: defPath, version: "preview", count: PARAMS.length,
@@ -23,6 +26,7 @@
   });
 
   function sample(p) {
+    if (p.text) return { paramId: p.id, name: p.name, raw: null, value: null, units: p.units, note: "", text: p.text };
     const t = secs();
     const load = Math.max(0, Math.sin(t / 3)) ** 2;
     const v = {

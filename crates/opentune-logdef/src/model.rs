@@ -129,6 +129,60 @@ pub struct Conversion {
     pub gauge_step: Option<f64>,
 }
 
+/// How a parameter's raw bytes are presented.
+///
+/// Most channels are numbers: the bytes are one integer, scaled by the
+/// conversion. Identification data (part numbers, serial numbers, dates, the
+/// VIN) is not a number; reading it as one shows a meaningless integer of its
+/// first 8 bytes. A non-[`Number`](Self::Number) kind decodes the **whole**
+/// record as text into [`Sample::text`](crate::Sample::text) instead, with
+/// `raw`/`value` empty and no conversion applied.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ValueKind {
+    /// An integer scaled by the conversion (the default).
+    #[default]
+    Number,
+    /// ASCII text: printable bytes as characters, trailing `00`/`FF`/space
+    /// padding dropped, any other non-printable byte shown as `.` (and noted).
+    #[serde(alias = "ascii", alias = "string")]
+    Text,
+    /// Packed BCD: two decimal digits per byte (e.g. a `YY MM DD` date),
+    /// trailing `F` filler nibbles dropped. A nibble above 9 is noted.
+    Bcd,
+    /// The record as upper-case hex, two digits per byte.
+    Hex,
+}
+
+impl ValueKind {
+    /// `true` for [`Number`](Self::Number) (used to keep it out of JSON).
+    pub fn is_number(&self) -> bool {
+        *self == ValueKind::Number
+    }
+
+    /// The kind a RomRaider/EcuFlash `storagetype` implies for non-numeric
+    /// types (`string`/`ascii`/`text`, `bcd`, `hex`/`bytes`), or `None` for
+    /// anything else (numeric types are mapped by the storage-type parser).
+    pub fn from_storage(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "string" | "ascii" | "text" | "char" => Some(ValueKind::Text),
+            "bcd" => Some(ValueKind::Bcd),
+            "hex" | "bytes" | "raw" => Some(ValueKind::Hex),
+            _ => None,
+        }
+    }
+
+    /// Short name as written in definitions (`number`, `text`, `bcd`, `hex`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ValueKind::Number => "number",
+            ValueKind::Text => "text",
+            ValueKind::Bcd => "bcd",
+            ValueKind::Hex => "hex",
+        }
+    }
+}
+
 /// An alternate address for a parameter (Format-B `<alt>`), used when the same
 /// logical channel lives at different addresses across ECU variants.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +215,10 @@ pub struct LogParam {
     /// Byte order of the stored value (defaults to big-endian, as SSM/RomRaider
     /// definitions are Motorola order).
     pub endian: Endian,
+    /// How the raw bytes are presented: a scaled number (default) or text
+    /// (ASCII / BCD / hex) for identification-style records.
+    #[serde(skip_serializing_if = "ValueKind::is_number", default)]
+    pub value_kind: ValueKind,
     /// The primary conversion (first `<conversion>` / the inline `expr`).
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub conversion: Option<Conversion>,

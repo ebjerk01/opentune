@@ -32,6 +32,8 @@
   const hist = {};
   const mm = {};
   const sensors = {}; // key -> sorted sensor indexes that have reported a value (EGT)
+  const texts = {}; // key -> last text of a text channel (the VIN, string values)
+  const VIN = { key: "vin", name: "VIN", unit: "", group: "vehicle" };
 
   // ---- units ---------------------------------------------------------------
   function shown(key, v) {
@@ -157,7 +159,7 @@
   }
 
   function tileKeys() {
-    const out = [];
+    const out = texts.vin != null ? ["vin"] : [];
     selection().forEach((k) => {
       if (sensors[k] && sensors[k].length) sensors[k].forEach((i) => out.push(k + "#" + i));
       else out.push(k);
@@ -175,7 +177,7 @@
     grid.innerHTML = "";
     tileKeys().forEach((tk) => {
       const k = tk.split("#")[0];
-      const off = supported && !supported.has(k);
+      const off = texts[k] == null && supported && !supported.has(k);
       const d = document.createElement("div");
       d.className = "tile" + (off ? " na" : "");
       d.dataset.k = tk;
@@ -193,6 +195,16 @@
 
   function paintTile(d, tk) {
     const k = tk.split("#")[0];
+    if (texts[tk] != null) {
+      // A text channel: the text itself, no gauge colour, sparkline or min/max.
+      d.querySelector(".t-val").textContent = texts[tk];
+      d.querySelector(".t-unit").textContent = "";
+      d.className = "tile live text";
+      const f = d.querySelectorAll(".t-foot span");
+      f[0].textContent = "text";
+      f[1].textContent = "";
+      return;
+    }
     const h = hist[tk] || [];
     const last = h.length ? h[h.length - 1] : null;
     const s = shown(k, last);
@@ -250,7 +262,10 @@
     let reshape = false;
     Object.keys(vals).forEach((k) => {
       const v = vals[k];
-      if (Array.isArray(v)) {
+      if (typeof v === "string") {
+        if (texts[k] == null) reshape = true;
+        texts[k] = v;
+      } else if (Array.isArray(v)) {
         // Backends report fixed sensor slots with null for absent sensors; tile
         // only the sensors that have ever answered.
         const seen = (sensors[k] = sensors[k] || []);
@@ -292,6 +307,9 @@
       const s = await invoke("obd_supported", { ...window.OT.connArgs() });
       const pids = new Set(s.pids || []);
       supported = new Set(table.filter((t) => t.pid != null && pids.has(t.pid)).map((t) => t.key));
+      // The VIN (mode 09 / UDS F190) is shown as a text tile.
+      if (s.vin) texts.vin = String(s.vin);
+      else delete texts.vin;
       if (BOOST.needs.every((k) => supported.has(k))) supported.add("boost_kpa");
     } catch (e) {
       $("dashStart").disabled = false;
@@ -344,7 +362,7 @@
   async function init() {
     try { table = await invoke("obd_pid_table"); } catch (e) { table = []; }
     table = table.concat([BOOST]);
-    byKey = {};
+    byKey = { vin: VIN };
     table.forEach((t) => { byKey[t.key] = t; });
     drawGauges();
     drawTiles();

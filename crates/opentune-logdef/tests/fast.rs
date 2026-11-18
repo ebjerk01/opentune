@@ -28,6 +28,7 @@ fn param(id: &str, addressing: Addressing, factor: f64, offset: f64) -> LogParam
         addressing,
         storagetype: None,
         endian: Endian::Big,
+        value_kind: Default::default(),
         conversion: Some(Conversion {
             units: "u".into(),
             expr: "X".into(),
@@ -508,4 +509,33 @@ fn fast_mode_cuts_requests_per_sample() {
     assert_eq!(st.setup_requests, 10);
     assert_eq!(fast as u64, st.setup_requests + st.tick_requests);
     assert!(polling >= 6 * fast, "{polling} vs {fast}");
+}
+
+#[test]
+fn text_channels_decode_the_same_in_fast_mode() {
+    let mut vin = did("vin", 0xF190);
+    vin.value_kind = opentune_logdef::ValueKind::Text;
+    vin.conversion = None;
+    let mut date = did("date", 0xF199);
+    date.value_kind = opentune_logdef::ValueKind::Bcd;
+    let d = def(vec![did("rpm", 0x1000), vin, date]);
+    let server = || {
+        let mut s = UdsServer::with_config(ServerConfig::default());
+        s.set_did(0x1000, vec![0x1A, 0xF8]);
+        s.set_did(0xF190, b"WVWZZZ00000000000".to_vec());
+        s.set_did(0xF199, vec![0x24, 0x11, 0x18]);
+        s
+    };
+    let mut sim = SimTransport::new(server());
+    let mut diag = CoreDiag::new(&mut sim, 1000);
+    let mut session = LiveSession::new(&d, &[], FastLogConfig::fast()).unwrap();
+    let st = session.start(&mut diag).clone();
+    assert_eq!(st.mode, LogMode::Fast2c, "reason: {:?}", st.reason);
+    let fast = session.tick(&mut diag);
+    assert_eq!(fast[1].text.as_deref(), Some("WVWZZZ00000000000"));
+    assert_eq!(fast[2].text.as_deref(), Some("241118"));
+    assert_eq!((fast[1].raw, fast[1].value), (None, None));
+    let mut sim2 = SimTransport::new(server());
+    let mut diag2 = CoreDiag::new(&mut sim2, 1000);
+    assert_same(&fast, &opentune_logdef::poll_once(&mut diag2, &d, &[]));
 }

@@ -6,7 +6,7 @@ use opentune_core::CoreDiag;
 use opentune_logdef::live::{poll_once, poll_to_csv};
 use opentune_logdef::{
     Addressing, Conversion, ConversionFit, EcuGroup, LogDef, LogParam, ProtocolGroup, ProtocolKind,
-    SourceFormat,
+    SourceFormat, ValueKind,
 };
 use opentune_udssim::server::UdsServer;
 use opentune_udssim::transport::SimTransport;
@@ -29,6 +29,7 @@ fn param_with(
         addressing,
         storagetype: None,
         endian: Endian::Big,
+        value_kind: ValueKind::Number,
         conversion: Some(Conversion {
             units: units.into(),
             expr: "X".into(),
@@ -118,6 +119,80 @@ fn unseeded_did_is_noted_not_dropped() {
     assert!(!samples[0].note.is_empty(), "the failure must be noted");
 }
 
+fn text_param(id: &str, did: u16, kind: ValueKind) -> LogParam {
+    let mut p = param(id, did, 1.0, 0.0, "");
+    p.conversion = None;
+    p.value_kind = kind;
+    p
+}
+
+#[test]
+fn text_bcd_and_hex_channels_decode_the_whole_record() {
+    let mut server = UdsServer::new();
+    // VIN-style ASCII padded with spaces and a NUL; a BCD date; a byte record.
+    server.set_did(0xF190, b"WVWZZZ00000000000 \0".to_vec());
+    server.set_did(0xF199, vec![0x24, 0x11, 0x18, 0xFF]);
+    server.set_did(0xF180, vec![0x01, 0xAB, 0x00]);
+    server.set_did(0xF18C, vec![b'S', b'N', 0x07, b'1']);
+    let mut sim = SimTransport::new(server);
+    let mut diag = CoreDiag::new(&mut sim, 1000);
+    let d = def(vec![
+        text_param("vin", 0xF190, ValueKind::Text),
+        text_param("date", 0xF199, ValueKind::Bcd),
+        text_param("boot", 0xF180, ValueKind::Hex),
+        text_param("serial", 0xF18C, ValueKind::Text),
+    ]);
+    let s = poll_once(&mut diag, &d, &[]);
+    assert_eq!(s[0].text.as_deref(), Some("WVWZZZ00000000000"));
+    assert_eq!((s[0].raw, s[0].value), (None, None));
+    assert_eq!(s[0].units, "text", "empty units fall back to the kind");
+    assert!(s[0].note.is_empty());
+    assert_eq!(s[1].text.as_deref(), Some("241118"));
+    assert_eq!(s[2].text.as_deref(), Some("01AB00"));
+    assert_eq!(s[3].text.as_deref(), Some("SN.1"));
+    assert!(s[3].note.contains("non-printable"), "{}", s[3].note);
+    assert!(s.iter().all(|x| x.answered()));
+
+    // CSV: value empty, the text in the trailing `text` column.
+    let mut buf = Vec::new();
+    poll_to_csv(&mut diag, &d, &["vin"], 1, 0, &mut buf).unwrap();
+    let csv = String::from_utf8(buf).unwrap();
+    let row = csv.lines().nth(1).unwrap();
+    assert_eq!(row, "0,vin,vin,,,text,,WVWZZZ00000000000");
+}
+
+#[test]
+fn identification_pack_marks_its_dids_as_text() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packs/iso14229-identification/loggers/uds-identification.json"
+    );
+    let d: LogDef = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let kind = |did: u16| {
+        d.params()
+            .find(|(_, _, p)| p.addressing == Addressing::UdsDid { did })
+            .map(|(_, _, p)| p.value_kind)
+            .unwrap()
+    };
+    assert_eq!(kind(0xF190), ValueKind::Text);
+    assert_eq!(kind(0xF187), ValueKind::Text);
+    assert_eq!(kind(0xF18C), ValueKind::Text);
+    assert_eq!(kind(0xF199), ValueKind::Bcd);
+    assert_eq!(kind(0xF180), ValueKind::Hex);
+    assert_eq!(
+        kind(0xF186),
+        ValueKind::Number,
+        "the session byte stays a number"
+    );
+}
+
+#[test]
+fn invalid_bcd_is_noted_not_hidden() {
+    let (t, n) = opentune_logdef::decode_text(ValueKind::Bcd, &[0x12, 0x3A]);
+    assert_eq!(t, "123A");
+    assert!(n.contains("not valid BCD"));
+}
+
 #[test]
 fn csv_has_a_header_and_one_row_per_sample_per_round() {
     let mut server = UdsServer::new();
@@ -131,7 +206,7 @@ fn csv_has_a_header_and_one_row_per_sample_per_round() {
     let text = String::from_utf8(buf).unwrap();
 
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines[0], "round,param_id,name,raw,value,units,note");
+    assert_eq!(lines[0], "round,param_id,name,raw,value,units,note,text");
     assert_eq!(lines.len(), 1 + 3, "header + 3 rounds × 1 param");
     assert!(lines[1].contains("temp"));
     assert!(lines[1].contains("60"), "100 - 40 = 60: {}", lines[1]); // scaled value

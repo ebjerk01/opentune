@@ -426,18 +426,10 @@ impl LiveSession {
         interval_ms: u64,
         out: &mut impl Write,
     ) -> std::io::Result<()> {
-        writeln!(out, "round,param_id,name,raw,value,units,note")?;
+        writeln!(out, "{}", crate::live::CSV_HEADER)?;
         for r in 0..rounds {
             for s in self.tick(diag) {
-                let raw = s.raw.map(|v| v.to_string()).unwrap_or_default();
-                let value = s.value.map(|v| v.to_string()).unwrap_or_default();
-                let name = s.name.replace(',', ";");
-                let note = s.note.replace(['\n', ','], " ");
-                writeln!(
-                    out,
-                    "{r},{},{name},{raw},{value},{},{note}",
-                    s.param_id, s.units
-                )?;
+                crate::live::write_csv_row(out, r, &s)?;
             }
             if interval_ms > 0 && r + 1 < rounds {
                 std::thread::sleep(std::time::Duration::from_millis(interval_ms));
@@ -504,10 +496,15 @@ impl LiveSession {
                     None
                 }
                 Addressing::UdsDid { did } => match probe_did(diag, *did) {
-                    // Polling decodes at most the first 8 record bytes.
+                    // Polling decodes at most the first 8 record bytes of a
+                    // number; a text channel decodes the whole record.
                     Ok(len) => Some(Element::Did {
                         did: *did,
-                        size: len.min(8) as u8,
+                        size: if p.value_kind.is_number() {
+                            len.min(8)
+                        } else {
+                            len.min(255)
+                        } as u8,
                     }),
                     Err(e) => {
                         self.status.notes.push(format!(

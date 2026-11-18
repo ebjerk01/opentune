@@ -118,7 +118,7 @@ pub async fn log_poll_once(
             let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
             Ok(opentune_logdef::poll_once(d, &def, &id_refs))
         })?;
-        if !samples.is_empty() && samples.iter().all(|x| x.value.is_none()) {
+        if !samples.is_empty() && !samples.iter().any(Sample::answered) {
             s.invalidate();
         }
         Ok(samples)
@@ -144,6 +144,8 @@ fn sample_json(s: &Sample) -> Value {
         "value": s.value,
         "units": s.units,
         "note": s.note,
+        // Text channels (identification DIDs): `value`/`raw` are null.
+        "text": s.text,
     })
 }
 
@@ -394,8 +396,7 @@ fn live_job(
                 Ok(samples) => {
                     let st = live.status().clone();
                     run.set_status(&st);
-                    let silent = !samples.is_empty()
-                        && samples.iter().all(|x| x.raw.is_none() && x.value.is_none());
+                    let silent = !samples.is_empty() && !samples.iter().any(Sample::answered);
                     dead = if silent { dead + 1 } else { 0 };
                     let _ = reply.send(Ok((samples, st)));
                     if dead >= DEAD_TICKS {
@@ -646,6 +647,7 @@ mod tests {
             addressing: Addressing::UdsDid { did },
             storagetype: None,
             endian: Endian::Big,
+            value_kind: Default::default(),
             conversion: Some(Conversion {
                 units: "u".into(),
                 expr: "X".into(),

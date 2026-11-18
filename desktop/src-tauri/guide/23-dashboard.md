@@ -21,6 +21,7 @@ exhaust gas temperature (bank 1 and 2), fuel rail pressure and battery voltage.
 
 - **Only supported values are shown.** Many engines do not report EGT, fuel rail pressure or MAF over generic OBD-II. A missing gauge means the ECU does not offer that value, not that the sensor is broken.
 - **Colours** — a gauge turns to the warning colour, then the critical colour, past fixed thresholds. These are generic defaults, not limits for your engine.
+- **VIN** — when the ECU reports it (mode 09, or UDS `F190`), the VIN is shown as a text tile at the start of the grid. Text tiles show the text itself, with no colour, sparkline or min/max.
 - **MAP / boost** — manifold absolute pressure. Boost is the part above atmospheric pressure.
 - Update speed depends on the adapter. An ELM327 reads only a few values per second, so more gauges means slower updates per gauge.
 

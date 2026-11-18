@@ -199,6 +199,72 @@
     return (sps >= 10 ? sps.toFixed(0) : sps.toFixed(1)) + " samples/s · " + rps.toFixed(2) + " req/sample";
   }
 
+  // ---- Live-log CSV (feat_logging.js, feat_dashboard.js) ------------------------
+  // The Log viewer reads this layout (opentune-logview, "OpenTune Live log"):
+  // one row per channel per tick, `ts` in Unix ms. `text` (last, optional for
+  // readers) carries text channels such as identification DIDs; their `value`
+  // is empty.
+  const LIVE_LOG_HEAD = ["ts", "param_id", "name", "raw", "value", "units", "note", "text"];
+  function csvField(v) {
+    const s = String(v == null ? "" : v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  // One CSV row object from a Live-log sample ({paramId,name,raw,value,units,note,text}).
+  function liveLogRow(ts, s) {
+    return {
+      ts, paramId: s.paramId, name: s.name,
+      raw: s.raw == null ? "" : s.raw,
+      value: s.value == null ? "" : s.value,
+      units: s.units || "", note: s.note || "",
+      text: s.text == null ? "" : s.text,
+    };
+  }
+  // CSV lines for rows (header first unless `noHeader`), "\n"-terminated.
+  function liveLogCsv(rows, noHeader) {
+    const out = noHeader ? [] : [LIVE_LOG_HEAD.join(",")];
+    (rows || []).forEach((r) => {
+      out.push([r.ts, r.paramId, r.name, r.raw, r.value, r.units, r.note, r.text].map(csvField).join(","));
+    });
+    return out.length ? out.join("\n") + "\n" : "";
+  }
+  // What a live table cell shows for a sample: the text of a text channel, the
+  // value, else the raw number, else a dash.
+  function liveShown(s, fmtNum) {
+    if (!s) return "—";
+    if (s.text != null) return String(s.text);
+    if (s.value != null) return fmtNum ? fmtNum(s.value) : String(s.value);
+    if (s.raw != null) return String(s.raw);
+    return "—";
+  }
+  // Dashboard poll -> Live-log rows. `values` maps channel key -> number,
+  // positional array (multi-sensor PIDs: one channel per answering sensor,
+  // `key#i`), string (a text channel) or null; `table` maps key -> {name, unit};
+  // `errors` maps key -> why it is null.
+  function dashLogRows(ts, values, table, errors) {
+    const rows = [];
+    Object.keys(values || {}).sort().forEach((k) => {
+      const t = (table && table[k]) || {};
+      const name = t.name || k;
+      const unit = t.unit || "";
+      const v = values[k];
+      const row = (id, nm, x) => {
+        if (typeof x === "string") rows.push({ ts, paramId: id, name: nm, raw: "", value: "", units: unit || "text", note: "", text: x });
+        else if (typeof x === "number" && isFinite(x)) rows.push({ ts, paramId: id, name: nm, raw: "", value: x, units: unit, note: "", text: "" });
+        else rows.push({ ts, paramId: id, name: nm, raw: "", value: "", units: unit, note: (errors && errors[k]) || "no value", text: "" });
+      };
+      if (Array.isArray(v)) v.forEach((x, i) => { if (x != null) row(k + "#" + i, name + " S" + (i + 1), x); });
+      else row(k, name, v);
+    });
+    return rows;
+  }
+  // "m:ss" (or "h:mm:ss") for an elapsed time in ms.
+  function fmtElapsed(ms) {
+    const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    const two = (x) => String(x).padStart(2, "0");
+    return h ? h + ":" + two(m) + ":" + two(r) : m + ":" + two(r);
+  }
+
   // ---- small line charts (feat_haldex.js, feat_ts.js) ---------------------------
   // SVG path for a series in a w x h box: { d, lo, hi }. t and v are equal-length
   // arrays (t ascending); a flat series is drawn mid-height.
@@ -241,6 +307,7 @@
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
     logModeBadge, fmtLogRate, seriesPath, tsFmt, tsCheckValue,
+    LIVE_LOG_HEAD, liveLogRow, liveLogCsv, liveShown, dashLogRows, fmtElapsed,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;

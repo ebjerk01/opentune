@@ -19,6 +19,30 @@ sample, never guessed.
 opentune log --def logger.xml --driver <id> --rounds 500 --out run.csv [IDS…]
 ```
 
+The CSV columns are `round,param_id,name,raw,value,units,note,text`.
+
+## Text channels
+
+Identification records (ISO 14229-1 `F187` part number, `F18C` serial, `F190`
+VIN, `F199` programming date, …) are not numbers. A channel's `value_kind`
+says how to present its bytes; anything but `number` decodes the **whole**
+record into `Sample::text` and leaves `raw`/`value` empty (no conversion):
+
+| `value_kind` | Decoding | Set by |
+|---|---|---|
+| `number` (default) | first 8 bytes as one integer, scaled | numeric `storagetype` or none |
+| `text` (alias `ascii`) | printable ASCII; trailing `00`/`FF`/space padding dropped; other bytes shown as `.` and noted | `storagetype="string"`/`"ascii"`/`"text"` |
+| `bcd` | two decimal digits per byte, trailing `F` fillers dropped; a nibble above 9 is noted | `storagetype="bcd"` |
+| `hex` | upper-case hex, two digits per byte | `storagetype="hex"`/`"bytes"` |
+
+In a pack's logger JSON set `"value_kind": "text"` (or `bcd`/`hex`) on the
+parameter; `number` is the default and is not written. Text channels work in
+both polling and fast mode (the record is sliced exactly as for numbers). The
+CSV writers put the text in the last column, `text`; the desktop Live-log CSV
+(`ts,param_id,name,raw,value,units,note,text`) does the same, and the Log viewer
+lists text channels in its notes instead of plotting an empty trace. Older
+seven-column files still open.
+
 ## Polling
 
 The default mode sends **one request per channel per sample**

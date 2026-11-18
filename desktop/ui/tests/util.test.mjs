@@ -198,3 +198,48 @@ test("fmtLogRate shows samples/s and requests per sample", () => {
   assert.equal(U.fmtLogRate({ ticks: 10, samples_per_s: 4.26, requests_per_sample: 1 }), "4.3 samples/s · 1.00 req/sample");
   assert.equal(U.fmtLogRate({ ticks: 99, samples_per_s: 51.04, requests_per_sample: 3 }), "51 samples/s · 3.00 req/sample");
 });
+
+test("Live-log CSV carries text channels in a trailing text column", () => {
+  const rows = [
+    U.liveLogRow(1700000000000, { paramId: "rpm", name: "Engine speed", raw: 3200, value: 800, units: "rpm", note: "" }),
+    U.liveLogRow(1700000000000, { paramId: "vin", name: "VIN, F190", raw: null, value: null, units: "text", note: "", text: "WVWZZZ00000000000" }),
+  ];
+  const csv = U.liveLogCsv(rows);
+  assert.equal(
+    csv,
+    "ts,param_id,name,raw,value,units,note,text\n" +
+      "1700000000000,rpm,Engine speed,3200,800,rpm,,\n" +
+      '1700000000000,vin,"VIN, F190",,,text,,WVWZZZ00000000000\n'
+  );
+  assert.equal(U.liveLogCsv(rows.slice(0, 1), true), "1700000000000,rpm,Engine speed,3200,800,rpm,,\n");
+  assert.equal(U.liveLogCsv([], true), "");
+  assert.deepEqual(U.LIVE_LOG_HEAD.slice(0, 7), ["ts", "param_id", "name", "raw", "value", "units", "note"]);
+});
+
+test("liveShown prefers text, then value, then raw", () => {
+  assert.equal(U.liveShown({ text: "SN.1", value: null }), "SN.1");
+  assert.equal(U.liveShown({ value: 1.5 }, (v) => v.toFixed(2)), "1.50");
+  assert.equal(U.liveShown({ value: null, raw: 7 }), "7");
+  assert.equal(U.liveShown({}), "—");
+  assert.equal(U.liveShown(null), "—");
+});
+
+test("dashLogRows turns a dashboard poll into Live-log rows", () => {
+  const table = { rpm: { name: "Engine speed", unit: "rpm" }, egt_b1: { name: "EGT bank 1", unit: "°C" }, vin: { name: "VIN", unit: "" }, maf: { name: "MAF", unit: "g/s" } };
+  const rows = U.dashLogRows(5, { rpm: 800, egt_b1: [400, null, 380], vin: "WVWZZZ00000000000", maf: null }, table, { maf: "no response" });
+  assert.deepEqual(rows.map((r) => r.paramId), ["egt_b1#0", "egt_b1#2", "maf", "rpm", "vin"]);
+  assert.equal(rows[1].name, "EGT bank 1 S3");
+  assert.equal(rows[2].note, "no response");
+  assert.equal(rows[2].value, "");
+  assert.equal(rows[3].value, 800);
+  assert.equal(rows[4].text, "WVWZZZ00000000000");
+  assert.equal(rows[4].value, "");
+  assert.ok(rows.every((r) => r.ts === 5));
+});
+
+test("fmtElapsed shows m:ss and h:mm:ss", () => {
+  assert.equal(U.fmtElapsed(0), "0:00");
+  assert.equal(U.fmtElapsed(65_400), "1:05");
+  assert.equal(U.fmtElapsed(3_725_000), "1:02:05");
+  assert.equal(U.fmtElapsed(-5), "0:00");
+});
