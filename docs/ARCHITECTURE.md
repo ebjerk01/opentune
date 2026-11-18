@@ -139,6 +139,9 @@ Kept as separate crates so apps and drivers can pull in only what they need.
 - **`opentune-flash`** — the flash orchestrator. `flash_calibration` enforces the
   safety sequence **voltage gate → verified backup → write → read-back verify**.
   These rules live here, not in drivers, so no driver can skip them.
+  `opentune_flash::module` programs a control module over UDS from a decoded
+  container (erase → 0x34/0x36/0x37 → checksum routine per block, resumable)
+  under the same policy — see [FLASHING.md](FLASHING.md).
 
 ### Format and engine crates
 Each is standalone (pure parsing / logic, tested offline) and pulled in by the
@@ -162,7 +165,7 @@ apps that need it.
 | `opentune-sa2` | Generic SA2 seed→key bytecode VM (caller-supplied program) |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
-| `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests |
+| `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests; optional flashable-ECU model with fault injection |
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
