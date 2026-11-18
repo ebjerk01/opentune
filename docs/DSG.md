@@ -99,6 +99,69 @@ code from `0x10000`. Neither the 02E sector table nor the MQB JAMCRC matches,
 and no other trailer was found, so the definition has `checksum: null`:
 OpenTune can show and compare these maps but cannot correct an edited image.
 
+## Read-only diagnostics (`opentune dsg`)
+
+`crates/opentune-dsg` reads a DQ250 02E over **KWP2000 on a VW TP2.0
+channel to the gearbox, logical address `0x02`**, the way `opentune haldex
+gen4` reads the Haldex (see [`HALDEX.md`](HALDEX.md)). It is **read-only**:
+the only services it sends are `0x10` (session start), `0x1A`, `0x18` and
+`0x21`. There is no clear-codes (`0x14`), coding, adaptation, basic-setting,
+security-access, routine or flash service in the crate.
+
+```text
+opentune dsg identify --driver slcan --port /dev/ttyACM0 [--json]
+opentune dsg dtcs     --driver socketcan --port can0
+opentune dsg groups 1 2 3 --driver gsusb --count 10 --interval-ms 500
+opentune dsg identify --sim        # scripted responder, synthetic data
+```
+
+Raw-CAN adapters only (socketcan, slcan, gsusb); `transport=tp20` and
+`tp20_addr=0x02` are implied, `--opt tp20_keepalive_ms=...` etc. are passed
+through. The channel setup, keep-alive (`A3`) and teardown (`A8`) are the
+core's `Tp20Channel`. `--session` (default `0x89`, `none` to skip) is started
+first; a refusal is reported and the reads continue.
+
+| Read | Request | What is decoded | Source / confidence |
+|---|---|---|---|
+| Identification | `1A 9B` | part number (12 chars), software version (4), 10 binary bytes (hex, **not decoded**), component text | VAG record layout from the public OpenHaldex-C6 Gen4 capture; not yet seen from an 02E |
+| | `1A 91`, `1A 97` | hardware number, system name (ASCII) | ISO 14230-3 option numbers; whether the 02E answers them is unknown |
+| Trouble codes | `18 02 FF 00` | 16-bit code = VAG 5-digit fault number; status bits 6..5 storage state (not stored / stored-not-present / pending / present), bit 7 warning lamp, bit 4 readiness; bits 3..0 raw | KWP2000 status layout as rnd-ash/ecu_diagnostics decodes it (see [`PRIOR-ART.md`](PRIOR-ART.md)); community confidence |
+| Measuring groups | `21 <n>` | 3-byte cells `(formula, a, b)`, scaled with the shared VAG formula table (`opentune_core::protocol::vagmeas`, the six formulas OpenHaldex-C6 checked on a Gen4); any other formula stays raw | formulas community confidence; **meanings: none** |
+
+Each identification option is optional: a refused one is listed and the
+others still decode. The coding value is **not** extracted — where it sits in
+the `0x9B` record is not publicly documented, so the extra bytes are shown
+raw.
+
+### Measuring groups: meanings are parked
+
+Which DQ250 group carries clutch pressures, temperatures or gear state is
+deliberately **not** encoded: there is no licence-compatible public source and
+no capture from a real 02E yet, and the owner parked the question until one
+exists. Every cell is therefore reported as `group`, 0-based `cell`, formula,
+`a`, `b`, the formula-scaled value (or raw) and state **`unconfirmed`**.
+
+The hook for adding meanings later is data, not code: a `kwp_measuring_block`
+entry in `live[]` of [`ctrldefs/vag-dq250-02e.json`](../ctrldefs/vag-dq250-02e.json)
+(format in [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md#live)) labels that
+`(group, cell)`, which `opentune dsg groups` then shows with state
+`from-definition` and the definition id. `--ctrldefs <dir>` points at another
+definition directory (e.g. a private one built from your own capture). Its
+`live[]` is empty today, and a test keeps it empty until a capture backs an
+entry. `--count`/`--interval-ms` repeat the read (the TP2.0 keep-alive holds
+the channel between samples) to record a capture with `--json`.
+
+### Validation
+
+**Synthetic-tested.** `crates/opentune-dsg/tests/` drive the reader over the
+core TP2.0 stack (`Tp20Channel` on the core `Tp20Ecu` simulator, block size 2,
+idle timeout with keep-alive, absent unit) and end to end through the slcan
+driver's TP2.0 channel, against a scripted DQ250 responder with a made-up
+identity (`02E000000X`, "SIMULATED DSG") — they assert that only read services
+reach the unit and that the channel is set up once and torn down with `A8`.
+Not tried on a car or bench yet: the first real read is the step that confirms
+address `0x02`, session `0x89` and the `0x9B` layout for the 02E.
+
 ## DQ250-MQB (0D9)
 
 From the open flashing tools (VW_Flash, mqb-flash-rs, DQ250-MQB-Bench-Flash):
@@ -116,7 +179,8 @@ Each family with an ecudef also has a controller definition in
 [`ctrldefs/`](../ctrldefs/) (`vag-dq250-02e`, `vag-dq250-mqb`, `vag-dq381`;
 format in [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md)) that links the ecudefs
 and adds the diagnostic channels (for 02E both the KWP2000-on-ISO-TP and the
-TP2.0 `0x02` option, neither confirmed on a car) and identify keys. A
+TP2.0 `0x02` option, neither confirmed on a car; the TP2.0 one is what
+`opentune dsg` uses, synthetic-tested) and identify keys. A
 repository test keeps their part numbers and addressing in step with the
 ecudefs. `opentune controller match 02E300042M` finds the definition.
 
@@ -127,7 +191,7 @@ module-flash path (request download / transfer data / checksum routine) once
 that path is validated on hardware; for 02E the transport and programming
 session still have to be established on a car. If the 02E answers VW TP2.0,
 the raw-CAN drivers can already open a KWP2000 channel to it for reads
-(`--opt transport=tp20 --opt tp20_addr=0x02`, see
+(`opentune dsg`, above; or `--opt transport=tp20 --opt tp20_addr=0x02`, see
 [`DRIVERS.md` §3f](DRIVERS.md#3f-vw-tp20-on-the-raw-can-drivers-socketcan-slcan-gsusb)); not tried on a car yet. FRF/ODX containers for these
 families (method `0x11`: table cipher + compression, per vag-tcu-tools) are not
 decoded for DSG yet.
@@ -151,6 +215,11 @@ decoded for DSG yet.
   DQ250-MQB block table (lengths, binfile layout, box-code location).
 - [TheFlashBold/DQ250-MQB-Bench-Flash](https://github.com/TheFlashBold/DQ250-MQB-Bench-Flash)
   (GPL-3.0) — TC1766, SBOOT bench read, JAMCRC per block.
+- [Forbes-Automotive/OpenHaldex-C6](https://github.com/Forbes-Automotive/OpenHaldex-C6)
+  (MIT) — the VAG `1A 9B` record layout, session `0x89` and the measuring-cell
+  formulas (from a Haldex Gen4; reused for the 02E read, unconfirmed there).
+- [rnd-ash/ecu_diagnostics](https://github.com/rnd-ash/ecu_diagnostics) — the
+  KWP2000 DTC status-byte layout (storage state, warning lamp, readiness).
 - [dspl1236/vag-tcu-tools](https://github.com/dspl1236/vag-tcu-tools) (MIT) —
   DQ381 CRC-32 (earlier work), FRF method `0x11` for DQ200/DQ250/DL382.
 - The 02E layout, checksum and maps: OpenTune's own analysis of real reads.

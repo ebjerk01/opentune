@@ -93,6 +93,7 @@ a top-level command is added without a row here.
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
 | `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
+| `opentune dsg` | VAG DQ250 02E DSG gearbox, read-only, KWP2000 over VW TP2.0 at `0x02`: `identify` (0x1A), `dtcs` (0x18), `groups <n...>` (0x21, numbered raw/formula-decoded cells, meanings only from the `vag-dq250-02e` controller definition); `--sim`, `--json` (see [`DSG.md`](DSG.md#read-only-diagnostics-opentune-dsg)) |
 | `opentune doip` | DoIP (ISO 13400) over Ethernet: `discover` entities by vehicle identification request (all / `--eid` / `--vin`, broadcast, unicast or IPv6 multicast) or `--listen` for announcements, optionally `--activate` routing on each; `status` (entity status) and `power` (diagnostic power mode) over UDP; `--sim` for the simulated entity, `--json` |
 | `opentune controller` | Drivetrain controller definitions (TCU, AWD; [`ctrldefs/`](../ctrldefs/)): `list`, `show`, `validate`, `match` a part number / gearbox code, `decode` a CAN log with a definition's frame sets, e.g. Mercedes 722.6 EGS51 (see [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md)) |
 | `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
@@ -126,6 +127,8 @@ The abstraction every app talks to and every driver implements.
   - `uds` — `UdsClient` (ISO 14229 services over a `DiagTransport`).
   - `kwp2000` — `Kwp2000Client`.
   - `vwtp20` — VW TP2.0 transport (KWP2000 over CAN on older VAG).
+  - `vagmeas` — VAG measuring-block cells and the one shared formula table
+    (used by `opentune-haldex` and `opentune-dsg`).
   - `canfd` — CAN-FD frames + `IsoTpFd` (ISO-TP over CAN-FD).
   - `doip` — `DoIpTransport` (ISO 13400 diagnostics over IP).
   - `doip_discovery` — `DoIpUdpClient`: UDP vehicle identification (all / by
@@ -179,6 +182,7 @@ apps that need it.
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
 | `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), simulated units ([`HALDEX.md`](HALDEX.md)) |
+| `opentune-dsg` | VAG DQ250 02E read-only diagnostics engine: KWP2000 over a core TP2.0 channel to address `0x02` — identification, DTCs with KWP status-byte decode, measuring groups as unconfirmed numbered cells (shared VAG formula table in `opentune_core::protocol::vagmeas`), meanings hooked from the controller definition's `live[]`; scripted DQ250 responder ([`DSG.md`](DSG.md)) |
 | `opentune-ctrldef` | Data-defined drivetrain controller definitions ([`ctrldefs/`](../ctrldefs/), schema `docs/ctrldef.schema.json`): identity, ecudef/unit links, diagnostic channels, DBC-style CAN frame sets, live channels, adaptations, tables with axes, gear ratios; loader, validation, CAN decoder + log summary ([`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md), [`MERCEDES-722.6.md`](MERCEDES-722.6.md)) |
 | `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
 | `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
