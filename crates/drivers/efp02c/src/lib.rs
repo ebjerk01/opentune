@@ -21,8 +21,8 @@
 //!   not declared). Reads, identification and the diagnostic transport work.
 //!
 //! Config ([`ConnectConfig::options`]):
-//! - `bitrate`: must be `1000000` (overrides [`ConnectConfig::bitrate`], whose
-//!   default of 500000 is refused). CLI: `--opt bitrate=1000000`.
+//! - `bitrate`: must be `1000000` if given (overrides [`ConnectConfig::bitrate`];
+//!   an unchanged default selects 1 Mbit/s, any other explicit rate is refused).
 //! - `termination`: `on` (default) / `off` — the box's bus terminator.
 //! - `identify`: `on` reads the box's identification block during open and
 //!   shows its model text as the firmware string (diagnostic only).
@@ -67,12 +67,16 @@ pub fn check_bitrate(bitrate: u32) -> Result<()> {
 }
 
 /// The bitrate a connection asks for: option `bitrate`, else `cfg.bitrate`.
+/// An untouched `cfg.bitrate` (the generic 500 kbit/s default) means "not
+/// specified" and selects the box's one confirmed rate, so the desktop and CLI
+/// work without extra options; an explicit other rate is still refused.
 fn requested_bitrate(cfg: &ConnectConfig) -> Result<u32> {
     match cfg.options.get("bitrate") {
         Some(b) => b
             .trim()
             .parse()
             .map_err(|_| Error::Config(format!("efp02c: bad bitrate '{b}'"))),
+        None if cfg.bitrate == ConnectConfig::default().bitrate => Ok(CONFIRMED_BITRATE),
         None => Ok(cfg.bitrate),
     }
 }
@@ -334,12 +338,21 @@ mod tests {
 
     #[test]
     fn refuses_unconfirmed_configs_before_usb() {
-        // Default 500 kbit/s.
-        let e = check_config(&ConnectConfig::default()).unwrap_err();
+        // The untouched default selects the confirmed 1 Mbit/s.
+        check_config(&ConnectConfig::default()).unwrap();
+        // An explicit other rate is refused.
+        let mut c = ConnectConfig::default();
+        c.options.insert("bitrate".into(), "500000".into());
+        let e = check_config(&c).unwrap_err();
         assert!(
             matches!(e, Error::Unsupported(ref m) if m.contains("1 Mbit/s")),
             "{e}"
         );
+        let c = ConnectConfig {
+            bitrate: 250_000,
+            ..ConnectConfig::default()
+        };
+        assert!(matches!(check_config(&c), Err(Error::Unsupported(_))));
         // 29-bit ids.
         let mut c = cfg_1m();
         c.tx_id = 0x18DA_10F1;

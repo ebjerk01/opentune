@@ -449,8 +449,8 @@ below supports is enabled:
 | ECU writes | **disabled** (`write_memory` refuses, capability not declared) until verified |
 | Listen-only mode | none known: the monitor reports `Passive` (the controller ACKs) |
 
-Options: `bitrate` (must be `1000000`; the `ConnectConfig` default of 500000
-is refused, so on the CLI pass `--opt bitrate=1000000`), `termination`
+Options: `bitrate` (optional; must be `1000000` if given — when nothing is
+specified the driver uses 1 Mbit/s, an explicit other rate is refused), `termination`
 (`on`/`off`, default `on` — mind an already-terminated bus), `identify`
 (`on`/`off`, default `off`), `usb_index` (which attached EFP02C, default 0).
 The monitor (`opentune candump --driver efp02c`) uses 1 Mbit/s when no
