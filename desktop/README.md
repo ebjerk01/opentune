@@ -143,7 +143,7 @@ In `src-tauri/tauri.conf.json`:
     "endpoints": [
       "https://github.com/ebjerk01/opentune/releases/latest/download/latest.json"
     ],
-    "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY"
+    "pubkey": "<base64 minisign public key, key id C273EE936EDA2C76>"
   }
 }
 ```
@@ -169,20 +169,29 @@ In `src-tauri/tauri.conf.json`:
   cargo tauri build
   ```
 
-  In CI, store the private key and its password as encrypted secrets.
+  In CI, store the private key and its password as the repository secrets
+  `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ### Release checklist
 
-1. Bump the version in `tauri.conf.json` (and `Cargo.toml`).
-2. `cargo tauri build` with the signing key set.
-3. Create a GitHub release and attach the installers, the update bundles, their
-   `.sig` files, and `latest.json`.
-4. Running apps pick up the new version from the endpoint on next check.
+Releases are built and signed by CI, not by hand:
+
+1. `scripts/bump-version.sh X.Y.Z` (updates every version field, incl. this
+   app's `tauri.conf.json`, `Cargo.toml`, `package.json`), merge to `main`.
+2. `git tag -a vX.Y.Z -m "OpenTune X.Y.Z" && git push origin vX.Y.Z`.
+3. `.github/workflows/release.yml` builds the AppImage, `.deb`, NSIS `.exe`
+   (+ `.msi`) and the CLI, signs every update bundle, verifies the signatures,
+   writes `latest.json` + `SHA256SUMS.txt` and creates a **draft** release.
+4. Review the draft and publish it. Running apps pick up the new version from
+   the endpoint on their next check (pre-releases are never offered).
+
+The full owner runbook (secrets, dry run, verifying an update from an older
+build, channel policy) is in [`UPDATER.md`](UPDATER.md#publishing-a-signed-release).
 
 A real `pubkey` is already present in `tauri.conf.json`, and the check → confirm
 → download+verify → install → relaunch flow is wired up in the **About & updates**
 panel. What is still needed to ship an update is the matching **private** key in
-the build/CI (`TAURI_SIGNING_PRIVATE_KEY`) and a published, signed release — see
+CI (`TAURI_SIGNING_PRIVATE_KEY`) and a pushed tag — see
 [`UPDATER.md`](UPDATER.md) for the CI-secret handling and for why updater signing,
 installer code-signing/notarization and build reproducibility are three separate
 concerns (OpenTune makes **no** reproducibility claim).

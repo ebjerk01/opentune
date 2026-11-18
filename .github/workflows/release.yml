@@ -1,39 +1,120 @@
 name: Release
 
-# Cut a release by pushing a tag like `v1.2.3`. The workflow builds the
-# `opentune` CLI for every target platform and the Tauri desktop app (with the
-# auto-update artifacts), then attaches everything to the GitHub Release for the
-# tag. `workflow_dispatch` runs the same build as a dry run (nothing is
-# published) so the pipeline can be exercised without cutting a release.
+# Cut a release by pushing a tag `vX.Y.Z` (or `vX.Y.Z-pre.N`) whose version
+# matches the repo (scripts/bump-version.sh). The workflow then:
+#
+#   prepare  - checks the tag against every version field, the updater endpoint
+#              and pubkey in tauri.conf.json, and that the updater signing
+#              secret exists. A tag build WITHOUT the secret fails here, before
+#              anything is built: an unsigned release would strand every
+#              installed app on its current version.
+#   cli      - builds the `opentune` CLI for Linux, Windows and macOS.
+#   desktop  - builds the Tauri app: Linux AppImage + .deb (ubuntu-22.04,
+#              glibc 2.35 baseline) and Windows NSIS .exe (+ .msi for non-pre-
+#              release versions), signing every updater bundle (*.sig).
+#   publish  - verifies every .sig against the app's pubkey, writes latest.json
+#              + SHA256SUMS.txt, and creates ONE GitHub release holding
+#              everything - as a DRAFT unless the repo variable
+#              OPENTUNE_RELEASE_AUTO_PUBLISH is 'true'. A tag with a `-pre` part
+#              becomes a GitHub pre-release.
+#
+# `workflow_dispatch` is an UNSIGNED dry run: same builds (`--no-sign`), the
+# bundles are kept as workflow artifacts, nothing is signed or published.
+#
+# macOS desktop bundles are intentionally not built (no Apple Developer ID to
+# sign/notarize with, so a downloaded .app is rejected by Gatekeeper on Apple
+# silicon); the macOS CLI still is. See docs/RELEASING.md.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
-# The jobs create/update the Release and upload assets, so the token needs write
-# access to repository contents.
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
+  # Tauri CLI used for the desktop bundles (npm @tauri-apps/cli; same version
+  # as cargo-tauri used for the local dry run).
+  TAURI_CLI_VERSION: 2.12.4
 
 jobs:
   # ---------------------------------------------------------------------------
-  # CLI binaries: build `opentune` for Linux, Windows and macOS (Intel + Apple
-  # silicon), archive each one, and upload it as a release asset.
+  prepare:
+    name: Prepare (version, updater config, signing secret)
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      publish: ${{ steps.meta.outputs.publish }}
+      name: ${{ steps.meta.outputs.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Classify the run
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"; publish=true
+          else
+            tag="v$(scripts/bump-version.sh --print)"; publish=false
+          fi
+          version="${tag#v}"
+          prerelease=false
+          case "$version" in *-*) prerelease=true ;; esac
+          name="OpenTune $tag"
+          if [ "${version%%.*}" = 0 ]; then name="$name (early alpha)"; fi
+          {
+            echo "tag=$tag"; echo "version=$version"; echo "prerelease=$prerelease"
+            echo "publish=$publish"; echo "name=$name"
+          } >> "$GITHUB_OUTPUT"
+          echo "### $name - publish=$publish prerelease=$prerelease" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Version fields agree with the tag
+        run: scripts/bump-version.sh --check "${{ steps.meta.outputs.tag }}"
+
+      - name: Updater endpoint + pubkey match this repository
+        shell: bash
+        run: |
+          if ! python3 -I scripts/make-latest-json.py --check-config \
+              --tag "${{ steps.meta.outputs.tag }}" \
+              --repo "$GITHUB_REPOSITORY" --server-url "$GITHUB_SERVER_URL"; then
+            if [ "${{ steps.meta.outputs.publish }}" = true ]; then exit 1; fi
+            echo "::warning::updater config does not match $GITHUB_REPOSITORY (fine for a dry run in a fork)"
+          fi
+
+      # Only checks that the secret is non-empty; its value never reaches a shell.
+      - name: Updater signing secret is configured (tag builds)
+        if: steps.meta.outputs.publish == 'true'
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_KEY" != true ]; then
+            echo "::error::Repository secret TAURI_SIGNING_PRIVATE_KEY is not set. Refusing to build an unsigned release: installed apps could not verify it and would never update. Add the secret (and TAURI_SIGNING_PRIVATE_KEY_PASSWORD) and re-run, see desktop/UPDATER.md."
+            exit 1
+          fi
+
   # ---------------------------------------------------------------------------
   cli:
     name: CLI · ${{ matrix.target }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Build the Linux CLI on the OLDEST supported runner (glibc 2.35) so
-          # the binary runs on Debian 12+/Ubuntu 22.04+ and newer. glibc is
-          # forward-incompatible, so the build host sets the minimum a user needs.
+          # Oldest supported runner (glibc 2.35): the binary runs on Debian
+          # 12+/Ubuntu 22.04+. glibc is forward-incompatible, so the build host
+          # sets the minimum a user needs.
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
@@ -44,7 +125,7 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       # libudev is needed by the `serialport` crate that several drivers link.
       - name: Install system dependencies (Linux)
@@ -52,80 +133,77 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
 
       - name: Install stable Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: ${{ matrix.target }}
 
       - name: Build the opentune CLI
         run: cargo build --release -p opentune-cli --target ${{ matrix.target }}
 
-      # Package the binary into a tar.gz (unix) or zip (windows). The archive is
-      # named opentune-<tag>-<target> so release assets are self-describing.
+      # opentune-<tag>-<target>.tar.gz (unix) / .zip (windows).
       - name: Package (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          stage="opentune-${{ github.ref_name }}-${{ matrix.target }}"
-          mkdir "$stage"
+          stage="opentune-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}"
+          mkdir -p dist "$stage"
           cp "target/${{ matrix.target }}/release/opentune" "$stage/"
-          cp README.md "$stage/" 2>/dev/null || true
-          cp LICENSE* "$stage/" 2>/dev/null || true
-          tar -czf "$stage.tar.gz" "$stage"
-          echo "ASSET=$stage.tar.gz" >> "$GITHUB_ENV"
+          cp README.md LICENSE* "$stage/" 2>/dev/null || true
+          tar -czf "dist/$stage.tar.gz" "$stage"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $stage = "opentune-${{ github.ref_name }}-${{ matrix.target }}"
-          New-Item -ItemType Directory -Path $stage | Out-Null
+          $stage = "opentune-${{ needs.prepare.outputs.tag }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $stage, dist -Force | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/opentune.exe" $stage
-          Copy-Item "README.md" $stage -ErrorAction SilentlyContinue
-          Copy-Item "LICENSE*" $stage -ErrorAction SilentlyContinue
-          Compress-Archive -Path "$stage/*" -DestinationPath "$stage.zip"
-          "ASSET=$stage.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Copy-Item "README.md", "LICENSE*" $stage -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/$stage.zip"
 
-      # Only attach to a Release when a tag was pushed. On workflow_dispatch the
-      # build still runs (verifying the pipeline) but nothing is published.
-      - name: Upload CLI archive to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+      - name: Keep the archive for the publish job
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          files: ${{ env.ASSET }}
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: cli-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
 
-  # ---------------------------------------------------------------------------
-  # Desktop app: build the Tauri bundles (AppImage/.deb on Linux, .dmg on macOS,
-  # .msi on Windows) plus the updater artifacts (latest.json + .sig) and attach
-  # them to the Release. Updater signing requires two repository secrets; when
-  # they are absent (e.g. a dry run) the build runs with updater artifacts
-  # disabled so the job still succeeds.
   # ---------------------------------------------------------------------------
   desktop:
-    name: Desktop · ${{ matrix.os }}
+    name: Desktop · ${{ matrix.platform }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-22.04 (glibc 2.35) is the OLDEST supported Linux runner: an
-        # AppImage bundles its libs but not glibc, and glibc is
-        # forward-incompatible, so building here makes the bundle run on
-        # Debian 12+/Ubuntu 22.04+ and newer. Building on ubuntu-latest would
-        # raise the floor to that runner's glibc and break older systems.
-        # See desktop/portable-build/ for a Docker (bookworm) alternative.
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        include:
+          # ubuntu-22.04 (glibc 2.35) is the oldest runner with webkit2gtk-4.1:
+          # an AppImage bundles its libs but not glibc, so this sets the floor
+          # (Debian 12+/Ubuntu 22.04+). When GitHub retires this runner, switch
+          # to `container: debian:bookworm` (glibc 2.36), the recipe in
+          # desktop/portable-build/Dockerfile. Never build on ubuntu-latest.
+          - platform: linux-x86_64
+            os: ubuntu-22.04
+            bundles: appimage,deb
+          - platform: windows-x86_64
+            os: windows-latest
+            bundles: nsis
+    defaults:
+      run:
+        shell: bash
+    env:
+      # linuxdeploy (AppImage) needs FUSE unless it extracts itself.
+      APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      # WebKitGTK and friends are required to build the Linux Tauri bundle.
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -133,76 +211,169 @@ jobs:
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             build-essential \
+            file \
             libssl-dev \
             libgtk-3-dev \
             librsvg2-dev \
+            libxdo-dev \
             libayatana-appindicator3-dev \
             libudev-dev \
             pkg-config
 
       - name: Install stable Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
 
       - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # The desktop crate builds outside the workspace, in desktop/src-tauri.
           workspaces: desktop/src-tauri
-          key: desktop-${{ matrix.os }}
+          key: desktop-release-${{ matrix.platform }}
 
       - name: Set up Node.js (for the Tauri CLI)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Install desktop JS dependencies (@tauri-apps/cli)
+      - name: Install the pinned Tauri CLI
         working-directory: desktop
-        run: npm install
+        run: npm install --no-save --no-audit --no-fund "@tauri-apps/cli@$TAURI_CLI_VERSION"
 
-      # Detect whether the updater signing secrets are configured. Referencing a
-      # secret here only tells us whether it is non-empty; the value stays masked.
-      - name: Detect updater signing secrets
-        id: signing
-        shell: bash
+      # WiX (.msi) only accepts a numeric pre-release part, so `-alpha.1`
+      # versions ship NSIS only. NSIS is the Windows updater default anyway.
+      - name: Choose bundles
+        id: bundles
         run: |
-          if [ -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::TAURI_SIGNING_PRIVATE_KEY is not set - building without updater artifacts (dry run)."
+          b="${{ matrix.bundles }}"
+          if [ "$RUNNER_OS" = Windows ] && [ "${{ needs.prepare.outputs.prerelease }}" != true ]; then
+            b="$b,msi"
           fi
+          echo "list=$b" >> "$GITHUB_OUTPUT"
+          # A restored cache must never leak an old bundle into this release.
+          rm -rf desktop/src-tauri/target/release/bundle
 
-      # Real release: secrets present AND a tag was pushed. tauri-action builds
-      # the bundles, signs the updater artifacts, generates latest.json, and
-      # uploads everything to the Release for the tag.
-      - name: Build & publish desktop bundles (signed)
-        if: steps.signing.outputs.enabled == 'true' && startsWith(github.ref, 'refs/tags/')
-        uses: tauri-apps/tauri-action@v0
+      # Tag build: createUpdaterArtifacts=true (tauri.conf.json) + the key ->
+      # every AppImage/deb/exe/msi gets a detached minisign `<bundle>.sig`. The
+      # secrets are scoped to this one step.
+      - name: Build desktop bundles (signed)
+        if: needs.prepare.outputs.publish == 'true'
+        working-directory: desktop
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci --bundles "${{ steps.bundles.outputs.list }}"
+
+      # Dry run: identical bundles, updater signing skipped explicitly.
+      - name: Build desktop bundles (unsigned dry run)
+        if: needs.prepare.outputs.publish != 'true'
+        working-directory: desktop
+        run: npx tauri build --ci --no-sign --bundles "${{ steps.bundles.outputs.list }}"
+
+      - name: Collect bundles (+ .sig)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          bundle=desktop/src-tauri/target/release/bundle
+          mkdir -p dist
+          files=("$bundle"/appimage/*.AppImage "$bundle"/deb/*.deb \
+                 "$bundle"/nsis/*-setup.exe "$bundle"/msi/*.msi)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no bundles under $bundle"; exit 1; }
+          for f in "${files[@]}"; do
+            cp -v "$f" dist/
+            if [ -f "$f.sig" ]; then
+              cp -v "$f.sig" dist/
+            elif [ "${{ needs.prepare.outputs.publish }}" = true ]; then
+              echo "::error::$f has no .sig - updater signing did not run"; exit 1
+            fi
+          done
+          ls -la dist
+
+      - name: Keep the bundles for the publish job
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          projectPath: desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: 'OpenTune ${{ github.ref_name }}'
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: true
+          name: desktop-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
 
-      # Dry run / no signing key: build the bundles to prove the pipeline works,
-      # but override tauri.conf.json to skip updater-artifact generation (which
-      # would otherwise require a signing key) and publish nothing.
-      - name: Prepare keyless build config
-        if: steps.signing.outputs.enabled != 'true'
-        shell: bash
-        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > "${{ runner.temp }}/no-updater.json"
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish the GitHub release
+    needs: [prepare, cli, desktop]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - name: Build desktop bundles (dry run, no signing key)
-        if: steps.signing.outputs.enabled != 'true'
-        uses: tauri-apps/tauri-action@v0
+      - name: Gather every build artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      # Verify each .sig cryptographically against the pubkey baked into the
+      # app, so a wrong key fails HERE instead of on users' machines.
+      - name: Write latest.json (signatures verified)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet "cryptography==44.0.0"
+          "$RUNNER_TEMP/venv/bin/python" -I scripts/make-latest-json.py \
+            --require-verify \
+            --assets release-assets \
+            --tag "$TAG" --repo "$GITHUB_REPOSITORY" --server-url "$GITHUB_SERVER_URL" \
+            --out release-assets/latest.json
+          cat release-assets/latest.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checksums
+        working-directory: release-assets
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Create the release (draft by default) and upload
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: desktop
-          args: --config ${{ runner.temp }}/no-updater.json
+          NAME: ${{ needs.prepare.outputs.name }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          AUTO_PUBLISH: ${{ vars.OPENTUNE_RELEASE_AUTO_PUBLISH }}
+        run: |
+          set -euo pipefail
+          if [ "$PRERELEASE" = true ]; then
+            channel="**Pre-release:** installed apps are NOT offered this version by the in-app updater (it follows the latest full release). Download it manually to test."
+          else
+            channel="**Auto-update:** once this release is published (not a draft), installed OpenTune Desktop apps are offered this version from \`latest.json\`."
+          fi
+          msi=" / \`.msi\`"
+          if [ "$PRERELEASE" = true ]; then msi=""; fi
+          # (YAML strips the block indent, so the heredoc lines start at column 0.)
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          OpenTune is early alpha software: calibration and flashing features are
+          validated only to the state stated in the docs. Read the README before
+          connecting to a car.
+
+          $channel
+
+          Desktop: Linux \`.AppImage\` / \`.deb\`, Windows \`-setup.exe\` (NSIS)$msi.
+          CLI: \`opentune-$TAG-<target>\` archives. \`*.sig\` = updater signatures,
+          \`SHA256SUMS.txt\` = checksums of every asset. Installers are not
+          OS-code-signed (expect a SmartScreen warning on Windows).
+          EOF
+
+          if state=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null); then
+            if [ "$state" != true ]; then
+              echo "::error::release $TAG is already published; refusing to replace its assets"; exit 1
+            fi
+            echo "draft $TAG exists (re-run): replacing its assets"
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            flags=(--verify-tag --title "$NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes)
+            if [ "$AUTO_PUBLISH" != true ]; then flags+=(--draft); fi
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" "${flags[@]}" release-assets/*
+          fi
+          gh release view "$TAG" --json url,isDraft,isPrerelease,assets \
+            -q '"\(.url) draft=\(.isDraft) prerelease=\(.isPrerelease) assets=\(.assets|length)"' \
+            | tee -a "$GITHUB_STEP_SUMMARY"

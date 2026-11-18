@@ -79,9 +79,10 @@ secrets, exported into the build job's environment. Rules:
 - If the key ever leaks, rotate it: generate a new pair, update `pubkey`, and
   ship a release signed with the new key (clients on the old key can still verify
   *that* release only if it is signed with the old key — plan a transition).
-- Wiring this into `.github/` workflows is deliberately **out of scope for this
-  note** — see `.github/` (owned separately). This note only states the
-  requirement.
+- The release workflow (`.github/workflows/release.yml`) passes both secrets to
+  the one build step that signs, and **refuses to run a tag build without
+  `TAURI_SIGNING_PRIVATE_KEY`** (an unsigned release would strand every
+  installed app). See *Publishing a signed release* below.
 
 ## Three separate things — do not conflate
 
@@ -99,14 +100,122 @@ secrets, exported into the build job's environment. Rules:
    attests the signer, not an independently verifiable build. Do not describe the
    signed update as "reproducible."
 
-## Status
+## The endpoint, the key and the release channel
 
-The updater is wired end to end (plugin + endpoint + real `pubkey` + capability +
-invocation UI + guard). What remains before releases work:
+- **Endpoint** (`plugins.updater.endpoints`):
+  `https://github.com/ebjerk01/opentune/releases/latest/download/latest.json`.
+  GitHub resolves `releases/latest/` to the newest release that is **neither a
+  draft nor a pre-release**. Consequences:
+  - A release reaches installed apps only once it is **published** (the
+    workflow creates a draft; publishing it is the go-live switch).
+  - A tag with a pre-release part (`v0.4.0-alpha.1`) becomes a GitHub
+    **pre-release** and is **never offered** by the updater. Testers install it
+    by hand; it still updates itself to the next full release
+    (`0.4.0-alpha.1 < 0.4.0` in semver).
+  - **Decision for the alpha period:** ship the alpha series as plain `v0.x.y`
+    tags (full releases; the workflow titles every `0.x` release
+    "OpenTune v0.x.y (early alpha)"). Use `-alpha.N`/`-rc.N` tags only for builds
+    that must *not* auto-update anyone. A separate opt-in beta channel would need
+    a second endpoint (e.g. a fixed `updater-beta` release holding its own
+    `latest.json`) and is not implemented.
+- **Public key** (`plugins.updater.pubkey`): base64 of a two-line minisign public
+  key, key id `C273EE936EDA2C76` (Ed25519, `Ed` algorithm, 32-byte key —
+  verified 2026-11-18). Do not change it: every installed app trusts exactly this
+  key. `scripts/make-latest-json.py --check-config` validates its format, and the
+  publish job refuses any `.sig` made by another key id.
 
-- Hold the matching **private** key (do not lose it) and expose
-  `TAURI_SIGNING_PRIVATE_KEY` to the build/CI.
-- Confirm `endpoints` in `tauri.conf.json` points at the real release URL.
-- Publish a signed release (installers + update bundles + `.sig` + `latest.json`)
-  — this is the only way to exercise a real end-to-end update, and it was **not**
-  done as part of this offline change.
+## Publishing a signed release
+
+What CI produces for a tag `vX.Y.Z`, in one GitHub release:
+
+| Asset | Purpose |
+| --- | --- |
+| `OpenTune_X.Y.Z_amd64.AppImage` + `.sig` | Linux install + update bundle (`linux-x86_64`, `linux-x86_64-appimage`) |
+| `OpenTune_X.Y.Z_amd64.deb` + `.sig` | Debian/Ubuntu install + update (`linux-x86_64-deb`) |
+| `OpenTune_X.Y.Z_x64-setup.exe` + `.sig` | Windows NSIS install + update (`windows-x86_64`, `windows-x86_64-nsis`) |
+| `OpenTune_X.Y.Z_x64_en-US.msi` + `.sig` | Windows MSI (`windows-x86_64-msi`; full releases only — WiX rejects `-alpha` versions) |
+| `opentune-vX.Y.Z-<target>.tar.gz` / `.zip` | the CLI (Linux, Windows, macOS x86_64 + arm64) |
+| `latest.json` | the updater manifest the app polls |
+| `SHA256SUMS.txt` | checksums of every asset above |
+
+macOS desktop bundles are **not** built: without an Apple Developer ID the
+downloaded `.app` is refused by Gatekeeper on Apple silicon ("damaged"), and
+there is no Mac to test on. The `latest.json` generator already understands
+`darwin-*` bundles, so adding a signed macOS job later is additive.
+
+### One-time: add the two repository secrets
+
+GitHub → repository **Settings → Secrets and variables → Actions → New
+repository secret**:
+
+| Secret | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | the private key file's full text (from the password manager) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password (leave the secret out, or empty, only if the key has none) |
+
+Optional repository **variable** (not a secret): `OPENTUNE_RELEASE_AUTO_PUBLISH`
+= `true` publishes the release immediately instead of leaving a draft. Leave it
+unset until a few releases have gone through the draft review.
+
+### Every release
+
+1. **Dry run (optional, recommended for the first release):** Actions →
+   *Release* → *Run workflow* on `main`. Same builds, **unsigned** (`--no-sign`),
+   nothing published; the bundles are downloadable as workflow artifacts.
+2. **Bump the version** on a branch, merge to `main`:
+
+   ```sh
+   scripts/bump-version.sh 0.2.0      # Cargo.toml, desktop Cargo.toml,
+                                      # tauri.conf.json, package.json, Cargo.locks
+   scripts/bump-version.sh --check    # CI runs this on every push too
+   ```
+
+3. **Tag `main` and push the tag** (the tag must equal the version, with a `v`):
+
+   ```sh
+   git tag -a v0.2.0 -m "OpenTune 0.2.0" && git push origin v0.2.0
+   ```
+
+4. **CI** (`release.yml`): `prepare` checks tag = every version field, the
+   endpoint/pubkey, and that `TAURI_SIGNING_PRIVATE_KEY` exists (fails otherwise)
+   → `cli` + `desktop` build in parallel; the desktop build signs every bundle →
+   `publish` verifies each `.sig` against the app's pubkey (Ed25519, key id must
+   be `C273EE936EDA2C76`), writes `latest.json` + `SHA256SUMS.txt` and creates the
+   **draft** release with all assets (pre-release if the tag has a `-` part).
+5. **Review the draft** (assets, notes; `latest.json` URLs point at
+   `releases/download/v0.2.0/...`), then **Publish release** with *Set as the
+   latest release* ticked. From this moment installed apps are offered the
+   update.
+6. **Verify from an older build:** start an installed older OpenTune (e.g. the
+   AppImage of the previous release, or the Windows install) → **About &
+   updates** → *Check for updates*. Expect *available: 0.2.0* → *Install* →
+   progress → *Restart* → the About panel shows 0.2.0. Quick server-side checks:
+
+   ```sh
+   curl -sL https://github.com/ebjerk01/opentune/releases/latest/download/latest.json | jq .version
+   sha256sum -c SHA256SUMS.txt     # in a folder with the downloaded assets
+   ```
+
+   For the **first** signed release there is no older *published* build yet: use
+   any build of an older version that carries the same `pubkey` + endpoint, e.g.
+   the AppImage from the step-1 dry run made *before* the bump (or a local
+   `cargo tauri build` of the previous commit). Updater signing covers the
+   download, so the old build itself does not need to be signed.
+
+If a run fails after the draft was created, fix and re-run the failed jobs: the
+publish step replaces the draft's assets. It refuses to touch a release that is
+already published — cut a new patch version instead.
+
+## What still needs the owner
+
+- Add the secrets `TAURI_SIGNING_PRIVATE_KEY` and
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (names exactly as written).
+- Choose the first version (`scripts/bump-version.sh`), tag, review and publish
+  the draft.
+- Decide on the channel policy above (plain `v0.x.y` for alphas is the
+  recommendation) and whether a beta channel is worth a second endpoint.
+- Optional: Windows Authenticode certificate (SmartScreen warning otherwise) and
+  an Apple Developer ID if macOS desktop builds are wanted — separate secrets,
+  separate work.
+- Run the first real end-to-end update (step 6) on the release after the first
+  signed one.
