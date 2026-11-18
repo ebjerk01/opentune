@@ -27,10 +27,16 @@
 //! | `0x0`       | data, more to follow, **ACK required now** (block end)|
 //! | `0x1`       | data, **last** frame of the telegram, ACK required    |
 //! | `0x2`       | data, more to follow, no ACK yet                      |
+//! | `0x3`       | data, **last** frame, no ACK expected                 |
+//! | `0x9`       | ACK — "block received, **not** ready for next" (a `0xB` follows) |
 //! | `0xA`       | channel params: `A0` request / `A1` response / `A3` test / `A8` disconnect |
 //! | `0xB`       | ACK — "block received, ready for next" (low nibble = next expected seq) |
 //! | `0xC`       | broadcast channel-setup request (to CAN id `0x200`)   |
 //! | `0xD`       | broadcast channel-setup response (positive = `0xD0`)  |
+//!
+//! The `0x3`/`0x9` opcodes and the `A3`/`A8` replies follow the public
+//! protocol description "VW Transport Protocol 2.0 (TP 2.0) for CAN bus"
+//! (jazdw.net), which also documents the setup and parameter frames.
 //!
 //! The application telegram is `[len_hi, len_lo, payload…]` (length is the KWP
 //! payload length, big-endian), split across the data frames' bytes `1..`.
@@ -48,6 +54,8 @@ mod op {
     pub const DATA_ACK_NOW: u8 = 0x00; // more data, ACK required now
     pub const DATA_LAST: u8 = 0x10; // last data frame, ACK required
     pub const DATA_MORE: u8 = 0x20; // more data, no ACK
+    pub const DATA_LAST_NO_ACK: u8 = 0x30; // last data frame, no ACK expected
+    pub const ACK_NOT_READY: u8 = 0x90; // block received, not ready for the next
     pub const PARAM: u8 = 0xA0; // A0/A1/A3/A8 channel management
     pub const ACK: u8 = 0xB0; // block acknowledge
     pub const SETUP_RESP: u8 = 0xD0; // positive broadcast setup response
@@ -95,8 +103,12 @@ fn decode_timing(byte: u8) -> u64 {
 /// VW TP2.0 transport over a [`CanLink`]. Built and used like
 /// [`IsoTp`](crate::protocol::isotp::IsoTp) and implements [`DiagTransport`], so
 /// a `Kwp2000Client` can drive it directly.
-pub struct VwTp20 {
-    link: Box<dyn CanLink>,
+///
+/// The link type defaults to `dyn CanLink`; a `VwTp20<dyn CanLink + Send>` is
+/// `Send`, which is what [`Tp20Channel`](crate::protocol::tp20channel::Tp20Channel)
+/// uses to keep the channel alive from a background thread.
+pub struct VwTp20<L: CanLink + ?Sized = dyn CanLink> {
+    link: Box<L>,
     /// Logical ECU address targeted by the channel-setup broadcast
     /// (0x01 = engine, 0x02 = gearbox, …).
     pub ecu_id: u8,
@@ -106,8 +118,10 @@ pub struct VwTp20 {
     pub rx_id: u32,
     /// CAN id we *send* to, assigned dynamically by the ECU during setup.
     pub tx_id: u32,
-    /// Block size the ECU wants: ACK after this many data frames (0 = never
-    /// until the last frame). Learned from the ECU's `A1` response.
+    /// Block size: before `open`, the one we *request* in our `A0` (the ECU
+    /// should ACK-gate its transmissions to us every this many frames); after
+    /// `open`, the one the ECU asked for in its `A1` (we wait for an ACK after
+    /// this many frames). 0 = only the last frame.
     pub block_size: u8,
     /// ECU-requested inter-frame separation, as a raw timing byte.
     pub st_min: u8,
@@ -119,12 +133,12 @@ pub struct VwTp20 {
     pub max_response_pending: u32,
 }
 
-impl VwTp20 {
+impl<L: CanLink + ?Sized> VwTp20<L> {
     /// Create a TP2.0 transport. `ecu_id` is the logical target address and
     /// `rx_id` is the CAN id the tester asks the ECU to answer on. The channel
     /// is opened lazily on the first [`request`](DiagTransport::request), or
     /// eagerly via [`open`](Self::open).
-    pub fn new(link: Box<dyn CanLink>, ecu_id: u8, rx_id: u32) -> Self {
+    pub fn new(link: Box<L>, ecu_id: u8, rx_id: u32) -> Self {
         Self {
             link,
             ecu_id,
@@ -139,8 +153,16 @@ impl VwTp20 {
         }
     }
 
+    /// Whether the channel is open (set up, parameters exchanged, not torn
+    /// down by either side).
+    pub fn is_open(&self) -> bool {
+        self.opened
+    }
+
     /// Open the channel: broadcast setup → dynamic id assignment → parameter
-    /// handshake. Safe to call more than once (a no-op once open).
+    /// handshake. Safe to call more than once (a no-op once open). Each step
+    /// waits at most `timeout_ms`; a failure names the step and the CAN ids
+    /// involved.
     pub fn open(&mut self, timeout_ms: u64) -> Result<()> {
         if self.opened {
             return Ok(());
@@ -168,29 +190,41 @@ impl VwTp20 {
         self.link.send_frame(BROADCAST_ID, &req)?;
 
         let resp_id = BROADCAST_ID + self.ecu_id as u32;
-        let data = self.recv_on(resp_id, timeout_ms)?;
+        let data = match self.recv_on(resp_id, timeout_ms) {
+            Ok(d) => d,
+            Err(Error::Timeout(_)) => {
+                return Err(Error::Protocol(format!(
+                    "TP2.0 channel setup (step 1 of 2): logical address 0x{:02X} did not \
+                     answer on CAN id 0x{resp_id:03X} within {timeout_ms} ms (setup request \
+                     sent on 0x{BROADCAST_ID:03X}, asking the module to transmit on \
+                     0x{:03X}). Check the module address, ignition, that the adapter sits on \
+                     a bus the module is reachable from, and the bitrate",
+                    self.ecu_id, self.rx_id
+                )))
+            }
+            Err(e) => return Err(e),
+        };
         if data.len() < 7 {
-            return Err(Error::Protocol("short TP2.0 setup response".into()));
+            return Err(Error::Protocol(format!(
+                "TP2.0 channel setup: short response on 0x{resp_id:03X} ({} bytes)",
+                data.len()
+            )));
         }
-        match data[1] {
+        let why = match data[1] {
             op::SETUP_RESP => {
                 // tx id assigned by the ECU: data[4] low byte, data[5] low nibble high byte.
                 self.tx_id = (((data[5] & 0x0F) as u32) << 8) | data[4] as u32;
-                Ok(())
+                return Ok(());
             }
-            0xD6 => Err(Error::Protocol(
-                "TP2.0 setup rejected: application not supported".into(),
-            )),
-            0xD7 => Err(Error::Protocol(
-                "TP2.0 setup rejected: application temporarily unavailable".into(),
-            )),
-            0xD8 => Err(Error::Protocol(
-                "TP2.0 setup rejected: no free resources".into(),
-            )),
-            other => Err(Error::Protocol(format!(
-                "TP2.0 setup negative response 0x{other:02X}"
-            ))),
-        }
+            0xD6 => "application not supported".to_string(),
+            0xD7 => "application temporarily unavailable".to_string(),
+            0xD8 => "no free resources".to_string(),
+            other => format!("negative response 0x{other:02X}"),
+        };
+        Err(Error::Protocol(format!(
+            "TP2.0 setup rejected by logical address 0x{:02X} (on 0x{resp_id:03X}): {why}",
+            self.ecu_id
+        )))
     }
 
     /// Step 2 — parameter handshake (`A0` → `A1`). We request our desired
@@ -208,35 +242,67 @@ impl VwTp20 {
         ];
         self.link.send_frame(self.tx_id, &req)?;
 
-        let data = self.recv_on(self.tx_id_or_rx(), timeout_ms)?;
-        if data.first() != Some(&param::RESP) || data.len() < 5 {
-            return Err(Error::Protocol(
-                "expected TP2.0 parameter response (A1)".into(),
-            ));
+        // Skip anything else on our receive id (a stale ACK or disconnect
+        // from an earlier channel) until the A1 arrives.
+        let deadline = Deadline::new(timeout_ms);
+        loop {
+            let data = match self.recv_on_until(self.rx_id, &deadline) {
+                Ok(d) => d,
+                Err(Error::Timeout(_)) => {
+                    return Err(Error::Protocol(format!(
+                        "TP2.0 parameter exchange (step 2 of 2): logical address 0x{:02X} \
+                         accepted the channel (tester transmits on 0x{:03X}) but sent no A1 \
+                         parameter response on 0x{:03X} within {timeout_ms} ms",
+                        self.ecu_id, self.tx_id, self.rx_id
+                    )))
+                }
+                Err(e) => return Err(e),
+            };
+            if data[0] == param::RESP && data.len() >= 5 {
+                // Honor the ECU's block size and separation time for our transmits.
+                self.block_size = data[1];
+                self.st_min = data[4];
+                return Ok(());
+            }
         }
-        // Honor the ECU's block size and separation time for our transmits.
-        self.block_size = data[1];
-        self.st_min = data[4];
-        Ok(())
-    }
-
-    fn tx_id_or_rx(&self) -> u32 {
-        self.rx_id
     }
 
     /// Send a channel-test / keep-alive (`A3`) and wait for the ECU's `A1`
-    /// reply. Call within P3max while the channel is idle to keep it alive.
+    /// reply. Call while the channel is idle to keep it alive (VAG testers
+    /// send it about once a second).
     pub fn keep_alive(&mut self, timeout_ms: u64) -> Result<()> {
         self.link.send_frame(self.tx_id, &[param::TEST])?;
-        let data = self.recv_on(self.rx_id, timeout_ms)?;
-        if data.first() == Some(&param::RESP) {
-            if data.len() >= 5 {
-                self.block_size = data[1];
-                self.st_min = data[4];
+        let deadline = Deadline::new(timeout_ms);
+        loop {
+            let data = match self.recv_on_until(self.rx_id, &deadline) {
+                Ok(d) => d,
+                Err(Error::Timeout(_)) => {
+                    return Err(Error::Protocol(format!(
+                        "no TP2.0 keep-alive response (A1) from logical address 0x{:02X} on \
+                         0x{:03X} within {timeout_ms} ms",
+                        self.ecu_id, self.rx_id
+                    )))
+                }
+                Err(e) => return Err(e),
+            };
+            match data[0] {
+                param::RESP => {
+                    if data.len() >= 5 {
+                        self.block_size = data[1];
+                        self.st_min = data[4];
+                    }
+                    return Ok(());
+                }
+                param::DISCONNECT => {
+                    self.opened = false;
+                    return Err(Error::Protocol(format!(
+                        "logical address 0x{:02X} closed the TP2.0 channel (A8)",
+                        self.ecu_id
+                    )));
+                }
+                // A stale ACK or other channel frame: keep waiting for the A1.
+                _ => {}
             }
-            Ok(())
-        } else {
-            Err(Error::Protocol("no TP2.0 keep-alive response".into()))
         }
     }
 
@@ -249,9 +315,22 @@ impl VwTp20 {
     }
 
     /// Receive the next frame whose CAN id equals `want`, skipping others.
+    /// The whole wait is bounded by `timeout_ms`, also on a busy bus where
+    /// unrelated frames keep arriving.
     fn recv_on(&mut self, want: u32, timeout_ms: u64) -> Result<Vec<u8>> {
+        self.recv_on_until(want, &Deadline::new(timeout_ms))
+    }
+
+    fn recv_on_until(&mut self, want: u32, deadline: &Deadline) -> Result<Vec<u8>> {
         loop {
-            let (id, data) = self.link.recv_frame(timeout_ms)?;
+            let left = deadline
+                .left_ms()
+                .ok_or(Error::Timeout(deadline.total_ms))?;
+            let (id, data) = match self.link.recv_frame(left) {
+                Ok(f) => f,
+                Err(Error::Timeout(_)) => return Err(Error::Timeout(deadline.total_ms)),
+                Err(e) => return Err(e),
+            };
             if id == want {
                 if data.is_empty() {
                     return Err(Error::Protocol("empty TP2.0 frame".into()));
@@ -265,10 +344,16 @@ impl VwTp20 {
     /// a channel-test (`A3`) with an `A1`, absorbing stray `A1`s, and erroring
     /// on an ECU disconnect (`A8`).
     fn recv_channel_frame(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
+        let deadline = Deadline::new(timeout_ms);
         loop {
-            let data = self.recv_on(self.rx_id, timeout_ms)?;
+            let data = self.recv_on_until(self.rx_id, &deadline)?;
             match data[0] & op::MASK {
-                op::DATA_ACK_NOW | op::DATA_LAST | op::DATA_MORE | op::ACK => return Ok(data),
+                op::DATA_ACK_NOW
+                | op::DATA_LAST
+                | op::DATA_MORE
+                | op::DATA_LAST_NO_ACK
+                | op::ACK
+                | op::ACK_NOT_READY => return Ok(data),
                 op::PARAM => match data[0] {
                     param::TEST => {
                         // ECU is testing the channel: answer with our params.
@@ -294,13 +379,17 @@ impl VwTp20 {
         }
     }
 
-    /// Wait for an ACK (`0xB_`) acknowledging a transmitted block.
+    /// Wait for an ACK (`0xB_`) acknowledging a transmitted block. A
+    /// "not ready" ACK (`0x9_`) means the receiver got the block but needs
+    /// time: keep waiting for the `0xB_` that follows.
     fn await_ack(&mut self, timeout_ms: u64) -> Result<()> {
-        let data = self.recv_channel_frame(timeout_ms)?;
-        if data[0] & op::MASK == op::ACK {
-            Ok(())
-        } else {
-            Err(Error::Protocol("expected TP2.0 block ACK".into()))
+        loop {
+            let data = self.recv_channel_frame(timeout_ms)?;
+            match data[0] & op::MASK {
+                op::ACK => return Ok(()),
+                op::ACK_NOT_READY => continue,
+                _ => return Err(Error::Protocol("expected TP2.0 block ACK".into())),
+            }
         }
     }
 
@@ -366,7 +455,7 @@ impl VwTp20 {
         loop {
             let frame = self.recv_channel_frame(timeout_ms)?;
             let kind = frame[0] & op::MASK;
-            if kind == op::ACK {
+            if kind == op::ACK || kind == op::ACK_NOT_READY {
                 return Err(Error::Protocol("unexpected ACK while receiving".into()));
             }
             let seq = frame[0] & 0x0F;
@@ -397,10 +486,37 @@ impl VwTp20 {
                         .send_frame(self.tx_id, &[op::ACK | next_seq(seq)])?;
                     break;
                 }
+                op::DATA_LAST_NO_ACK => break,
                 _ => return Err(Error::Protocol("unexpected TP2.0 data PCI".into())),
             }
         }
         decode_telegram(&buf)
+    }
+}
+
+/// A wall-clock bound for a multi-frame wait.
+struct Deadline {
+    end: std::time::Instant,
+    total_ms: u64,
+}
+
+impl Deadline {
+    fn new(timeout_ms: u64) -> Self {
+        Self {
+            end: std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms),
+            total_ms: timeout_ms,
+        }
+    }
+
+    /// Milliseconds left (at least 1 while any time remains), or `None` once
+    /// the deadline has passed.
+    fn left_ms(&self) -> Option<u64> {
+        let left = self.end.checked_duration_since(std::time::Instant::now())?;
+        if left.is_zero() {
+            None
+        } else {
+            Some((left.as_millis() as u64).max(1))
+        }
     }
 }
 
@@ -421,7 +537,7 @@ fn decode_telegram(buf: &[u8]) -> Result<Vec<u8>> {
     Ok(buf[2..2 + declared].to_vec())
 }
 
-impl DiagTransport for VwTp20 {
+impl<L: CanLink + ?Sized> DiagTransport for VwTp20<L> {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
         self.open(timeout_ms)?;
         self.send_telegram(req, timeout_ms)?;
