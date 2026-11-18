@@ -243,3 +243,12 @@ test("fmtElapsed shows m:ss and h:mm:ss", () => {
   assert.equal(U.fmtElapsed(3_725_000), "1:02:05");
   assert.equal(U.fmtElapsed(-5), "0:00");
 });
+
+test("mapsTarget picks a bundled definition or carries a file's MapDef", () => {
+  const md = { name: "Boost", rows: 2, cols: 2 };
+  assert.deepEqual(U.mapsTarget("bosch-edc16u34", { name: "Boost" }, "/d/stock.bin"), { defId: "bosch-edc16u34", mapName: "Boost", mapdef: null, image: "/d/stock.bin" });
+  assert.deepEqual(U.mapsTarget("__file__", { name: "Boost", def: md }, null), { defId: null, mapName: "Boost", mapdef: md, image: null });
+  assert.ok(U.mapsTarget("__file__", { name: "Boost" }, null).error);
+  assert.ok(U.mapsTarget("", { name: "Boost" }, null).error);
+  assert.ok(U.mapsTarget("x", null, null).error);
+});

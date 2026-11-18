@@ -58,6 +58,11 @@ the demo map in `opentune-demo-edc16.json` + `opentune-demo-edc16.bin`.
   the numbers you would edit on top of where the engine ran.
 - Samples **outside the axes** are counted in the edge cell (an ECU clamps its
   lookup there) and reported separately per side.
+- **Open in Maps** switches to the **Maps** panel with the same definition and
+  map selected and, when an image is set (chosen here or opened in the Image
+  panel), decodes it there, ready to edit. A map from a **Definition file…**
+  opens in Maps as an ad-hoc map. Without an image the map is only selected;
+  choose an image in Maps to decode it.
 - Samples with a missing X or Y value are **skipped** and counted.
 - Time in a cell is the time to the next sample, capped at five median sample
   steps so a pause in the log does not count as time in a cell.

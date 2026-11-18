@@ -120,9 +120,23 @@
     const d = ((window.__PREVIEW__ || {}).ecudefs || []).find((x) => x.id === ecudefId);
     return {
       id: ecudefId || "preview-demo", name: d ? d.name : "Preview demo definition",
-      maps: MAPS.map((m) => ({ name: m.name, rows: m.rows, cols: m.cols, unit: m.unit, x_axis: axisInfo(m.x_axis, m.cols), y_axis: axisInfo(m.y_axis, m.rows), needs_image: false })),
+      maps: MAPS.map((m, i) => ({
+        name: m.name, rows: m.rows, cols: m.cols, unit: m.unit, x_axis: axisInfo(m.x_axis, m.cols), y_axis: axisInfo(m.y_axis, m.rows), needs_image: false,
+        // The app sends `def` only for a definition file; the preview's demo maps
+        // are not in any bundled definition, so it always sends it and "Open in
+        // Maps" opens them as ad-hoc maps.
+        def: mapDef(m, i),
+      })),
     };
   };
+  function mapDef(m, i) {
+    const ax = (a, n) => (a.values.length ? { name: a.name, unit: a.unit, count: n, values: a.values } : null);
+    return {
+      name: m.name, notes: "CONFIDENCE: EXAMPLE ONLY. Preview demo map.", address: 0x1e0000 + i * 0x400,
+      data_type: "u16", endian: "big", rows: m.rows, cols: m.cols, scaling: { factor: 1, offset: 0 }, unit: m.unit,
+      x_axis: ax(m.x_axis, m.cols), y_axis: ax(m.y_axis, m.rows),
+    };
+  }
   const UNIT = { "1/min": "rpm", "u/min": "rpm", "mg/hub": "mg/stroke", "mg/str": "mg/stroke" };
   const normU = (u) => { const s = String(u || "").toLowerCase().replace(/\s+/g, ""); return UNIT[s] || s; };
   const nearest = (axis, v) => { let best = 0; axis.forEach((a, i) => { if (Math.abs(a - v) < Math.abs(axis[best] - v)) best = i; }); return best; };

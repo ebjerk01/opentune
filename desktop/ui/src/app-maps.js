@@ -102,6 +102,35 @@ async function openMapDef(path, mapdef) {
   } catch (e) { $("mvResult").innerHTML = errBanner(e); }
 }
 
+// Open a map in this panel from elsewhere (the Log viewer's overlay card):
+// t = { defId, mapName, mapdef, image } as OTUtil.mapsTarget builds it. A
+// bundled definition's map is selected in the pickers (and decoded when an
+// image is known); a map from a definition file opens as an ad-hoc map.
+// Returns "opened" | "selected" | an error text.
+async function openInMaps(t) {
+  if (t.image) { state.mvImage = t.image; refreshImageHints(); }
+  const path = state.mvImage || state.imagePath;
+  const adhoc = async () => {
+    if (!path) { showPanel("maps"); toast("Choose an image (Image…) to decode this map", true); return "no image to decode the map"; }
+    await openMapDef(path, t.mapdef);
+    return "opened";
+  };
+  if (!t.defId) return t.mapdef ? adhoc() : "nothing to open";
+  showPanel("maps");
+  await ensureDefs();
+  const has = (sel, v) => Array.from(sel.options).some((o) => o.value === v);
+  if (!has($("mvDef"), t.defId)) return t.mapdef ? adhoc() : (toast(`'${t.defId}' is not in the Maps list`, true), "definition not listed");
+  $("mvDef").value = t.defId;
+  await populateMaps();
+  if (!has($("mvMap"), t.mapName)) return t.mapdef ? adhoc() : (toast(`'${t.mapName}' is not in this definition`, true), "map not listed");
+  $("mvMap").value = t.mapName;
+  if (!path) { toast("Map selected — choose an image to decode it"); return "selected"; }
+  await $("btnDecodeMap").onclick();
+  $("mvResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  return "opened";
+}
+window.openInMaps = openInMaps;
+
 // ---- editor rendering ------------------------------------------------------
 function edRange() {
   const ed = state.ed; let lo = Infinity, hi = -Infinity;

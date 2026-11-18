@@ -608,12 +608,30 @@
           <button type="button" data-m="hits">Hits</button><button type="button" data-m="time">Time</button>${h.values ? '<button type="button" data-m="value">Value</button>' : ""}
         </div>
         ${cells ? `<label class="chk"><input type="checkbox" id="lvShowMap" ${showMap ? "checked" : ""}/> Show map values (${esc(mp.unit || "raw")})</label>` : ""}
+        <button class="btn sm" id="lvOpenMaps" type="button" title="Switch to Maps with this definition and map selected (and this image, decoded)">Open in Maps</button>
       </div>
       <div class="heatwrap"><table class="heat lv-heat"><thead>${thead}</thead><tbody>${body}</tbody></table></div>
       <div class="legend"><span>${fmt(lo)}</span><span class="bar"></span><span>${fmt(hi)}</span> &nbsp; <span>${esc(metricName)} · empty cells were never used</span></div>`;
     segOn($("lvMetric"), V.metric);
     $("lvMetric").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { V.metric = b.dataset.m; renderOverlay(); }));
     if ($("lvShowMap")) $("lvShowMap").addEventListener("change", renderOverlay);
+    $("lvOpenMaps").addEventListener("click", openInMapsPanel);
+  }
+
+  // "Open in Maps": the same definition + map (and image) in the Maps panel.
+  async function openInMapsPanel() {
+    const t = window.OTUtil.mapsTarget($("lvDef").value, curMap(), imagePath());
+    if (t.error) return toastMsg(t.error, true);
+    if (typeof window.openInMaps !== "function") return toastMsg("the Maps panel is not available", true);
+    try {
+      await window.openInMaps(t);
+    } catch (e) {
+      toastMsg("Open in Maps: " + msg(e), true);
+    }
+  }
+  function toastMsg(t, bad) {
+    if (typeof window.toast === "function") window.toast(t, bad);
+    else ovError(t);
   }
 
   // ---- wiring -------------------------------------------------------------

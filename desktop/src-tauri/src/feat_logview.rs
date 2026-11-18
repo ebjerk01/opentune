@@ -225,7 +225,22 @@ pub fn log_def_maps(
     state: tauri::State<AppData>,
 ) -> Result<Value, String> {
     let def = find_def(ecudef_id.as_deref(), ecudef_path.as_deref(), &state)?;
-    Ok(def_maps_value(&def))
+    def_maps_for_ui(&def, ecudef_id.is_none())
+}
+
+/// [`def_maps_value`], plus each map's full `MapDef` as `def` when the
+/// definition came from a file: it is not in the Maps panel's list, so "Open
+/// in Maps" opens such a map there as an ad-hoc map.
+fn def_maps_for_ui(def: &EcuDef, from_file: bool) -> Result<Value, String> {
+    let mut v = def_maps_value(def);
+    if from_file {
+        if let Some(maps) = v["maps"].as_array_mut() {
+            for (j, m) in maps.iter_mut().zip(&def.maps) {
+                j["def"] = serde_json::to_value(m).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(v)
 }
 
 fn def_maps_value(def: &EcuDef) -> Value {
@@ -674,6 +689,15 @@ mod tests {
         let maps = def_maps_value(&def);
         assert_eq!(maps["maps"][0]["needs_image"], true);
         assert_eq!(maps["maps"][0]["x_axis"]["unit"], "mg/stroke");
+        // "Open in Maps": a bundled definition is opened by id, a file's maps
+        // travel as their MapDef.
+        assert!(def_maps_for_ui(&def, false).unwrap()["maps"][0]
+            .get("def")
+            .is_none());
+        let file = def_maps_for_ui(&def, true).unwrap();
+        let back: opentune_core::ecudef::MapDef =
+            serde_json::from_value(file["maps"][0]["def"].clone()).unwrap();
+        assert_eq!(back, def.maps[0]);
     }
 
     #[test]

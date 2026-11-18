@@ -92,7 +92,7 @@
   },
   "logview": {
     "title": "Log viewer",
-    "summary": "Open a CSV datalog, plot and zoom its channels, and overlay it on a map to see which cells were used, for how long and with which values. Units are compared, never converted.",
+    "summary": "Open a CSV datalog, plot and zoom its channels, and overlay it on a map to see which cells were used, for how long and with which values, then Open in Maps to edit that map. Units are compared, never converted.",
     "needs": ["CSV log", "Definition + image for the map overlay"],
     "risk": "none",
     "guide": "35-log-viewer"

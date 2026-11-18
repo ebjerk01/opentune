@@ -257,6 +257,23 @@
     });
     return rows;
   }
+  // ---- Log viewer -> Maps (feat_logview.js, app-maps.js) -----------------------
+  // What "Open in Maps" should open for the overlay's selection: `defValue` is
+  // the Log viewer's definition select ("" | "__file__" | bundled id), `map` the
+  // overlay map ({ name, def? }), `image` the image in use (or null).
+  // { defId, mapName, mapdef, image } (`defId` null for a definition file, whose
+  // map then travels as `mapdef`), or { error } when there is nothing to open.
+  function mapsTarget(defValue, map, image) {
+    if (!map || !map.name) return { error: "choose a map first" };
+    const img = image || null;
+    if (defValue === "__file__") {
+      if (!map.def) return { error: "this definition file's map cannot be opened in Maps" };
+      return { defId: null, mapName: map.name, mapdef: map.def, image: img };
+    }
+    if (!defValue) return { error: "choose a definition first" };
+    return { defId: defValue, mapName: map.name, mapdef: map.def || null, image: img };
+  }
+
   // "m:ss" (or "h:mm:ss") for an elapsed time in ms.
   function fmtElapsed(ms) {
     const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
@@ -307,7 +324,7 @@
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
     logModeBadge, fmtLogRate, seriesPath, tsFmt, tsCheckValue,
-    LIVE_LOG_HEAD, liveLogRow, liveLogCsv, liveShown, dashLogRows, fmtElapsed,
+    LIVE_LOG_HEAD, liveLogRow, liveLogCsv, liveShown, dashLogRows, fmtElapsed, mapsTarget,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;
