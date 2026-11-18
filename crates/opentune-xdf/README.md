@@ -13,15 +13,29 @@ unlocking that library without re-deriving every address by hand.
 
 ```rust
 pub fn parse_xdf(src: &str) -> opentune_xdf::Result<XdfImport>;
+pub fn parse_xdf_strict(src: &str) -> opentune_xdf::Result<XdfImport>; // Err(Strict) unless clean
 
 pub struct XdfImport {
     pub title: Option<String>,   // definition title from the XDF header
-    pub base_offset: u32,        // header base offset (already applied to addresses)
+    pub base_offset: u32,        // header base offset magnitude (already applied)
+    pub base_subtract: bool,     // base offset is subtracted
     pub maps: Vec<opentune_core::ecudef::MapDef>,
     pub constants: Vec<XdfConstant>, // scalar <XDFCONSTANT> values (XML only)
-    pub warnings: Vec<String>,   // structured import-loss / fidelity warnings
+    pub warnings: Vec<String>,   // one line per issue of every non-clean object
+    pub reports: Vec<ObjectReport>, // per object: clean / warned / refused + issues
 }
 ```
+
+Every `<XDFTABLE>`, `<XDFFUNCTION>`, `<XDFCONSTANT>`, `<XDFFLAG>`,
+`<XDFPATCH>` and `<XDFCHECKSUM>` ends in one `report::ObjectReport`:
+**clean** (faithful), **warned** (imported with an explicit loss, also in the
+map `notes` as `WARN[kind] …`) or **refused** (with the reason). Nothing is
+imported with a silently wrong address, cell type or scale. The full
+construct → outcome table is in [`docs/MAP-DEFS.md`](../../docs/MAP-DEFS.md#importing-other-definition-formats).
+`XdfImport::into_strict()` / `--strict` refuse the file when any table,
+function or constant is not clean (flags/patches/checksums/separators are
+out of scope and don't count). The `report` module is shared with the
+EcuFlash/RomRaider/FastECU importers.
 
 `warnings` carries file-level fidelity losses that do not belong to a single
 map's `notes` — a table/constant skipped because its address rebasing
@@ -83,8 +97,12 @@ it is never approximated.
 |---|---|
 | `0x01` | signed (two's complement) |
 | `0x02` | LSB first (little-endian / Intel); clear ⇒ big-endian (Motorola) |
-| `0x04` | swap-XY (storage transposed). **Detected and flagged, never applied** — see below |
-| `0x10000` | IEEE-754 float (with a 32-bit element) |
+| `0x04` | column-major storage. A 2-D table is imported **transposed** (rows/cols and x/y axes exchanged — the same bytes read the same way); a no-op on vectors |
+| `0x10000` | IEEE-754 float (32-bit elements only; anything else is refused) |
+
+Other bits are reported (`typeflags-unknown`). Without a flag word the header
+`DEFAULTS` apply and the map is warned only where that changes the decoding
+(e.g. `lsbfirst=1` on a multi-byte cell).
 
 These are the community-documented readings. Endianness in XDF is historically
 ambiguous (a per-table flag vs. a file-level `DEFAULTS lsbfirst`); when a table
@@ -99,12 +117,18 @@ import.
   table. The element type is therefore defaulted to `u8`/big-endian and every
   such map is flagged in `notes`. Confirm the real width/endianness against your
   readout.
-- **Non-linear math** is pre-scaled + flagged, not converted (see above).
-- **Exotic strides.** A negative `mmedmajorstridebits`/`mmedminorstridebits`
-  (reversed or non-contiguous layout) is flagged in `notes` but the map is still
-  shaped by `rows`×`cols`; the reversed layout itself is not modeled.
-- **Non-standard element widths** (e.g. 24-bit) are approximated to the next
-  standard type and flagged.
+- **Non-linear math** is pre-scaled + warned, not converted (see above); so is
+  a `<MATH>` that uses `VAR`s other than `X` (`type="address"`/`"link"`).
+- **Strides.** `mmedmajorstridebits`/`mmedminorstridebits` other than plain
+  packing (interleaved GM tables, every-Nth-word vectors, negative = reversed)
+  are **refused**: a `MapDef` is contiguous. Label-only axes carry `-32` strides
+  that mean nothing (no data is read) and are ignored.
+- **Non-standard element widths** (24-bit, 64-bit, non-32-bit floats) are
+  **refused**, never approximated.
+- **Axes.** `embedinfo type="1"` = embedded (stored axis), `type="3"
+  linkobjid` = linked to another 1-D table (resolved to its storage), labels
+  otherwise. An axis whose breakpoints can't be resolved keeps its count and
+  the map is warned. A dimension of 1 gets no axis.
 - **Categorical axis labels.** Real TCU/BMW XDFs carry non-numeric axis labels
   (gear/mode names such as `1->2`, `2->3`). OpenTune's `AxisDef` stores only
   numeric breakpoints, so these text labels cannot be kept as values. The axis
@@ -112,22 +136,19 @@ import.
   are listed in the map `notes` **and** in `XdfImport.warnings` rather than
   silently discarded. (If the core axis model gains a categorical/label field,
   switch to preserving the text directly.)
-- **Swap-XY (`mmedtypeflags 0x04`).** Some tables (e.g. BMW 6HP shift maps)
-  declare that their data is stored transposed relative to the row-major
-  (column-fastest) order OpenTune reads with. RomRaider's XDF converter honours
-  this by setting `swapxy=true`; its `Table3D` population swaps the inner/outer
-  loop, i.e. it is a genuine **storage-order** transform, not mere presentation.
-  OpenTune has no per-map storage-orientation field and no round-trippable way
-  to record the flag (`export_xdf` would drop it and silently re-corrupt), and a
-  blind transpose of an asymmetric map is itself dangerous — so this crate
-  **does not transpose**. It detects the bit, leaves `rows`/`cols` as declared,
-  and marks the orientation unverified in `notes` + `warnings` so a human can
-  confirm it against a known image before trusting cell positions.
-- **Address rebasing is checked.** A `BASEOFFSET subtract` that would take an
-  address below the base (which previously wrapped to a giant offset like
-  `0xFFFFFF10`), or an add that overflows `u32`, is refused: the table/constant
-  is skipped and a reason recorded in `warnings`, never emitted as a wrapped
-  address. A rebasing that lands at exactly `0` is valid and kept.
+- **Column-major (`mmedtypeflags 0x04`).** The bytes of an R×C column-major
+  table are exactly a C×R row-major table whose axes are exchanged, so that is
+  what is imported (noted in `notes`). Every cell keeps its value and its
+  breakpoints; `export_xdf` writes the row-major view, which TunerPro reads
+  identically. (Earlier versions only flagged the bit.) Evidence: GM XDFs whose
+  0x04 tables are interleaved column by column, and RomRaider's converter,
+  which treats the bit as a storage-order swap.
+- **Address rebasing is checked.** Both header forms are read: TunerPro 5
+  `<BASEOFFSET offset subtract>` and the older signed text form
+  `<baseoffset>-49152</baseoffset>` (previously ignored — every address of such
+  a file was off by the base). Underflow/overflow refuses the object; never a
+  wrapped address. A whole-file `REGION` bounds every object: data past it is
+  refused.
 - **Character encoding.** XDF payload text (titles, units) may be
   Windows-1251/Latin-1; pass the bytes in as a string (lossy UTF-8 is fine for
   structure). Non-ASCII units may come through as mojibake — that is a source
@@ -136,17 +157,27 @@ import.
   [`XdfConstant`] scalars into `XdfImport.constants` (a distinct list, not folded
   into `maps`). Only plain numeric scalars are imported — a bitfield/switch is
   **not** promoted to an unrestricted scalar write.
-- **Not imported:** `%%FLAG%%` (bit flags), `%%CONSTANT%%`/`%%CHECKSUM%%`
-  blocks, `<XDFFLAG>`, DAC/DALINK data-link scaling, and the checksum region
-  descriptors. Legacy `%%TABLE%%` files expose only tables (no constants list).
+- **Refused as out of scope** (listed in `reports`, never imported):
+  `<XDFFLAG>`/`%%FLAG%%` bit flags, `<XDFPATCH>`, `<XDFCHECKSUM>`, and
+  separator/info entries with no data address. DALINK (live-data links) is
+  ignored. Legacy `%%TABLE%%` files expose only tables (no constants list).
+- **Binary (pre-XML) XDFs** are refused with `Error::Binary` — re-save them
+  as XML in TunerPro.
 
 ## CLI
 
 Part of the workspace. The CLI exposes it as `opentune import-xdf <file>
-[--into <ecudef.json>]` (lists the maps, or merges `XdfImport.maps` into the
-target `EcuDef.maps`) and `opentune export-xdf` for the reverse direction.
+[--into <ecudef.json>] [-o out.json] [--strict]` (prints the per-object
+report and the maps, writes `{maps, constants, report}` JSON, or merges
+`XdfImport.maps` into the target `EcuDef.maps`) and `opentune export-xdf`
+for the reverse direction.
 
 ## Tested on
+
+- Corpus run (ignored test `tests/corpus.rs`, `OPENTUNE_XDF_CORPUS=<dir>`)
+  over 219 unique public community XDFs (BMW MSS54/MSD8x/6HP, GM LS1/E38,
+  Alfa/Fiat Motronic, Moto Guzzi, Ducati …; not shipped). See the numbers in
+  `docs/MAP-DEFS.md`.
 
 - Synthetic inline XDF fixtures (XML and legacy) — the unit tests, so they pass
   without any external files.
