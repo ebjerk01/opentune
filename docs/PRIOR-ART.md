@@ -16,6 +16,9 @@ they are here only to indicate relative reach, not to rank quality.
 | Project | Stars (approx) | Licence | What OpenTune learned |
 |---|---|---|---|
 | [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) | ~450 | BSD-2-Clause | The reference for Simos/MEDC17 UDS flashing: security access, request-download/transfer-data sequencing, compression/encryption blocks and block checksums. Directly informed our UDS flash state machine and the `bench_boot` vs OBD `full_read` distinction. BSD → patterns are reusable. |
+| [bri3d/mqb-flash-rs](https://github.com/bri3d/mqb-flash-rs) | — | MIT | Rust port of the MQB flashing modules; its DQ250-MQB block table (lengths, bin-file layout, box-code and version locations) is the layout behind `temic-dq250-mqb`. See `docs/DSG.md`. |
+| [TheFlashBold/DQ250-MQB-Bench-Flash](https://github.com/TheFlashBold/DQ250-MQB-Bench-Flash) | — | GPL-3.0 | DQ250-MQB SBOOT bench read/flash (TC1766) and the per-block JAMCRC behind the `dq250` checksum. |
+| [dspl1236/vag-tcu-tools](https://github.com/dspl1236/vag-tcu-tools) | — | MIT | DQ381 / ZF 8HP CRC-32 layouts and the FRF method notes for DQ200/DQ250/DL382 containers. |
 | [miikasyvanen/FastECU](https://github.com/miikasyvanen/FastECU) | ~250 | GPL-3.0 | A cross-platform open reflashing tool covering many OEM/protocol families; a model for how to structure a driver/protocol/definition split in a desktop tuning app. GPL-3.0 → compatible. |
 
 ## Checksums
