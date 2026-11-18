@@ -77,12 +77,12 @@ fn rows(csv: &str) -> HashMap<(usize, String), (String, String)> {
     let mut lines = csv.lines();
     assert_eq!(
         lines.next(),
-        Some("round,param_id,name,raw,value,units,note,text")
+        Some("round,param_id,name,raw,value,units,note,text,ts")
     );
     lines
         .map(|l| {
             let f: Vec<&str> = l.split(',').collect();
-            assert_eq!(f.len(), 8, "{l}");
+            assert_eq!(f.len(), 9, "{l}");
             (
                 (f[0].parse().unwrap(), f[1].to_string()),
                 (f[4].to_string(), f[6].to_string()),

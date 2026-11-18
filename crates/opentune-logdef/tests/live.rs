@@ -153,12 +153,14 @@ fn text_bcd_and_hex_channels_decode_the_whole_record() {
     assert!(s[3].note.contains("non-printable"), "{}", s[3].note);
     assert!(s.iter().all(|x| x.answered()));
 
-    // CSV: value empty, the text in the trailing `text` column.
+    // CSV: value empty, the text in the `text` column (then `ts`).
     let mut buf = Vec::new();
     poll_to_csv(&mut diag, &d, &["vin"], 1, 0, &mut buf).unwrap();
     let csv = String::from_utf8(buf).unwrap();
     let row = csv.lines().nth(1).unwrap();
+    let (row, ts) = row.rsplit_once(',').unwrap();
     assert_eq!(row, "0,vin,vin,,,text,,WVWZZZ00000000000");
+    assert!(ts.parse::<u64>().is_ok(), "{ts}");
 }
 
 #[test]
@@ -206,8 +208,15 @@ fn csv_has_a_header_and_one_row_per_sample_per_round() {
     let text = String::from_utf8(buf).unwrap();
 
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines[0], "round,param_id,name,raw,value,units,note,text");
+    assert_eq!(lines[0], "round,param_id,name,raw,value,units,note,text,ts");
     assert_eq!(lines.len(), 1 + 3, "header + 3 rounds × 1 param");
+    // `ts` (last) is Unix ms per round, never going backwards.
+    let ts: Vec<u64> = lines[1..]
+        .iter()
+        .map(|l| l.rsplit(',').next().unwrap().parse().unwrap())
+        .collect();
+    assert!(ts[0] > 1_600_000_000_000, "{ts:?}");
+    assert!(ts.windows(2).all(|w| w[1] >= w[0]), "{ts:?}");
     assert!(lines[1].contains("temp"));
     assert!(lines[1].contains("60"), "100 - 40 = 60: {}", lines[1]); // scaled value
 }

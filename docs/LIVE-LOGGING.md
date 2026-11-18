@@ -19,7 +19,12 @@ sample, never guessed.
 opentune log --def logger.xml --driver <id> --rounds 500 --out run.csv [IDS…]
 ```
 
-The CSV columns are `round,param_id,name,raw,value,units,note,text`.
+The CSV columns are `round,param_id,name,raw,value,units,note,text,ts`:
+`round` counts polls from 0, and `ts` is the wall-clock time each round
+started, in Unix milliseconds (every row of a round shares it). The Log viewer
+opens the file as an OpenTune Live log, like the desktop's; a file written
+before the `ts` column existed still opens, with the round number as the time
+axis.
 
 ## Text channels
 
@@ -170,7 +175,7 @@ for its first sentence before the first sample. USB CDC-ACM ignores the baud
 rate; a UART receiver needs its configured rate (`--gps-baud`, default 9600).
 
 Each round of the CSV gets these rows after the ECU channels (same
-`round,param_id,name,raw,value,units,note,text` columns):
+`round,param_id,name,raw,value,units,note,text,ts` columns):
 
 | `param_id` | Value | Units |
 |---|---|---|

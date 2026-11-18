@@ -8,7 +8,8 @@ Everything is offline and read-only.
 ## What you need
 
 - A **CSV log**. Any of:
-  - a **Live log** CSV saved by OpenTune (one row per parameter per tick);
+  - a **Live log** CSV saved by OpenTune (one row per parameter per tick),
+    from this app or from the command line (`opentune log`);
   - a CSV with one column per channel and a time column, from any logger.
 - For the **map overlay**: an ECU definition with the map, and, when the map's
   axes are stored in the image (most bundled maps), the **image (.bin)** the

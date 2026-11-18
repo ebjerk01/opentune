@@ -443,13 +443,14 @@ impl LiveSession {
     ) -> std::io::Result<()> {
         writeln!(out, "{}", crate::live::CSV_HEADER)?;
         for r in 0..rounds {
+            let ts = crate::live::unix_ms();
             let samples = self.tick(diag);
             for s in &samples {
-                crate::live::write_csv_row(out, r, s)?;
+                crate::live::write_csv_row(out, r, ts, s)?;
             }
             if let Some(g) = gps.as_deref_mut() {
                 for s in g.samples(&samples) {
-                    crate::live::write_csv_row(out, r, &s)?;
+                    crate::live::write_csv_row(out, r, ts, &s)?;
                 }
             }
             if interval_ms > 0 && r + 1 < rounds {

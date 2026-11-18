@@ -366,12 +366,28 @@ pub fn poll_once(diag: &mut dyn RawDiag, def: &LogDef, ids: &[&str]) -> Vec<Samp
 }
 
 /// Header of the CSV [`poll_to_csv`] and [`LiveSession::run_csv`](crate::LiveSession::run_csv)
-/// write. `text` (last, so readers that index the first seven columns keep
-/// working) carries a text channel's decoded text; its `value` is empty.
-pub const CSV_HEADER: &str = "round,param_id,name,raw,value,units,note,text";
+/// write. `text` carries a text channel's decoded text (its `value` is empty).
+/// `ts` is the wall-clock time the round started, in Unix milliseconds, shared
+/// by every row of that round: the Log viewer's long-format reader keys on
+/// `ts,param_id,value`, as in the desktop Live log. The new columns are
+/// appended, so readers that index the first seven (or eight) keep working.
+pub const CSV_HEADER: &str = "round,param_id,name,raw,value,units,note,text,ts";
+
+/// Wall-clock now in Unix milliseconds (0 if the clock is before 1970).
+pub(crate) fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// One CSV row (single-line and comma-safe).
-pub(crate) fn write_csv_row(out: &mut impl Write, round: usize, s: &Sample) -> std::io::Result<()> {
+pub(crate) fn write_csv_row(
+    out: &mut impl Write,
+    round: usize,
+    ts_ms: u64,
+    s: &Sample,
+) -> std::io::Result<()> {
     let raw = s.raw.map(|v| v.to_string()).unwrap_or_default();
     let value = s.value.map(|v| v.to_string()).unwrap_or_default();
     let name = s.name.replace(',', ";");
@@ -379,7 +395,7 @@ pub(crate) fn write_csv_row(out: &mut impl Write, round: usize, s: &Sample) -> s
     let text = s.text.as_deref().unwrap_or("").replace(['\n', ','], " ");
     writeln!(
         out,
-        "{round},{},{name},{raw},{value},{},{note},{text}",
+        "{round},{},{name},{raw},{value},{},{note},{text},{ts_ms}",
         s.param_id, s.units
     )
 }
@@ -396,8 +412,9 @@ pub fn poll_to_csv(
 ) -> std::io::Result<()> {
     writeln!(out, "{CSV_HEADER}")?;
     for r in 0..rounds {
+        let ts = unix_ms();
         for s in poll_once(diag, def, ids) {
-            write_csv_row(out, r, &s)?;
+            write_csv_row(out, r, ts, &s)?;
         }
         if interval_ms > 0 && r + 1 < rounds {
             std::thread::sleep(std::time::Duration::from_millis(interval_ms));
