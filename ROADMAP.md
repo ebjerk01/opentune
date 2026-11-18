@@ -48,6 +48,7 @@ Everything here operates on a flash `.bin`.
 - [x] **Single-file map finder** (`opentune-mapfind`, `findmaps <image>`) — counted-table headers + axis pairs, scored candidates with evidence, hints worded as unverified; on the EDC16U34 stock read all defined maps are found, 91.5 % of tune-changed regions across 47 pairs are covered by a candidate. Approach credited to openremap-core (MIT), re-implemented.
 - [x] **Portable tune recipes** (`opentune-recipe`, CLI `recipe create|apply|show`, format in `docs/RECIPES.md`) — anchored patches + source identity; `apply` refuses unless identity and every anchor match (explicit `--relocate` refuses ambiguous matches), then checksum-fixes and attests. Byte-identical on 24 of 45 real pairs; the rest are refused (never guessed).
 - [x] **Log viewer + map overlay** (`opentune-logview`, desktop panel) — Live-log and generic CSV, zoom/pan plot with min/max decimation, cursor readout, per-window stats; overlay a log on a map as hits / time-in-cell / value heat grid, refusing unit mismatches unless accepted.
+- [x] **Strict definition import** — every XDF/FastECU object reported clean / warned / refused (`--strict`), fixed the ignored `<baseoffset>` header form, linked axes, XDF functions; FastECU (EcuFlash/RomRaider XML + MapPack CSV) importer; corpus: 219 public XDFs + 663 Subaru calibrations.
 - [x] **TunerPro XDF and ASAM A2L import + export** — both round-trip validated; A2L validated at scale on real EDC15 / Siemens-PPD / BMW-MSV80 (thousands of maps), with STD_AXIS address computation and cuboid slicing
 
 ### Identification
@@ -66,7 +67,7 @@ Everything here operates on a flash `.bin`.
 - [x] **Desktop (Tauri)** — identify, checksum verify/fix, findmaps, map viewer **+ editor** (edit/interpolate/smooth, write-back + checksum fix), **compare**, flash (mock), vault, offline guide
 - [x] **Portable Linux builds** — glibc baseline fixed (`ubuntu-22.04` CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`); alpha AppImage + `.deb`
 - [x] **Android `opentune-ffi`** — UniFFI binding over the core (compile-verified; Kotlin bindings generated) + a Jetpack Compose app (`android/`)
-- [~] Desktop auto-update from GitHub Releases (configured; needs a signing key)
+- [~] Desktop auto-update + signed releases — release pipeline ready (`release.yml`: version check, signed Linux AppImage/.deb + Windows NSIS/MSI, `.sig` verified against the pubkey, `latest.json` + SHA256SUMS, draft release; `scripts/bump-version.sh`; `docs/RELEASING.md`, `desktop/UPDATER.md`). Waiting on the owner: add the signing secrets, then tag the first release. macOS desktop skipped (no Developer ID); Windows installers not code-signed.
 - [x] **Android APK built + verified on real hardware** (SM-P600): installs, launches to the UI, the UniFFI native lib loads & round-trips into the Rust core — no crash. Debug/alpha build.
 
 ---
@@ -255,11 +256,11 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 4. **Recipes on EDC17** — fixed: verify/attest against the stock reference, no nested-block writes, check words carved out of patches → 13/15 EDC17 pairs byte-identical (42/45 overall). Open: the CP42 nested block at 0x3005A8 (rule unknown; refused unless `--allow-unverified`, which still leaves the attestation unsatisfied).
 5. **Relocate maps by content signature** — apply a definition built for one software version to a sibling version's read (PCR2.1 CASM2K30 → CASM2L95 is the first case).
 6. **Logger text/BCD decode** — identification DIDs (part numbers, serials) currently show as numbers in the live logger.
-7. **Cross-validate EDC15/EDC16 vs ZedSuite (Rust)** — cheap hardening of what already ships.
-8. **Validate the UDS state machine vs `python-udsoncan`** — conformance of the protocol layer (udssim server done).
+7. ✅ **Cross-validated EDC15/EDC16 vs ZedSuite** — 77 dumps: full agreement where both find blocks (EDC16 132/132 regions, byte-identical corrections); OpenTune finds more (boot/program/nested, Mercedes CR, Vito, BMW 320d). Gap: ZedSuite's `tdi41_2002` classic layout verifies a dump we refuse (no tuned pair to validate correction).
+8. ✅ **UDS/DoIP conformance vs python-udsoncan + doipclient** — `tools/conformance/` (25 cases, 12 → 25 passing after udssim fixes; 13th gate + CI job).
 9. **Generalized controller-def schema → drivetrain defs** — the data model for TCU/AWD units, then VAG DSG / Haldex / Mercedes 722.6 defs (flashing is 🔒).
 10. **SA2 seed/key plugin set** — user-supplied, never auto-applied (sensitive; careful scoping).
-11. **Small UI follow-ups** — Dashboard "Record", "open in Maps" from the log overlay, pack picker in the panels, UI preview fixtures for the new panels.
+11. **New checksum `simos-crc`** (Continental block-CRC headers, real-image-tested 776/778 headers across Kia/Hyundai, Ford, Lada; VAG Simos 8–18 + ECM3 not claimed — no reads). **Small UI follow-ups** — Dashboard "Record", "open in Maps" from the log overlay, pack picker in the panels, UI preview fixtures for the new panels.
 
 **Waiting on data**
 - **EDC17CP14 maps** (Passat CC) — need a VAG CP14 stock read, ideally with a tune of it.
