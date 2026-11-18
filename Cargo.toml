@@ -43,6 +43,7 @@ members = [
     "crates/opentune-logview",
     "crates/opentune-mapfind",
     "crates/opentune-recipe",
+    "crates/opentune-haldex",
 ]
 
 [workspace.package]

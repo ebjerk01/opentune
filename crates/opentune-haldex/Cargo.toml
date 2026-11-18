@@ -1,0 +1,16 @@
+[package]
+name = "opentune-haldex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "BorgWarner Haldex AWD support: Gen4 read-only KWP2000/TP2.0 engine, passive Haldex CAN decoder for candump/SavvyCAN logs, and an OpenHaldex controller backend (modes, status, control frames)."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+serde.workspace = true
+
+[dev-dependencies]
+opentune-udssim = { path = "../opentune-udssim" }

@@ -33,7 +33,11 @@ desktop app bundles this folder and opens its file pickers here.
 - `vag-modules` is UDS on CAN only. opendbc's fingerprints show these ids
   answering UDS on MQB, MEB and late PQ cars; older modules that speak
   KWP2000 over VW TP2.0 are not listed because the auto-scan engine only
-  speaks UDS and OBD.
+  speaks UDS and OBD. Its Haldex entry (`0x70F`/`0x779`) is the MQB **Gen5**
+  unit; the PQ-era **Haldex Gen4** (e.g. Passat CC 4Motion) is KWP2000 over
+  TP2.0 at logical address `0x0A`, which this module-list schema cannot
+  express — read it with `opentune haldex gen4` instead (see
+  [`docs/HALDEX.md`](../docs/HALDEX.md)).
 - The generic OBD service scripts default to OBD ECU #1 (`req_id` `0x7E0` /
   `resp_id` `0x7E8`); the panel's Target fields override that. Mode 04 sent
   physically clears only the addressed ECU. Auto-scan → Clear with

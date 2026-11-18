@@ -90,6 +90,7 @@ a top-level command is added without a row here.
 | `opentune obd` | Generic OBD-II: mode-01 live data, readiness, freeze frame, mode-09 info (VIN/CALID/CVN), stored/pending/permanent DTCs |
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
+| `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
 
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.
@@ -164,6 +165,7 @@ apps that need it.
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
+| `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), simulated units ([`HALDEX.md`](HALDEX.md)) |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`

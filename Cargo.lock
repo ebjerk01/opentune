@@ -784,6 +784,7 @@ dependencies = [
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
+ "opentune-haldex",
  "opentune-logdef",
  "opentune-mapfind",
  "opentune-ols",
@@ -984,6 +985,15 @@ dependencies = [
  "opentune-driver-mock",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "opentune-haldex"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-udssim",
+ "serde",
 ]
 
 [[package]]

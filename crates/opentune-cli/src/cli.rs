@@ -1,5 +1,5 @@
 //! The clap definitions of the public command tree.
-use crate::{candump, mapfind_cmd, obd_cmd, recipe_cmd};
+use crate::{candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -446,6 +446,12 @@ pub enum Command {
         /// One or more UDS requests as hex (e.g. `22F190`), handled in order.
         #[arg(required = true, value_name = "HEX")]
         requests: Vec<String>,
+    },
+    /// BorgWarner Haldex AWD: decode Haldex CAN frames in a log, read a Gen4
+    /// controller (read-only), OpenHaldex status and mode.
+    Haldex {
+        #[command(subcommand)]
+        action: haldex_cmd::HaldexAction,
     },
 }
 

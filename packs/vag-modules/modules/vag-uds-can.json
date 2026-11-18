@@ -51,7 +51,7 @@
       "source": "opendbc values.py extra_ecus (Ecu.fwdCamera 0x74f, rx offset 0x6A)"
     },
     {
-      "name": "AWD coupling (Haldex, 4Motion)",
+      "name": "AWD coupling (Haldex Gen5, MQB 4Motion)",
       "addr": 15,
       "req_id": 1807,
       "resp_id": 1913,

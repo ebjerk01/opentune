@@ -45,6 +45,7 @@ mod candump;
 mod cli;
 mod commands;
 mod context;
+mod haldex_cmd;
 mod mapfind_cmd;
 mod obd_cmd;
 mod recipe_cmd;
