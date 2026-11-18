@@ -99,7 +99,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown.",
+    "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown. Record writes the polled values to a Live-log CSV for the Log viewer.",
     "needs": ["Adapter: CAN", "Ignition on", "Engine running", "HS-CAN"],
     "risk": "read-only",
     "guide": "23-dashboard"

@@ -233,6 +233,7 @@ macro_rules! core_command_list {
             feat_dash::obd_pid_table,
             feat_dash::obd_supported,
             feat_dash::obd_read,
+            feat_dash::dash_record_write,
             feat_obdinfo::obd_inspect,
             feat_db::db_list,
             feat_db::db_get,

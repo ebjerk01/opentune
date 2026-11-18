@@ -39,6 +39,14 @@
   // Placeholder VIN (never a real one): shown as the dashboard's text tile.
   F.obd_supported = async () => { await wait(400); return { pids: DIESEL, vin: "WVWZZZ00000000000" }; };
 
+  // Dashboard Record: pretend to write; the size grows with what was sent.
+  let recBytes = 0;
+  F.dash_record_write = async ({ path, csv, append }) => {
+    await wait(20);
+    recBytes = (append ? recBytes : 0) + String(csv || "").length;
+    return { path, bytes: recBytes };
+  };
+
   const s = { egt1: 210, egt2: 190, dpf: 240, spd: 0, cool: 72 };
   F.obd_read = async () => {
     await wait(60);

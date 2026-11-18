@@ -17,6 +17,22 @@ exhaust gas temperature (bank 1 and 2), fuel rail pressure and battery voltage.
 3. The panel first asks the ECU which values it supports, then shows a gauge for each supported one.
 4. Press **Stop** before using another live panel.
 
+## Recording
+
+Press **● Record** to write the polled values to a CSV file. Pick where to save
+it; recording starts the dashboard if it is not running yet. While it runs the
+bar shows **REC**, the elapsed time, the number of samples and the file name.
+Press **■ Stop recording** to finish.
+
+- The file is a **Live-log CSV** (`ts,param_id,name,raw,value,units,note,text`,
+  one row per value per sample, time in ms): open it in the **Log viewer** to
+  plot it or overlay it on a map. Multi-sensor values (EGT) get one channel per
+  sensor; the VIN goes into the `text` column.
+- Rows are written about once a second, so a crash loses at most the last second.
+- Recording stops by itself when you switch to another panel, the adapter
+  disconnects, polling fails three times in a row, or **Stop** is pressed. The
+  bar then says how many samples went into which file.
+
 ## Reading the results
 
 - **Only supported values are shown.** Many engines do not report EGT, fuel rail pressure or MAF over generic OBD-II. A missing gauge means the ECU does not offer that value, not that the sensor is broken.

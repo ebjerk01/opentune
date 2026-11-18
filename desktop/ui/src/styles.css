@@ -373,6 +373,7 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
 .tile.text .t-val { font-size: 15px; word-break: break-all; }
 .tile.text .spark { visibility: hidden; }
 .live-text { font-family: var(--mono); word-break: break-all; }
+#dashRec.rec-on { color: var(--bad); border-color: var(--bad); }
 .t-label { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 .t-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
