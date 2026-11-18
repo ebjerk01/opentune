@@ -95,7 +95,12 @@ pub fn run(ctx: &CliContext, action: ChecksumAction) -> Result<()> {
                 }
             }
         }
-        ChecksumAction::Attest { algo, file, out } => {
+        ChecksumAction::Attest {
+            algo,
+            file,
+            out,
+            reference,
+        } => {
             let img = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
             let imp = ctx.checksum(&algo).ok_or_else(|| {
                 anyhow!(
@@ -103,8 +108,24 @@ pub fn run(ctx: &CliContext, action: ChecksumAction) -> Result<()> {
                     opentune_attest::AttestError::UnknownAlgorithm(algo.clone())
                 )
             })?;
-            let att = opentune_attest::attest_image_with(&*imp, &algo, &img)
-                .map_err(|e| anyhow!("{e}"))?;
+            let att = match reference {
+                Some(r) => {
+                    let refimg = std::fs::read(&r)
+                        .map_err(|e| anyhow!("read reference {}: {e}", r.display()))?;
+                    let ra =
+                        opentune_attest::attest_image_with_reference(&*imp, &algo, &img, &refimg)
+                            .map_err(|e| anyhow!("{e}"))?;
+                    for b in ra.unverifiable() {
+                        eprintln!(
+                            "! {} cannot be verified (changed from the reference, rule unknown)",
+                            b.name
+                        );
+                    }
+                    ra.attestation
+                }
+                None => opentune_attest::attest_image_with(&*imp, &algo, &img)
+                    .map_err(|e| anyhow!("{e}"))?,
+            };
             let json = serde_json::to_string_pretty(&att)?;
             if let Some(out) = out {
                 std::fs::write(&out, &json).map_err(|e| anyhow!("write {}: {e}", out.display()))?;

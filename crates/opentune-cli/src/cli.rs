@@ -680,6 +680,11 @@ pub enum ChecksumAction {
         /// Write the attestation JSON here (otherwise printed to stdout).
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Your own untouched stock read of the same ECU. EDC17 blocks without a
+        /// library constant are then judged against it (as `fix --reference`
+        /// corrected them); other algorithms ignore it.
+        #[arg(long)]
+        reference: Option<PathBuf>,
     },
 }
 
