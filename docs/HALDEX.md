@@ -137,7 +137,8 @@ controller ignores mode changes).
 
 ### Backend API for a desktop panel
 
-The panel (after the desktop split) should call these, all in
+The desktop **Haldex AWD** panel (`desktop/src-tauri/src/feat_haldex.rs`, tier
+`bench`, synthetic-tested) calls these, all in
 `opentune_haldex`, and add nothing protocol-specific of its own:
 
 | Panel action | Call | Notes |

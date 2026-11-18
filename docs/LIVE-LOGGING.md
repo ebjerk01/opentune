@@ -125,7 +125,9 @@ is a possible later addition.
 
 ## Backend API for the desktop panel
 
-The desktop live-data panel is not wired to fast mode yet. It should drive
+The desktop **Live log** panel's *Fast (0x2C)* toggle uses this API
+(`desktop/src-tauri/src/feat_logging.rs`: `log_start` / `log_tick` /
+`log_stop`, synthetic-tested). It drives
 `opentune_logdef::LiveSession` over the driver's `CoreDiag`:
 
 ```rust
