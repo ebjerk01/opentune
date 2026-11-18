@@ -101,3 +101,35 @@ fn all_ecudefs_pass_validation() {
     }
     assert!(checked > 0, "no ecudefs validated in {}", dir.display());
 }
+
+/// The identity a VW 1.6 TDI CR (EA189) engine ECU reported live over UDS via
+/// `elm327obd` (2026-11-18): ECU name (0xF197) and hardware/part number
+/// (0xF191). `identify` must resolve it to the identification-only definition,
+/// and that definition must not claim anything an image read would be needed
+/// for (layout, maps, checksum, seed/key).
+#[test]
+fn live_vw_16tdi_identity_matches_identification_only_def() {
+    let defs = ecudef::load_dir(&ecudefs_dir()).expect("ecudefs parse");
+    let id = opentune_core::EcuId {
+        ecu_name: Some("R4 1.6l TDI".into()),
+        hw_number: Some("03L907425C".into()),
+        ..Default::default()
+    };
+    let def = ecudef::match_ecu(&defs, &id).expect("03L907425C must match a definition");
+    assert_eq!(def.id, "siemens-pcr21-03l907425c");
+    assert_eq!(def.diag_layer, opentune_core::DiagLayer::Uds);
+    assert_eq!((def.tx_id, def.rx_id), (0x7E0, 0x7E8));
+    // Identification only: no checksum, seed/key, maps, layout or size claim.
+    assert!(def.checksum.is_none(), "no checksum claim");
+    assert!(def.seedkey.is_none(), "no seed/key claim");
+    assert!(def.maps.is_empty(), "no maps");
+    assert!(def.regions.is_empty(), "no flash layout");
+    assert_eq!(def.flash_size, 0, "no flash size");
+
+    // The ECU name is generic across VAG 1.6 TDI ECUs and is not a match key.
+    let name_only = opentune_core::EcuId {
+        ecu_name: Some("R4 1.6l TDI".into()),
+        ..Default::default()
+    };
+    assert!(ecudef::match_ecu(&defs, &name_only).is_none());
+}

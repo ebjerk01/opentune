@@ -321,9 +321,14 @@ switch) at 38400 baud, with only `AT` commands and no vehicle attached:
 
 **On a car (2026-11-18):** with the same clone on HS-CAN (`ATSP6`, 7E0/7E8),
 `opentune info` / `identify --driver elm327obd` read the battery voltage, ECU
-name, part number and VIN from a VW EDC17 1.6 TDI (EA189) on the first try:
-the first real-ECU exchange of this driver. Not yet exercised on a car: DTC
-read/clear, block reads and anything that needs security access.
+name, part number and VIN from a VW 1.6 TDI CR (EA189) engine ECU on the first
+try: the first real-ECU exchange of this driver. Not yet exercised on a car: DTC
+read/clear, block reads and anything that needs security access. The reported
+identity (ECU name `R4 1.6l TDI`, hardware/part number `03L907425C`) now
+matches the identification-only definition `siemens-pcr21-03l907425c`. Public
+parts listings cross-reference that number to Continental Simos PCR2.1 (not
+Bosch EDC17 as first noted here); the family is unconfirmed until an image of
+this unit is read.
 
 **Receive filter sticks until `ATZ`** (isolated on a car with the same clone,
 using a separate script, 2026-11-18):
