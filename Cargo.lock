@@ -1514,6 +1514,7 @@ dependencies = [
  "opentune-autoscan",
  "opentune-coding",
  "opentune-core",
+ "opentune-ctrldef",
  "opentune-logdef",
  "opentune-servicefn",
  "opentune-xdf",

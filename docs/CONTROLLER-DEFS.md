@@ -16,8 +16,15 @@ opentune controller decode 722.6 capture.log [--bus egs51] [--frames] [--json]
 ```
 
 `decode` reads the same log formats as `opentune haldex decode` (can-utils
-candump, OpenTune CSV, SavvyCAN CSV) and prints per-frame signal ranges and
-the definition's live channels. It is offline and never transmits.
+candump, OpenTune CSV, SavvyCAN CSV, Vector ASC) and prints per-frame signal
+ranges and the definition's live channels. It is offline and never transmits.
+
+Definitions also ship in [definition packs](DEFINITION-PACKS.md): a pack's
+`controllers/*.json` are the same files, loaded with the same validator (see
+[In definition packs](#in-definition-packs)). In the desktop app the
+**Controllers** panel lists the built-in set and every pack's controllers,
+shows one definition with its validation state, and decodes a CAN log with it
+(guide page *Controllers*).
 
 Validation words are the vocabulary of
 [`DEVELOPMENT.md` §7](DEVELOPMENT.md#7-validation-state-vocabulary).
@@ -236,6 +243,29 @@ errors fail CI, warnings are shown with `--warnings`.
 | `link.checksum` | error | checksum id is known to `opentune-checksum`. |
 | `link.checksum_mismatch` | warn | `checksum` differs from a linked ecudef's. |
 | `link.ecudef_map` | error | the named map exists in that ecudef. |
+
+## In definition packs
+
+The repository's `ctrldefs/` is the **built-in set**. A
+[definition pack](DEFINITION-PACKS.md) carries more under `controllers/`:
+
+```
+my-pack/
+  pack.json
+  controllers/acme-t1.json     # one ControllerDef, file named after its id
+```
+
+`opentune-packs` loads each file as a `ControllerDef` (unknown fields
+rejected) and runs `validate()` plus the file-name rule; a file with an error
+is skipped and listed in the pack's load report with the reasons, the others
+become pack entries of kind `controller` (sub-directory `controllers`). The
+`link.*` rules need the repository's ecudefs, database units and checksum ids,
+so the consumer checks them: the desktop **Controllers** panel resolves a
+pack definition's links against the bundled ecudefs plus the pack's own
+`ecudefs/`. `opentune packs <dir>` counts a pack's controllers; to run the
+CLI's `controller` commands on a pack definition, pass its path
+(`opentune controller show packs/<id>/controllers/<file>.json`) or
+`--dir packs/<id>/controllers`.
 
 ## Adding a controller
 

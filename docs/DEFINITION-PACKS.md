@@ -3,7 +3,8 @@
 A **definition pack** is one versioned, loadable bundle of OpenTune's data-defined
 knowledge for a vehicle or platform. It is how coverage grows by *data* instead of
 code: drop in a pack and every service engine (coding, adaptation, service
-functions, logging, auto-scan) picks up what it needs. Implemented by the
+functions, logging, auto-scan, drivetrain controller definitions) picks up what
+it needs. Implemented by the
 `opentune-packs` crate; load/inspect one with `opentune packs <dir>`.
 
 ## Layout
@@ -21,7 +22,12 @@ my-pack/
   services/*.json      # ServiceScript     — service-function scripts
   loggers/*.json       # LogDef            — live-data / logger definitions
   modules/*.json       # VehicleModules    — module lists for auto-scan
+  controllers/*.json   # ControllerDef     — drivetrain TCU / AWD definitions
 ```
+
+`controllers/` holds the same files as the repository's built-in
+[`ctrldefs/`](../ctrldefs/) ([CONTROLLER-DEFS.md](CONTROLLER-DEFS.md)); each file
+is named after its `id`.
 
 Any sub-directory is optional. Files named `TEMPLATE.json` or starting with `_`/`.`
 are treated as scaffolding and skipped, and so are pack *directories* starting with
@@ -41,6 +47,9 @@ loader skipped files says how many, and lists each file with the reason.
 or a definition inside it); the app remembers it and offers it in every panel.
 **File…** still takes a single loose definition. Each panel remembers its last
 choice. Backend: `packs_list` / `packs_open` (`desktop/src-tauri/src/packs.rs`).
+The **Controllers** panel mounts the same picker for `controllers/`; its list
+shows the built-in `ctrldefs/` plus the controllers of every installed pack and
+of every pack loaded from disk, each marked with its pack and validation state.
 
 ## Manifest (`pack.json`)
 
@@ -70,13 +79,18 @@ vendor-derived data does not belong in a public/community pack.
 - error only when `pack.json` is missing or unparseable (that's what makes a
   directory a pack);
 - load each definition file into its typed form and, where the type supports it
-  (coding / adaptation / service scripts / ECU defs), **validate** it;
+  (coding / adaptation / service scripts / ECU defs / controller defs),
+  **validate** it. Controller definitions get `opentune-ctrldef`'s structure and
+  honesty rules plus its file-name rule; their links (ecudefs, database units,
+  checksum ids) need the repository and are checked by the consumer (see
+  [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md#in-definition-packs));
 - a file that fails to parse or validate is recorded in the pack's `LoadReport`
   with the reason and **skipped** — it never aborts the pack or disappears
   silently.
 
 `PackLibrary` merges several packs and offers simple cross-pack lookups
-(`coding_by_id`, `service_by_id`, iterate all defs of a kind, per-kind counts).
+(`coding_by_id`, `service_by_id`, `controller_by_id`, iterate all defs of a
+kind, per-kind counts).
 
 ## CLI
 
@@ -132,6 +146,11 @@ is `packs`, so `opentune packs` from the repository root lists the shipped packs
      and OpenTune ships no seed/key algorithms. An optional `seedkey` id names
      the algorithm a host application (e.g. a desktop plugin) must supply for
      that step; without one, a secured script can be planned but not run.
+   - **Controller definition** (`controllers/*.json`, `ControllerDef`) — copy
+     the closest file in [`ctrldefs/`](../ctrldefs/) and follow
+     [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md) (public sources with licences,
+     safety notes, evidence words). Check it with
+     `opentune controller validate packs/<your-id>/controllers --warnings`.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
      `opentune-adaptation` and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
      ships them yet: open, license-compatible coding data is rare, and vendor

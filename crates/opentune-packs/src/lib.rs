@@ -2,11 +2,11 @@
 //!
 //! A **definition pack** is one versioned, loadable bundle of OpenTune's
 //! data-defined knowledge for a vehicle/platform: ECU definitions, coding-label
-//! sets, adaptation-channel maps, service-function scripts, logger definitions
-//! and module lists. It is how OpenTune's coverage grows by *data* rather than
+//! sets, adaptation-channel maps, service-function scripts, logger definitions,
+//! module lists and drivetrain controller definitions. It is how OpenTune's coverage grows by *data* rather than
 //! code — the app (or a community contributor) ships a pack, and every service
 //! engine (`opentune-coding`, `-adaptation`, `-servicefn`, `-logdef`,
-//! `-autoscan`) picks up what it needs.
+//! `-autoscan`, `-ctrldef`) picks up what it needs.
 //!
 //! ## Layout
 //!
@@ -22,13 +22,19 @@
 //!     services/*.json     # opentune_servicefn::ServiceScript
 //!     loggers/*.json      # opentune_logdef::LogDef
 //!     modules/*.json      # opentune_autoscan::VehicleModules
+//!     controllers/*.json  # opentune_ctrldef::ControllerDef (TCU / AWD)
 //! ```
 //!
 //! Loading is **honest**: a file that fails to parse or validate is recorded in
 //! the [`LoadReport`] (with the reason) and skipped — it never aborts the whole
 //! pack or silently vanishes. [`load_pack`] errors only when the manifest itself
 //! is missing or unparseable. Definitions that carry a `validate()` (coding,
-//! adaptation, service scripts, ECU defs) are validated on load.
+//! adaptation, service scripts, ECU defs, controller definitions) are validated
+//! on load. A controller definition goes through `opentune-ctrldef`'s own
+//! structural/honesty rules plus its file-name rule (the file stem is the id);
+//! its links (ecudefs, database units, checksum ids) need the repository and
+//! are checked by the consumer that has it (`opentune controller validate`, the
+//! desktop Controller panel).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -41,6 +47,7 @@ use opentune_autoscan::VehicleModules;
 use opentune_coding::CodingDef;
 use opentune_core::ecudef::{is_scaffolding_file, EcuDef};
 use opentune_core::validate::has_errors;
+use opentune_ctrldef::ControllerDef;
 use opentune_logdef::LogDef;
 use opentune_servicefn::ServiceScript;
 
@@ -98,6 +105,9 @@ pub enum Kind {
     Logger,
     /// `modules/` — [`VehicleModules`].
     Modules,
+    /// `controllers/` — [`ControllerDef`] (drivetrain TCU / AWD definitions,
+    /// the same files as the repository's `ctrldefs/`).
+    Controller,
 }
 
 impl Kind {
@@ -110,10 +120,23 @@ impl Kind {
             Kind::Service => "services",
             Kind::Logger => "loggers",
             Kind::Modules => "modules",
+            Kind::Controller => "controllers",
+        }
+    }
+    /// Singular name of the kind (`ecudef`, `coding`, …, `controller`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::EcuDef => "ecudef",
+            Kind::Coding => "coding",
+            Kind::Adaptation => "adaptation",
+            Kind::Service => "service",
+            Kind::Logger => "logger",
+            Kind::Modules => "modules",
+            Kind::Controller => "controller",
         }
     }
     /// All kinds, in load order.
-    pub fn all() -> [Kind; 6] {
+    pub fn all() -> [Kind; 7] {
         [
             Kind::EcuDef,
             Kind::Coding,
@@ -121,6 +144,7 @@ impl Kind {
             Kind::Service,
             Kind::Logger,
             Kind::Modules,
+            Kind::Controller,
         ]
     }
 }
@@ -188,6 +212,8 @@ pub struct Pack {
     pub loggers: Vec<LogDef>,
     /// Module lists (for auto-scan).
     pub modules: Vec<VehicleModules>,
+    /// Drivetrain controller definitions (TCU / AWD).
+    pub controllers: Vec<ControllerDef>,
     /// Every definition file that loaded, in load order (kind, then file name).
     pub entries: Vec<PackEntry>,
     /// Load diagnostics.
@@ -254,6 +280,7 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
         services: Vec::new(),
         loggers: Vec::new(),
         modules: Vec::new(),
+        controllers: Vec::new(),
         entries: Vec::new(),
         report: LoadReport::default(),
     };
@@ -277,7 +304,8 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
                     continue;
                 }
             };
-            match load_one(kind, &text, &mut pack) {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            match load_one(kind, &text, stem, &mut pack) {
                 Err(message) => pack.report.notes.push(LoadNote {
                     file: rel,
                     kind,
@@ -285,7 +313,6 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
                 }),
                 Ok((id, name)) => {
                     pack.report.loaded += 1;
-                    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     pack.entries.push(PackEntry {
                         kind,
                         file: rel.replace('\\', "/"),
@@ -301,8 +328,14 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
 
 /// Parse + validate one definition of `kind` from `text`, pushing it into the
 /// right vec. Returns its `(id, name)` (an empty id means "use the file stem"),
-/// or `Err(reason)` if it should be skipped (not counted).
-fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Result<(String, String), String> {
+/// or `Err(reason)` if it should be skipped (not counted). `stem` is the file
+/// stem (controller definitions must be named after their id).
+fn load_one(
+    kind: Kind,
+    text: &str,
+    stem: &str,
+    pack: &mut Pack,
+) -> Result<(String, String), String> {
     match kind {
         Kind::EcuDef => match serde_json::from_str::<EcuDef>(text) {
             Ok(d) => {
@@ -372,6 +405,30 @@ fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Result<(String, String),
             }
             Err(e) => Err(format!("parse error: {e}")),
         },
+        Kind::Controller => match ControllerDef::from_json(text) {
+            Ok(d) => {
+                let issues: Vec<_> = d
+                    .validate()
+                    .into_iter()
+                    .chain(d.validate_filename(stem))
+                    .filter(|i| i.severity == opentune_ctrldef::Severity::Error)
+                    .collect();
+                if !issues.is_empty() {
+                    return Err(format!(
+                        "controller validation errors: {}",
+                        issues
+                            .iter()
+                            .map(|i| i.to_string())
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    ));
+                }
+                let label = (d.id.clone(), d.name.clone());
+                pack.controllers.push(d);
+                Ok(label)
+            }
+            Err(e) => Err(format!("parse error: {e}")),
+        },
     }
 }
 
@@ -429,7 +486,7 @@ impl PackLibrary {
     }
 
     /// Total definitions loaded across all packs, by kind.
-    pub fn counts(&self) -> [(Kind, usize); 6] {
+    pub fn counts(&self) -> [(Kind, usize); 7] {
         let mut c = [
             (Kind::EcuDef, 0usize),
             (Kind::Coding, 0),
@@ -437,6 +494,7 @@ impl PackLibrary {
             (Kind::Service, 0),
             (Kind::Logger, 0),
             (Kind::Modules, 0),
+            (Kind::Controller, 0),
         ];
         for p in &self.packs {
             c[0].1 += p.ecudefs.len();
@@ -445,6 +503,7 @@ impl PackLibrary {
             c[3].1 += p.services.len();
             c[4].1 += p.loggers.len();
             c[5].1 += p.modules.len();
+            c[6].1 += p.controllers.len();
         }
         c
     }
@@ -465,6 +524,10 @@ impl PackLibrary {
     pub fn ecudefs(&self) -> impl Iterator<Item = &EcuDef> {
         self.packs.iter().flat_map(|p| p.ecudefs.iter())
     }
+    /// All controller definitions across packs.
+    pub fn controllers(&self) -> impl Iterator<Item = &ControllerDef> {
+        self.packs.iter().flat_map(|p| p.controllers.iter())
+    }
     /// Find a coding def by its `id`.
     pub fn coding_by_id(&self, id: &str) -> Option<&CodingDef> {
         self.coding().find(|d| d.id == id)
@@ -472,6 +535,10 @@ impl PackLibrary {
     /// Find a service script by its `id`.
     pub fn service_by_id(&self, id: &str) -> Option<&ServiceScript> {
         self.services().find(|s| s.id == id)
+    }
+    /// Find a controller definition by its `id`.
+    pub fn controller_by_id(&self, id: &str) -> Option<&ControllerDef> {
+        self.controllers().find(|d| d.id == id)
     }
 }
 
@@ -571,6 +638,71 @@ mod tests {
         assert_eq!(pack.coding.len(), 0);
         assert_eq!(pack.report.notes.len(), 1);
         assert!(pack.report.notes[0].message.contains("validation"));
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// A minimal controller definition that passes `opentune-ctrldef`'s rules.
+    fn controller(id: &str) -> String {
+        format!(
+            r#"{{"id":"{id}","name":"Demo TCU","kind":"tcu","maker":"Demo","family":"T1",
+              "validation":"implemented","identify":{{"part_numbers":["DEMO-1"]}},
+              "safety":["synthetic test definition"],
+              "sources":[{{"title":"test","license":"GPL-3.0-or-later","used_for":"test"}}]}}"#
+        )
+    }
+
+    #[test]
+    fn loads_controller_definitions_with_ctrldef_validation() {
+        let d = temp_dir("ctrl");
+        write(&d, "pack.json", r#"{"id":"p","name":"P"}"#);
+        write(&d, "controllers/demo-tcu.json", &controller("demo-tcu"));
+        // named after a different id: the ctrldef file-name rule rejects it
+        write(&d, "controllers/wrong-name.json", &controller("demo-other"));
+        // unknown fields are rejected by the ctrldef schema
+        write(
+            &d,
+            "controllers/typo.json",
+            &controller("typo").replacen(r#""kind""#, r#""kindd":1,"kind""#, 1),
+        );
+        // structurally invalid: no safety notes, no sources
+        write(
+            &d,
+            "controllers/no-safety.json",
+            r#"{"id":"no-safety","name":"X","kind":"awd","maker":"M","family":"F",
+               "validation":"implemented","safety":[],"sources":[]}"#,
+        );
+        let pack = load_pack(&d).unwrap();
+        assert_eq!(pack.controllers.len(), 1);
+        assert_eq!(pack.controllers[0].id, "demo-tcu");
+        assert_eq!(
+            pack.entries,
+            vec![PackEntry {
+                kind: Kind::Controller,
+                file: "controllers/demo-tcu.json".into(),
+                id: "demo-tcu".into(),
+                name: "Demo TCU".into(),
+            }]
+        );
+        assert_eq!(pack.entries[0].kind.name(), "controller");
+        assert_eq!(pack.entries[0].kind.dir(), "controllers");
+        let mut notes: Vec<(&str, &str)> = pack
+            .report
+            .notes
+            .iter()
+            .map(|n| (n.file.as_str(), n.message.as_str()))
+            .collect();
+        notes.sort();
+        assert_eq!(notes.len(), 3, "{notes:?}");
+        assert!(pack.report.notes.iter().all(|n| n.kind == Kind::Controller));
+        assert!(notes[0].0.ends_with("no-safety.json") && notes[0].1.contains("validation"));
+        assert!(notes[1].0.ends_with("typo.json") && notes[1].1.contains("parse error"));
+        assert!(notes[2].0.ends_with("wrong-name.json") && notes[2].1.contains("id.filename"));
+        let lib = PackLibrary {
+            packs: vec![pack],
+            failed: Vec::new(),
+        };
+        assert!(lib.controller_by_id("demo-tcu").is_some());
+        assert_eq!(lib.counts()[6], (Kind::Controller, 1));
         std::fs::remove_dir_all(&d).ok();
     }
 
