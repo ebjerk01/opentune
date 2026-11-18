@@ -25,7 +25,8 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             addr,
             len,
             out,
-        } => device::read(ctx, conn, addr, len, out),
+            plan,
+        } => device::read(ctx, conn, addr, len, out, plan),
         Command::Diff { a, b } => image::diff_files(a, b),
         Command::Checksum { action } => checksum::run(ctx, action),
         Command::Flash {
@@ -45,7 +46,8 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             addr,
             len,
             vault,
-        } => device::dump(ctx, conn, addr, len, vault),
+            plan,
+        } => device::dump(ctx, conn, addr, len, vault, plan),
         Command::Findmaps {
             stock,
             tuned,

@@ -56,7 +56,7 @@ a top-level command is added without a row here.
 |---|---|
 | `opentune drivers` | List the interface drivers this build knows about |
 | `opentune info` | Open a driver and print ECU identity + battery voltage |
-| `opentune read` | Read a memory region to a file |
+| `opentune read` | Read a memory region to a file; `--plan` prints the requests without sending them |
 | `opentune diff` | Byte-diff two images and summarise changed regions |
 | `opentune checksum` | Verify / correct checksums; `checksum algos` lists the algorithms |
 | `opentune flash` | Write a region through the safety orchestrator (backup → write → verify) |

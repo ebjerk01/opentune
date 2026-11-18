@@ -17,6 +17,21 @@
 //! - `diag_layer`: `Uds` uses [`UdsClient`]; `Kwp2000` uses [`Kwp2000Client`].
 //! - `tx_id`/`rx_id`: CAN tx/rx ids, or (K-line) the ECU target address in
 //!   `tx_id`.
+//!
+//! Block read on CAN (UDS): an ELM327 can only **transmit** a single ISO-TP
+//! frame, so every request must fit 7 bytes. The read uses the compact
+//! `addressAndLengthFormatIdentifier`s and refuses (before anything is sent)
+//! what cannot be expressed:
+//! - `options["read_mode"] = "upload"` (default): `RequestUpload 0x35` with
+//!   format `0x22` (16-bit address) or `0x13` (24-bit address, 255-byte
+//!   windows, one request/transfer/exit cycle each). A 32-bit address leaves
+//!   no byte for the size and is refused.
+//! - `options["read_mode"] = "rmba"`: `ReadMemoryByAddress 0x23` with format
+//!   `0x14` (32-bit address, 1-byte size), `options["read_chunk"]` bytes per
+//!   request (default 32, at most 255).
+//!
+//! K-line (KWP2000, or UDS over K-line) reads are unchanged: there is no
+//! single-frame limit there.
 
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::elm;
@@ -433,14 +448,27 @@ impl Interface for Elm327Driver {
         region: MemoryRegion,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<Vec<u8>> {
+        // UDS on CAN: plan the single-frame request format first, so a region
+        // the ELM cannot address is refused before anything is sent.
+        let on_can = self.transport()?.can;
+        let can_plan = match self.diag_layer {
+            DiagLayer::Uds if on_can => {
+                if region.length == 0 {
+                    return Ok(Vec::new());
+                }
+                Some(can_read_plan(self.cfg.as_ref(), region)?)
+            }
+            _ => None,
+        };
         // A full read from a locked ECU needs security access too; a no-op when
         // no handler is set and security is not required.
         self.security_access()?;
         let layer = self.diag_layer;
         let t = self.transport()?;
-        match layer {
-            DiagLayer::Uds => uds_read_memory(t, region, progress),
-            DiagLayer::Kwp2000 => kwp_read_memory(t, region, progress),
+        match (layer, can_plan) {
+            (DiagLayer::Uds, Some(plan)) => uds_can_read_memory(t, plan, region, progress),
+            (DiagLayer::Uds, None) => uds_read_memory(t, region, progress),
+            (DiagLayer::Kwp2000, _) => kwp_read_memory(t, region, progress),
         }
     }
 
@@ -555,6 +583,135 @@ fn uds_read_memory(
     }
     out.truncate(region.length as usize);
     let _ = uds.transfer_exit();
+    Ok(out)
+}
+
+/// `addressAndLengthFormatIdentifier` for `ReadMemoryByAddress` on CAN:
+/// 4-byte address, 1-byte size (`23 14 <addr32> <size8>` = 7 bytes).
+const CAN_RMBA_ALFID: u8 = 0x14;
+
+/// Default bytes per `ReadMemoryByAddress` request on CAN. This driver does
+/// not pace the ECU's consecutive frames, so long replies are kept short.
+const CAN_RMBA_CHUNK: u32 = 0x20;
+
+/// A UDS block read framed for the ELM327's 7-byte single-frame transmit
+/// limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CanRead {
+    /// `ReadMemoryByAddress` (0x23), format 0x14, `chunk` bytes per request.
+    ByAddress { chunk: u32 },
+    /// `RequestUpload` (0x35) with `alfid` (0x22 or 0x13), in windows of at
+    /// most `window` bytes (what the size field can express).
+    Upload { alfid: u8, window: u32 },
+}
+
+/// Choose the CAN read format for `region` (non-empty) from the `read_mode` /
+/// `read_chunk` options. Errors (nothing sent) for an address the format
+/// cannot carry or a bad option.
+fn can_read_plan(cfg: Option<&ConnectConfig>, region: MemoryRegion) -> Result<CanRead> {
+    let opt = |k: &str| {
+        cfg.and_then(|c| c.options.get(k))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+    };
+    let last = region
+        .address
+        .checked_add(region.length.saturating_sub(1))
+        .ok_or_else(|| {
+            Error::Config(format!(
+                "region 0x{:08X}+0x{:X} runs past the 32-bit address space",
+                region.address, region.length
+            ))
+        })?;
+    match opt("read_mode").map(str::to_ascii_lowercase).as_deref() {
+        None | Some("upload" | "35" | "0x35") => {
+            let (alfid, window) = match last {
+                0..=0xFFFF => (0x22, 0xFFFF),
+                0x1_0000..=0xFF_FFFF => (0x13, 0xFF),
+                _ => {
+                    return Err(Error::Unsupported(format!(
+                        "RequestUpload (0x35): address 0x{last:08X} needs a 4-byte address, \
+                         which leaves no room for the size in an ELM327 single-frame request \
+                         (7 bytes); use option read_mode=rmba (ReadMemoryByAddress 0x23, \
+                         format 0x14) or a raw-CAN interface (slcan/gs_usb/SocketCAN/J2534)"
+                    )))
+                }
+            };
+            Ok(CanRead::Upload { alfid, window })
+        }
+        Some("rmba" | "23" | "0x23") => {
+            let chunk = match opt("read_chunk") {
+                None => CAN_RMBA_CHUNK,
+                Some(v) => parse_access_level(v)
+                    .filter(|&n| n > 0)
+                    .map(u32::from)
+                    .ok_or_else(|| {
+                        Error::Config(format!(
+                            "elm327 option read_chunk={v:?}: expected 1..=255 bytes (the \
+                             1-byte size field of format 0x14)"
+                        ))
+                    })?,
+            };
+            Ok(CanRead::ByAddress { chunk })
+        }
+        Some(_) => Err(Error::Config(format!(
+            "elm327 option read_mode={:?}: expected upload or rmba",
+            opt("read_mode").unwrap_or_default()
+        ))),
+    }
+}
+
+/// UDS block read on CAN with requests that fit one ELM327 frame (see
+/// [`can_read_plan`]). Security access has already run.
+fn uds_can_read_memory(
+    transport: &mut dyn DiagTransport,
+    plan: CanRead,
+    region: MemoryRegion,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Vec<u8>> {
+    let total = region.length;
+    let report = |progress: &mut dyn FnMut(Progress), done: usize| {
+        progress(Progress {
+            phase: Phase::Read,
+            done: done as u64,
+            total: u64::from(total),
+        })
+    };
+    let mut uds = UdsClient::new(transport);
+    let mut out = Vec::with_capacity(total as usize);
+    report(progress, 0);
+    match plan {
+        CanRead::ByAddress { chunk } => {
+            while (out.len() as u32) < total {
+                let addr = region.address + out.len() as u32;
+                let n = chunk.min(total - out.len() as u32);
+                out.extend(uds.read_memory_by_address(CAN_RMBA_ALFID, addr, n)?);
+                report(progress, out.len());
+            }
+        }
+        CanRead::Upload { alfid, window } => {
+            while (out.len() as u32) < total {
+                let addr = region.address + out.len() as u32;
+                let win = window.min(total - out.len() as u32);
+                uds.request_upload_with_format(0x00, alfid, addr, win)?;
+                let mut got = 0u32;
+                let mut seq: u8 = 1;
+                while got < win {
+                    let body = uds.transfer_data(seq, &[])?;
+                    let data = &body[1..];
+                    if data.is_empty() {
+                        return Err(Error::Protocol("empty transferData block".into()));
+                    }
+                    let take = data.len().min((win - got) as usize);
+                    out.extend_from_slice(&data[..take]);
+                    got += take as u32;
+                    seq = seq.wrapping_add(1);
+                    report(progress, out.len());
+                }
+                uds.transfer_exit()?;
+            }
+        }
+    }
     Ok(out)
 }
 
@@ -916,16 +1073,31 @@ mod elm_transport_tests {
     use super::*;
     use std::collections::VecDeque;
 
-    /// Scripted byte stream: hands out `inbox`, then idles.
+    /// Scripted byte stream: hands out `inbox`, then idles. Records what is
+    /// written to it.
     struct MockStream {
         inbox: VecDeque<u8>,
+        written: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     }
 
     impl MockStream {
         fn boxed(script: &str) -> Box<dyn ElmStream> {
-            Box::new(Self {
+            Self::recording(script).0
+        }
+
+        /// The stream plus a handle on everything written to it.
+        fn recording(
+            script: &str,
+        ) -> (
+            Box<dyn ElmStream>,
+            std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        ) {
+            let written = std::sync::Arc::default();
+            let s = Self {
                 inbox: script.bytes().collect(),
-            })
+                written: std::sync::Arc::clone(&written),
+            };
+            (Box::new(s), written)
         }
     }
 
@@ -939,7 +1111,8 @@ mod elm_transport_tests {
                 _ => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "idle")),
             }
         }
-        fn write_all(&mut self, _buf: &[u8]) -> std::io::Result<()> {
+        fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+            self.written.lock().unwrap().extend_from_slice(buf);
             Ok(())
         }
         fn flush(&mut self) -> std::io::Result<()> {
@@ -989,6 +1162,146 @@ mod elm_transport_tests {
         // skipped.
         let mut t = ElmTransport::new(MockStream::boxed("BUS INIT: ...OK\rC1EF8F\r\r>"));
         assert_eq!(t.request(&[0x81], 300).unwrap(), [0xC1, 0xEF, 0x8F]);
+    }
+
+    /// The 10 AT replies of the 11-bit ISO-TP init, then `replies` (one ELM
+    /// prompt block each).
+    fn can_script(replies: &[&str]) -> String {
+        let mut s = "OK\r>".repeat(10);
+        for r in replies {
+            s.push_str(r);
+            s.push_str("\r\r>");
+        }
+        s
+    }
+
+    /// The diagnostic requests written (hex lines that are not AT commands).
+    fn requests(written: &std::sync::Mutex<Vec<u8>>) -> Vec<String> {
+        String::from_utf8(written.lock().unwrap().clone())
+            .unwrap()
+            .split('\r')
+            .filter(|l| !l.is_empty() && !l.starts_with("AT"))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    fn open_can(
+        replies: &[&str],
+        options: &[(&str, &str)],
+    ) -> (Elm327Driver, std::sync::Arc<std::sync::Mutex<Vec<u8>>>) {
+        let (stream, written) = MockStream::recording(&can_script(replies));
+        let mut d = Elm327Driver::with_stream(stream);
+        let mut cfg = ConnectConfig::default();
+        for (k, v) in options {
+            cfg.options.insert((*k).into(), (*v).into());
+        }
+        d.open(&cfg).unwrap();
+        (d, written)
+    }
+
+    /// Every request fits one ELM327 CAN frame: 7 bytes = 14 hex digits.
+    fn assert_single_frame(reqs: &[String]) {
+        for r in reqs {
+            assert!(r.len() <= 14, "{r} is longer than 7 bytes");
+        }
+    }
+
+    #[test]
+    fn can_upload_uses_a_compact_16_bit_format() {
+        let (mut d, written) = open_can(
+            &[
+                "752000FF",
+                "760100010203",
+                "760204050607",
+                "7603080910",
+                "77",
+            ],
+            &[],
+        );
+        let mut seen = Vec::new();
+        let data = d
+            .read_memory(MemoryRegion::new(0x1000, 11), &mut |p| seen.push(p.done))
+            .unwrap();
+        assert_eq!(data, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0x10]);
+        let reqs = requests(&written);
+        assert_eq!(reqs, ["3500221000000B", "3601", "3602", "3603", "37"]);
+        assert_single_frame(&reqs);
+        assert_eq!(seen, [0, 4, 8, 11]);
+    }
+
+    #[test]
+    fn can_rmba_reads_32_bit_addresses_in_single_frames() {
+        let (mut d, written) = open_can(
+            &["6311223344", "635566"],
+            &[("read_mode", "rmba"), ("read_chunk", "4")],
+        );
+        let data = d
+            .read_memory(MemoryRegion::new(0x8000_0000, 6), &mut |_| {})
+            .unwrap();
+        assert_eq!(data, [0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+        let reqs = requests(&written);
+        assert_eq!(reqs, ["23148000000004", "23148000000402"]);
+        assert_single_frame(&reqs);
+    }
+
+    #[test]
+    fn can_upload_refuses_a_32_bit_address_before_sending() {
+        let (mut d, written) = open_can(&[], &[]);
+        let err = d
+            .read_memory(MemoryRegion::new(0x8000_0000, 16), &mut |_| {})
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Unsupported(m) if m.contains("read_mode=rmba")),
+            "{err:?}"
+        );
+        assert!(requests(&written).is_empty(), "nothing sent");
+    }
+
+    #[test]
+    fn can_read_plan_picks_formats_and_checks_options() {
+        let cfg = |kv: &[(&str, &str)]| {
+            let mut c = ConnectConfig::default();
+            for (k, v) in kv {
+                c.options.insert((*k).into(), (*v).into());
+            }
+            c
+        };
+        let none = cfg(&[]);
+        assert_eq!(
+            can_read_plan(Some(&none), MemoryRegion::new(0, 0x10000)).unwrap(),
+            CanRead::Upload {
+                alfid: 0x22,
+                window: 0xFFFF
+            }
+        );
+        assert_eq!(
+            can_read_plan(Some(&none), MemoryRegion::new(0xFFF0, 0x20)).unwrap(),
+            CanRead::Upload {
+                alfid: 0x13,
+                window: 0xFF
+            }
+        );
+        assert_eq!(
+            can_read_plan(
+                Some(&cfg(&[("read_mode", "RMBA")])),
+                MemoryRegion::new(0, 1)
+            )
+            .unwrap(),
+            CanRead::ByAddress {
+                chunk: CAN_RMBA_CHUNK
+            }
+        );
+        for bad in [
+            cfg(&[("read_mode", "dma")]),
+            cfg(&[("read_mode", "rmba"), ("read_chunk", "0")]),
+            cfg(&[("read_mode", "rmba"), ("read_chunk", "256")]),
+        ] {
+            assert!(matches!(
+                can_read_plan(Some(&bad), MemoryRegion::new(0, 1)),
+                Err(Error::Config(_))
+            ));
+        }
+        assert!(can_read_plan(Some(&none), MemoryRegion::new(0xFFFF_FFF0, 0x20)).is_err());
     }
 
     #[test]

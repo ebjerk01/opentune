@@ -49,6 +49,9 @@ pub trait Interface {
     fn write_memory(&mut self, region: MemoryRegion, data: &[u8],
                     progress: &mut dyn FnMut(Progress)) -> Result<()>;
 
+    fn plan_read_memory(&mut self, region: MemoryRegion)
+        -> Option<Result<Vec<String>>> { None }
+
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> { None }
     fn can_monitor(&mut self) -> Option<&mut dyn CanMonitor> { None }
 }
@@ -67,6 +70,13 @@ Contract:
 - **`read_memory` / `write_memory`** — call `progress` at least at start and end
   with `Progress { phase, done, total }`; report real progress for long reads.
   Validate lengths; return `Error::NotConnected` if used before `open`.
+- **`plan_read_memory`** — optional dry run of `read_memory` on the opened
+  driver: the exact lines the read would write to the adapter, in order, with
+  **nothing sent**. Return `Some(Err(_))` where the real read would be refused
+  before reaching the bus. The default `None` means "this driver cannot plan";
+  callers (`opentune read --plan`, `CliContext::plan_read`) then refuse with
+  "driver cannot plan" instead of reading for real. `elm327obd` plans its full
+  read; `mock` plans the file slice it would copy.
 - **`diag`** — if the driver owns a request/response `DiagTransport` (an
   `IsoTp` over its `CanLink`, a KWP2000/OBD session, …), **override this** to
   return it once `open` has succeeded. The default `None` means "no generic
@@ -226,7 +236,19 @@ anything, every line the read would write, in order: the `AT` pacing and each
 hex request, each with its purpose. A send-key appears as `2712<key>`, and an
 upload's blocks appear as a counter range. The dry run fails where the real
 read would fail before reaching the bus. `memory::dry_run_read` is the same
-planner without an opened adapter.
+planner without an opened adapter. The lines (without the purposes) are also
+offered through `Interface::plan_read_memory`, so a registry-opened driver and
+the CLI can plan:
+
+```sh
+opentune read --driver elm327obd --port /dev/ttyUSB0 --bus hs \
+    --tx-id 7E0 --rx-id 7E8 --opt read_mode=upload \
+    --addr 0x10000 --len 0x400 --plan
+```
+
+`--plan` opens the adapter (the `AT` init only), prints each line on stdout
+and sends no diagnostic request. `dump --plan` does the same without reading
+the identity or archiving anything.
 
 **Write: bench-only, discouraged.** `capabilities().write_memory` is `false`.
 The ELM cannot send multi-frame ISO-TP, so `write_memory` does the following:
@@ -269,6 +291,27 @@ switch) at 38400 baud, with only `AT` commands and no vehicle attached:
 Not yet validated against a real ECU. The first car session (read-only, see
 [`FIRST-CAR-TEST.md`](FIRST-CAR-TEST.md)) should start with
 `plan_read_memory` and a small region.
+
+## 3e. `elm327`: UDS block read on CAN
+
+`crates/drivers/kline-elm327` (crate `opentune-driver-elm327`, id `elm327`)
+has the same single-frame transmit limit on CAN. Its UDS `read_memory` plans
+the request format before anything is sent, security access included, and
+uses the compact `addressAndLengthFormatIdentifier`s:
+
+- `read_mode=upload` (default): `RequestUpload 0x35` with format `0x22`
+  (16-bit address) or `0x13` (24-bit address, 255-byte windows, one
+  request/transfer/exit cycle per window). A 32-bit address is refused with a
+  pointer to `read_mode=rmba`.
+- `read_mode=rmba`: `ReadMemoryByAddress 0x23` with format `0x14` (32-bit
+  address, 1-byte size), `read_chunk` bytes per request (default 32, 1..=255;
+  this driver does not pace the ECU's consecutive frames).
+
+K-line reads (KWP2000, and UDS over K-line) are unchanged. Writes on CAN still
+use the 4-byte format and are refused by the 7-byte check; use `elm327obd`'s
+bench path or a raw-CAN interface. Like `elm327obd`, this is unit-tested
+against scripted ELM replies only. It has no dry run (`plan_read_memory` is
+`None`).
 
 ## 4. Registration
 
