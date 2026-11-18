@@ -152,6 +152,23 @@ impl LoadReport {
     }
 }
 
+/// One definition file that loaded (and validated) cleanly: where it lives in
+/// the pack and how to label it in a picker. A UI or CLI that runs an engine on
+/// a *file* (the coding / adaptation / service / logger / auto-scan engines all
+/// take a path) resolves `root.join(file)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackEntry {
+    /// What kind of definition the file holds.
+    pub kind: Kind,
+    /// Pack-relative path, e.g. `coding/bcm.json`.
+    pub file: String,
+    /// The definition's own id (the file stem for kinds without one: logger
+    /// definitions and module lists).
+    pub id: String,
+    /// Human-readable name (`name`, the vehicle of a module list, or empty).
+    pub name: String,
+}
+
 /// A loaded definition pack.
 #[derive(Debug, Clone)]
 pub struct Pack {
@@ -171,6 +188,8 @@ pub struct Pack {
     pub loggers: Vec<LogDef>,
     /// Module lists (for auto-scan).
     pub modules: Vec<VehicleModules>,
+    /// Every definition file that loaded, in load order (kind, then file name).
+    pub entries: Vec<PackEntry>,
     /// Load diagnostics.
     pub report: LoadReport,
 }
@@ -235,6 +254,7 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
         services: Vec::new(),
         loggers: Vec::new(),
         modules: Vec::new(),
+        entries: Vec::new(),
         report: LoadReport::default(),
     };
 
@@ -257,14 +277,22 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
                     continue;
                 }
             };
-            if let Some(msg) = load_one(kind, &text, &mut pack) {
-                pack.report.notes.push(LoadNote {
+            match load_one(kind, &text, &mut pack) {
+                Err(message) => pack.report.notes.push(LoadNote {
                     file: rel,
                     kind,
-                    message: msg,
-                });
-            } else {
-                pack.report.loaded += 1;
+                    message,
+                }),
+                Ok((id, name)) => {
+                    pack.report.loaded += 1;
+                    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    pack.entries.push(PackEntry {
+                        kind,
+                        file: rel.replace('\\', "/"),
+                        id: if id.is_empty() { stem.to_string() } else { id },
+                        name,
+                    });
+                }
             }
         }
     }
@@ -272,14 +300,15 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
 }
 
 /// Parse + validate one definition of `kind` from `text`, pushing it into the
-/// right vec. Returns `Some(reason)` if it should be skipped (not counted).
-fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Option<String> {
+/// right vec. Returns its `(id, name)` (an empty id means "use the file stem"),
+/// or `Err(reason)` if it should be skipped (not counted).
+fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Result<(String, String), String> {
     match kind {
         Kind::EcuDef => match serde_json::from_str::<EcuDef>(text) {
             Ok(d) => {
                 let issues = d.validate();
                 if has_errors(&issues) {
-                    return Some(format!(
+                    return Err(format!(
                         "ECU def validation errors: {}",
                         issues
                             .iter()
@@ -289,54 +318,59 @@ fn load_one(kind: Kind, text: &str, pack: &mut Pack) -> Option<String> {
                             .join("; ")
                     ));
                 }
+                let label = (d.id.clone(), d.name.clone());
                 pack.ecudefs.push(d);
-                None
+                Ok(label)
             }
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
         Kind::Coding => match serde_json::from_str::<CodingDef>(text) {
             Ok(d) => match d.validate() {
                 Ok(()) => {
+                    let label = (d.id.clone(), d.name.clone());
                     pack.coding.push(d);
-                    None
+                    Ok(label)
                 }
-                Err(e) => Some(format!("coding validation: {e}")),
+                Err(e) => Err(format!("coding validation: {e}")),
             },
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
         Kind::Adaptation => match serde_json::from_str::<AdaptationDef>(text) {
             Ok(d) => match d.validate() {
                 Ok(()) => {
+                    let label = (d.id.clone(), d.name.clone());
                     pack.adaptation.push(d);
-                    None
+                    Ok(label)
                 }
-                Err(e) => Some(format!("adaptation validation: {e}")),
+                Err(e) => Err(format!("adaptation validation: {e}")),
             },
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
         Kind::Service => match serde_json::from_str::<ServiceScript>(text) {
             Ok(d) => match d.validate() {
                 Ok(()) => {
+                    let label = (d.id.clone(), d.name.clone());
                     pack.services.push(d);
-                    None
+                    Ok(label)
                 }
-                Err(e) => Some(format!("service-script validation: {e}")),
+                Err(e) => Err(format!("service-script validation: {e}")),
             },
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
         Kind::Logger => match serde_json::from_str::<LogDef>(text) {
             Ok(d) => {
                 pack.loggers.push(d);
-                None
+                Ok((String::new(), String::new()))
             }
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
         Kind::Modules => match serde_json::from_str::<VehicleModules>(text) {
             Ok(d) => {
+                let label = (String::new(), d.vehicle.clone());
                 pack.modules.push(d);
-                None
+                Ok(label)
             }
-            Err(e) => Some(format!("parse error: {e}")),
+            Err(e) => Err(format!("parse error: {e}")),
         },
     }
 }
@@ -492,6 +526,34 @@ mod tests {
         assert_eq!(pack.report.loaded, 1);
         assert_eq!(pack.report.notes.len(), 1);
         assert_eq!(pack.report.notes[0].kind, Kind::Coding);
+        // only the clean file is an entry, with its id, name and relative path
+        assert_eq!(
+            pack.entries,
+            vec![PackEntry {
+                kind: Kind::Coding,
+                file: "coding/bcm.clb.json".into(),
+                id: "test-bcm".into(),
+                name: "BCM".into(),
+            }]
+        );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn entries_fall_back_to_the_file_stem() {
+        let d = temp_dir("entries");
+        write(&d, "pack.json", r#"{"id":"p","name":"P"}"#);
+        write(
+            &d,
+            "modules/car.json",
+            r#"{"vehicle":"Demo car","modules":[]}"#,
+        );
+        let pack = load_pack(&d).unwrap();
+        assert_eq!(pack.entries.len(), 1);
+        assert_eq!(pack.entries[0].kind, Kind::Modules);
+        assert_eq!(pack.entries[0].id, "car");
+        assert_eq!(pack.entries[0].name, "Demo car");
+        assert_eq!(pack.entries[0].file, "modules/car.json");
         std::fs::remove_dir_all(&d).ok();
     }
 
