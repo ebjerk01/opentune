@@ -24,6 +24,8 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 - **Calibration maps** — map-by-map **compare** in physical units, a **map-finder** for a single image (scored candidates with evidence) or a stock/tuned diff, portable **tune recipes** that only apply to a matching image (checksum-fixed and attested), a **log viewer** with map overlay, and import/export of the big community definition libraries: **TunerPro XDF**, **ASAM A2L**, and **EcuFlash / RomRaider XML** (Subaru/Mitsubishi), plus **WinOLS `.ols`** project import and a direct **A2L → XDF** converter — with lossy conversions flagged, never guessed.
 - **Module coding** — a data-driven coding engine: read a module's configuration, decode it to human-readable parameters via coding-label definitions, edit a parameter (range/option validated), preview the before→after diff, and write it back safely (read-fresh → merge → read-back verify, with dry-run).
 - **Diagnostics data** — an **11,140-code DTC database + decoder**, VIN and VAG/Bosch part-number decoders, and an ECU-library scanner.
+- **Drivetrain** — VAG **DQ250 02E** DSG definitions with its sector checksum (validated on real reads) and shift-schedule maps; DQ250 MQB / DQ200 / DL382 identification; **Haldex Gen4** read-only identify and measuring groups over KWP2000/TP2.0 plus passive Haldex CAN decoding; **OpenHaldex** status and mode control.
+- **Open aftermarket ECUs** — TunerStudio-compatible **Speeduino / rusEFI / MegaSquirt** support: INI definitions and `.msq` tunes, serial read/write with read-back verify before burn, live channels (`opentune ts`).
 - A **CLI** (`opentune`) exposing all of the above: `drivers · identify · info · read · dump · diff · findmaps · compare · checksum verify|fix|algos|attest · flash · vault · ecudefs · packs · import-xdf|a2l|ecuflash|ols · a2l2xdf · export-xdf|a2l · vin · decode-part · scan · dtc · container · cbf · coding · adaptation · autoscan · service · log · simulate`.
 
 ### Implemented, awaiting on-car validation
@@ -34,6 +36,7 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 - **Protocol layer** — ISO-TP (hardened), UDS, KWP2000, VW TP2.0, CAN-FD (+ ISO-TP-FD) and **DoIP** (ISO 13400), with security access (`0x27`) wired into every write path — *you supply the seed/key algorithm; OpenTune ships none*.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, resumable/recoverable, with a backup vault and a full session transcript.
 - **Apps** — a Tauri **desktop** app (identify, checksums, map viewer/editor, compare, flash, vault, log viewer, ECU database, in-app help, plus an adapter bar and capability-gated live panels for coding, auto-scan + DTCs, adaptation, service functions, logging, an OBD dashboard, OBD inspection and CAN capture — the live panels sit in the Bench section of alpha builds until they are vehicle-tested; plugins can add panels) — try every live panel offline against the built-in **virtual car** (`vcar` driver) and an **Android** app over the same core (UniFFI).
+- **Plugin API** — the desktop app and the CLI are both libraries: embedders add panels, commands, drivers, checksum algorithms and caller-supplied seed/key handlers without forking (`docs/PLUGINS.md`). OpenTune itself ships no OEM seed/key algorithms.
 
 ## Architecture
 
@@ -136,18 +139,23 @@ short version:
 - ✅ Full-vehicle **auto-scan** — every module, DTCs, identities
 - ✅ **OBD inspection** — readiness monitors, freeze frame, VIN/CALID/CVN, stored/pending/permanent DTCs
 - ✅ **Virtual car** — a simulated six-module vehicle so every live panel works offline
+- ✅ **Fast logging** — UDS `0x2C` dynamic data identifiers bundle many channels into one request, with automatic fallback to polling
 - ✅ **Datalogging** — logger.xml definitions + a live polling loop to CSV over UDS DIDs, OBD-II PIDs and `0x23` memory reads *(Subaru SSM still pending)*
 - ✅ Protocol stack — ISO-TP, UDS, KWP2000, VW TP2.0, OBD-II, CAN-FD, DoIP
 - ✅ Diagnostics driver — ELM327 / OBD, with a UDS conformance simulator for offline tests
 - ✅ SecurityAccess SA2 bytecode VM (runs caller-supplied bytecode)
 - ✅ Mercedes CBF diagnostic descriptions
+- ✅ **Drivetrain** — DQ250 02E checksum + shift maps, Haldex Gen4 read-only + OpenHaldex, DSG/TCU recognition
+- ✅ **Aftermarket ECUs** — Speeduino / rusEFI / MegaSquirt (TunerStudio INI + `.msq`, serial read/write/burn, live data)
+- ✅ **Plugin API** — desktop + CLI host APIs, seed/key and checksum resolvers
 
 **Next**
 - 🔲 Extend live **datalogging** to the Subaru SSM transport, plus dashboards and triggers
 - 🔲 On-car validation of the live diagnostic, adaptation and logging paths
 - 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
 - 🔲 Desktop & Android UX — guided wizards over the engines
-- 🔲 A growing community definition & pack library, and broader drivetrain/AWD coverage
+- 🔲 A growing community definition & pack library, and broader drivetrain/AWD coverage (DQ250 launch/torque maps, DQ200/DL382 maps, active Haldex Gen4 reads over TP2.0)
+- 🔲 Signed releases with desktop auto-update
 - 🔲 CAN-FD, DoIP and J2534 flashing validated on hardware
 
 OEM seed/key algorithms and protected calibration data are never bundled — OpenTune
