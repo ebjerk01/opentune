@@ -9,10 +9,14 @@
 //!   `confirm` and returns the unit's **read-back** state. `sim: true` talks to
 //!   an in-app [`SimOpenHaldex`] instead (kept in [`HaldexState`], so a mode
 //!   change persists between polls).
-//! - **Gen4 read** — [`read_gen4`] needs a VW TP2.0 channel, which no shipped
-//!   driver opens yet; a real read is refused with that explanation (the same
-//!   rule as `opentune haldex gen4`). `sim: true` runs the real `VwTp20` +
-//!   KWP2000 stack against the simulated Gen4 unit.
+//! - **Gen4 read** — [`read_gen4`] needs a VW TP2.0 channel: with the
+//!   raw-CAN drivers (socketcan, slcan, gsusb) the adapter is opened with
+//!   `transport=tp20` to logical address 0x0A ([`gen4_key`]) through the
+//!   adapter hub, read, and closed again (the channel's
+//!   keep-alive stops and `A8` is sent). Other drivers (the ELM327s) are
+//!   refused with the reason (the same rule as `opentune haldex gen4`).
+//!   `sim: true` runs the real `VwTp20` + KWP2000 stack against the simulated
+//!   Gen4 unit.
 //! - **CAN-log decode** — a candump / OpenTune CSV / SavvyCAN log becomes the
 //!   crate's summary plus chart-ready series (lock request, lock actual, clutch
 //!   value, Gen4 temperature, front/rear wheel-speed delta), and can be
@@ -21,12 +25,13 @@
 //! Commands: `haldex_modes`, `haldex_status`, `haldex_set_mode`,
 //! `haldex_gen4_read`, `haldex_decode_log`, `haldex_export_csv`.
 
-use crate::adapter::{AdapterHub, Addr, ConnKey};
+use crate::adapter::{AdapterHub, Addr, ConnKey, Session};
 use opentune_core::protocol::vwtp20::VwTp20;
 use opentune_core::RawDiag;
 use opentune_haldex::canlog::{parse_log, summarize, LogFrame};
 use opentune_haldex::gen4::{
-    read_gen4, Gen4ReadOptions, DEFAULT_GROUPS, TP20_LOGICAL_ADDRESS, TP20_TESTER_RX_ID,
+    read_gen4, tp20_refusal, Gen4ReadOptions, DEFAULT_GROUPS, TP20_LOGICAL_ADDRESS,
+    TP20_TESTER_RX_ID,
 };
 use opentune_haldex::openhaldex::{self, Mode, OpenHaldexUds};
 use opentune_haldex::sim::{SimGen4, SimGen4Link, SimOpenHaldex};
@@ -182,17 +187,49 @@ pub async fn haldex_set_mode(
     Ok(v)
 }
 
-/// Drivers that can open a VW TP2.0 channel (none yet; see docs/HALDEX.md).
-const TP20_DRIVERS: &[&str] = &[];
+/// Why a real Gen4 read is refused with `driver` (`None`: it can open TP2.0).
+pub fn gen4_refusal(driver: &str) -> Option<String> {
+    tp20_refusal(driver).map(|why| {
+        format!(
+            "{why} In this panel: use the simulated unit to see the read, or capture the \
+             drivetrain CAN (CAN capture) and decode it below."
+        )
+    })
+}
 
-/// Why a real Gen4 read is refused with `driver`.
-pub fn gen4_refusal(driver: &str) -> String {
-    format!(
-        "driver '{driver}' cannot open a VW TP2.0 channel, which the Haldex Gen4 needs (KWP2000 \
-         over TP2.0 at logical address 0x0A). No OpenTune driver does yet: the ELM327 drivers \
-         refuse TP2.0 and socketcan / slcan / gs_usb only build ISO-TP. Use the simulated unit \
-         to see the read, or capture the drivetrain CAN (CAN capture) and decode it below."
-    )
+/// The adapter binding for a real Gen4 read: the sidebar's driver/port/baud/
+/// bus with a TP2.0 channel to logical address 0x0A (`transport=tp20`,
+/// `tp20_addr=0x0A`; the module transmits on 0x300).
+pub fn gen4_key(
+    driver: &str,
+    port: Option<&str>,
+    baud: Option<&str>,
+    bus: Option<&str>,
+) -> ConnKey {
+    let addr = Addr {
+        tx_id: TP20_LOGICAL_ADDRESS as u32,
+        rx_id: TP20_TESTER_RX_ID,
+    };
+    ConnKey::new(driver, port, baud, bus, addr)
+        .with_option("transport", "tp20")
+        .with_option("tp20_addr", &format!("0x{TP20_LOGICAL_ADDRESS:02X}"))
+}
+
+/// A real Gen4 read on the hub's session: open the adapter with the TP2.0
+/// options, read, then close it so the channel is torn down (`A8`) and the
+/// next panel re-opens with its own settings.
+pub fn gen4_on(s: &mut Session, key: &ConnKey, opts: &Gen4ReadOptions) -> Result<Value, String> {
+    let r: Result<_, String> = (|| {
+        let drv = s.interface(key)?;
+        let transport = drv.info().display_name;
+        let t = drv
+            .diag()
+            .ok_or_else(|| format!("driver '{}' has no diagnostic transport", key.driver))?;
+        Ok((read_gen4(t, opts), transport))
+    })();
+    s.invalidate();
+    let (r, transport) = r?;
+    Ok(json!({ "report": r, "responded": r.responded(), "sim": false, "adapter": transport }))
 }
 
 /// The simulated Gen4 read: the real `VwTp20` channel and KWP2000 client
@@ -206,14 +243,20 @@ pub fn gen4_sim(opts: &Gen4ReadOptions) -> Value {
 }
 
 /// Read-only Gen4 controller read (identification, stored codes, measuring
-/// groups). Refused on real hardware until a driver opens TP2.0.
+/// groups). On real hardware it needs a raw-CAN driver (TP2.0); others are
+/// refused with the reason.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn haldex_gen4_read(
     driver: Option<String>,
+    port: Option<String>,
+    baud: Option<String>,
+    bus: Option<String>,
     sim: bool,
     groups: Option<Vec<u8>>,
     read_dtcs: Option<bool>,
     timeout_ms: Option<u64>,
+    hub: tauri::State<'_, AdapterHub>,
 ) -> Result<Value, String> {
     let mut opts = Gen4ReadOptions {
         groups: groups
@@ -225,15 +268,17 @@ pub async fn haldex_gen4_read(
     if let Some(t) = timeout_ms {
         opts.timeout_ms = t;
     }
-    if !sim {
-        let d = driver.unwrap_or_default();
-        if !TP20_DRIVERS.contains(&d.as_str()) {
-            return Err(gen4_refusal(&d));
-        }
+    if sim {
+        return tauri::async_runtime::spawn_blocking(move || gen4_sim(&opts))
+            .await
+            .map_err(|e| format!("Gen4 read task failed: {e}"));
     }
-    tauri::async_runtime::spawn_blocking(move || gen4_sim(&opts))
-        .await
-        .map_err(|e| format!("Gen4 read task failed: {e}"))
+    let d = driver.unwrap_or_default();
+    if let Some(why) = gen4_refusal(&d) {
+        return Err(why);
+    }
+    let key = gen4_key(&d, port.as_deref(), baud.as_deref(), bus.as_deref());
+    hub.run("Haldex Gen4 read", move |s| gen4_on(s, &key, &opts))
 }
 
 /// One chart series.
@@ -492,8 +537,11 @@ mod tests {
 
     #[test]
     fn gen4_real_read_is_refused_and_sim_read_works() {
-        let e = gen4_refusal("elm327obd");
+        let e = gen4_refusal("elm327obd").unwrap();
         assert!(e.contains("TP2.0") && e.contains("elm327obd"), "{e}");
+        for d in ["socketcan", "slcan", "gsusb"] {
+            assert!(gen4_refusal(d).is_none(), "{d}");
+        }
         let v = gen4_sim(&Gen4ReadOptions::default());
         assert_eq!(v["responded"], true);
         assert!(v["report"]["identity"]["part_number"]
@@ -501,6 +549,57 @@ mod tests {
             .unwrap()
             .starts_with("0AY"));
         assert!(!v["report"]["groups"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn gen4_real_read_runs_over_a_tp20_driver() {
+        use opentune_core::protocol::diag::DiagTransport;
+        use opentune_core::protocol::tp20channel::Tp20Options;
+        use opentune_core::protocol::tp20sim::{Tp20Ecu, Tp20EcuConfig};
+        use opentune_driver_slcan::{sim::SimSlcanPort, SlcanDriver};
+        use opentune_haldex::sim::SIM_TESTER_TX_ID;
+        use std::sync::Arc;
+
+        let key = gen4_key("slcan", Some("/dev/ttyACM0"), None, None);
+        let o = Tp20Options::from_config(&key.config().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!((o.addr, o.rx_id), (0x0A, 0x300));
+
+        let unit = Arc::new(Mutex::new(SimGen4::default()));
+        let u = unit.clone();
+        let ecu = Tp20Ecu::new(
+            Tp20EcuConfig {
+                addr: TP20_LOGICAL_ADDRESS,
+                tester_tx_id: SIM_TESTER_TX_ID,
+                ..Tp20EcuConfig::default()
+            },
+            Box::new(move |req| u.lock().unwrap().request(req, 0).unwrap()),
+        )
+        .shared();
+        let e = ecu.clone();
+        let mut s = Session::new(Box::new(move |k: &ConnKey| {
+            let mut d = SlcanDriver::new();
+            d.open_with_port(Box::new(SimSlcanPort::tp20(e.clone())), &k.config()?)
+                .map_err(|e| e.to_string())?;
+            Ok(Box::new(d) as Box<dyn opentune_core::Interface>)
+        }));
+        let v = gen4_on(&mut s, &key, &Gen4ReadOptions::default()).unwrap();
+        assert_eq!(v["responded"], true);
+        assert_eq!(v["sim"], false);
+        assert!(v["adapter"].as_str().unwrap().contains("TP2.0 to 0x0A"));
+        assert!(v["report"]["identity"]["part_number"]
+            .as_str()
+            .unwrap()
+            .starts_with("0AY"));
+        // The read closes the adapter: the channel was torn down.
+        assert_eq!(ecu.lock().unwrap().disconnects, 1);
+        assert!(unit
+            .lock()
+            .unwrap()
+            .services()
+            .iter()
+            .all(|s| [0x10, 0x1A, 0x18, 0x21].contains(s)));
     }
 
     #[test]

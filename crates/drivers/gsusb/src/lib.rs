@@ -16,7 +16,9 @@
 //!
 //! Config ([`ConnectConfig::options`]):
 //! - `iface`: SocketCAN interface name the kernel gs_usb driver created
-//!   (default `can0`).
+//!   (default: option `port` unless it is a device path, else `can0`).
+//! - `transport=tp20` + `tp20_addr=<module>`: open a VW TP2.0 channel
+//!   (KWP2000) instead of ISO-TP; see [`opentune_core::protocol::tp20channel`].
 //!
 //! Nothing here has been run against real hardware; the [`CanLink`] and the
 //! host-frame codec are mock/round-trip tested.
@@ -27,6 +29,7 @@ pub mod monitor;
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
 use opentune_core::protocol::seedkey::SeedKey;
+use opentune_core::protocol::tp20channel::{CanDiag, CanTransportKind, Tp20Options};
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
@@ -36,7 +39,8 @@ use opentune_core::{
 /// gs_usb / candleLight USB-CAN interface driver.
 #[derive(Default)]
 pub struct GsUsbDriver {
-    transport: Option<IsoTp>,
+    /// ISO-TP (default) or a VW TP2.0 channel, built on `open`.
+    transport: Option<CanDiag>,
     cfg: Option<ConnectConfig>,
     /// Optional seed/key handler for UDS security access (service 0x27). No OEM
     /// algorithm ships with OpenTune; the application supplies one.
@@ -61,12 +65,39 @@ impl GsUsbDriver {
     /// future libusb backend), bypassing the SocketCAN opener.
     pub fn with_link(link: Box<dyn CanLink>, tx_id: u32, rx_id: u32) -> Self {
         let mut d = Self::new();
-        d.transport = Some(IsoTp::new(link, tx_id, rx_id));
+        d.transport = Some(CanDiag::IsoTp(IsoTp::new(link, tx_id, rx_id)));
         d
     }
 
+    /// Open over a ready [`CanLink`] (a test mock or a future libusb
+    /// backend) with the full [`Interface::open`] transport selection:
+    /// ISO-TP by default, a VW TP2.0 channel with `transport=tp20`.
+    pub fn open_with_link(
+        &mut self,
+        link: Box<dyn CanLink + Send>,
+        cfg: &ConnectConfig,
+    ) -> Result<()> {
+        Tp20Options::from_config(cfg)?;
+        self.close()?;
+        let transport = CanDiag::open(link, cfg).map_err(|e| match e {
+            Error::Protocol(m) => Error::Protocol(format!("gsusb: {m}")),
+            other => other,
+        })?;
+        self.transport = Some(transport);
+        self.cfg = Some(cfg.clone());
+        Ok(())
+    }
+
+    /// The transport `open` built, if any.
+    pub fn transport_kind(&self) -> Option<CanTransportKind> {
+        self.transport.as_ref().map(CanDiag::kind)
+    }
+
     fn transport(&mut self) -> Result<&mut IsoTp> {
-        self.transport.as_mut().ok_or(Error::NotConnected)
+        self.transport
+            .as_mut()
+            .ok_or(Error::NotConnected)?
+            .isotp("gsusb")
     }
 
     fn begin_session(&mut self) -> Result<()> {
@@ -82,12 +113,16 @@ impl GsUsbDriver {
         let level = seedkey_level(self.cfg.as_ref(), 0x11);
         // Disjoint field borrows: `seed_key` (shared), `transport` (unique).
         let sk = self.seed_key.as_deref();
-        let transport = self.transport.as_mut().ok_or(Error::NotConnected)?;
+        let transport = self
+            .transport
+            .as_mut()
+            .ok_or(Error::NotConnected)?
+            .isotp("gsusb")?;
         uds_security_access(transport, sk, level, required)
     }
 
     /// Open the SocketCAN link the kernel `gs_usb` driver exposes.
-    fn open_link(&self, cfg: &ConnectConfig) -> Result<Box<dyn CanLink>> {
+    fn open_link(&self, cfg: &ConnectConfig) -> Result<Box<dyn CanLink + Send>> {
         socketcan_link(cfg)
     }
 }
@@ -99,9 +134,13 @@ impl Interface for GsUsbDriver {
     }
 
     fn info(&self) -> InterfaceInfo {
+        let mut display_name = "gs_usb / candleLight USB-CAN".to_string();
+        if let Some(t @ CanDiag::Tp20(_)) = &self.transport {
+            display_name = format!("{display_name}, {}", t.describe());
+        }
         InterfaceInfo {
             id: "gsusb".into(),
-            display_name: "gs_usb / candleLight USB-CAN".into(),
+            display_name,
             firmware: None,
             serial: None,
         }
@@ -116,31 +155,38 @@ impl Interface for GsUsbDriver {
             can: true,
             read_memory: true,
             write_memory: true,
+            vwtp20: true,
             ..Default::default()
         }
     }
 
-    /// Expose the host-side ISO-TP over the gs_usb link as a [`DiagTransport`] so the coding/adaptation/
-    /// auto-scan/service/logging engines (and the raw-request console) can
-    /// drive this adapter. `None` until `open()` succeeds.
+    /// Expose the transport over the gs_usb link (host-side ISO-TP, or the VW
+    /// TP2.0 channel with `transport=tp20`) as a [`DiagTransport`] so the
+    /// coding/adaptation/auto-scan/service/logging engines (and the
+    /// raw-request console) can drive this adapter. `None` until `open()`
+    /// succeeds.
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
         self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
-        if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
+        let tp20 = Tp20Options::from_config(cfg)?;
+        if tp20.is_none() && !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
             return Err(Error::Unsupported(
-                "gs_usb driver supports CAN/ISO-TP protocols only".into(),
+                "gs_usb driver supports CAN/ISO-TP protocols, and VW TP2.0 with transport=tp20"
+                    .into(),
             ));
         }
         let link = self.open_link(cfg)?;
-        self.transport = Some(IsoTp::new(link, cfg.tx_id, cfg.rx_id));
-        self.cfg = Some(cfg.clone());
-        Ok(())
+        self.open_with_link(link, cfg)
     }
 
+    /// Close: a TP2.0 channel stops its keep-alive and sends the disconnect
+    /// (`A8`) first.
     fn close(&mut self) -> Result<()> {
-        self.transport = None;
+        if let Some(mut t) = self.transport.take() {
+            t.close();
+        }
         self.cfg = None;
         Ok(())
     }
@@ -189,11 +235,14 @@ impl Interface for GsUsbDriver {
 // --- SocketCAN link (kernel gs_usb path) ------------------------------------
 
 #[cfg(target_os = "linux")]
-fn socketcan_link(cfg: &ConnectConfig) -> Result<Box<dyn CanLink>> {
+fn socketcan_link(cfg: &ConnectConfig) -> Result<Box<dyn CanLink + Send>> {
     use socketcan::Socket;
+    // `port` names the interface too (as for the monitor); a device path
+    // cannot be one.
     let iface = cfg
         .options
         .get("iface")
+        .or_else(|| cfg.options.get("port").filter(|p| !p.contains('/')))
         .map(String::as_str)
         .unwrap_or("can0");
     let socket = socketcan::CanSocket::open(iface).map_err(|e| {
@@ -206,7 +255,7 @@ fn socketcan_link(cfg: &ConnectConfig) -> Result<Box<dyn CanLink>> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn socketcan_link(_cfg: &ConnectConfig) -> Result<Box<dyn CanLink>> {
+fn socketcan_link(_cfg: &ConnectConfig) -> Result<Box<dyn CanLink + Send>> {
     Err(Error::Unsupported(
         "the gs_usb kernel/SocketCAN path is Linux-only; a libusb backend using \
          the gs_usb host-frame codec is needed on this platform"

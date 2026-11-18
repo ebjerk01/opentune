@@ -122,6 +122,8 @@ Byte 0 of each data frame is `op_nibble | seq` (4-bit sequence, wraps 0xF→0x0)
 | `0x0` | data, more to follow, **ACK required now** (block boundary) |
 | `0x1` | data, **last** frame of the telegram, ACK required |
 | `0x2` | data, more to follow, no ACK yet |
+| `0x3` | data, **last** frame, no ACK expected |
+| `0x9` | ACK — "received, not ready for next" (a `0xB_` follows) |
 | `0xB` | ACK — "ready for next block" (low nibble = next expected seq) |
 
 The application telegram is `[len_hi, len_lo, payload…]` (12-bit length) split
@@ -135,7 +137,12 @@ block boundary and after the last frame, then strip and length-check the telegra
 ### Keep-alive / management
 
 - `keep_alive()` sends `A3` (channel test) and expects the ECU's `A1`; call it
-  within P3max while the channel is idle.
+  within P3max while the channel is idle. `tp20channel::Tp20Channel` (what the
+  raw-CAN drivers open with `transport=tp20`) does this from a background
+  thread after an idle interval, serialised with requests, and sends `A8` on
+  close.
+- Every wait is bounded by a deadline, so a busy bus (frames on other ids
+  arriving continuously) cannot stretch a timeout.
 - While receiving, an ECU-initiated `A3` is answered transparently with an `A1`,
   stray `A1`s are absorbed, and an ECU `A8` (disconnect) surfaces as an error.
 - `disconnect()` sends `A8` to tear the channel down.

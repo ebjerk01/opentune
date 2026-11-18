@@ -24,6 +24,8 @@
 //! `docs/FIRST-CAR-TEST.md`.
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
+use opentune_core::protocol::tp20channel::{transport_kind, CanTransportKind};
+use opentune_core::{ConnectConfig, DiagLayer, Protocol};
 use serde::Serialize;
 
 /// TP2.0 logical address of the PQ Haldex (AWD) controller.
@@ -42,6 +44,52 @@ pub const ID_OPTION: u8 = 0x9B;
 /// Measuring groups read by default (1 and 3 carry the documented Gen4
 /// values; 125/126 are read raw for characterisation).
 pub const DEFAULT_GROUPS: [u8; 4] = [1, 3, 125, 126];
+
+/// Driver ids that can open a VW TP2.0 channel (option `transport=tp20`):
+/// the raw-CAN adapters. The ELM327 drivers cannot.
+pub const TP20_DRIVERS: &[&str] = &["socketcan", "slcan", "gsusb"];
+
+/// Why a real Gen4 read is refused with `driver`, or `None` when the driver
+/// can open the TP2.0 channel the Gen4 needs.
+pub fn tp20_refusal(driver: &str) -> Option<String> {
+    if TP20_DRIVERS.contains(&driver) {
+        return None;
+    }
+    Some(format!(
+        "driver '{driver}' cannot open a VW TP2.0 channel, which the Haldex Gen4 needs \
+         (KWP2000 over TP2.0 at logical address 0x0A). Use a raw-CAN adapter: socketcan, \
+         slcan (CANable) or gsusb (candleLight), which open TP2.0 with transport=tp20. The \
+         ELM327 drivers refuse TP2.0 (an ELM327 cannot send the raw frames, per-block ACKs \
+         and keep-alives a channel needs); with one, capture the drivetrain CAN and decode \
+         it passively, or run the simulated read (docs/HALDEX.md)."
+    ))
+}
+
+/// The connection for a Gen4 read over a raw-CAN driver: `base` (port,
+/// bitrate, extra options) with KWP2000 over a TP2.0 channel to
+/// [`TP20_LOGICAL_ADDRESS`], the module asked to transmit on
+/// [`TP20_TESTER_RX_ID`]. Options the caller set (`tp20_rx_id`,
+/// `tp20_keepalive_ms`, …) are kept; `transport=isotp` is refused.
+pub fn gen4_connect_config(mut base: ConnectConfig) -> Result<ConnectConfig, String> {
+    if matches!(transport_kind(&base), Ok(CanTransportKind::IsoTp))
+        && base.options.contains_key("transport")
+    {
+        return Err(
+            "the Haldex Gen4 is reached over VW TP2.0, not ISO-TP: drop \
+                    transport=isotp (or set transport=tp20)"
+                .into(),
+        );
+    }
+    base.protocol = Protocol::Vwtp20;
+    base.diag_layer = DiagLayer::Kwp2000;
+    base.tx_id = TP20_LOGICAL_ADDRESS as u32;
+    base.rx_id = TP20_TESTER_RX_ID;
+    let o = &mut base.options;
+    o.entry("transport".into()).or_insert_with(|| "tp20".into());
+    o.entry("tp20_addr".into())
+        .or_insert_with(|| format!("0x{TP20_LOGICAL_ADDRESS:02X}"));
+    Ok(base)
+}
 
 /// Haldex generation suggested by a controller part number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -318,6 +366,33 @@ pub fn read_gen4(transport: &mut dyn DiagTransport, opts: &Gen4ReadOptions) -> G
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tp20_drivers_and_connect_config() {
+        assert!(tp20_refusal("slcan").is_none());
+        assert!(tp20_refusal("gsusb").is_none());
+        assert!(tp20_refusal("socketcan").is_none());
+        let why = tp20_refusal("elm327obd").unwrap();
+        assert!(why.contains("TP2.0") && why.contains("elm327obd"));
+
+        let mut base = ConnectConfig::default();
+        base.options.insert("port".into(), "/dev/ttyACM0".into());
+        base.options
+            .insert("tp20_keepalive_ms".into(), "500".into());
+        let c = gen4_connect_config(base).unwrap();
+        assert_eq!(c.protocol, Protocol::Vwtp20);
+        assert_eq!(c.options["transport"], "tp20");
+        assert_eq!(c.options["tp20_addr"], "0x0A");
+        assert_eq!(c.options["tp20_keepalive_ms"], "500");
+        let o = opentune_core::protocol::tp20channel::Tp20Options::from_config(&c)
+            .unwrap()
+            .unwrap();
+        assert_eq!((o.addr, o.rx_id), (0x0A, 0x300));
+
+        let mut iso = ConnectConfig::default();
+        iso.options.insert("transport".into(), "isotp".into());
+        assert!(gen4_connect_config(iso).is_err());
+    }
 
     #[test]
     fn classify_parts() {
