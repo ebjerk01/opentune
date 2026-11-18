@@ -1,0 +1,1313 @@
+{
+  "id": "mercedes-egs5x-7226",
+  "name": "Mercedes 722.6 5-speed automatic (NAG1) - EGS / EGS51 TCU",
+  "kind": "tcu",
+  "maker": "Siemens",
+  "family": "722.6 EGS51",
+  "vehicles": [
+    "Mercedes W210 E-Class (1996-2002, pre-2000 TCU)",
+    "W202 C-Class",
+    "other pre-2000 722.6 applications with an EGS / EGS51 TCU"
+  ],
+  "validation": "synthetic-tested",
+  "notes": "External (body-mounted) TCU of the 722.6 five-speed automatic. One CAN generation is defined: 'egs51' (pre-2000 EGS/EGS51 cars, 500 kbit/s), transcribed from the Ultimate-NAG52 project's hand-made EGS51 matrix. The frame layout of the later EGS52 (CAN-C, 2000+) cars is deliberately NOT included: it will be re-derived from a listen-only capture of the owner's own car. A W210 can be either generation; docs/MERCEDES-722.6.md describes how to tell them apart from a capture (by CAN ids, and by the gear coding in 0x218, which on EGS51 is R = 6 / P = 8). Everything here is passive CAN decode plus documentation: OpenTune does not transmit to this TCU, read its flash or know its checksum. Diagnostics: pre-2000 units are diagnosed on the K-line (C1 pin 1, see the database unit) with a protocol the cited sources do not document, so no diagnostic channel is declared. Tables describe the calibration structure of the open Ultimate-NAG52 replacement firmware (shift schedules, shift time, fill, TCC and adaptation maps), not the stock EGS flash layout, which is not publicly documented; no values are shipped. Validation: synthetic CAN frames built from the published layout only - nothing has been checked against a capture from a real car yet.",
+  "identify": {"part_numbers": [], "sw_numbers": [], "gearbox_codes": ["722.6", "NAG1", "W5A"]},
+  "ecudefs": [],
+  "units": ["mercedes-egs52-7226"],
+  "diagnostics": [],
+  "buses": [
+    {
+      "name": "egs51",
+      "description": "CAN (powertrain), EGS / EGS51 cars (pre-2000)",
+      "bitrate": 500000,
+      "notes": "Bit layouts from ultimate-nag52-fw lib/egs51_ecus/can_data.txt (upstream: 'manually generated'); scaling from its src/canbus/can_egs51.cpp.",
+      "frames": [
+        {
+          "id": "0x200",
+          "name": "BS_200",
+          "sender": "ESP/ABS",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "BZ200h",
+              "start": 13,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "number",
+              "notes": "Message counter."
+            },
+            {
+              "name": "BLS",
+              "start": 9,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "released"},
+                {"raw": 1, "name": "pressed"},
+                {"raw": 2, "name": "undefined"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "Brake light switch; upstream treats value 1 as brake pressed."
+            },
+            {
+              "name": "DRTGVL",
+              "start": 23,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "forward"},
+                {"raw": 2, "name": "reverse"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "Rotation direction, front left."
+            },
+            {
+              "name": "DVL",
+              "start": 21,
+              "len": 14,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.5,
+              "unit": "rpm",
+              "invalid": [16383],
+              "notes": "Wheel speed. Upstream feeds the rear-wheel values to its output-speed estimate as twice the wheel rpm (TCUIO::wheel_*_2x_rpm), hence factor 0.5 rpm; 0x3FFF = not available (upstream check). Front wheels: same encoding assumed (same signal family), not checked by upstream code."
+            },
+            {
+              "name": "DRTGVR",
+              "start": 39,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "forward"},
+                {"raw": 2, "name": "reverse"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "Rotation direction, front right."
+            },
+            {
+              "name": "DVR",
+              "start": 37,
+              "len": 14,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.5,
+              "unit": "rpm",
+              "invalid": [16383],
+              "notes": "Wheel speed. Upstream feeds the rear-wheel values to its output-speed estimate as twice the wheel rpm (TCUIO::wheel_*_2x_rpm), hence factor 0.5 rpm; 0x3FFF = not available (upstream check). Front wheels: same encoding assumed (same signal family), not checked by upstream code."
+            }
+          ]
+        },
+        {
+          "id": "0x208",
+          "name": "BS_208",
+          "sender": "ESP/ABS",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "GMAX_ESP",
+              "start": 5,
+              "len": 3,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "G1"},
+                {"raw": 2, "name": "G2"},
+                {"raw": 3, "name": "G3"},
+                {"raw": 4, "name": "G4"},
+                {"raw": 5, "name": "G5"},
+                {"raw": 6, "name": "G6"},
+                {"raw": 7, "name": "G7"}
+              ],
+              "notes": "ESP upper gear limit."
+            },
+            {
+              "name": "GMIN_ESP",
+              "start": 2,
+              "len": 3,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "G1"},
+                {"raw": 2, "name": "G2"},
+                {"raw": 3, "name": "G3"},
+                {"raw": 4, "name": "G4"},
+                {"raw": 5, "name": "G5"},
+                {"raw": 6, "name": "G6"},
+                {"raw": 7, "name": "G7"}
+              ],
+              "notes": "ESP lower gear limit."
+            },
+            {
+              "name": "SZS",
+              "start": 14,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "error"},
+                {"raw": 1, "name": "normal"},
+                {"raw": 2, "name": "diagnosis"},
+                {"raw": 3, "name": "exhaust test"}
+              ],
+              "notes": "ESP system state."
+            },
+            {
+              "name": "ANFN",
+              "start": 22,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "undefined"},
+                {"raw": 1, "name": "request N"},
+                {"raw": 2, "name": "no request"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "ESP request to select neutral."
+            },
+            {
+              "name": "BRE_AKT_ESP",
+              "start": 23,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "ESP brake intervention active."
+            },
+            {
+              "name": "DRTGHR",
+              "start": 39,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "forward"},
+                {"raw": 2, "name": "reverse"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "Rotation direction, rear right."
+            },
+            {
+              "name": "DHR",
+              "start": 37,
+              "len": 14,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.5,
+              "unit": "rpm",
+              "invalid": [16383],
+              "notes": "Wheel speed. Upstream feeds the rear-wheel values to its output-speed estimate as twice the wheel rpm (TCUIO::wheel_*_2x_rpm), hence factor 0.5 rpm; 0x3FFF = not available (upstream check)."
+            },
+            {
+              "name": "DRTGHL",
+              "start": 55,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "passive"},
+                {"raw": 1, "name": "forward"},
+                {"raw": 2, "name": "reverse"},
+                {"raw": 3, "name": "SNV"}
+              ],
+              "notes": "Rotation direction, rear left."
+            },
+            {
+              "name": "DHL",
+              "start": 53,
+              "len": 14,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.5,
+              "unit": "rpm",
+              "invalid": [16383],
+              "notes": "Wheel speed. Upstream feeds the rear-wheel values to its output-speed estimate as twice the wheel rpm (TCUIO::wheel_*_2x_rpm), hence factor 0.5 rpm; 0x3FFF = not available (upstream check)."
+            }
+          ]
+        },
+        {
+          "id": "0x308",
+          "name": "MS_308",
+          "sender": "engine",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "KUEB_O_A",
+              "start": 6,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Engine requests the torque-converter lock-up clutch open."
+            },
+            {
+              "name": "NMOT",
+              "start": 15,
+              "len": 16,
+              "byte_order": "big",
+              "kind": "number",
+              "unit": "rpm",
+              "notes": "Engine speed (upstream reads it unscaled as rpm)."
+            },
+            {
+              "name": "UEHITZ",
+              "start": 39,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Engine oil overheating."
+            },
+            {
+              "name": "ANL_LFT",
+              "start": 35,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Starter running."
+            },
+            {
+              "name": "T_OEL",
+              "start": 47,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "offset": -40.0,
+              "unit": "degC",
+              "invalid": [255],
+              "notes": "Engine oil temperature, raw - 40 (upstream); 0xFF = not available."
+            }
+          ]
+        },
+        {
+          "id": "0x210",
+          "name": "MS_210",
+          "sender": "engine",
+          "dlc": 8,
+          "notes": "EGS51-era MS_210 layout from upstream's hand-made EGS51 matrix.",
+          "signals": [
+            {
+              "name": "PW",
+              "start": 23,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.4,
+              "unit": "%",
+              "notes": "Accelerator pedal, 0..250 = 0..100 % (upstream)."
+            },
+            {
+              "name": "M_ESP",
+              "start": 55,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Engine torque for ESP, raw * 3 (upstream EGS51 layer); 0xFF = not available."
+            }
+          ]
+        },
+        {
+          "id": "0x310",
+          "name": "MS_310",
+          "sender": "engine",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "MAX_TRQ_FACTOR",
+              "start": 31,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.0078,
+              "notes": "Factor applied to the maximum torque (upstream)."
+            },
+            {
+              "name": "IND_TORQUE",
+              "start": 39,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Indicated engine torque, raw * 3 (upstream)."
+            },
+            {
+              "name": "DRG_TORQUE",
+              "start": 47,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Engine drag torque, raw * 3 (upstream)."
+            },
+            {
+              "name": "MAX_TORQUE",
+              "start": 55,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Maximum engine torque, raw * 3 (upstream)."
+            },
+            {
+              "name": "MIN_TORQUE",
+              "start": 63,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Minimum engine torque, raw * 3 (upstream)."
+            }
+          ]
+        },
+        {
+          "id": "0x608",
+          "name": "MS_608",
+          "sender": "engine",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "T_MOT",
+              "start": 7,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "offset": -40.0,
+              "unit": "degC",
+              "invalid": [255],
+              "notes": "Coolant temperature, raw - 40 (upstream); 0xFF = not available."
+            },
+            {
+              "name": "T_LUFT",
+              "start": 15,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "offset": -40.0,
+              "unit": "degC",
+              "invalid": [255],
+              "notes": "Intake air temperature, raw - 40 (upstream); 0xFF = not available."
+            },
+            {
+              "name": "VB",
+              "start": 47,
+              "len": 16,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.868,
+              "unit": "ul/250ms",
+              "notes": "Fuel consumption; upstream scales raw * 0.868 to microlitres per 250 ms."
+            }
+          ]
+        },
+        {
+          "id": "0x230",
+          "name": "EWM_230",
+          "sender": "selector (EWM)",
+          "dlc": 1,
+          "notes": "",
+          "signals": [
+            {
+              "name": "W_S",
+              "start": 7,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Programme switch position (W/S)."
+            },
+            {
+              "name": "FPT",
+              "start": 6,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Programme button pressed."
+            },
+            {"name": "KD", "start": 5, "len": 1, "byte_order": "big", "kind": "bool", "notes": "Kickdown."},
+            {
+              "name": "SPERR",
+              "start": 4,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Shift-lock magnet energised."
+            },
+            {
+              "name": "WHC",
+              "start": 3,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 5, "name": "D"},
+                {"raw": 6, "name": "N"},
+                {"raw": 7, "name": "R"},
+                {"raw": 8, "name": "P"},
+                {"raw": 9, "name": "+"},
+                {"raw": 10, "name": "-"},
+                {"raw": 11, "name": "N-D"},
+                {"raw": 12, "name": "R-N"},
+                {"raw": 13, "name": "P-R"},
+                {"raw": 15, "name": "SNV"}
+              ],
+              "notes": "Selector lever position (NAG)."
+            }
+          ]
+        },
+        {
+          "id": "0x410",
+          "name": "KLA_410",
+          "sender": "climate control",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "KOMP_EIN",
+              "start": 0,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "A/C compressor on."
+            },
+            {
+              "name": "M_KOMP",
+              "start": 23,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.25,
+              "unit": "Nm",
+              "notes": "A/C compressor torque; upstream subtracts raw / 4 Nm from the engine torque."
+            }
+          ]
+        },
+        {
+          "id": "0x218",
+          "name": "GS_218",
+          "sender": "TCU",
+          "dlc": 8,
+          "notes": "EGS51 GS_218 is upstream's own black-box layout ('manually generated').",
+          "signals": [
+            {
+              "name": "TORQUE_REQ",
+              "start": 7,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 3.0,
+              "unit": "Nm",
+              "invalid": [254],
+              "notes": "TCU torque request, raw * 3 Nm (upstream encodes Nm / 3 plus drag / 3); 0xFE = no request."
+            },
+            {
+              "name": "GB_TYPE",
+              "start": 15,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Manual gearbox (1) / automatic (0)."
+            },
+            {
+              "name": "GB_OK",
+              "start": 13,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Gearbox programme OK."
+            },
+            {
+              "name": "OFF_ROAD",
+              "start": 12,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Off-road."
+            },
+            {
+              "name": "PN",
+              "start": 11,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Selector in P or N."
+            },
+            {
+              "name": "GARAGE_SHIFT",
+              "start": 10,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Garage shift in progress."
+            },
+            {
+              "name": "CAN_START",
+              "start": 9,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Engine start enable."
+            },
+            {
+              "name": "TORQUE_REQ_EN",
+              "start": 8,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Torque request enabled."
+            },
+            {
+              "name": "GZC",
+              "start": 23,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "N"},
+                {"raw": 1, "name": "D1"},
+                {"raw": 2, "name": "D2"},
+                {"raw": 3, "name": "D3"},
+                {"raw": 4, "name": "D4"},
+                {"raw": 5, "name": "D5"},
+                {"raw": 6, "name": "R"},
+                {"raw": 7, "name": "R2"},
+                {"raw": 8, "name": "P"},
+                {"raw": 15, "name": "SNV"}
+              ],
+              "notes": "Target gear (EGS51 coding: R = 6, R2 = 7, P = 8)."
+            },
+            {
+              "name": "GIC",
+              "start": 19,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "N"},
+                {"raw": 1, "name": "D1"},
+                {"raw": 2, "name": "D2"},
+                {"raw": 3, "name": "D3"},
+                {"raw": 4, "name": "D4"},
+                {"raw": 5, "name": "D5"},
+                {"raw": 6, "name": "R"},
+                {"raw": 7, "name": "R2"},
+                {"raw": 8, "name": "P"},
+                {"raw": 15, "name": "SNV"}
+              ],
+              "notes": "Actual gear (EGS51 coding)."
+            },
+            {
+              "name": "TCC_SLIPPING",
+              "start": 31,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Lock-up clutch slipping."
+            },
+            {
+              "name": "TCC_OPEN",
+              "start": 30,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Lock-up clutch open."
+            },
+            {
+              "name": "TCC_CLOSED",
+              "start": 29,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Lock-up clutch closed."
+            },
+            {
+              "name": "GEARBOX_BIG",
+              "start": 28,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Large gearbox (W5A 580)."
+            },
+            {
+              "name": "LIMP_MODE",
+              "start": 27,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Gearbox in limp-home mode."
+            },
+            {
+              "name": "SE",
+              "start": 26,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Shift started."
+            },
+            {
+              "name": "KICKDOWN",
+              "start": 25,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Kickdown."
+            },
+            {
+              "name": "FWD",
+              "start": 24,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Front-wheel drive."
+            },
+            {
+              "name": "FEHLER",
+              "start": 43,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "number",
+              "unit": "raw",
+              "notes": "Fault number / counter."
+            }
+          ]
+        },
+        {
+          "id": "0x418",
+          "name": "GS_418",
+          "sender": "TCU",
+          "dlc": 8,
+          "notes": "",
+          "signals": [
+            {
+              "name": "FSC",
+              "start": 7,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "ascii",
+              "notes": "Gear / range letter for the cluster display ('P', 'R', 'N', 'D', '1'..'5')."
+            },
+            {
+              "name": "FPC",
+              "start": 15,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "ascii",
+              "notes": "Driving-programme letter for the cluster ('S', 'C', 'W', 'M', 'A', ...)."
+            },
+            {
+              "name": "T_GET",
+              "start": 23,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "offset": -50.0,
+              "unit": "degC",
+              "notes": "ATF temperature, raw - 50 (the upstream CAN layers encode temp + 50). Upstream's EGS51 layer does not fill this byte."
+            },
+            {
+              "name": "ALLRAD",
+              "start": 31,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Four-wheel drive vehicle."
+            },
+            {
+              "name": "FRONT",
+              "start": 30,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Front-wheel drive (1) / rear-wheel drive (0)."
+            },
+            {
+              "name": "SCHALT",
+              "start": 29,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Manual gearbox (upstream: automatic = 0)."
+            },
+            {
+              "name": "CVT",
+              "start": 28,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "CVT (1) / stepped gearbox (0)."
+            },
+            {
+              "name": "MECH",
+              "start": 27,
+              "len": 2,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "large NAG"},
+                {"raw": 1, "name": "small NAG"},
+                {"raw": 2, "name": "large NAG2"},
+                {"raw": 3, "name": "small NAG2"}
+              ],
+              "notes": "Gearbox mechanics variant."
+            },
+            {
+              "name": "ESV_BRE",
+              "start": 25,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Brake request when engaging a gear."
+            },
+            {"name": "KD", "start": 24, "len": 1, "byte_order": "big", "kind": "bool", "notes": "Kickdown."},
+            {
+              "name": "GZC",
+              "start": 39,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "N"},
+                {"raw": 1, "name": "D1"},
+                {"raw": 2, "name": "D2"},
+                {"raw": 3, "name": "D3"},
+                {"raw": 4, "name": "D4"},
+                {"raw": 5, "name": "D5"},
+                {"raw": 6, "name": "D6"},
+                {"raw": 7, "name": "D7"},
+                {"raw": 8, "name": "D_CVT"},
+                {"raw": 9, "name": "R_CVT"},
+                {"raw": 10, "name": "R3"},
+                {"raw": 11, "name": "R"},
+                {"raw": 12, "name": "R2"},
+                {"raw": 13, "name": "P"},
+                {"raw": 14, "name": "none"},
+                {"raw": 15, "name": "SNV"}
+              ],
+              "notes": "Target gear (16-value coding)."
+            },
+            {
+              "name": "GIC",
+              "start": 35,
+              "len": 4,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "N"},
+                {"raw": 1, "name": "D1"},
+                {"raw": 2, "name": "D2"},
+                {"raw": 3, "name": "D3"},
+                {"raw": 4, "name": "D4"},
+                {"raw": 5, "name": "D5"},
+                {"raw": 6, "name": "D6"},
+                {"raw": 7, "name": "D7"},
+                {"raw": 8, "name": "D_CVT"},
+                {"raw": 9, "name": "R_CVT"},
+                {"raw": 10, "name": "R3"},
+                {"raw": 11, "name": "R"},
+                {"raw": 12, "name": "R2"},
+                {"raw": 13, "name": "P"},
+                {"raw": 14, "name": "none"},
+                {"raw": 15, "name": "SNV"}
+              ],
+              "notes": "Actual gear (16-value coding)."
+            },
+            {
+              "name": "M_VERL",
+              "start": 47,
+              "len": 8,
+              "byte_order": "big",
+              "kind": "number",
+              "factor": 0.25,
+              "unit": "Nm",
+              "invalid": [255],
+              "notes": "Transmission loss torque, raw / 4 (upstream); 0xFF = implausible."
+            },
+            {
+              "name": "FMRADPAR",
+              "start": 55,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Wheel-torque factor parity."
+            },
+            {
+              "name": "FMRADTGL",
+              "start": 54,
+              "len": 1,
+              "byte_order": "big",
+              "kind": "bool",
+              "notes": "Wheel-torque factor toggle."
+            },
+            {
+              "name": "WHST",
+              "start": 53,
+              "len": 3,
+              "byte_order": "big",
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "P"},
+                {"raw": 1, "name": "R"},
+                {"raw": 2, "name": "N"},
+                {"raw": 4, "name": "D"},
+                {"raw": 7, "name": "SNV"}
+              ],
+              "notes": "Selector lever position as reported by the TCU."
+            },
+            {
+              "name": "FMRAD",
+              "start": 50,
+              "len": 11,
+              "byte_order": "big",
+              "kind": "number",
+              "unit": "raw",
+              "notes": "Wheel-torque factor; scaling not documented upstream (0x7FF on manual gearboxes)."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "engine speed",
+      "unit": "rpm",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "MS_308", "signal": "NMOT"}
+    },
+    {
+      "name": "accelerator pedal",
+      "unit": "%",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "MS_210", "signal": "PW"}
+    },
+    {
+      "name": "coolant temperature",
+      "unit": "degC",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "MS_608", "signal": "T_MOT"}
+    },
+    {
+      "name": "engine oil temperature",
+      "unit": "degC",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "MS_308", "signal": "T_OEL"}
+    },
+    {
+      "name": "brake switch",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "BS_200", "signal": "BLS"}
+    },
+    {
+      "name": "rear left wheel speed",
+      "unit": "rpm",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "BS_208", "signal": "DHL"}
+    },
+    {
+      "name": "rear right wheel speed",
+      "unit": "rpm",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "BS_208", "signal": "DHR"}
+    },
+    {
+      "name": "selector lever",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "EWM_230", "signal": "WHC"}
+    },
+    {
+      "name": "display gear",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_418", "signal": "FSC"}
+    },
+    {
+      "name": "display programme",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_418", "signal": "FPC"}
+    },
+    {
+      "name": "actual gear",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "GIC"}
+    },
+    {
+      "name": "target gear",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "GZC"}
+    },
+    {
+      "name": "ATF temperature",
+      "unit": "degC",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_418", "signal": "T_GET"}
+    },
+    {
+      "name": "indicated engine torque",
+      "unit": "Nm",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "MS_310", "signal": "IND_TORQUE"}
+    },
+    {
+      "name": "TCU torque request",
+      "unit": "Nm",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "TORQUE_REQ"}
+    },
+    {
+      "name": "lock-up clutch closed",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "TCC_CLOSED"}
+    },
+    {
+      "name": "lock-up clutch slipping",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "TCC_SLIPPING"}
+    },
+    {
+      "name": "TCU limp mode",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "egs51", "frame": "GS_218", "signal": "LIMP_MODE"}
+    }
+  ],
+  "adaptations": [
+    {
+      "name": "lock-up clutch pressure",
+      "kind": "adaptation",
+      "service": "",
+      "writes": false,
+      "requires_security": false,
+      "table": "TCC pressure adaptation",
+      "validation": "implemented",
+      "notes": "Learned by the Ultimate-NAG52 firmware and edited through its configuration app. The stock EGS51/52 adaptation services are not publicly documented, so OpenTune declares no service to read or reset them."
+    },
+    {
+      "name": "shift torque (pulling)",
+      "kind": "adaptation",
+      "service": "",
+      "writes": false,
+      "requires_security": false,
+      "table": "shift torque adaptation (pulling)",
+      "validation": "implemented",
+      "notes": "Learned by the Ultimate-NAG52 firmware and edited through its configuration app. The stock EGS51/52 adaptation services are not publicly documented, so OpenTune declares no service to read or reset them."
+    },
+    {
+      "name": "shift torque (pushing)",
+      "kind": "adaptation",
+      "service": "",
+      "writes": false,
+      "requires_security": false,
+      "table": "shift torque adaptation (pushing)",
+      "validation": "implemented",
+      "notes": "Learned by the Ultimate-NAG52 firmware and edited through its configuration app. The stock EGS51/52 adaptation services are not publicly documented, so OpenTune declares no service to read or reset them."
+    },
+    {
+      "name": "clutch prefill time",
+      "kind": "adaptation",
+      "service": "",
+      "writes": false,
+      "requires_security": false,
+      "table": "prefill time adaptation",
+      "validation": "implemented",
+      "notes": "Learned by the Ultimate-NAG52 firmware and edited through its configuration app. The stock EGS51/52 adaptation services are not publicly documented, so OpenTune declares no service to read or reset them."
+    },
+    {
+      "name": "shift pressure offset",
+      "kind": "adaptation",
+      "service": "",
+      "writes": false,
+      "requires_security": false,
+      "table": "shift pressure offset adaptation",
+      "validation": "implemented",
+      "notes": "Learned by the Ultimate-NAG52 firmware and edited through its configuration app. The stock EGS51/52 adaptation services are not publicly documented, so OpenTune declares no service to read or reset them."
+    }
+  ],
+  "tables": [
+    {
+      "name": "upshift schedule",
+      "role": "shift_up",
+      "profiles": ["S", "C", "A", "M"],
+      "unit": "rpm (input shaft)",
+      "rows": 4,
+      "cols": 11,
+      "x_axis": {"name": "pedal", "unit": "%", "values": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]},
+      "y_axis": {"name": "shift", "labels": ["1-2", "2-3", "3-4", "4-5"]},
+      "confidence": "structure_only",
+      "notes": "Input-shaft speed at which each upshift happens, by pedal. One map per profile and per engine type (petrol / diesel). Manual (M) upshift maps hold 9999 (no automatic upshift).",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/profiles.h, src/maps.h"
+    },
+    {
+      "name": "downshift schedule",
+      "role": "shift_down",
+      "profiles": ["S", "C", "A", "M"],
+      "unit": "rpm (input shaft)",
+      "rows": 4,
+      "cols": 11,
+      "x_axis": {"name": "pedal", "unit": "%", "values": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]},
+      "y_axis": {"name": "shift", "labels": ["2-1", "3-2", "4-3", "5-4"]},
+      "confidence": "structure_only",
+      "notes": "Input-shaft speed below which each downshift happens, by pedal. One map per profile and engine type. The manual-mode downshift map protects the gearbox from lugging and is not user-editable upstream.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/profiles.h, src/maps.h"
+    },
+    {
+      "name": "upshift time",
+      "role": "shift_time",
+      "profiles": ["S", "C", "A", "M", "W", "R"],
+      "unit": "ms",
+      "rows": 5,
+      "cols": 6,
+      "x_axis": {"name": "pedal", "unit": "%", "values": [0, 20, 40, 60, 80, 100]},
+      "y_axis": {
+        "name": "input speed",
+        "unit": "rpm",
+        "count": 5,
+        "derived": "1000 + k * (redline - 1000) / 4 for k = 0..4; redline from the vehicle configuration (petrol / diesel)"
+      },
+      "confidence": "structure_only",
+      "notes": "Target shift (overlap) duration for upshifts, by pedal and input speed.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/profiles.cpp, src/maps.cpp"
+    },
+    {
+      "name": "downshift time",
+      "role": "shift_time",
+      "profiles": ["S", "C", "A", "M", "W", "R"],
+      "unit": "ms",
+      "rows": 5,
+      "cols": 6,
+      "x_axis": {"name": "pedal", "unit": "%", "values": [0, 20, 40, 60, 80, 100]},
+      "y_axis": {
+        "name": "input speed",
+        "unit": "rpm",
+        "count": 5,
+        "derived": "1000 + k * (redline - 1000) / 4 for k = 0..4; redline from the vehicle configuration (petrol / diesel)"
+      },
+      "confidence": "structure_only",
+      "notes": "Target shift (overlap) duration for downshifts, by pedal and input speed.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/profiles.cpp, src/maps.cpp"
+    },
+    {
+      "name": "clutch fill time",
+      "role": "fill_time",
+      "profiles": [],
+      "unit": "ms",
+      "rows": 5,
+      "cols": 4,
+      "x_axis": {"name": "ATF temperature", "unit": "degC", "values": [-20, 5, 25, 60]},
+      "y_axis": {"name": "clutch", "labels": ["K1", "K2", "K3", "B1", "B2"]},
+      "confidence": "structure_only",
+      "notes": "Fill-phase duration of the applying clutch (the firmware divides by its 20 ms cycle). Separate small-NAG and large-NAG defaults.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/pressure_manager.cpp, src/maps.h"
+    },
+    {
+      "name": "clutch fill pressure",
+      "role": "fill_pressure",
+      "profiles": [],
+      "unit": "mbar",
+      "rows": 1,
+      "cols": 6,
+      "x_axis": {"name": "clutch", "labels": ["K1", "K2", "K3", "B1", "B2", "B3"]},
+      "confidence": "structure_only",
+      "notes": "Fill pressure per clutch (B3 = reverse).",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/pressure_manager.cpp, src/maps.h"
+    },
+    {
+      "name": "clutch low fill pressure",
+      "role": "fill_pressure",
+      "profiles": [],
+      "unit": "mbar",
+      "rows": 1,
+      "cols": 5,
+      "x_axis": {"name": "clutch", "labels": ["K1", "K2", "K3", "B1", "B2"]},
+      "confidence": "structure_only",
+      "notes": "Low fill (hold) pressure per forward clutch.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/pressure_manager.cpp, src/maps.h"
+    },
+    {
+      "name": "TCC PWM",
+      "role": "tcc_pressure",
+      "profiles": [],
+      "unit": "duty /4096",
+      "rows": 5,
+      "cols": 7,
+      "x_axis": {"name": "TCC pressure", "unit": "mbar", "values": [0, 2000, 4000, 5000, 7500, 10000, 15000]},
+      "y_axis": {"name": "ATF temperature", "unit": "degC", "values": [0, 30, 60, 90, 120]},
+      "confidence": "structure_only",
+      "notes": "Lock-up clutch solenoid PWM for a target pressure.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/pressure_manager.cpp, src/maps.cpp"
+    },
+    {
+      "name": "TCC slip target",
+      "role": "tcc_slip",
+      "profiles": [],
+      "unit": "rpm slip",
+      "rows": 8,
+      "cols": 11,
+      "x_axis": {"name": "pedal", "unit": "%", "values": [0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 100]},
+      "y_axis": {"name": "input speed", "unit": "rpm", "values": [1000, 1200, 1400, 1600, 1800, 2000, 4000, 6000]},
+      "confidence": "structure_only",
+      "notes": "Target lock-up slip: <= 10 = closed, > 100 = open, between = slipping at that target.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/torque_converter.cpp, src/maps.cpp"
+    },
+    {
+      "name": "TCC pressure adaptation",
+      "role": "adaptation",
+      "profiles": ["D1", "D2", "D3", "D4", "D5"],
+      "unit": "mbar",
+      "rows": 6,
+      "cols": 6,
+      "x_axis": {"name": "engine load", "unit": "%", "values": [0, 5, 10, 25, 50, 100]},
+      "y_axis": {"name": "ATF temperature", "unit": "degC", "values": [-20, 0, 20, 40, 80, 120]},
+      "confidence": "structure_only",
+      "notes": "Learned lock-up pressure; one map per gear 1-5.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/torque_converter.cpp, src/adapt_maps.cpp"
+    },
+    {
+      "name": "shift torque adaptation (pulling)",
+      "role": "adaptation",
+      "profiles": ["1-2", "2-3", "3-4", "4-5", "5-4", "4-3", "3-2", "2-1"],
+      "unit": "Nm",
+      "rows": 5,
+      "cols": 4,
+      "x_axis": {"name": "input speed", "unit": "rpm", "values": [1000, 1500, 2000, 4000]},
+      "y_axis": {"name": "load", "unit": "%", "values": [0, 20, 50, 100, 150]},
+      "confidence": "structure_only",
+      "notes": "Learned torque correction for pulling shifts (crossover upshifts, release downshifts); one map per shift.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/adaptation/shift_adaptation.cpp, src/maps.cpp"
+    },
+    {
+      "name": "shift torque adaptation (pushing)",
+      "role": "adaptation",
+      "profiles": ["1-2", "2-3", "3-4", "4-5", "5-4", "4-3", "3-2", "2-1"],
+      "unit": "Nm",
+      "rows": 4,
+      "cols": 4,
+      "x_axis": {"name": "input speed", "unit": "rpm", "values": [1000, 1500, 2000, 4000]},
+      "y_axis": {"name": "load", "unit": "%", "values": [0, 5, 10, 20]},
+      "confidence": "structure_only",
+      "notes": "Learned torque correction for pushing shifts (crossover downshifts, release upshifts); one map per shift.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/adaptation/shift_adaptation.cpp, src/maps.cpp"
+    },
+    {
+      "name": "prefill time adaptation",
+      "role": "adaptation",
+      "profiles": [],
+      "unit": "ms",
+      "rows": 1,
+      "cols": 8,
+      "x_axis": {"name": "shift", "labels": ["1-2", "2-3", "3-4", "4-5", "5-4", "4-3", "3-2", "2-1"]},
+      "confidence": "structure_only",
+      "notes": "Learned prefill-time correction per shift.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/adaptation/shift_adaptation.cpp"
+    },
+    {
+      "name": "shift pressure offset adaptation",
+      "role": "adaptation",
+      "profiles": [],
+      "unit": "mbar",
+      "rows": 1,
+      "cols": 8,
+      "x_axis": {"name": "shift", "labels": ["1-2", "2-3", "3-4", "4-5", "5-4", "4-3", "3-2", "2-1"]},
+      "confidence": "structure_only",
+      "notes": "Learned shift-pressure offset per shift.",
+      "source": "rnd-ash/ultimate-nag52-fw (GPL-3.0) src/adaptation/shift_adaptation.cpp"
+    }
+  ],
+  "gearsets": [
+    {
+      "name": "small NAG (W5A 280/300/330), 1996",
+      "applies_to": ["W5A 280", "W5A 300", "W5A 330"],
+      "gears": [
+        {"gear": "1", "ratio": 3.932},
+        {"gear": "2", "ratio": 2.408},
+        {"gear": "3", "ratio": 1.486},
+        {"gear": "4", "ratio": 1.0},
+        {"gear": "5", "ratio": 0.83},
+        {"gear": "R1", "ratio": -3.1},
+        {"gear": "R2", "ratio": -1.899}
+      ],
+      "source": "Wikipedia 'Mercedes-Benz 5G-Tronic transmission' (gear ratio table; facts)",
+      "notes": "Small core model (4/5/6-cylinder cars)."
+    },
+    {
+      "name": "large NAG (W5A 400/580/900), 1996",
+      "applies_to": ["W5A 400", "W5A 580", "W5A 900"],
+      "gears": [
+        {"gear": "1", "ratio": 3.588},
+        {"gear": "2", "ratio": 2.186},
+        {"gear": "3", "ratio": 1.405},
+        {"gear": "4", "ratio": 1.0},
+        {"gear": "5", "ratio": 0.831},
+        {"gear": "R1", "ratio": -3.16},
+        {"gear": "R2", "ratio": -1.926}
+      ],
+      "source": "Wikipedia 'Mercedes-Benz 5G-Tronic transmission' (gear ratio table; facts)",
+      "notes": "Large core model (8/12-cylinder, SUV, turbo)."
+    },
+    {
+      "name": "small NAG (W5A 330), 2004",
+      "applies_to": ["W5A 330"],
+      "gears": [
+        {"gear": "1", "ratio": 3.951},
+        {"gear": "2", "ratio": 2.423},
+        {"gear": "3", "ratio": 1.486},
+        {"gear": "4", "ratio": 1.0},
+        {"gear": "5", "ratio": 0.833},
+        {"gear": "R1", "ratio": -3.147},
+        {"gear": "R2", "ratio": -1.93}
+      ],
+      "source": "Wikipedia 'Mercedes-Benz 5G-Tronic transmission' (gear ratio table; facts)",
+      "notes": ""
+    },
+    {
+      "name": "large NAG (W5A 580), 2004",
+      "applies_to": ["W5A 580"],
+      "gears": [
+        {"gear": "1", "ratio": 3.595},
+        {"gear": "2", "ratio": 2.186},
+        {"gear": "3", "ratio": 1.405},
+        {"gear": "4", "ratio": 1.0},
+        {"gear": "5", "ratio": 0.831},
+        {"gear": "R1", "ratio": -3.167},
+        {"gear": "R2", "ratio": -1.926}
+      ],
+      "source": "Wikipedia 'Mercedes-Benz 5G-Tronic transmission' (gear ratio table; facts); same values as the ratio table in rnd-ash/ultimate-nag52-fw-rs egs_pc_sim/src/gearbox.rs (GPL-3.0)",
+      "notes": ""
+    }
+  ],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "The 722.6 TCU sets line, shift and lock-up pressures: wrong maps or adaptations can slip and burn clutches or wreck the gearbox, and a gearbox fault can make the car move unexpectedly or lose drive in traffic.",
+    "OpenTune only listens here: it never transmits on the powertrain CAN for this unit. Do not replay captured frames onto a running car - GS_218 carries the TCU's engine-torque request and the engine acts on it.",
+    "Capture with a listen-only adapter where possible, car stationary or on a safe road, and never wire into CAN-C while the engine runs.",
+    "The tables describe the Ultimate-NAG52 replacement firmware; do not assume the stock EGS51/52 stores the same tables or values."
+  ],
+  "sources": [
+    {
+      "title": "rnd-ash/ultimate-nag52-fw",
+      "url": "https://github.com/rnd-ash/ultimate-nag52-fw",
+      "license": "GPL-3.0",
+      "used_for": "EGS51 CAN frame layouts (lib/egs51_ecus/can_data.txt), signal scaling (src/canbus/ CAN layers), map structures and axes (src/maps.h, src/profiles.*, src/pressure_manager.cpp, src/torque_converter.cpp, src/adaptation/)"
+    },
+    {
+      "title": "rnd-ash/ultimate-nag52-fw-rs",
+      "url": "https://github.com/rnd-ash/ultimate-nag52-fw-rs",
+      "license": "GPL-3.0",
+      "used_for": "cross-check of the EGS51 CAN matrix (can_data/egs51.txt) and the large-NAG ratio table (egs_pc_sim)"
+    },
+    {
+      "title": "Wikipedia: Mercedes-Benz 5G-Tronic transmission",
+      "url": "https://en.wikipedia.org/wiki/Mercedes-Benz_5G-Tronic_transmission",
+      "license": "facts",
+      "used_for": "gear ratios per variant"
+    }
+  ]
+}

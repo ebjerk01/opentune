@@ -2,7 +2,9 @@
 //! parsed [`Command`] to them.
 use crate::cli::{Command, ContainerAction};
 use crate::context::CliContext;
-use crate::{bsl_cmd, candump, doip_cmd, haldex_cmd, obd_cmd, recipe_cmd, seedkey_cmd, ts_cmd};
+use crate::{
+    bsl_cmd, candump, ctrldef_cmd, doip_cmd, haldex_cmd, obd_cmd, recipe_cmd, seedkey_cmd, ts_cmd,
+};
 use anyhow::Result;
 
 pub mod checksum;
@@ -222,6 +224,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
         Command::Candump(args) => candump::run(reg, args),
         Command::Recipe { action } => recipe_cmd::run(ctx, action),
         Command::Haldex { action } => haldex_cmd::run(reg, action),
+        Command::Controller { action } => ctrldef_cmd::run(action),
         Command::Ts { action } => ts_cmd::run(action),
         Command::Doip { action } => doip_cmd::run(action),
         Command::Seedkey { action } => seedkey_cmd::run(action),

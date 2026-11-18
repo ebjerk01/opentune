@@ -1,0 +1,357 @@
+{
+  "id": "borgwarner-haldex-gen4",
+  "name": "BorgWarner Haldex Gen4 AWD controller (VAG PQ, 0AY 907 554)",
+  "kind": "awd",
+  "maker": "BorgWarner",
+  "family": "Haldex Gen4",
+  "vehicles": [
+    "VW Passat CC 4Motion",
+    "Passat 4Motion (2009-)",
+    "Tiguan",
+    "Golf Mk6 R",
+    "Skoda Yeti / Superb 4x4",
+    "Audi Q3",
+    "TT/TTS 8J",
+    "A3/S3 8P facelift"
+  ],
+  "validation": "synthetic-tested",
+  "notes": "Mirror of what opentune-haldex implements for Gen4, as data: the read-only KWP2000/TP2.0 channel, the measuring-group cells it labels and the PQ drivetrain frames it decodes (a parity test in opentune-haldex keeps this file and the decoder in step). The ecudef holds the identify keys and the empty flash layout; no flash layout, MCU or checksum is publicly known. See docs/HALDEX.md.",
+  "identify": {"part_numbers": ["0AY907554C", "0BS907554"], "sw_numbers": [], "gearbox_codes": []},
+  "ecudefs": ["borgwarner-haldex-gen4"],
+  "units": ["haldex-gen4"],
+  "diagnostics": [
+    {
+      "name": "tp20",
+      "transport": "vwtp20",
+      "layer": "kwp2000",
+      "bitrate": 500000,
+      "rx_id": "0x300",
+      "tp20_address": "0x0A",
+      "session": "0x89",
+      "identification": "1A9B",
+      "validation": "synthetic-tested",
+      "notes": "Channel setup on 0x200, unit answers on 0x20A; rx_id is the id the tester asks the unit to send on. Seen in the public OpenHaldex-C6 capture of an 0AY 907 554 C. Raw-CAN adapters only (socketcan, slcan, gsusb); `opentune haldex gen4` is the read engine."
+    }
+  ],
+  "buses": [
+    {
+      "name": "pq",
+      "description": "PQ35/PQ46 drivetrain CAN",
+      "bitrate": 500000,
+      "notes": "Frames a Gen1/2/4 Haldex sends and listens to.",
+      "frames": [
+        {
+          "id": "0x2A0",
+          "name": "Bremse_4",
+          "sender": "ABS",
+          "min_len": 1,
+          "validation": "synthetic-tested",
+          "notes": "Lock request from the ABS (or an OpenHaldex in its place).",
+          "signals": [
+            {
+              "name": "ABS_Vorgabewert_mitte_Kupplung",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "factor": 3.0,
+              "offset": -381.0,
+              "unit": "Nm/min",
+              "notes": "Requested coupling stiffness, DBC scale (vw_pq.dbc)."
+            },
+            {
+              "name": "lock_request",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "curve": [[0, 0], [128, 0], [253, 100], [255, 100]],
+              "unit": "%",
+              "notes": "Byte 0 as lock percent. Lock percent on the Gen2/Gen4 lever scale OpenHaldex-C6 documents: <= 0x80 open, 0x81..0xFD linear over 125 steps, >= 0xFE full. Community confidence."
+            },
+            {
+              "name": "ABS_Vorgabewert_hinten_Kupplung",
+              "start": 8,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.7874,
+              "unit": "%",
+              "notes": "Rear coupling request, DBC scale."
+            }
+          ]
+        },
+        {
+          "id": "0x2C0",
+          "name": "Allrad_1",
+          "sender": "Haldex",
+          "min_len": 2,
+          "validation": "real-image-tested",
+          "notes": "Haldex status (Gen1/2/4). Checked on two public real Gen4 captures (OpenHaldex-C6 vehicle logs).",
+          "signals": [
+            {
+              "name": "Fehler_Allrad_Kupplung",
+              "start": 0,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Coupling fault."
+            },
+            {
+              "name": "Ubertemperaturschutz",
+              "start": 1,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Over-temperature protection active."
+            },
+            {
+              "name": "Fehlerstatus_Kupplungssteifigkeit",
+              "start": 2,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Clutch torque signal fault."
+            },
+            {
+              "name": "Kupplung_komplett_offen",
+              "start": 3,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Coupling fully open."
+            },
+            {"name": "Notlauf", "start": 4, "len": 1, "kind": "bool", "notes": "Limp / fault reaction."},
+            {
+              "name": "Allrad_Warnlampe",
+              "start": 5,
+              "len": 1,
+              "kind": "bool",
+              "notes": "AWD warning lamp request."
+            },
+            {
+              "name": "Geschwindigkeitsbegrenzung",
+              "start": 6,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Speed limitation."
+            },
+            {
+              "name": "Kupplungssteifigkeit_Mitte_Ist",
+              "start": 8,
+              "len": 8,
+              "kind": "number",
+              "factor": 3.0,
+              "offset": -381.0,
+              "unit": "Nm/min",
+              "notes": "Actual coupling stiffness, DBC scale."
+            },
+            {
+              "name": "lock_actual",
+              "start": 8,
+              "len": 8,
+              "kind": "number",
+              "curve": [[0, 0], [128, 0], [253, 100], [255, 100]],
+              "unit": "%",
+              "notes": "Byte 1 as engagement percent. Lock percent on the Gen2/Gen4 lever scale OpenHaldex-C6 documents: <= 0x80 open, 0x81..0xFD linear over 125 steps, >= 0xFE full. Community confidence."
+            },
+            {
+              "name": "Fehlerspeichereintrag",
+              "start": 31,
+              "len": 1,
+              "kind": "bool",
+              "notes": "A fault is stored."
+            },
+            {
+              "name": "Kupplungssteifigkeit_Hinten_Ist",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.7874,
+              "unit": "%",
+              "notes": "Byte 4 in the DBC reading."
+            },
+            {
+              "name": "gen4_temperature",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "offset": -60.0,
+              "unit": "degC",
+              "invalid": [255],
+              "notes": "Byte 4 read as the Gen4 unit temperature, raw - 60 (OpenHaldex-C6, community); not meaningful on Gen1/2."
+            },
+            {
+              "name": "counter",
+              "start": 60,
+              "len": 4,
+              "kind": "number",
+              "notes": "Alive counter (byte 7 high nibble)."
+            }
+          ]
+        },
+        {
+          "id": "0x4A0",
+          "name": "Bremse_3",
+          "sender": "ABS",
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "Wheel speeds.",
+          "signals": [
+            {
+              "name": "Radgeschw__VL",
+              "start": 1,
+              "len": 15,
+              "kind": "number",
+              "factor": 0.01,
+              "unit": "km/h",
+              "notes": "Wheel speed front left."
+            },
+            {
+              "name": "Radgeschw__VR",
+              "start": 17,
+              "len": 15,
+              "kind": "number",
+              "factor": 0.01,
+              "unit": "km/h",
+              "notes": "Wheel speed front right."
+            },
+            {
+              "name": "Radgeschw__HL",
+              "start": 33,
+              "len": 15,
+              "kind": "number",
+              "factor": 0.01,
+              "unit": "km/h",
+              "notes": "Wheel speed rear left."
+            },
+            {
+              "name": "Radgeschw__HR",
+              "start": 49,
+              "len": 15,
+              "kind": "number",
+              "factor": 0.01,
+              "unit": "km/h",
+              "notes": "Wheel speed rear right."
+            }
+          ]
+        },
+        {
+          "id": "0x280",
+          "name": "Motor_1",
+          "sender": "engine",
+          "min_len": 6,
+          "validation": "synthetic-tested",
+          "notes": "Engine speed and pedal.",
+          "signals": [
+            {
+              "name": "Motordrehzahl",
+              "start": 16,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.25,
+              "unit": "rpm",
+              "notes": "Engine speed."
+            },
+            {
+              "name": "Fahrpedalwert",
+              "start": 40,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.4,
+              "unit": "%",
+              "notes": "Accelerator pedal."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "oil temperature",
+      "unit": "degC",
+      "source": {"kind": "kwp_measuring_block", "group": 1, "cell": 0},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "clutch plate temperature",
+      "unit": "degC",
+      "source": {"kind": "kwp_measuring_block", "group": 1, "cell": 1},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "supply voltage",
+      "unit": "V",
+      "source": {"kind": "kwp_measuring_block", "group": 1, "cell": 2},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "oil pressure",
+      "unit": "bar",
+      "source": {"kind": "kwp_measuring_block", "group": 3, "cell": 0},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "estimated torque",
+      "unit": "Nm",
+      "source": {"kind": "kwp_measuring_block", "group": 3, "cell": 1},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "clutch valve duty",
+      "unit": "%",
+      "source": {"kind": "kwp_measuring_block", "group": 3, "cell": 2},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "clutch valve current",
+      "unit": "A",
+      "source": {"kind": "kwp_measuring_block", "group": 3, "cell": 3},
+      "notes": "OpenHaldex-C6 label, community confidence."
+    },
+    {
+      "name": "lock request",
+      "unit": "%",
+      "source": {"kind": "can_signal", "bus": "pq", "frame": "Bremse_4", "signal": "lock_request"}
+    },
+    {
+      "name": "lock actual",
+      "unit": "%",
+      "source": {"kind": "can_signal", "bus": "pq", "frame": "Allrad_1", "signal": "lock_actual"}
+    },
+    {
+      "name": "unit temperature",
+      "unit": "degC",
+      "source": {"kind": "can_signal", "bus": "pq", "frame": "Allrad_1", "signal": "gen4_temperature"}
+    },
+    {
+      "name": "engine speed",
+      "unit": "rpm",
+      "source": {"kind": "can_signal", "bus": "pq", "frame": "Motor_1", "signal": "Motordrehzahl"}
+    }
+  ],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "Changing the AWD lock changes how the car drives. Only act with the car stationary or in a safe place, and know how to return to stock behaviour.",
+    "OpenTune never writes to the Haldex controller itself (no coding, adaptation, basic settings, code clearing or flashing).",
+    "Bench work: follow the pinout and bench-safety notes of the database unit, and check the pinout on your own unit first."
+  ],
+  "sources": [
+    {
+      "title": "commaai/opendbc vw_pq.dbc / vw_mqb.dbc",
+      "url": "https://github.com/commaai/opendbc",
+      "license": "MIT",
+      "used_for": "PQ Bremse_4/Allrad_1/Bremse_3/Motor_1 and MQB ESP_19 signal layouts and names"
+    },
+    {
+      "title": "Forbes-Automotive/OpenHaldex-C6",
+      "url": "https://github.com/Forbes-Automotive/OpenHaldex-C6",
+      "license": "MIT",
+      "used_for": "Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, lever scale, OpenHaldex frames and DIDs, public CAN captures"
+    },
+    {
+      "title": "Dark Side Developments Gen4 application list",
+      "url": "",
+      "license": "facts",
+      "used_for": "vehicle applications"
+    }
+  ]
+}

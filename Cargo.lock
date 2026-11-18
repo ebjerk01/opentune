@@ -1159,6 +1159,7 @@ dependencies = [
  "opentune-coding",
  "opentune-container",
  "opentune-core",
+ "opentune-ctrldef",
  "opentune-db",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
@@ -1221,6 +1222,16 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-ctrldef"
+version = "0.5.0"
+dependencies = [
+ "opentune-checksum",
+ "opentune-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1411,6 +1422,7 @@ name = "opentune-haldex"
 version = "0.5.0"
 dependencies = [
  "opentune-core",
+ "opentune-ctrldef",
  "opentune-driver-slcan",
  "opentune-udssim",
  "serde",

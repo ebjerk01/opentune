@@ -1,0 +1,211 @@
+{
+  "id": "openhaldex-c6",
+  "name": "OpenHaldex controller (open-source Haldex lock-request box)",
+  "kind": "other",
+  "maker": "Forbes Automotive",
+  "family": "OpenHaldex",
+  "vehicles": ["VAG PQ / MQB cars with a Haldex Gen1/2/4/5 coupling"],
+  "validation": "synthetic-tested",
+  "notes": "Aftermarket box that sits between the car and the Haldex and rewrites the lock request. Its CAN broadcast/command frames and supplier UDS DIDs as opentune-haldex implements them (parity-tested). The mode write is done by `opentune haldex mode set` (confirm-gated, read back).",
+  "identify": {"part_numbers": [], "sw_numbers": [], "gearbox_codes": ["OpenHaldex"]},
+  "ecudefs": [],
+  "units": [],
+  "diagnostics": [
+    {
+      "name": "uds",
+      "transport": "iso_tp",
+      "layer": "uds",
+      "bitrate": 500000,
+      "tx_id": "0x70F",
+      "rx_id": "0x779",
+      "validation": "synthetic-tested",
+      "notes": "include/OpenHaldexC6_canID.h; tested against a simulator."
+    }
+  ],
+  "buses": [
+    {
+      "name": "openhaldex",
+      "description": "the bus the OpenHaldex sits on",
+      "bitrate": 500000,
+      "notes": "Only sent with 'Broadcast over CAN' enabled on the unit.",
+      "frames": [
+        {
+          "id": "0x6B0",
+          "name": "OpenHaldex_state",
+          "sender": "OpenHaldex",
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "README 'CAN Broadcast'.",
+          "signals": [
+            {
+              "name": "standalone_flags",
+              "start": 8,
+              "len": 8,
+              "kind": "number",
+              "notes": "Standalone flags (bitmask for Gen1/2/4/5)."
+            },
+            {
+              "name": "requested",
+              "start": 16,
+              "len": 8,
+              "kind": "number",
+              "unit": "%",
+              "notes": "Engagement requested by the firmware."
+            },
+            {
+              "name": "actual",
+              "start": 24,
+              "len": 8,
+              "kind": "number",
+              "unit": "%",
+              "notes": "Lock percent returned by the differential."
+            },
+            {
+              "name": "speed",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Vehicle speed."
+            },
+            {
+              "name": "mode_override",
+              "start": 40,
+              "len": 8,
+              "kind": "number",
+              "notes": "Legacy mode-override flag."
+            },
+            {
+              "name": "mode",
+              "start": 48,
+              "len": 8,
+              "kind": "enum",
+              "values": [
+                {"raw": 0, "name": "stock"},
+                {"raw": 1, "name": "fwd"},
+                {"raw": 2, "name": "5050"},
+                {"raw": 3, "name": "6040"},
+                {"raw": 4, "name": "7525"},
+                {"raw": 5, "name": "expert"}
+              ],
+              "notes": "Mode index."
+            },
+            {
+              "name": "pedal",
+              "start": 56,
+              "len": 8,
+              "kind": "number",
+              "unit": "%",
+              "notes": "Driver's pedal."
+            }
+          ]
+        },
+        {
+          "id": "0x6A0",
+          "name": "OpenHaldex_command",
+          "sender": "tester",
+          "min_len": 1,
+          "validation": "synthetic-tested",
+          "notes": "README 'Change Mode': byte 0 = mode index + 1.",
+          "signals": [
+            {
+              "name": "mode_command",
+              "start": 0,
+              "len": 8,
+              "kind": "enum",
+              "values": [
+                {"raw": 1, "name": "stock"},
+                {"raw": 2, "name": "fwd"},
+                {"raw": 3, "name": "5050"},
+                {"raw": 4, "name": "6040"},
+                {"raw": 5, "name": "7525"},
+                {"raw": 6, "name": "expert"}
+              ],
+              "notes": "Requested mode."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "commanded lock",
+      "unit": "%",
+      "source": {"kind": "uds_did", "did": "0xFDA0", "byte": 0, "len": 1}
+    },
+    {
+      "name": "engagement (raw)",
+      "unit": "",
+      "source": {"kind": "uds_did", "did": "0xFDA0", "byte": 1, "len": 1}
+    },
+    {"name": "mode index", "unit": "", "source": {"kind": "uds_did", "did": "0xFDA0", "byte": 2, "len": 1}},
+    {
+      "name": "slip FL",
+      "unit": "",
+      "source": {"kind": "uds_did", "did": "0xFDA1", "byte": 0, "len": 1, "signed": true},
+      "notes": "-128 = no value."
+    },
+    {
+      "name": "slip FR",
+      "unit": "",
+      "source": {"kind": "uds_did", "did": "0xFDA1", "byte": 1, "len": 1, "signed": true},
+      "notes": "-128 = no value."
+    },
+    {
+      "name": "slip RL",
+      "unit": "",
+      "source": {"kind": "uds_did", "did": "0xFDA1", "byte": 2, "len": 1, "signed": true},
+      "notes": "-128 = no value."
+    },
+    {
+      "name": "slip RR",
+      "unit": "",
+      "source": {"kind": "uds_did", "did": "0xFDA1", "byte": 3, "len": 1, "signed": true},
+      "notes": "-128 = no value."
+    },
+    {
+      "name": "mode (broadcast)",
+      "unit": "",
+      "source": {"kind": "can_signal", "bus": "openhaldex", "frame": "OpenHaldex_state", "signal": "mode"}
+    },
+    {
+      "name": "lock actual (broadcast)",
+      "unit": "%",
+      "source": {"kind": "can_signal", "bus": "openhaldex", "frame": "OpenHaldex_state", "signal": "actual"}
+    }
+  ],
+  "adaptations": [
+    {
+      "name": "mode",
+      "kind": "adaptation",
+      "service": "UDS 0x2E 0xFDA2 [mode 0..5]",
+      "writes": true,
+      "requires_security": false,
+      "validation": "synthetic-tested",
+      "notes": "`opentune haldex mode set` - refuses without --confirm, then reads 0xFDA0 back."
+    }
+  ],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "Changing the AWD lock changes how the car drives. Only act with the car stationary or in a safe place, and know how to return to stock behaviour.",
+    "Mode changes are writes: they need --confirm and are read back; a disabled controller ignores them."
+  ],
+  "sources": [
+    {
+      "title": "Forbes-Automotive/OpenHaldex-C6",
+      "url": "https://github.com/Forbes-Automotive/OpenHaldex-C6",
+      "license": "MIT",
+      "used_for": "Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, lever scale, OpenHaldex frames and DIDs, public CAN captures"
+    },
+    {
+      "title": "dandwyer/OpenHaldex-S3, ABangingDonk/OpenHaldexDue",
+      "url": "https://github.com/dandwyer/OpenHaldex-S3",
+      "license": "MIT",
+      "used_for": "cross-checks of the frame layouts"
+    }
+  ]
+}

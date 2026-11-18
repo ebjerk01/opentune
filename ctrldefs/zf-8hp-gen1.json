@@ -1,0 +1,79 @@
+{
+  "id": "zf-8hp-gen1",
+  "name": "ZF 8HP first-generation TCU (8HP45/55/70/90)",
+  "kind": "tcu",
+  "maker": "ZF",
+  "family": "8HP Gen1",
+  "vehicles": ["BMW F-series", "Audi (AL551, 8HP55/8HP90)", "Chrysler / Dodge / Jeep 8HP Gen1"],
+  "validation": "synthetic-tested",
+  "notes": "Drop-in example of a non-VAG controller: identity, the zf8hp CAL checksum (AL551 generation, CRC-32 vectors + synthetic only) and the first-generation gear ratios. The CAL_DATA region is the one the zf8hp checksum covers in an AL551 image; the full image size and other regions are not claimed. Diagnostics differ per brand (BMW, Audi, FCA) and are not declared until a cited source documents them.",
+  "identify": {"part_numbers": [], "sw_numbers": [], "gearbox_codes": ["8HP45", "8HP55", "8HP70", "8HP90", "AL551"]},
+  "ecudefs": [],
+  "units": ["zf-8hp-gen1"],
+  "diagnostics": [],
+  "buses": [],
+  "live": [],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [
+    {
+      "name": "8HP45 (Gen1)",
+      "applies_to": ["8HP45"],
+      "gears": [
+        {"gear": "1", "ratio": 4.7143},
+        {"gear": "2", "ratio": 3.1429},
+        {"gear": "3", "ratio": 2.1064},
+        {"gear": "4", "ratio": 1.6667},
+        {"gear": "5", "ratio": 1.2854},
+        {"gear": "6", "ratio": 1.0},
+        {"gear": "7", "ratio": 0.8387},
+        {"gear": "8", "ratio": 0.6667},
+        {"gear": "R", "ratio": -3.2952}
+      ],
+      "source": "Wikipedia 'ZF 8HP transmission' (facts)",
+      "notes": ""
+    },
+    {
+      "name": "8HP55/65/70/90 (Gen1)",
+      "applies_to": ["8HP55", "8HP65", "8HP70", "8HP90"],
+      "gears": [
+        {"gear": "1", "ratio": 4.7143},
+        {"gear": "2", "ratio": 3.1429},
+        {"gear": "3", "ratio": 2.1064},
+        {"gear": "4", "ratio": 1.6667},
+        {"gear": "5", "ratio": 1.2847},
+        {"gear": "6", "ratio": 1.0},
+        {"gear": "7", "ratio": 0.8392},
+        {"gear": "8", "ratio": 0.6667},
+        {"gear": "R", "ratio": -3.3168}
+      ],
+      "source": "Wikipedia 'ZF 8HP transmission' (facts)",
+      "notes": ""
+    }
+  ],
+  "checksum": "zf8hp",
+  "flash": {
+    "size": 0,
+    "regions": [{"name": "cal_data", "region": {"address": 1638400, "length": 458080}, "writable": false}],
+    "full_read": "bench_boot",
+    "notes": "AL551 (method 0x22) image offsets from the zf8hp checksum handler: CRC-32 over 0x190000..=0x1FFD5F, stored at 0x180244. AES variants and Gen3 TriCore are not covered."
+  },
+  "safety": [
+    "An 8HP TCU controls clutch pressures: wrong calibration data can destroy clutches or make the car move unexpectedly.",
+    "The 8HP TCU has no internal CAN termination; on the bench fit 120 ohm at the TCU and apply the main supply before wake-up (database unit)."
+  ],
+  "sources": [
+    {
+      "title": "dspl1236/vag-tcu-tools",
+      "url": "https://github.com/dspl1236/vag-tcu-tools",
+      "license": "MIT",
+      "used_for": "ZF 8HP AL551 CAL CRC-32 layout"
+    },
+    {
+      "title": "Wikipedia: ZF 8HP transmission",
+      "url": "https://en.wikipedia.org/wiki/ZF_8HP_transmission",
+      "license": "facts",
+      "used_for": "first-generation gear ratios"
+    }
+  ]
+}

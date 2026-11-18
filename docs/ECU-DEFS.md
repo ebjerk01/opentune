@@ -108,6 +108,14 @@ Notes on the values above:
 - `checksum: "edc16"` selects the EDC16 algorithm in `opentune-checksum`; a
   definition with no known checksum uses `null`.
 
+## Drivetrain controllers
+
+TCU and AWD units also get a **controller definition** in
+[`ctrldefs/`](../ctrldefs/) that links one or more ecudefs (one per software
+generation) and adds what an ecudef does not carry: diagnostic channels, CAN
+broadcast frames, live channels, adaptations, shift/pressure tables with axes
+and gear ratios. See [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md).
+
 ## Adding a definition
 
 1. Copy an existing file in `ecudefs/` and edit the fields.

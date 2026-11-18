@@ -1,0 +1,57 @@
+{
+  "id": "vag-dq250-mqb",
+  "name": "VAG DQ250 6-speed DSG (0D9, MQB) - Temic TCU",
+  "kind": "tcu",
+  "maker": "Temic",
+  "family": "DQ250 (0D9)",
+  "vehicles": ["MQB DQ250 applications (Golf 7 GTI/R, Audi S3 8V, ...)"],
+  "validation": "synthetic-tested",
+  "notes": "Layout and JAMCRC checksum in the ecudef temic-dq250-mqb (synthetic-tested; no real 0D9 read). UDS on 0x7E1/0x7E9 per VW_Flash/opendbc. See docs/DSG.md.",
+  "identify": {"part_numbers": ["0D9300"], "sw_numbers": [], "gearbox_codes": ["0D9"]},
+  "ecudefs": ["temic-dq250-mqb"],
+  "units": ["temic-dq250-mqb-vag"],
+  "diagnostics": [
+    {
+      "name": "uds",
+      "transport": "iso_tp",
+      "layer": "uds",
+      "bitrate": 500000,
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "validation": "implemented",
+      "notes": "VW_Flash / opendbc. Not tried on a car."
+    }
+  ],
+  "buses": [],
+  "live": [],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "A DSG TCU controls clutch pressure. Wrong shift or clutch data can damage the clutches or the gearbox and can make a car move unexpectedly. Edit by ratio, keep downshift points below their upshift points, and keep a verified stock read.",
+    "Only calibration editing is in scope: no launch-control, torque-limiter or protection defeat.",
+    "Bench reads: current-limited supply, fused +12 V, CAN terminated (see the database unit)."
+  ],
+  "sources": [
+    {
+      "title": "bri3d/VW_Flash",
+      "url": "https://github.com/bri3d/VW_Flash",
+      "license": "BSD-2-Clause",
+      "used_for": "UDS ids, block layout, JAMCRC"
+    },
+    {
+      "title": "bri3d/mqb-flash-rs",
+      "url": "https://github.com/bri3d/mqb-flash-rs",
+      "license": "MIT",
+      "used_for": "block table"
+    },
+    {
+      "title": "TheFlashBold/DQ250-MQB-Bench-Flash",
+      "url": "https://github.com/TheFlashBold/DQ250-MQB-Bench-Flash",
+      "license": "GPL-3.0",
+      "used_for": "bench read path"
+    }
+  ]
+}

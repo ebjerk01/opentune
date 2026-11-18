@@ -39,7 +39,8 @@ they are here only to indicate relative reach, not to rank quality.
 |---|---|---|---|
 | [rnd-ash/ecu_diagnostics](https://github.com/rnd-ash/ecu_diagnostics) | ~120 | GPL-3.0-only | A Rust UDS/KWP2000/OBD stack — the closest neighbour to `opentune-core`'s protocol layer. Validated our KWP2000/UDS service split and error-code modelling. GPL-3.0 → compatible. |
 | [rnd-ash/OpenVehicleDiag](https://github.com/rnd-ash/OpenVehicleDiag) | ~400 | GPL-3.0 | A diagnostics suite with a CDF/ODX-style definition importer; informed how we think about lowering OEM definition formats into a neutral internal model. GPL-3.0 → compatible with OpenTune (reuse under GPL-3 terms, with attribution). |
-| [rnd-ash/ultimate-nag52-fw](https://github.com/rnd-ash/ultimate-nag52-fw) | ~150 | GPL-3.0 | Open transmission-controller firmware; a reference for real-world UDS routine/IO-control usage and CAN framing on a live module. GPL-3.0 → compatible. |
+| [rnd-ash/ultimate-nag52-fw](https://github.com/rnd-ash/ultimate-nag52-fw) | ~150 | GPL-3.0 | Open replacement TCU firmware for the Mercedes 722.6. Licence checked 2026-11-18 (GPL-3.0 `LICENSE`). Source of the `mercedes-egs5x-7226` controller definition, for three things only: its hand-made EGS51 CAN set (`lib/egs51_ecus/can_data.txt`, with the scaling in its CAN layers), the shape/axes of its shift, shift-time, fill, TCC and adaptation maps (structure only, no values), and the gear-ratio cross-check. Layouts transcribed into data; no code copied. Its other CAN matrices are not used (see [MERCEDES-722.6.md](MERCEDES-722.6.md#sources-and-provenance)). GPL-3.0 → compatible. |
+| [rnd-ash/ultimate-nag52-fw-rs](https://github.com/rnd-ash/ultimate-nag52-fw-rs) | — | GPL-3.0 | Rust port of the same TCU (`egs_can`, `diag_common`, `flasher`, `bootloader`, `egs_pc_sim`). Used as a cross-check of the EGS51 matrix and for the large-NAG ratio table; its embedded `no_std` crates are not used. GPL-3.0 → compatible. |
 | [pylessard/python-udsoncan](https://github.com/pylessard/python-udsoncan) | ~650 | MIT | The reference UDS (ISO 14229) client implementation; our service IDs, sub-functions, NRC handling and DID conventions follow its well-tested shape. Also the independent client in the `opentune-udssim` conformance harness ([tools/conformance](../tools/conformance/README.md)). MIT → reusable. |
 | [jacobschaer/python-doipclient](https://github.com/jacobschaer/python-doipclient) | ~200 | MIT | A DoIP (ISO 13400-2) client; drives the simulator's DoIP entity (routing activation, alive check, NACKs) in the conformance harness. Test-only, not shipped. MIT → reusable. |
 | [pylessard/python-can-isotp](https://github.com/pylessard/python-can-isotp) | ~430 | MIT | The reference ISO 15765-2 (ISO-TP) implementation — single/first/consecutive/flow-control frames, block size and STmin. Directly informed `protocol/isotp.rs`. MIT → reusable. |
@@ -60,7 +61,10 @@ they are here only to indicate relative reach, not to rank quality.
 |---|---|---|---|
 | [Forbes-Automotive/OpenHaldex-C6](https://github.com/Forbes-Automotive/OpenHaldex-C6) | — | MIT | The OpenHaldex controller: its mode set, CAN broadcast/command frames, BLE contract, supplier UDS DIDs, the Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, and public PQ/MQB CAN captures used as test vectors. `opentune-haldex` is written fresh from these facts (see [`HALDEX.md`](HALDEX.md)). |
 | [dandwyer/OpenHaldex-S3](https://github.com/dandwyer/OpenHaldex-S3), [ABangingDonk/OpenHaldexDue](https://github.com/ABangingDonk/OpenHaldexDue) | — | MIT | Cross-checks of the same Haldex frame layouts and the project lineage. |
-| [commaai/opendbc](https://github.com/commaai/opendbc) `vw_pq.dbc` / `vw_mqb.dbc` | — | MIT | Signal layouts of `Allrad_1`, `Bremse_4`, `Bremse_3`, `Motor_1` and `ESP_19` for the passive Haldex decoder. |
+| [commaai/opendbc](https://github.com/commaai/opendbc) `vw_pq.dbc` / `vw_mqb.dbc` | — | MIT | Signal layouts of `Allrad_1`, `Bremse_4`, `Bremse_3`, `Motor_1` and `ESP_19` for the passive Haldex decoder (and the Haldex controller definitions in `ctrldefs/`). |
+
+Gear ratios in `ctrldefs/` (722.6, ZF 8HP) are public mechanical facts from the
+Wikipedia transmission articles; no text is reproduced.
 ## Aftermarket ECUs (TunerStudio-compatible)
 
 | Project | Stars (approx) | Licence | What OpenTune learned |

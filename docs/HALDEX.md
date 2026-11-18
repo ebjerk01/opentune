@@ -168,6 +168,17 @@ The desktop **Haldex AWD** panel (`desktop/src-tauri/src/feat_haldex.rs`, tier
 Per the sidebar tier rule, a panel that talks to the car stays tier `bench`
 until vehicle-tested; the log decoder may be `public`.
 
+## As controller definitions
+
+The Gen4, Gen5 and OpenHaldex frames, channels and DIDs are also written down
+as data in [`ctrldefs/`](../ctrldefs/) (`borgwarner-haldex-gen4`,
+`borgwarner-haldex-gen5`, `openhaldex-c6`; format in
+[`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md)), so `opentune controller show` /
+`decode` work on them like on any other drivetrain unit.
+`crates/opentune-haldex/tests/ctrldef_parity.rs` decodes the same frames
+with this crate and with the generic decoder and requires identical values;
+this crate stays the engine for the Gen4 read and the OpenHaldex client.
+
 ## Safety
 
 - Changing the AWD lock changes how the car drives. Only change modes with the

@@ -46,6 +46,7 @@ mod candump;
 mod cli;
 mod commands;
 mod context;
+mod ctrldef_cmd;
 mod doip_cmd;
 mod haldex_cmd;
 mod mapfind_cmd;

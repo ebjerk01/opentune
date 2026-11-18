@@ -1,0 +1,20 @@
+[package]
+name = "opentune-ctrldef"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Data-defined drivetrain controller definitions (TCU, AWD/4WD): identity, diagnostics addressing, CAN broadcast decode, live channels, adaptations, shift/pressure tables with axes, gear ratios, flash/checksum links and safety notes."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# tests/repo_ctrldefs.rs checks every shipped definition's links: ecudef ids,
+# checksum ids and database unit ids must resolve.
+opentune-checksum = { path = "../opentune-checksum" }

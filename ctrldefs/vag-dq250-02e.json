@@ -1,0 +1,54 @@
+{
+  "id": "vag-dq250-02e",
+  "name": "VAG DQ250 6-speed DSG (02E, PQ35/PQ46) - Temic TCU J743",
+  "kind": "tcu",
+  "maker": "Temic",
+  "family": "DQ250 (02E)",
+  "vehicles": ["Golf V/VI", "Jetta", "Passat B6/CC", "Audi A3 8P", "TT 8J", "Seat Leon", "Skoda Octavia"],
+  "validation": "real-image-tested",
+  "notes": "Controller view of the 02E mechatronic. Flash layout, maps and checksum live in the two ecudefs (one per software generation): temic-dq250-02e (PowerPC, dq250-02e checksum real-image-tested 78/78, 30 shift tables MEDIUM) and temic-dq250-02e-tricore (no checksum). Diagnostics: neither channel is confirmed for 02E; PQ-era workshop diagnostics commonly run KWP2000 over VW TP2.0. See docs/DSG.md.",
+  "identify": {"part_numbers": ["02E300", "02E927"], "sw_numbers": [], "gearbox_codes": ["02E"]},
+  "ecudefs": ["temic-dq250-02e", "temic-dq250-02e-tricore"],
+  "units": ["temic-dq250-vag"],
+  "diagnostics": [
+    {
+      "name": "kwp-isotp",
+      "transport": "iso_tp",
+      "layer": "kwp2000",
+      "bitrate": 500000,
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "validation": "implemented",
+      "notes": "OBD transmission ids, as in the ecudef; not confirmed for 02E."
+    },
+    {
+      "name": "tp20",
+      "transport": "vwtp20",
+      "layer": "kwp2000",
+      "bitrate": 500000,
+      "tp20_address": "0x02",
+      "validation": "implemented",
+      "notes": "VAG gearbox logical address; open with --opt transport=tp20 --opt tp20_addr=0x02 on a raw-CAN driver. Not tried on a car."
+    }
+  ],
+  "buses": [],
+  "live": [],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "A DSG TCU controls clutch pressure. Wrong shift or clutch data can damage the clutches or the gearbox and can make a car move unexpectedly. Edit by ratio, keep downshift points below their upshift points, and keep a verified stock read.",
+    "Only calibration editing is in scope: no launch-control, torque-limiter or protection defeat.",
+    "Bench reads: current-limited supply, fused +12 V, CAN terminated (see the database unit)."
+  ],
+  "sources": [
+    {
+      "title": "OpenTune's own analysis of real 02E reads (docs/DSG.md)",
+      "url": "",
+      "license": "GPL-3.0-or-later",
+      "used_for": "layout, checksum and maps (in the linked ecudefs)"
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ebjerk01/opentune/blob/main/docs/ctrldef.schema.json",
+  "title": "OpenTune drivetrain controller definition",
+  "description": "Schema for a ctrldefs/*.json controller definition (opentune_ctrldef::ControllerDef): TCU and AWD/4WD units. Structural shape only; the honesty, consistency and link rules are enforced by `opentune controller validate` (see docs/CONTROLLER-DEFS.md). CAN ids, DIDs and addresses may be written as numbers or as \"0x...\" strings.",
+  "type": "object",
+  "required": ["id", "name", "kind", "maker", "family", "validation", "safety", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)+$", "description": "Stable id equal to the file stem: <maker>-<family>[-<variant>]." },
+    "name": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["tcu", "awd", "transfer_case", "differential", "other"] },
+    "maker": { "type": "string", "minLength": 1, "description": "Controller supplier." },
+    "family": { "type": "string", "minLength": 1 },
+    "vehicles": { "type": "array", "items": { "type": "string" } },
+    "validation": { "$ref": "#/definitions/validation" },
+    "notes": { "type": "string" },
+    "identify": { "$ref": "#/definitions/identify" },
+    "ecudefs": { "type": "array", "items": { "type": "string" }, "description": "ecudefs/ ids holding flash layout, maps and checksum (one per software generation)." },
+    "units": { "type": "array", "items": { "type": "string" }, "description": "database/units/ ids (pinouts, bench notes)." },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/definitions/diagChannel" } },
+    "buses": { "type": "array", "items": { "$ref": "#/definitions/bus" } },
+    "live": { "type": "array", "items": { "$ref": "#/definitions/liveChannel" } },
+    "adaptations": { "type": "array", "items": { "$ref": "#/definitions/adaptation" } },
+    "tables": { "type": "array", "items": { "$ref": "#/definitions/table" } },
+    "gearsets": { "type": "array", "items": { "$ref": "#/definitions/gearSet" } },
+    "checksum": { "type": ["string", "null"], "minLength": 1, "description": "opentune-checksum algorithm id, when no linked ecudef names it." },
+    "flash": { "anyOf": [{ "$ref": "#/definitions/flash" }, { "type": "null" }] },
+    "safety": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/source" } }
+  },
+  "definitions": {
+    "hexOrInt": {
+      "description": "A number, or a hex string such as \"0x2C0\".",
+      "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "string", "pattern": "^(0[xX][0-9A-Fa-f]+|[0-9]+)$" }]
+    },
+    "validation": {
+      "enum": ["implemented", "synthetic-tested", "real-image-tested", "bench-tested", "vehicle-tested"],
+      "description": "docs/DEVELOPMENT.md section 7 vocabulary."
+    },
+    "identify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Keys without * or ? match as prefix/substring (case/space-insensitive); keys with them must match the whole value.",
+      "properties": {
+        "part_numbers": { "type": "array", "items": { "type": "string" } },
+        "sw_numbers": { "type": "array", "items": { "type": "string" } },
+        "gearbox_codes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "diagChannel": {
+      "type": "object",
+      "required": ["name", "transport", "layer", "bitrate", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "transport": { "enum": ["iso_tp", "vwtp20", "iso14230_kline", "iso9141", "raw_can"] },
+        "layer": { "enum": ["uds", "kwp2000"] },
+        "bitrate": { "type": "integer", "minimum": 1 },
+        "tx_id": { "anyOf": [{ "$ref": "#/definitions/hexOrInt" }, { "type": "null" }], "description": "ISO-TP request id." },
+        "rx_id": { "anyOf": [{ "$ref": "#/definitions/hexOrInt" }, { "type": "null" }], "description": "ISO-TP response id, or the id a TP2.0 unit is asked to answer on." },
+        "extended_ids": { "type": "boolean", "default": false },
+        "tp20_address": { "anyOf": [{ "$ref": "#/definitions/hexOrInt" }, { "type": "null" }], "description": "VW TP2.0 logical address (required for vwtp20)." },
+        "kline_address": { "anyOf": [{ "$ref": "#/definitions/hexOrInt" }, { "type": "null" }] },
+        "session": { "anyOf": [{ "$ref": "#/definitions/hexOrInt" }, { "type": "null" }] },
+        "identification": { "type": ["string", "null"], "pattern": "^([0-9A-Fa-f]{2})+$", "description": "Identification request as hex, e.g. 1A9B." },
+        "validation": { "$ref": "#/definitions/validation" },
+        "notes": { "type": "string" }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "required": ["name", "bitrate", "frames"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9_.-]+$", "description": "Set name, chosen with --bus." },
+        "description": { "type": "string" },
+        "bitrate": { "type": "integer", "minimum": 1 },
+        "notes": { "type": "string" },
+        "frames": { "type": "array", "items": { "$ref": "#/definitions/frame" } }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "required": ["id", "name", "signals"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/hexOrInt" },
+        "extended": { "type": "boolean", "default": false },
+        "name": { "type": "string", "minLength": 1 },
+        "sender": { "type": "string" },
+        "dlc": { "type": ["integer", "null"], "minimum": 0, "maximum": 64 },
+        "min_len": { "type": ["integer", "null"], "minimum": 0, "maximum": 64, "description": "A shorter payload is not decoded (default 1)." },
+        "cycle_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "validation": { "anyOf": [{ "$ref": "#/definitions/validation" }, { "type": "null" }] },
+        "notes": { "type": "string" },
+        "signals": { "type": "array", "items": { "$ref": "#/definitions/signal" } }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "required": ["name", "start", "len"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "start": { "type": "integer", "minimum": 0, "description": "DBC start bit: LSB for little (Intel), MSB in sawtooth numbering for big (Motorola)." },
+        "len": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "byte_order": { "enum": ["little", "big"], "default": "little" },
+        "signed": { "type": "boolean", "default": false },
+        "kind": { "enum": ["number", "bool", "enum", "ascii"], "default": "number" },
+        "factor": { "type": "number", "default": 1.0 },
+        "offset": { "type": "number", "default": 0.0 },
+        "curve": {
+          "type": "array",
+          "description": "Piecewise-linear [raw, physical] points, raw ascending, clamped at the ends. Replaces factor/offset.",
+          "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+        },
+        "unit": { "type": "string" },
+        "invalid": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Raw values meaning not available." },
+        "raw_range": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2, "description": "Valid raw [min, max]." },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["raw", "name"],
+            "additionalProperties": false,
+            "properties": { "raw": { "type": "integer", "minimum": 0 }, "name": { "type": "string" } }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "liveChannel": {
+      "type": "object",
+      "required": ["name", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "unit": { "type": "string" },
+        "notes": { "type": "string" },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object", "additionalProperties": false, "required": ["kind", "bus", "frame", "signal"],
+              "properties": { "kind": { "const": "can_signal" }, "bus": { "type": "string" }, "frame": { "type": "string" }, "signal": { "type": "string" } }
+            },
+            {
+              "type": "object", "additionalProperties": false, "required": ["kind", "group", "cell"],
+              "properties": { "kind": { "const": "kwp_measuring_block" }, "group": { "type": "integer", "minimum": 0, "maximum": 255 }, "cell": { "type": "integer", "minimum": 0, "maximum": 255 } }
+            },
+            {
+              "type": "object", "additionalProperties": false, "required": ["kind", "did", "len"],
+              "properties": {
+                "kind": { "const": "uds_did" }, "did": { "$ref": "#/definitions/hexOrInt" },
+                "byte": { "type": "integer", "minimum": 0 }, "len": { "type": "integer", "minimum": 1, "maximum": 4 },
+                "signed": { "type": "boolean" }, "factor": { "type": "number" }, "offset": { "type": "number" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "adaptation": {
+      "type": "object",
+      "required": ["name", "kind", "validation"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["adaptation", "basic_setting", "routine", "reset"] },
+        "service": { "type": "string", "description": "Service and identifier as text; empty when not publicly known." },
+        "writes": { "type": "boolean" },
+        "requires_security": { "type": "boolean" },
+        "table": { "type": ["string", "null"], "description": "Name of the table holding the learned values." },
+        "validation": { "$ref": "#/definitions/validation" },
+        "notes": { "type": "string" }
+      }
+    },
+    "axis": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Exactly one of values, labels or derived (+ count).",
+      "properties": {
+        "name": { "type": "string" },
+        "unit": { "type": "string" },
+        "values": { "type": "array", "items": { "type": "number" } },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "derived": { "type": "string" },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": ["name", "role", "rows", "cols", "x_axis", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "role": {
+          "enum": ["shift_up", "shift_down", "shift_time", "shift_pressure", "fill_time", "fill_pressure", "tcc_slip",
+                   "tcc_pressure", "torque_limit", "adaptation", "launch", "coupling_lock", "other"]
+        },
+        "profiles": { "type": "array", "items": { "type": "string" } },
+        "unit": { "type": "string" },
+        "rows": { "type": "integer", "minimum": 1 },
+        "cols": { "type": "integer", "minimum": 1 },
+        "x_axis": { "$ref": "#/definitions/axis" },
+        "y_axis": { "anyOf": [{ "$ref": "#/definitions/axis" }, { "type": "null" }] },
+        "storage": {
+          "anyOf": [
+            {
+              "type": "object", "required": ["address", "data_type", "endian"], "additionalProperties": false,
+              "properties": {
+                "address": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+                "data_type": { "enum": ["u8", "s8", "u16", "s16", "u32", "s32", "f32"] },
+                "endian": { "enum": ["big", "little"] },
+                "factor": { "type": "number" },
+                "offset": { "type": "number" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "ecudef_map": {
+          "anyOf": [
+            { "type": "object", "required": ["ecudef", "map"], "additionalProperties": false,
+              "properties": { "ecudef": { "type": "string" }, "map": { "type": "string" } } },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "enum": ["high", "medium", "low", "structure_only"] },
+        "notes": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    },
+    "gearSet": {
+      "type": "object",
+      "required": ["name", "gears"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "applies_to": { "type": "array", "items": { "type": "string" } },
+        "gears": {
+          "type": "array", "minItems": 1,
+          "items": { "type": "object", "required": ["gear", "ratio"], "additionalProperties": false,
+                     "properties": { "gear": { "type": "string" }, "ratio": { "type": "number" } } }
+        },
+        "source": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "flash": {
+      "type": "object",
+      "required": ["size"],
+      "additionalProperties": false,
+      "properties": {
+        "size": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "0 = unknown." },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["name", "region"], "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "region": { "type": "object", "required": ["address", "length"], "additionalProperties": false,
+                          "properties": { "address": { "type": "integer", "minimum": 0 }, "length": { "type": "integer", "minimum": 0 } } },
+              "writable": { "type": "boolean" }
+            }
+          }
+        },
+        "full_read": { "enum": ["obd", "bench_boot"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["title", "license", "used_for"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string" },
+        "license": { "type": "string", "minLength": 1 },
+        "used_for": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

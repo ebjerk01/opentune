@@ -46,6 +46,7 @@ members = [
     "crates/opentune-mapfind",
     "crates/opentune-recipe",
     "crates/opentune-haldex",
+    "crates/opentune-ctrldef",
     "crates/opentune-tsini",
     "crates/opentune-tsproto",
     "crates/opentune-c167bsl",

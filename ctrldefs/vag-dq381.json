@@ -1,0 +1,45 @@
+{
+  "id": "vag-dq381",
+  "name": "VAG DQ381 7-speed wet DSG (0GC) - Bosch TCU",
+  "kind": "tcu",
+  "maker": "Bosch",
+  "family": "DQ381",
+  "vehicles": ["MQB DQ381 applications"],
+  "validation": "real-image-tested",
+  "notes": "Layout and the dq381 CRC-32 (real-image-tested) live in the ecudef bosch-dq381. No maps shipped. Boot reads and seed/key research stay out of the public tree.",
+  "identify": {"part_numbers": ["0GC927", "0GC300"], "sw_numbers": [], "gearbox_codes": ["0GC"]},
+  "ecudefs": ["bosch-dq381"],
+  "units": ["bosch-dq381-vag"],
+  "diagnostics": [
+    {
+      "name": "uds",
+      "transport": "iso_tp",
+      "layer": "uds",
+      "bitrate": 500000,
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "validation": "implemented",
+      "notes": "OBD transmission ids, as in the ecudef. Not tried on a car."
+    }
+  ],
+  "buses": [],
+  "live": [],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "A DSG TCU controls clutch pressure. Wrong shift or clutch data can damage the clutches or the gearbox and can make a car move unexpectedly. Edit by ratio, keep downshift points below their upshift points, and keep a verified stock read.",
+    "Only calibration editing is in scope: no launch-control, torque-limiter or protection defeat.",
+    "Bench reads: current-limited supply, fused +12 V, CAN terminated (see the database unit)."
+  ],
+  "sources": [
+    {
+      "title": "dspl1236/vag-tcu-tools",
+      "url": "https://github.com/dspl1236/vag-tcu-tools",
+      "license": "MIT",
+      "used_for": "DQ381 CRC-32 layout"
+    }
+  ]
+}

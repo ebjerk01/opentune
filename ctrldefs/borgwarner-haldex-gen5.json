@@ -1,0 +1,154 @@
+{
+  "id": "borgwarner-haldex-gen5",
+  "name": "BorgWarner Haldex Gen5 AWD controller (VAG MQB, 0CQ 907 554)",
+  "kind": "awd",
+  "maker": "BorgWarner",
+  "family": "Haldex Gen5",
+  "vehicles": ["Golf 7 R", "Audi S3 8V", "Tiguan AD", "TT 8S"],
+  "validation": "synthetic-tested",
+  "notes": "MQB Gen5 coupling controller: UDS module address from VW_Flash, the MQB status/wheel frames opentune-haldex decodes, and the 'haldex' block word-sum (VW_Flash, synthetic-tested only - no real Gen5 dump). The PQ unit 0AY 907 554 F that OpenHaldex treats as Gen5 is not covered here. No flash size or region layout is claimed.",
+  "identify": {"part_numbers": ["0CQ907554"], "sw_numbers": [], "gearbox_codes": []},
+  "ecudefs": [],
+  "units": ["haldex-gen5"],
+  "diagnostics": [
+    {
+      "name": "uds",
+      "transport": "iso_tp",
+      "layer": "uds",
+      "bitrate": 500000,
+      "tx_id": "0x70F",
+      "rx_id": "0x779",
+      "validation": "implemented",
+      "notes": "VW_Flash lib/modules/haldex4motion.py (0x70F / 0x779); reachable from the OBD port where the gateway routes it. Not tried on a car."
+    }
+  ],
+  "buses": [
+    {
+      "name": "mqb",
+      "description": "MQB drivetrain CAN",
+      "bitrate": 500000,
+      "notes": "",
+      "frames": [
+        {
+          "id": "0x118",
+          "name": "Allrad_03",
+          "sender": "Haldex",
+          "min_len": 3,
+          "validation": "synthetic-tested",
+          "notes": "Gen5 status (OpenHaldex-C6 / -S3).",
+          "signals": [
+            {"name": "counter", "start": 8, "len": 4, "kind": "number", "notes": "Alive counter."},
+            {
+              "name": "status",
+              "start": 12,
+              "len": 2,
+              "kind": "enum",
+              "values": [{"raw": 0, "name": "normal"}, {"raw": 2, "name": "fault reaction"}],
+              "notes": "2 = fault reaction (clutch released)."
+            },
+            {
+              "name": "request_accepted",
+              "start": 14,
+              "len": 1,
+              "kind": "bool",
+              "notes": "The unit accepts the lock request it receives."
+            },
+            {
+              "name": "lock_actual",
+              "start": 16,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.4,
+              "unit": "%",
+              "raw_range": [0, 250],
+              "notes": "0..250 = 0..100 %; above 250 = no value yet."
+            }
+          ]
+        },
+        {
+          "id": "0x0B2",
+          "name": "ESP_19",
+          "sender": "ABS",
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "Wheel speeds (vw_mqb.dbc).",
+          "signals": [
+            {
+              "name": "ESP_HL_Radgeschw_02",
+              "start": 0,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.0075,
+              "unit": "km/h",
+              "notes": "Wheel speed rear left."
+            },
+            {
+              "name": "ESP_HR_Radgeschw_02",
+              "start": 16,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.0075,
+              "unit": "km/h",
+              "notes": "Wheel speed rear right."
+            },
+            {
+              "name": "ESP_VL_Radgeschw_02",
+              "start": 32,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.0075,
+              "unit": "km/h",
+              "notes": "Wheel speed front left."
+            },
+            {
+              "name": "ESP_VR_Radgeschw_02",
+              "start": 48,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.0075,
+              "unit": "km/h",
+              "notes": "Wheel speed front right."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "lock actual",
+      "unit": "%",
+      "source": {"kind": "can_signal", "bus": "mqb", "frame": "Allrad_03", "signal": "lock_actual"}
+    }
+  ],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": "haldex",
+  "flash": null,
+  "safety": [
+    "Changing the AWD lock changes how the car drives. Only act with the car stationary or in a safe place, and know how to return to stock behaviour.",
+    "OpenTune never writes to the Haldex controller itself (no coding, adaptation, basic settings, code clearing or flashing).",
+    "Bench work: follow the pinout and bench-safety notes of the database unit, and check the pinout on your own unit first."
+  ],
+  "sources": [
+    {
+      "title": "commaai/opendbc vw_pq.dbc / vw_mqb.dbc",
+      "url": "https://github.com/commaai/opendbc",
+      "license": "MIT",
+      "used_for": "PQ Bremse_4/Allrad_1/Bremse_3/Motor_1 and MQB ESP_19 signal layouts and names"
+    },
+    {
+      "title": "Forbes-Automotive/OpenHaldex-C6",
+      "url": "https://github.com/Forbes-Automotive/OpenHaldex-C6",
+      "license": "MIT",
+      "used_for": "Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, lever scale, OpenHaldex frames and DIDs, public CAN captures"
+    },
+    {
+      "title": "bri3d/VW_Flash",
+      "url": "https://github.com/bri3d/VW_Flash",
+      "license": "BSD-2-Clause",
+      "used_for": "Gen5 UDS ids and the per-block word-sum ('haldex' checksum)"
+    }
+  ]
+}

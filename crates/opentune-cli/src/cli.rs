@@ -1,6 +1,7 @@
 //! The clap definitions of the public command tree.
 use crate::{
-    bsl_cmd, candump, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, seedkey_cmd, ts_cmd,
+    bsl_cmd, candump, ctrldef_cmd, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd,
+    seedkey_cmd, ts_cmd,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -513,6 +514,12 @@ pub enum Command {
     Bsl {
         #[command(subcommand)]
         action: bsl_cmd::BslAction,
+    },
+    /// Drivetrain controller definitions (TCU, AWD): list, show, validate,
+    /// match a part number, decode a CAN log with a definition's frame sets.
+    Controller {
+        #[command(subcommand)]
+        action: ctrldef_cmd::ControllerAction,
     },
 }
 

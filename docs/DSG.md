@@ -110,6 +110,16 @@ substitution cipher over LZSS. Full reads go through the SBOOT bench path. The
 `dq250` checksum refuses to write until one block's stored JAMCRC validates on
 the image in hand — it stays **synthetic-tested** until a real 0D9 read appears.
 
+## Controller definitions
+
+Each family with an ecudef also has a controller definition in
+[`ctrldefs/`](../ctrldefs/) (`vag-dq250-02e`, `vag-dq250-mqb`, `vag-dq381`;
+format in [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md)) that links the ecudefs
+and adds the diagnostic channels (for 02E both the KWP2000-on-ISO-TP and the
+TP2.0 `0x02` option, neither confirmed on a car) and identify keys. A
+repository test keeps their part numbers and addressing in step with the
+ecudefs. `opentune controller match 02E300042M` finds the definition.
+
 ## Flashing (later)
 
 OpenTune does not flash any DSG TCU yet. The plan is the shared UDS
