@@ -76,6 +76,13 @@
     "risk": "none",
     "guide": "20-utilities"
   },
+  "sa2": {
+    "title": "SA2 script",
+    "summary": "Run your own VAG SA2 seed/key script offline: paste it, load a file or pick it from your own FRF / ODX / SGO container, read the disassembly and lints, and compute the key for a seed. OpenTune ships no script.",
+    "needs": ["Your own SA2 script or flash container"],
+    "risk": "none",
+    "guide": "38-SA2-script"
+  },
   "database": {
     "title": "ECU database",
     "summary": "Searchable reference of ECUs, TCUs and AWD units: CPU, flash size, how to read them, checksum family, vehicles and bench pinouts with a confidence level.",

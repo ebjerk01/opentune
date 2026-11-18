@@ -36,6 +36,10 @@ them. They exist for learning and for testing against the offline simulator.
 A plugin build may add its own algorithms to the list; their results are
 marked **plugin algorithm** because they do not come from OpenTune.
 
+For a VAG **SA2** script (the seed/key bytecode in your own flash
+container), use the **SA2 script** panel: it disassembles the script and
+computes the key with OpenTune's SA2 interpreter.
+
 ## Safety
 
 All four tools are offline and read-only.

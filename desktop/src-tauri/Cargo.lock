@@ -2653,6 +2653,7 @@ dependencies = [
  "opentune-candump",
  "opentune-checksum",
  "opentune-coding",
+ "opentune-container",
  "opentune-core",
  "opentune-db",
  "opentune-driver-efp02c",
@@ -2674,6 +2675,7 @@ dependencies = [
  "opentune-logdef",
  "opentune-logview",
  "opentune-packs",
+ "opentune-sa2",
  "opentune-scan",
  "opentune-servicefn",
  "opentune-tsini",
@@ -2848,6 +2850,14 @@ dependencies = [
  "opentune-servicefn",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "opentune-sa2"
+version = "0.5.0"
+dependencies = [
+ "opentune-core",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

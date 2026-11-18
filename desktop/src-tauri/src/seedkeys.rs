@@ -13,33 +13,81 @@
 //!
 //! The plugin owns the algorithm and its provenance; when no resolver knows an
 //! id, every caller keeps the honest "plan only / not available" behaviour.
+//!
+//! One generic handler is built in: the VAG **SA2 interpreter**
+//! (`opentune-sa2`), which computes nothing until the *user* supplies a
+//! script. After the plugin resolvers, `sa2` resolves to the script the user
+//! armed in the SA2 panel ([`SeedKeys::arm_sa2`], held in memory for this run
+//! only), and `sa2:<hex>` to the script given inline in the id (the CLI's
+//! `--seedkey sa2:<hex>` form). No script ships with OpenTune.
 
 use opentune_core::protocol::seedkey::SeedKey;
+use std::sync::{Arc, Mutex};
 
 /// Looks up a seed/key algorithm by id (see [`crate::DesktopConfig::seedkeys`]).
 /// Return `None` for ids the resolver does not know.
 pub type SeedKeyResolver = fn(&str) -> Option<Box<dyn SeedKey>>;
 
 /// Seed/key algorithm lookup (managed state): the embedder's resolvers, in
-/// order. The public app has none, so [`get`](SeedKeys::get) always returns
-/// `None` there.
+/// order, then the built-in SA2 interpreter over a user-supplied script. With
+/// no resolver and no armed script (the public app at startup),
+/// [`get`](SeedKeys::get) returns `None` for every id except an inline
+/// `sa2:<hex>`.
+///
+/// Clones share the armed SA2 script, so a clone taken into an adapter
+/// operation sees what the user armed.
 #[derive(Clone, Default)]
-pub struct SeedKeys(Vec<SeedKeyResolver>);
+pub struct SeedKeys {
+    resolvers: Vec<SeedKeyResolver>,
+    sa2: Arc<Mutex<Option<ArmedSa2>>>,
+}
+
+/// The SA2 script the user armed for live sessions (see [`SeedKeys::arm_sa2`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArmedSa2 {
+    /// The script bytes.
+    pub script: Vec<u8>,
+    /// Where the user said it came from (shown in the UI; free text).
+    pub label: String,
+}
 
 impl SeedKeys {
     /// A lookup over `resolvers`, consulted in order.
     pub fn new(resolvers: Vec<SeedKeyResolver>) -> Self {
-        SeedKeys(resolvers)
+        SeedKeys {
+            resolvers,
+            sa2: Arc::default(),
+        }
     }
 
-    /// Resolve `id` (trimmed) with the first resolver that knows it. A blank id
-    /// never resolves.
+    /// Resolve `id` (trimmed): the first plugin resolver that knows it, else
+    /// the built-in SA2 interpreter (`sa2` = the armed script, `sa2:<hex>` =
+    /// the inline one). A blank id never resolves.
     pub fn get(&self, id: &str) -> Option<Box<dyn SeedKey>> {
         let id = id.trim();
         if id.is_empty() {
             return None;
         }
-        self.0.iter().find_map(|r| r(id))
+        self.plugin(id).or_else(|| self.builtin_sa2(id))
+    }
+
+    /// Resolve `id` through the plugin resolvers only.
+    pub fn plugin(&self, id: &str) -> Option<Box<dyn SeedKey>> {
+        let id = id.trim();
+        if id.is_empty() {
+            return None;
+        }
+        self.resolvers.iter().find_map(|r| r(id))
+    }
+
+    /// The built-in SA2 handler for `sa2` (the armed script) or `sa2:<hex>`.
+    fn builtin_sa2(&self, id: &str) -> Option<Box<dyn SeedKey>> {
+        let script = if id == SA2_ID {
+            self.armed_sa2()?.script
+        } else {
+            opentune_sa2::parse_hex(id.strip_prefix("sa2:")?).ok()?
+        };
+        Some(Box::new(opentune_sa2::Sa2SeedKey::new(script)))
     }
 
     /// Like [`get`](SeedKeys::get), with the standard "not available" error.
@@ -47,14 +95,37 @@ impl SeedKeys {
         self.get(id).ok_or_else(|| unavailable(id))
     }
 
-    /// Whether no resolver is registered (the public app).
+    /// Whether no plugin resolver is registered (the public app).
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.resolvers.is_empty()
+    }
+
+    /// Arm `script` as the `sa2` handler for this run (replacing any earlier
+    /// one), or disarm it with `None`. Nothing is persisted.
+    pub fn arm_sa2(&self, armed: Option<ArmedSa2>) {
+        *self.sa2.lock().unwrap_or_else(|p| p.into_inner()) = armed;
+    }
+
+    /// The armed SA2 script, if any.
+    pub fn armed_sa2(&self) -> Option<ArmedSa2> {
+        self.sa2.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Whether `id` resolves to the built-in SA2 interpreter (not a plugin).
+    pub fn is_builtin_sa2(&self, id: &str) -> bool {
+        let id = id.trim();
+        self.plugin(id).is_none() && self.builtin_sa2(id).is_some()
     }
 }
 
+/// The seed/key id the armed SA2 script answers to.
+pub const SA2_ID: &str = "sa2";
+
 /// The message for an id no resolver knows.
 pub fn unavailable(id: &str) -> String {
+    if id.trim() == SA2_ID {
+        return "no SA2 script is armed — load your own script in the SA2 script panel and arm it for live sessions (OpenTune ships none)".into();
+    }
     format!(
         "no seed/key algorithm '{}' is available in this build — OpenTune ships none; it must come from a plugin",
         id.trim()
@@ -134,6 +205,60 @@ mod tests {
         let public = SeedKeys::default();
         assert!(public.is_empty());
         assert!(public.get("shared").is_none(), "the public app has none");
+        assert!(
+            public.get(SA2_ID).is_none(),
+            "no SA2 script until one is armed"
+        );
+    }
+
+    // Synthetic SA2 script (written for the tests): eor 0xFFFFFFFF; finish.
+    const NOT: &[u8] = &[0x87, 0xFF, 0xFF, 0xFF, 0xFF, 0x4C];
+
+    #[test]
+    fn armed_sa2_script_resolves_as_sa2_and_is_shared_by_clones() {
+        let keys = SeedKeys::default();
+        let e = keys.require("sa2").err().unwrap();
+        assert!(e.contains("SA2 script panel"), "{e}");
+        let op = keys.clone(); // e.g. taken into an adapter operation
+        keys.arm_sa2(Some(ArmedSa2 {
+            script: NOT.to_vec(),
+            label: "test".into(),
+        }));
+        let h = op.get(" sa2 ").expect("clone sees the armed script");
+        assert_eq!(h.id(), "sa2");
+        assert_eq!(
+            h.compute(&[0, 0, 0, 1], 0x11).unwrap(),
+            [0xFF, 0xFF, 0xFF, 0xFE]
+        );
+        assert!(keys.is_builtin_sa2("sa2"));
+        assert_eq!(op.armed_sa2().unwrap().label, "test");
+        keys.arm_sa2(None);
+        assert!(op.get("sa2").is_none(), "disarm is shared too");
+        assert!(keys.armed_sa2().is_none());
+    }
+
+    #[test]
+    fn inline_sa2_ids_and_plugin_precedence() {
+        let keys = SeedKeys::default();
+        let h = keys.get("sa2:87FFFFFFFF4C").unwrap();
+        assert_eq!(
+            h.compute(&[0, 0, 0, 1], 0x11).unwrap(),
+            [0xFF, 0xFF, 0xFF, 0xFE]
+        );
+        assert!(keys.get("sa2:8").is_none(), "bad hex never resolves");
+        assert!(keys.get("sa2x").is_none());
+        // A plugin that answers "sa2" keeps precedence over the armed script.
+        fn plugin_sa2(id: &str) -> Option<Box<dyn SeedKey>> {
+            (id == "sa2").then(|| Box::new(super::testkeys::Tagged("plugin-sa2", 0)) as _)
+        }
+        let keys = SeedKeys::new(vec![plugin_sa2]);
+        keys.arm_sa2(Some(ArmedSa2 {
+            script: NOT.to_vec(),
+            label: String::new(),
+        }));
+        assert_eq!(keys.get("sa2").unwrap().id(), "plugin-sa2");
+        assert!(!keys.is_builtin_sa2("sa2"));
+        assert!(keys.plugin("sa2:87FFFFFFFF4C").is_none());
     }
 
     #[test]

@@ -23,7 +23,10 @@ here — it is out of scope for this app.
 
 `Image` · `Analyze bin` · `Identify` · `Checksum` · `Maps` (findmaps diff +
 map viewer/editor) · `Compare` · `Flash` · `Vault` · `Drivers` · `Project` ·
-`Utilities` · `Guide` (bundled offline markdown) · `About & updates`.
+`Utilities` · `SA2 script` (your own VAG SA2 seed/key script: load from
+hex / file / your own FRF·ODX·SGO, disassemble, seed → key with a bounded
+trace; arming it for live sessions is Bench tier) · `Guide` (bundled offline
+markdown) · `About & updates`.
 
 Diagnostics (live, capability-gated): `Coding` · `Auto-scan` (modules + DTCs) ·
 `Adaptation` · `Service fn` · `Live log` · `OBD live` (dashboard) ·
@@ -60,6 +63,10 @@ for the full set); each calls straight into the OpenTune crates.
   from disk), used by the shared pack picker in the engine panels.
 - **Utilities** — `vin_decode`, `part_decode`, `dtc_lookup`, `seedkey_algos`,
   `seedkey_compute`, `data_paths`, `guide_list`, `guide_read`.
+- **SA2 script** — `sa2_load` (text / script file / container → SA2
+  candidates), `sa2_inspect` (disassembly + lints, seed → key, bounded trace),
+  `sa2_status` / `sa2_arm` (arm or disarm the script as seed/key id `sa2`;
+  refused on the stable channel and without an acknowledgement).
 - **Debug** — `debug_raw_request` and `debug_simulate` (refuse to run unless
   built with the `alpha` feature), plus `debug_log_dump` / `debug_log_clear`
   for the session log.

@@ -74,6 +74,15 @@ fn plugin_api_paths_and_shapes() {
     DebugLog::default().push("plugin line");
     assert!(Checksums::default().get("edc16").is_some());
     assert!(SeedKeys::default().get("anything").is_none());
+    // The built-in SA2 interpreter over a user-armed script (see docs/PLUGINS.md).
+    let keys = SeedKeys::new(vec![no_seedkey]);
+    assert!(keys.armed_sa2().is_none() && keys.plugin("sa2").is_none());
+    keys.arm_sa2(Some(opentune_desktop::seedkeys::ArmedSa2 {
+        script: vec![0x4C],
+        label: "plugin test".into(),
+    }));
+    assert!(keys.is_builtin_sa2("sa2"));
+    keys.arm_sa2(None);
 
     // Command routing.
     assert_eq!(command_names("a, m :: b"), vec!["a", "b"]);

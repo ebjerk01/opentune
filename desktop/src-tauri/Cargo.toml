@@ -78,6 +78,9 @@ opentune-haldex = { path = "../../crates/opentune-haldex" }
 # TunerStudio-compatible aftermarket ECUs: INI + .msq, serial protocol (TS panel).
 opentune-tsini = { path = "../../crates/opentune-tsini" }
 opentune-tsproto = { path = "../../crates/opentune-tsproto" }
+# VAG SA2 seed/key interpreter + the user's own flash containers (SA2 panel).
+opentune-sa2 = { path = "../../crates/opentune-sa2" }
+opentune-container = { path = "../../crates/opentune-container" }
 
 [features]
 # Tauri's default behaviour for a release build.

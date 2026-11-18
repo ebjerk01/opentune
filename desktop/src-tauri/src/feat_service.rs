@@ -107,6 +107,7 @@ fn key_available(script: &ServiceScript, keys: &SeedKeys) -> bool {
 /// Why a secured script cannot run here, naming the unavailable id.
 fn missing_key_note(script: &ServiceScript) -> String {
     match script.seedkey.as_deref() {
+        Some(id) if id.trim() == seedkeys::SA2_ID => "This script needs UDS SecurityAccess with your SA2 script (seedkey 'sa2'), and none is armed. Load your own script in the SA2 script panel and arm it for live sessions; OpenTune ships none. The script can be planned here but not executed.".into(),
         Some(id) => format!(
             "This script needs UDS SecurityAccess with seed/key algorithm '{}', which is not available in this build. OpenTune ships no OEM seed/key provider; a plugin must supply it. The script can be planned here but not executed.",
             id.trim()
@@ -236,10 +237,14 @@ fn plan_script(script: &ServiceScript, keys: &SeedKeys) -> Result<Value, String>
             v["seedkey_available"] = json!(key_available(script, keys));
             if needs {
                 if let Some(id) = script.seedkey.as_deref() {
-                    v["note"] = json!(format!(
-                        "SecurityAccess will use the plugin-supplied seed/key algorithm '{}' (not part of OpenTune).",
-                        id.trim()
-                    ));
+                    v["note"] = json!(if keys.is_builtin_sa2(id) {
+                        "SecurityAccess will use your SA2 script, run by OpenTune's SA2 interpreter (OpenTune ships no script).".to_string()
+                    } else {
+                        format!(
+                            "SecurityAccess will use the plugin-supplied seed/key algorithm '{}' (not part of OpenTune).",
+                            id.trim()
+                        )
+                    });
                 }
             }
             Ok(v)
@@ -432,6 +437,31 @@ mod tests {
             e.contains("'vcar-test'") && e.contains("not available"),
             "{e}"
         );
+    }
+
+    #[test]
+    fn an_armed_sa2_script_unlocks_as_seedkey_sa2() {
+        use crate::seedkeys::{ArmedSa2, SA2_ID};
+        // Synthetic SA2 script: eor 0x5A5A5A5A; finish — the same transform as
+        // the virtual car's TEST-ONLY key on its 4-byte seeds.
+        let keys = SeedKeys::default();
+        let script = airbag_script(Some(SA2_ID));
+        let plan = plan_script(&script, &keys).unwrap();
+        assert_eq!(plan["seedkey_available"], false);
+        let note = plan["note"].as_str().unwrap();
+        assert!(note.contains("SA2 script panel"), "{note}");
+        assert!(run(&script, &keys, "demo@service-sa2-none").is_err());
+
+        keys.arm_sa2(Some(ArmedSa2 {
+            script: vec![0x87, 0x5A, 0x5A, 0x5A, 0x5A, 0x4C],
+            label: "synthetic".into(),
+        }));
+        let plan = plan_script(&script, &keys).unwrap();
+        assert_eq!(plan["seedkey_available"], true);
+        assert!(plan["note"].as_str().unwrap().contains("SA2 interpreter"));
+        let rep = run(&script, &keys, "demo@service-sa2").unwrap();
+        assert!(rep.succeeded(), "{rep:?}");
+        assert!(rep.security_unlocked);
     }
 
     #[test]

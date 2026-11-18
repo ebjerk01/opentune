@@ -42,6 +42,7 @@ mod feat_logging;
 mod feat_logview;
 mod feat_obd;
 mod feat_obdinfo;
+mod feat_sa2;
 mod feat_scan;
 mod feat_service;
 mod feat_ts;
@@ -290,6 +291,10 @@ macro_rules! core_command_list {
             utilities::dtc_lookup,
             utilities::seedkey_algos,
             utilities::seedkey_compute,
+            feat_sa2::sa2_load,
+            feat_sa2::sa2_inspect,
+            feat_sa2::sa2_status,
+            feat_sa2::sa2_arm,
             project::project_save,
             project::project_open,
             flash::flash,
