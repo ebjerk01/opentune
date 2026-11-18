@@ -8,7 +8,7 @@ Sections:
 - [Bosch EDC15C6](#bosch-edc15c6-mercedes-cdi) — Mercedes CDI (`ecudefs/bosch-edc15c6.json`)
 - [Simos PCR2.1](#continentalsiemens-simos-pcr21-vag-16-tdi-cr) — VAG 1.6 TDI CR (`ecudefs/siemens-pcr21.json`)
 - [Bosch EDC17CP14](#bosch-edc17cp14-vag-20-tdi-cr--no-maps-shipped) — no maps shipped (why)
-- [VAG DSG TCUs (DQ250 02E)](#vag-dsg-tcus-dq250-02e) — shift schedules (`ecudefs/temic-dq250-02e.json`, `temic-dq250-02e-tricore.json`); family overview in [`DSG.md`](DSG.md)
+- [VAG DSG TCUs (DQ250 02E)](#vag-dsg-tcus-dq250-02e) — shift schedules and the drive-off table (`ecudefs/temic-dq250-02e.json`, `temic-dq250-02e-tricore.json`); family overview in [`DSG.md`](DSG.md)
 - [Reproducing / validating](#reproducing--validating), [Adding maps for another ECU](#adding-maps-for-another-ecu)
 
 All facts here come from **public** material and from reference stock/tuned ECU
@@ -199,8 +199,16 @@ tune of it) — then follow the method below.
 No stock/tuned pair of any DSG software was available, so no map here is
 diff-confirmed against a tune and none is HIGH. Inputs: nine real 02E reads —
 seven PowerPC-generation 0x68000-byte reads (five software versions) and two
-TriCore-generation `02E300013N` reads (two datasets of one software). See
-[`DSG.md`](DSG.md) for layouts and the checksum.
+TriCore-generation `02E300013N` reads (two datasets of one software). A second
+library search (2026-11-18, see [`DSG.md`](DSG.md#families)) found no further
+02E, DQ200 or DL382 dump and no tuned file. See [`DSG.md`](DSG.md) for layouts
+and the checksum.
+
+The main evidence is the **sibling-calibration diff**: three datasets of one
+PowerPC code build — an A3 2.0 TDI (`02E300041N`), a TT 2.0 TFSI (`02E300046K`)
+and a Golf GTI 2.0 TFSI (`02E300042M`). A table whose values follow the
+engine (diesel vs petrol speed band, idle speed) differs in all three; the two
+TFSI calibrations agreeing where the TDI differs points at engine-type data.
 
 ### Shift schedules
 
@@ -241,13 +249,64 @@ code build shared by `02E300041N`, `02E300046K` and `02E300042M` (tags
 the `02E300011BL` R32 software holds a group at `0x61CCC` / `0x61EAC`. Locate the
 tables by content in your own read before any write.
 
+### Drive-off engine speed (inferred)
+
+One 12 × 8 u16 table with its 8-point axis stored directly in front, found in
+**every** 02E read of every build (five PowerPC builds and the TriCore build):
+
+- the axis starts at 0 and ends at 1000 (1100 on `02E300046K`);
+- the 12 rows are four identical groups of the same three curves;
+- every row starts in the idle-speed band of the engine the calibration was
+  built for — A3 2.0 TDI 930, TT 2.0 TFSI 800, Golf GTI 2.0 TFSI 900, Golf VI
+  GTI/R 950, 3.2 VR6 770–800 — and rises monotonically to a plateau well below
+  that engine's shift speeds (TDI 1600–1800, TFSI 1600–3200, VR6 1600–2800);
+- the three datasets of the `02E300041N` code build all differ inside it.
+
+An engine speed that starts at idle and rises with a 0..1000 input is the shape
+of a drive-off target (the engine speed the TCU holds by slipping the clutch
+while pulling away) over accelerator pedal. That role, the pedal axis (raw,
+plausibly 0.1 %) and the meaning of the row index are **inferred**; nothing
+here is confirmed by a tune, so the map is MEDIUM and ships raw. Raising it
+raises the slip energy the clutch absorbs at every pull-away.
+
+| Definition / software | Axis | Data | Confidence |
+|---|---|---|---|
+| `temic-dq250-02e` (`02E300041N` / `046K` / `042M` build) | `0x61628` | `0x61638` | MEDIUM |
+| same table in `02E300042F` / `042G` (not in the def) | `0x6315C` | `0x6316C` | — |
+| same table in `02E300011BL` R32 (not in the def) | `0x63664` | `0x63674` | — |
+| same table in `02E300011C` TT 3.2 (not in the def) | `0x63644` | `0x63654` | — |
+| `temic-dq250-02e-tricore` (`02E300013N`, little-endian) | `0x594` | `0x5A4` | MEDIUM |
+
+The fixture test checks the shape on every read at these addresses and the
+three-way sibling difference (diesel row starts above both petrol rows and tops
+out below them).
+
 ### Not shipped
 
-Torque limits per gear, clutch pressure / torque-transfer characteristics,
-clutch adaptation and launch tables: candidate structures exist (e.g. families
-of 16-point rising curves near `0x61B70..0x62470` in the PowerPC CAL), but no
-read pair or open reference identifies them, so they are left out rather than
-named by guess. A stock/tuned pair of one 02E software would be the next step
+Torque limits per gear / input-torque limiter, clutch pressure and
+torque-transfer characteristics, clutch adaptation, shift time, kick-down and
+temperature protection: no table could be tied to any of these roles with
+evidence. What was tried, so the next attempt does not repeat it:
+
+- the single-file map finder (`opentune findmaps <read> --no-byte-layouts`)
+  lists ~90 candidates in the CAL, but its count-header and axis-pair hits
+  there are coincidental runs — the 02E CAL has no inline map headers, its
+  tables are fixed-size blocks;
+- a three-way word classification of the sibling datasets (TDI-only
+  differences vs both-TFSI differences) and a search for the publicly reported
+  02E software torque cap (360 Nm, per
+  [Puma Power Tuning's DSG page](https://sites.google.com/view/pumapowertuning/dsg);
+  also 350/3600 etc.) gave
+  no table whose values follow engine torque — the TFSI (280 Nm) and TDI
+  (320 Nm) calibrations do not order that way anywhere convincing;
+- candidate structures remain unnamed: a temperature-like axis
+  `-30, -20, -10, 0, 60, 130, 135, 140` at `0x603C0`, four engine-speed-indexed
+  8-point curves at `0x63E52..0x63ED0` whose breakpoints follow the engine's
+  speed band, 5 × 5 blocks with 400..4650 axes near `0x64A9A`, and families of
+  16-point rising curves at `0x61B70..0x62470` that are identical across
+  datasets (computed, kinematic-looking).
+
+A stock/tuned pair of one 02E software would settle them
 (`opentune findmaps stock.bin tuned.bin`).
 
 ---

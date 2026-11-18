@@ -11,8 +11,8 @@ Validation words follow [`DEVELOPMENT.md` §7](DEVELOPMENT.md#7-validation-state
 
 | Family | Gearbox code | TCU | Definition | Checksum | Maps | State |
 |---|---|---|---|---|---|---|
-| DQ250 (PQ35/PQ46), PowerPC software | `02E` (sw `02E300…`) | Temic, big-endian PowerPC, 0x68000 read | `temic-dq250-02e` | `dq250-02e` | 30 shift tables (raw, MEDIUM) | checksum **real-image-tested**; maps real-image-checked |
-| DQ250 (PQ), TriCore software | `02E` (e.g. `02E300013N`) | Temic, Infineon TriCore, 0xB0000 read | `temic-dq250-02e-tricore` | none known | 20 shift tables (raw, MEDIUM) | identify + maps; no checksum |
+| DQ250 (PQ35/PQ46), PowerPC software | `02E` (sw `02E300…`) | Temic, big-endian PowerPC, 0x68000 read | `temic-dq250-02e` | `dq250-02e` | 30 shift tables + drive-off table (raw, MEDIUM) | checksum **real-image-tested**; maps real-image-checked |
+| DQ250 (PQ), TriCore software | `02E` (e.g. `02E300013N`) | Temic, Infineon TriCore, 0xB0000 read | `temic-dq250-02e-tricore` | none known | 20 shift tables + drive-off table (raw, MEDIUM) | identify + maps; no checksum |
 | DQ250-MQB | `0D9` (sw `0D9300…`) | Temic, TC1766 | `temic-dq250-mqb` | `dq250` (JAMCRC) | none | identify; checksum synthetic-tested |
 | DQ381 | `0GC` | Bosch, SH72549 | `bosch-dq381` | `dq381` | none | checksum real-image-tested (earlier work) |
 | DQ200 | `0AM`, `0CW` | supplier unconfirmed | — (database unit `vag-dq200`) | none | none | identify only |
@@ -27,6 +27,17 @@ number is medium. The extracted part number also drives definition matching.
 No DQ250-MQB, DQ200 or DL382 read was available, so those entries claim only
 what the open references document. Nothing is guessed to fill the gaps: no
 flash size, layout or checksum is set for DQ200/DL382.
+
+The owner's reference library was searched again (2026-11-18) by file name
+(`dsg`, `02E`, `0AM`, `0CW`, `0CK`, `0CL`, `DQ200`, `DL382`, `stage`/`mod`/`ori`
+next to a TCU part number), by container type (`.frf`, `.sgo`, `.odx`, `.pdx`)
+and by content (the `GSG DSG` / `getriebe_DSG` ident and `0AM300…`, `0CK300…`,
+`0CL300…`, `0CW300…`, `02E300…` part numbers in every binary). Result: the nine
+02E reads already used here, no tuned 02E file, and **no DQ200 or DL382 dump or
+FRF/SGO container**. The only DQ200/DL382 material in the library sits inside
+commercial WinOLS projects, A2L files and DCM calibration exports, which the
+clean-room rules exclude, so they were not opened. DQ200 and DL382 therefore
+stay identify-only.
 
 ## DQ250 02E — PowerPC generation
 
@@ -44,8 +55,14 @@ The software seen as a 0x68000-byte (416 KiB) read:
 ```
 
 Software that shares one code build carries several calibration datasets
-(e.g. `02E300041N` A3 2.0 TDI and `02E300046K` TT 2.0 TFSI): their code sectors
-are byte-identical and only the CAL sector differs.
+(e.g. `02E300041N` A3 2.0 TDI, `02E300046K` TT 2.0 TFSI and `02E300042M` Golf
+GTI 2.0 TFSI): their code sectors are (nearly) identical and only the CAL
+sector differs. The CAL has no inline map headers; tables are fixed-size blocks,
+sometimes with their breakpoint axis stored directly in front. In that code
+build the region `0x62400..0x65000` is largely repeated (most words identical)
+`0x2C00` bytes later (`0x65000..0x67C00`): two parameter sets of the same
+layout, each holding one of the shift-schedule groups B and C. Which condition
+selects a set is not established.
 
 ### Checksum `dq250-02e` (real-image-tested)
 

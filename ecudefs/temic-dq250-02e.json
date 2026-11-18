@@ -3,7 +3,7 @@
   "name": "VAG DQ250 / 02E 6-speed DSG TCU (Temic, PowerPC generation)",
   "maker": "Temic",
   "family": "DQ250",
-  "notes": "VAG DQ250 six-speed wet-clutch DSG (02E gearbox, PQ35/PQ46 platforms: Golf V/VI, Jetta, Passat B6/CC, A3 8P, TT 8J, Leon, Octavia...) - mechatronic/TCU J743 inside the gearbox. This definition covers the PowerPC-generation software read as a 0x68000-byte (416 KiB) image: twelve 32 KiB code sectors 0x0-0x5FFFF (big-endian PowerPC code) and a 32 KiB calibration sector 0x60000-0x67FFF that starts with the ident record '<nn>02E300xxxX  GSG DSG ... DCT' and ends with the version tag 'v069...__getriebe_DSG_XXXX' and the CRC table footer. checksum 'dq250-02e' (CRC-16/MCRF4XX per sector, 13 big-endian words at 0x67FE2) is real-image-tested: it matches every word on six real 02E reads; it is NOT the DQ250-MQB JAMCRC. Diagnostics: the transport/layer below (ISO-TP, KWP2000 at the OBD transmission ids 0x7E1/0x7E9) is not confirmed for 02E - PQ-era workshop diagnostics commonly run KWP2000 over VW TP2.0; set it to match the car. No OBD full-read path is documented, hence bench_boot. Maps are the shift-speed schedules located from structure and sibling calibrations (raw, MEDIUM); torque limiters, clutch pressure/adaptation and launch tables are not shipped because they could not be located and justified from the available reads. TriCore-generation 02E software (e.g. 02E300013N) has a different layout: see temic-dq250-02e-tricore. Calibration only: no launch/torque-limiter defeat.",
+  "notes": "VAG DQ250 six-speed wet-clutch DSG (02E gearbox, PQ35/PQ46 platforms: Golf V/VI, Jetta, Passat B6/CC, A3 8P, TT 8J, Leon, Octavia...) - mechatronic/TCU J743 inside the gearbox. This definition covers the PowerPC-generation software read as a 0x68000-byte (416 KiB) image: twelve 32 KiB code sectors 0x0-0x5FFFF (big-endian PowerPC code) and a 32 KiB calibration sector 0x60000-0x67FFF that starts with the ident record '<nn>02E300xxxX  GSG DSG ... DCT' and ends with the version tag 'v069...__getriebe_DSG_XXXX' and the CRC table footer. checksum 'dq250-02e' (CRC-16/MCRF4XX per sector, 13 big-endian words at 0x67FE2) is real-image-tested: it matches every word on six real 02E reads; it is NOT the DQ250-MQB JAMCRC. Diagnostics: the transport/layer below (ISO-TP, KWP2000 at the OBD transmission ids 0x7E1/0x7E9) is not confirmed for 02E - PQ-era workshop diagnostics commonly run KWP2000 over VW TP2.0; set it to match the car. No OBD full-read path is documented, hence bench_boot. Maps are the shift-speed schedules and the drive-off engine-speed table, located from structure and sibling calibrations (raw, MEDIUM, roles inferred); torque limiters, clutch pressure/adaptation, shift-time and temperature-protection tables are not shipped because they could not be identified and justified from the available reads (no stock/tuned pair). TriCore-generation 02E software (e.g. 02E300013N) has a different layout: see temic-dq250-02e-tricore. Calibration only: no launch/torque-limiter defeat.",
   "protocol": "iso_tp",
   "diag_layer": "kwp2000",
   "bitrate": 500000,
@@ -517,6 +517,34 @@
         "offset": 0.0
       },
       "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "drive-off engine speed vs pedal (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack, no tuned file): the sibling-calibration diff of three datasets of this code build - an A3 2.0 TDI, a TT 2.0 TFSI and a Golf GTI 2.0 TFSI calibration - which all differ inside this table, plus the table structure. Every read of every 02E software build seen (five PowerPC builds and the TriCore build) holds this table with the same shape: an 8-point axis that starts at 0 and ends at 1000 (1100 on 02E300046K) stored directly in front of 12 rows x 8 columns, and the 12 rows are four identical groups of the same three rising curves. Every row starts in the idle-speed band of the engine the calibration was built for (A3 2.0 TDI 930, TT 2.0 TFSI 800, Golf GTI 2.0 TFSI 900, 3.2 VR6 770-800) and rises monotonically to a plateau far below that engine's shift speeds (TDI 1600-1800, TFSI 1600-3200, VR6 1600-2800). An engine speed that starts at idle and rises with an input that runs 0..1000 is the shape of a drive-off (pulling-away) engine-speed target over accelerator pedal, which a dual-clutch TCU holds by slipping the clutch; that role, the axis being the pedal (raw 0..1000, plausibly 0.1 %), and the meaning of the row index (three curves x four groups) are INFERRED, not confirmed by a tune. 12 rows x 8 columns of u16 big-endian; x axis (8 x u16 BE) at 0x61628. Cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G hold the axis 0x1B34 bytes later (0x6315C, data 0x6316C), the 02E300011BL R32 software at 0x63664 and the 02E300011C TT 3.2 software at 0x63644 - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix. Drive-off behaviour is safety-relevant: raising it raises clutch slip energy at every pull-away.",
+      "address": 398904,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 12,
+      "cols": 8,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "x_axis": {
+        "name": "accelerator pedal (inferred)",
+        "unit": "raw (0..1000, likely 0.1 %)",
+        "count": 8,
+        "address": 398888,
+        "data_type": "u16",
+        "endian": "big",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
       "min": 0.0,
       "max": 8000.0
     }
