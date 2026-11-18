@@ -1,6 +1,6 @@
 //! The clap definitions of the public command tree.
 use crate::{
-    bsl_cmd, candump, ctrldef_cmd, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd,
+    bsl_cmd, candump, ctrldef_cmd, doip_cmd, dsg_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd,
     seedkey_cmd, ts_cmd,
 };
 use clap::{Parser, Subcommand};
@@ -494,6 +494,12 @@ pub enum Command {
     Haldex {
         #[command(subcommand)]
         action: haldex_cmd::HaldexAction,
+    },
+    /// VAG DQ250 02E DSG gearbox, read-only (KWP2000 over VW TP2.0 at 0x02):
+    /// identification, stored trouble codes, raw measuring groups.
+    Dsg {
+        #[command(subcommand)]
+        action: dsg_cmd::DsgAction,
     },
     /// DoIP (ISO 13400) over Ethernet: discover entities (vehicle
     /// identification / announcements), entity status, diagnostic power mode.

@@ -1175,6 +1175,7 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-dsg",
  "opentune-dtc",
  "opentune-ecuflash",
  "opentune-flash",
@@ -1185,6 +1186,7 @@ dependencies = [
  "opentune-ols",
  "opentune-packs",
  "opentune-recipe",
+ "opentune-sa2",
  "opentune-scan",
  "opentune-servicefn",
  "opentune-tsini",
@@ -1375,6 +1377,17 @@ dependencies = [
  "opentune-packs",
  "opentune-servicefn",
  "opentune-udssim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-dsg"
+version = "0.5.0"
+dependencies = [
+ "opentune-core",
+ "opentune-ctrldef",
+ "opentune-driver-slcan",
  "serde",
  "serde_json",
 ]

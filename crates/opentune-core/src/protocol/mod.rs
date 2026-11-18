@@ -13,6 +13,7 @@
 //! - [`diag`]: the request/response [`DiagTransport`] trait + NRC helpers.
 //! - [`uds`] / [`kwp2000`]: service clients over a `DiagTransport`.
 //! - [`seedkey`]: the seed→key plugin interface for security access.
+//! - [`vagmeas`]: VAG measuring-block cells and their shared formula table.
 pub mod canfd;
 pub mod diag;
 pub mod doip;
@@ -24,6 +25,7 @@ pub mod seedkey;
 pub mod tp20channel;
 pub mod tp20sim;
 pub mod uds;
+pub mod vagmeas;
 pub mod vwtp20;
 
 pub use canfd::{CanFrame, IsoTpFd};

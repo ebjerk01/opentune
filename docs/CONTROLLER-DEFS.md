@@ -134,6 +134,8 @@ A source that counts bits from the MSB of the frame read as a big-endian
 
 Names are unique per bus set (the same channel may come from two alternative
 sets) and among the non-CAN sources. `decode` reports the CAN ones.
+`opentune dsg groups` labels the measuring-group cells named by
+`kwp_measuring_block` entries (and reports every other cell as unconfirmed).
 
 ### `adaptations[]`
 
