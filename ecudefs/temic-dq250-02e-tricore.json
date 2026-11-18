@@ -3,7 +3,7 @@
   "name": "VAG DQ250 / 02E 6-speed DSG TCU (Temic, TriCore generation)",
   "maker": "Temic",
   "family": "DQ250",
-  "notes": "Later 02E (DQ250, PQ35/PQ46) software built for a little-endian Infineon TriCore (the code decodes as TriCore; e.g. 02E300013N, Golf VI GTI / R). Read as 0xB0000 bytes: a 64 KiB calibration block at 0x0-0xFFFF (ident record '<nn>02E300013N  GSG DSG AG6 ... DCT' near 0x3668, version tag 'v0697...__getriebe_DSG_...' at 0xFFC0) followed by the code from 0x10000. No checksum is claimed: neither the 02E CRC-16 sector table nor the DQ250-MQB JAMCRC holds on the available reads, so checksum is null and edited images cannot be corrected. Diagnostics as for temic-dq250-02e (transport/layer unconfirmed; set to match the car); no OBD full-read path is documented. Maps: the two shift-speed schedule groups, located by structure only (raw, MEDIUM). Calibration only.",
+  "notes": "Later 02E (DQ250, PQ35/PQ46) software built for a little-endian Infineon TriCore (the code decodes as TriCore; e.g. 02E300013N, Golf VI GTI / R). Read as 0xB0000 bytes: a 64 KiB calibration block at 0x0-0xFFFF (ident record '<nn>02E300013N  GSG DSG AG6 ... DCT' near 0x3668, version tag 'v0697...__getriebe_DSG_...' at 0xFFC0) followed by the code from 0x10000. No checksum is claimed: neither the 02E CRC-16 sector table nor the DQ250-MQB JAMCRC holds on the available reads, so checksum is null and edited images cannot be corrected. Diagnostics as for temic-dq250-02e (transport/layer unconfirmed; set to match the car); no OBD full-read path is documented. Maps: the two shift-speed schedule groups and the drive-off engine-speed table, located by the structure shared with the PowerPC generation (raw, MEDIUM, roles inferred). Calibration only.",
   "protocol": "iso_tp",
   "diag_layer": "kwp2000",
   "bitrate": 500000,
@@ -357,6 +357,34 @@
         "offset": 0.0
       },
       "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "drive-off engine speed vs pedal (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack, no tuned file), located by the structure shared with the PowerPC-generation 02E software, where sibling calibrations of one code build (A3 2.0 TDI / TT 2.0 TFSI / Golf GTI 2.0 TFSI) differ inside this table. Every read of every 02E software build seen (five PowerPC builds and the TriCore build) holds this table with the same shape: an 8-point axis that starts at 0 and ends at 1000 (1100 on 02E300046K) stored directly in front of 12 rows x 8 columns, and the 12 rows are four identical groups of the same three rising curves. Every row starts in the idle-speed band of the engine the calibration was built for (A3 2.0 TDI 930, TT 2.0 TFSI 800, Golf GTI 2.0 TFSI 900, 3.2 VR6 770-800) and rises monotonically to a plateau far below that engine's shift speeds (TDI 1600-1800, TFSI 1600-3200, VR6 1600-2800). An engine speed that starts at idle and rises with an input that runs 0..1000 is the shape of a drive-off (pulling-away) engine-speed target over accelerator pedal, which a dual-clutch TCU holds by slipping the clutch; that role, the axis being the pedal (raw 0..1000, plausibly 0.1 %), and the meaning of the row index (three curves x four groups) are INFERRED, not confirmed by a tune. Here: axis 0, 150, ..., 1000 and rows 950 -> 1800/2200/2400; both available datasets (Golf VI GTI and R) carry identical values. 12 rows x 8 columns of u16 little-endian; x axis (8 x u16 LE) at 0x594. Cells ship raw; edit by ratio. Address is an offset into the 0xB0000-byte read (CAL first); confirm by content before any write. No checksum is known for this software, so OpenTune cannot correct an edited image.",
+      "address": 1444,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 12,
+      "cols": 8,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "x_axis": {
+        "name": "accelerator pedal (inferred)",
+        "unit": "raw (0..1000, likely 0.1 %)",
+        "count": 8,
+        "address": 1428,
+        "data_type": "u16",
+        "endian": "little",
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0
+        }
+      },
       "min": 0.0,
       "max": 8000.0
     }
