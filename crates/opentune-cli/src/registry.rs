@@ -49,5 +49,12 @@ pub fn public_registry() -> Registry {
         opentune_udssim::driver::DRIVER_NAME,
         || Box::new(opentune_udssim::UdssimDriver::new()),
     );
+    // Unverified (mock-tested only): USB serial in this build; BLE needs the
+    // driver crate's `btleplug` feature.
+    r.register(
+        opentune_driver_isotp_ble::DRIVER_ID,
+        opentune_driver_isotp_ble::DRIVER_NAME,
+        || Box::new(opentune_driver_isotp_ble::IsoTpBleDriver::new()),
+    );
     r
 }

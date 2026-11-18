@@ -24,6 +24,7 @@ opentune-driver-gsusb = { path = "../drivers/gsusb" }
 opentune-driver-elm327net = { path = "../drivers/elm327net" }
 opentune-driver-elm327-obd = { path = "../drivers/elm327" }
 opentune-driver-vcar = { path = "../drivers/vcar" }
+opentune-driver-isotp-ble = { path = "../drivers/isotp-ble-bridge" }
 clap.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true

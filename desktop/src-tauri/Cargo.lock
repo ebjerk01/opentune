@@ -9,6 +9,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher",
+ "cpufeatures",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -391,6 +402,16 @@ dependencies = [
  "num-traits",
  "serde",
  "windows-link",
+]
+
+[[package]]
+name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common",
+ "inout",
 ]
 
 [[package]]
@@ -1677,6 +1698,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inout"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
 name = "io-kit-sys"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2544,6 +2574,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-container"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "flate2",
+ "roxmltree",
+]
+
+[[package]]
 name = "opentune-core"
 version = "0.5.0"
 dependencies = [
@@ -2579,6 +2618,7 @@ dependencies = [
  "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",
  "opentune-driver-gsusb",
+ "opentune-driver-isotp-ble",
  "opentune-driver-j2534",
  "opentune-driver-kkl",
  "opentune-driver-mock",
@@ -2638,6 +2678,14 @@ dependencies = [
  "opentune-core",
  "opentune-driver-socketcan",
  "socketcan",
+]
+
+[[package]]
+name = "opentune-driver-isotp-ble"
+version = "0.5.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
 ]
 
 [[package]]
@@ -2705,6 +2753,7 @@ version = "0.1.0"
 name = "opentune-flash"
 version = "0.5.0"
 dependencies = [
+ "opentune-container",
  "opentune-core",
  "serde",
  "serde_json",

@@ -26,6 +26,11 @@ panels it can drive:
 | `gsusb` | gs_usb / candleLight USB-CAN | CAN, memory read/write |
 | `kkl` | KKL 409.1 K-line cable | K-line, memory read/write |
 
+Alpha builds also list `isotp-ble` (ESP32 ISO-TP BLE bridge running the
+open-source Switchleg1 firmware; CAN, memory read/write). It is **unverified**
+(tested against a simulated bridge only) and talks to the bridge over its USB
+serial port; BLE needs a build with the driver's `btleplug` feature.
+
 The Arduino K-line bridge and the OpenTune ESP32-S3 interface have drivers in
 the source tree but are not in the desktop build yet.
 

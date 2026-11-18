@@ -53,6 +53,8 @@ opentune-driver-gsusb = { path = "../../crates/drivers/gsusb" }
 opentune-driver-j2534 = { path = "../../crates/drivers/j2534" }
 opentune-driver-kkl = { path = "../../crates/drivers/kkl" }
 opentune-driver-vcar = { path = "../../crates/drivers/vcar" }
+# Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
+opentune-driver-isotp-ble = { path = "../../crates/drivers/isotp-ble-bridge", optional = true }
 
 # Service engines + conformance sim, wired into the (alpha) Debug panel.
 opentune-coding = { path = "../../crates/opentune-coding" }
@@ -80,4 +82,4 @@ default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 # Alpha channel: exposes the live Debug panel (all engines + live drivers +
 # session log). Never enabled in a stable/release build.
-alpha = []
+alpha = ["dep:opentune-driver-isotp-ble"]
