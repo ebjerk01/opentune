@@ -252,7 +252,8 @@ impl Interface for BridgeDriver {
         let end = region.end();
         while addr < end {
             let chunk = ((end - addr).min(0xFE)) as u8;
-            let data = kwp.read_memory(addr, chunk)?;
+            // Exact length: a short reply must not shift every later address.
+            let data = kwp.read_memory_exact(addr, chunk)?;
             out.extend_from_slice(&data);
             addr += chunk as u32;
             progress(Progress {
