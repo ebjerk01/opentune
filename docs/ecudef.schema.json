@@ -57,7 +57,7 @@
     },
     "checksum": {
       "type": ["string", "null"],
-      "description": "Checksum algorithm id known to opentune-checksum (crc32-tail, edc15c6, edc16, edc17, pcr21, me7, dq250, dq250-02e, dq381, tcu-ccitt) or null.",
+      "description": "Checksum algorithm id known to opentune-checksum (crc32-tail, edc15c6, edc16, edc17, pcr21, me7, dq250, dq250-02e, dq381, tcu-ccitt, zf8hp, haldex, simos-crc) or null.",
       "minLength": 1
     },
     "seedkey": { "type": ["string", "null"], "minLength": 1, "description": "Seed/key algorithm id or null." },
