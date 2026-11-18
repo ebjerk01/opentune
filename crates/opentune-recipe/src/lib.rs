@@ -16,9 +16,14 @@
 //!    bytes and context must match exactly at the recorded offset, or, only in
 //!    the explicit [`ApplyMode::Relocate`] mode, the context+original sequence
 //!    must occur **exactly once** elsewhere (zero or several matches refuse);
-//! 3. writes the new bytes, runs the checksum correction for the family, and
-//!    attests the result with `opentune-attest` — an unsatisfied attestation
-//!    refuses the whole apply.
+//! 3. writes the new bytes, runs the checksum correction for the family (with
+//!    the unmodified target as the reference image), and attests the result
+//!    with `opentune-attest` against that same reference — an unsatisfied
+//!    attestation refuses the whole apply. The only exception is the explicit
+//!    [`ApplyOptions::allow_unverified`] override, and only for blocks the
+//!    algorithm *cannot* verify (never for a checksum that verifiably fails):
+//!    the output is then produced with an attestation that stays
+//!    **unsatisfied**, so the flash policy still refuses to write it.
 //!
 //! Nothing is partially applied: any refused patch refuses the recipe, and the
 //! per-patch [`ApplyReport`] says why. The file format (JSON, versioned) is
@@ -314,7 +319,7 @@ fn diff_regions(a: &[u8], b: &[u8], gap: usize) -> Vec<(usize, usize)> {
     out
 }
 
-/// Find the changed regions that are checksum fields: bytes the checksum
+/// Find the checksum fields among the changed bytes: bytes the checksum
 /// correction itself rewrote in the tuned image.
 ///
 /// Corrupting every small (<= 16 byte) changed region and correcting makes the
@@ -322,12 +327,57 @@ fn diff_regions(a: &[u8], b: &[u8], gap: usize) -> Vec<(usize, usize)> {
 /// candidates. They are confirmed together (revert only them, correct,
 /// the tuned image must come back byte-for-byte) and, if that fails, one by
 /// one. Anything unconfirmed stays an ordinary patch.
+///
+/// A checksum word can also sit inside a larger changed region (EDC17's
+/// compensation word is the last dword of its block, right after calibration
+/// data the tune changed, so the gap merge swallows it). A second probe
+/// corrupts the large regions; the bytes the correction writes inside them
+/// are carved out as candidate sub-ranges and confirmed the same way.
 fn checksum_fields(
     algo: &dyn opentune_checksum::ChecksumAlgo,
     stock: &[u8],
     tuned: &[u8],
     regions: &[(usize, usize)],
 ) -> Vec<Range> {
+    let small = small_region_fields(algo, stock, tuned, regions);
+    let carved = carved_fields(algo, stock, tuned, regions, &small);
+    let mut all = small;
+    all.extend(carved);
+    all.sort();
+    all.into_iter()
+        .map(|(s, e)| Range {
+            start: s as u64,
+            end: e as u64,
+        })
+        .collect()
+}
+
+/// `tuned` with every range in `set` reverted to the stock bytes.
+fn reverted(stock: &[u8], tuned: &[u8], set: &[(usize, usize)]) -> Vec<u8> {
+    let mut x = tuned.to_vec();
+    for &(s, e) in set {
+        x[s..e].copy_from_slice(&stock[s..e]);
+    }
+    x
+}
+
+/// Reverting exactly `set` and correcting reproduces `tuned` byte-for-byte.
+fn confirms(
+    algo: &dyn opentune_checksum::ChecksumAlgo,
+    stock: &[u8],
+    tuned: &[u8],
+    set: &[(usize, usize)],
+) -> bool {
+    let mut x = reverted(stock, tuned, set);
+    algo.correct_with_reference(&mut x, stock).is_ok() && x == tuned
+}
+
+fn small_region_fields(
+    algo: &dyn opentune_checksum::ChecksumAlgo,
+    stock: &[u8],
+    tuned: &[u8],
+    regions: &[(usize, usize)],
+) -> Vec<(usize, usize)> {
     let small: Vec<(usize, usize)> = regions
         .iter()
         .copied()
@@ -336,13 +386,6 @@ fn checksum_fields(
     if small.is_empty() {
         return Vec::new();
     }
-    let revert = |set: &[(usize, usize)]| {
-        let mut x = tuned.to_vec();
-        for &(s, e) in set {
-            x[s..e].copy_from_slice(&stock[s..e]);
-        }
-        x
-    };
     // Probe: invert every small region so each is certainly wrong (reverting
     // them all could reproduce the stock image, whose checksums are valid).
     let mut probe = tuned.to_vec();
@@ -363,22 +406,110 @@ fn checksum_fields(
                 .any(|f| (f.offset as usize) < e && (f.offset as usize) + 8 > s)
         })
         .collect();
-    let confirm = |set: &[(usize, usize)]| {
-        let mut x = revert(set);
-        algo.correct_with_reference(&mut x, stock).is_ok() && x == tuned
-    };
-    let ok: Vec<(usize, usize)> = if !cands.is_empty() && confirm(&cands) {
+    let confirm = |set: &[(usize, usize)]| confirms(algo, stock, tuned, set);
+    if !cands.is_empty() && confirm(&cands) {
         cands
     } else {
         cands
             .into_iter()
             .filter(|r| confirm(std::slice::from_ref(r)))
             .collect()
+    }
+}
+
+/// Checksum sub-ranges inside the large (> 16 byte) changed regions; see
+/// [`checksum_fields`]. `known` are the already confirmed small-region fields.
+fn carved_fields(
+    algo: &dyn opentune_checksum::ChecksumAlgo,
+    stock: &[u8],
+    tuned: &[u8],
+    regions: &[(usize, usize)],
+    known: &[(usize, usize)],
+) -> Vec<(usize, usize)> {
+    let large: Vec<(usize, usize)> = regions
+        .iter()
+        .copied()
+        .filter(|(s, e)| e - s > 16)
+        .collect();
+    if large.is_empty() {
+        return Vec::new();
+    }
+    let mut probe = tuned.to_vec();
+    for &(s, e) in &large {
+        for b in &mut probe[s..e] {
+            *b = !*b;
+        }
+    }
+    let before = probe.clone();
+    let Ok(fixes) = algo.correct_with_reference(&mut probe, stock) else {
+        return Vec::new();
     };
-    ok.into_iter()
-        .map(|(s, e)| Range {
-            start: s as u64,
-            end: e as u64,
+    // A fix's offset is where its field starts; the bytes the correction
+    // actually wrote (within an 8-byte window, the widest field we know)
+    // delimit it.
+    let mut cands: Vec<(usize, usize)> = Vec::new();
+    for f in &fixes {
+        let fo = f.offset as usize;
+        for &(s, e) in &large {
+            let (lo, hi) = (fo.max(s), (fo + 8).min(e));
+            let written: Vec<usize> = (lo..hi).filter(|&i| probe[i] != before[i]).collect();
+            if let (Some(&a), Some(&b)) = (written.first(), written.last()) {
+                if !cands.contains(&(a, b + 1)) {
+                    cands.push((a, b + 1));
+                }
+            }
+        }
+    }
+    if cands.is_empty() {
+        return Vec::new();
+    }
+    let with = |c: &[(usize, usize)]| {
+        let mut set = known.to_vec();
+        set.extend_from_slice(c);
+        set
+    };
+    if confirms(algo, stock, tuned, &with(&cands)) {
+        return cands;
+    }
+    cands
+        .into_iter()
+        .filter(|c| confirms(algo, stock, tuned, &with(std::slice::from_ref(c))))
+        .collect()
+}
+
+/// `[s, e)` minus every field, with unchanged bytes trimmed off each piece's
+/// ends (a piece that is left with no changed byte is dropped).
+fn split_around_fields(
+    s: usize,
+    e: usize,
+    fields: &[Range],
+    stock: &[u8],
+    tuned: &[u8],
+) -> Vec<(usize, usize)> {
+    let mut pieces = vec![(s, e)];
+    for f in fields {
+        let (fs, fe) = (f.start as usize, f.end as usize);
+        pieces = pieces
+            .into_iter()
+            .flat_map(|(a, b)| {
+                if fe <= a || b <= fs {
+                    vec![(a, b)]
+                } else {
+                    vec![(a, fs.max(a)), (fe.min(b), b)]
+                }
+            })
+            .collect();
+    }
+    pieces
+        .into_iter()
+        .filter_map(|(mut a, mut b)| {
+            while a < b && stock[a] == tuned[a] {
+                a += 1;
+            }
+            while b > a && stock[b - 1] == tuned[b - 1] {
+                b -= 1;
+            }
+            (a < b).then_some((a, b))
         })
         .collect()
 }
@@ -494,16 +625,31 @@ pub fn create_with(
         Some(algo) => checksum_fields(&*algo, stock, tuned, &regions),
         None => Vec::new(),
     };
-    let is_cs = |s: usize| cs_fields.iter().any(|r| r.start as usize == s);
+    let pieces: Vec<(usize, usize)> = regions
+        .iter()
+        .flat_map(|&(s, e)| split_around_fields(s, e, &cs_fields, stock, tuned))
+        .collect();
 
     let mut patches = Vec::new();
     let mut excluded = cs_fields.clone();
-    for &(s, e) in &regions {
-        if is_cs(s) {
-            continue;
-        }
-        let b = s.saturating_sub(opts.context);
-        let a = (e + opts.context).min(stock.len());
+    for (s, e) in pieces {
+        // Context never reaches into a checksum field: its bytes are
+        // recomputed per target, so they are no anchor (and would stop an
+        // already-tuned target from being recognised as such).
+        let field_end_before = cs_fields
+            .iter()
+            .map(|r| r.end as usize)
+            .filter(|&fe| fe <= s)
+            .max()
+            .unwrap_or(0);
+        let field_start_after = cs_fields
+            .iter()
+            .map(|r| r.start as usize)
+            .filter(|&fs| fs >= e)
+            .min()
+            .unwrap_or(stock.len());
+        let b = s.saturating_sub(opts.context).max(field_end_before);
+        let a = (e + opts.context).min(stock.len()).min(field_start_after);
         patches.push(Patch {
             offset: s as u64,
             original: hex(&stock[s..e]),
@@ -564,6 +710,12 @@ pub struct ApplyOptions {
     pub mode: ApplyMode,
     /// Checksum algorithm override (otherwise the recipe's).
     pub checksum: Option<String>,
+    /// Produce the output even when some checksum blocks **cannot be
+    /// verified** (e.g. an EDC17 nested sub-block of unknown rule that the tune
+    /// changed). The attestation then stays `satisfied = false`, so the flash
+    /// policy refuses to write the image; it is for inspection and bench work.
+    /// A block that verifiably FAILS its checksum still refuses the apply.
+    pub allow_unverified: bool,
 }
 
 impl Default for ApplyOptions {
@@ -571,6 +723,7 @@ impl Default for ApplyOptions {
         Self {
             mode: ApplyMode::Strict,
             checksum: None,
+            allow_unverified: false,
         }
     }
 }
@@ -668,6 +821,10 @@ pub struct ApplyReport {
     pub checksum_fixes: Vec<String>,
     /// Attestation of the output (present once checksums were evaluated).
     pub attestation: Option<ChecksumAttestation>,
+    /// Checksum blocks that could not be verified (unknown rule, changed vs
+    /// the target). Non-empty on an output only with
+    /// [`ApplyOptions::allow_unverified`]; the attestation is then unsatisfied.
+    pub unverified_blocks: Vec<String>,
     /// The output is byte-identical to the tuned image the recipe came from.
     pub identical_to_recipe_result: bool,
     /// Why the apply was refused, if it was.
@@ -760,6 +917,7 @@ pub fn apply_with(
         checksum: checksum.clone(),
         checksum_fixes: Vec::new(),
         attestation: None,
+        unverified_blocks: Vec::new(),
         identical_to_recipe_result: false,
         refusal: None,
         output: None,
@@ -948,13 +1106,25 @@ pub fn apply_with(
         }
         Err(e) => return rep.refuse(format!("checksum correction ({algo_id}) failed: {e}")),
     }
-    match opentune_attest::attest_image_with(&*algo, &algo_id, &out) {
-        Ok(att) => {
-            let ok = att.satisfied;
-            let note = att.note.clone();
-            rep.attestation = Some(att);
-            if !ok {
-                return rep.refuse(format!("attestation not satisfied: {note}"));
+    // Attest against the unmodified target: blocks the algorithm cannot judge
+    // alone (EDC17 code / nested sub-blocks) are verified as byte-identical to
+    // it, or reported as unverifiable — never assumed ok.
+    match opentune_attest::attest_image_with_reference(&*algo, &algo_id, &out, target) {
+        Ok(r) => {
+            let ok = r.attestation.satisfied;
+            let note = r.attestation.note.clone();
+            let failed = !r.failed().is_empty();
+            rep.unverified_blocks = r.unverifiable().iter().map(|b| b.name.clone()).collect();
+            rep.attestation = Some(r.attestation);
+            if !ok && (failed || !opts.allow_unverified) {
+                let hint = if !failed && !rep.unverified_blocks.is_empty() {
+                    " (the output can be produced for inspection with allow_unverified / \
+                     --allow-unverified; its attestation stays unsatisfied and it cannot be \
+                     flashed)"
+                } else {
+                    ""
+                };
+                return rep.refuse(format!("attestation not satisfied: {note}{hint}"));
             }
         }
         Err(e) => return rep.refuse(format!("attestation failed: {e}")),
