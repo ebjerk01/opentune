@@ -889,7 +889,8 @@ pub fn flash_module(
             )));
         };
         let key = sk.compute(&seed, p.security_level)?;
-        uds.send_key(p.security_level.wrapping_add(1), &key)?;
+        // Keep the ECU's NRC (invalid key / attempts exceeded / delay).
+        uds.send_key_detailed(p.security_level.wrapping_add(1), &key)?;
         rec.note(
             ModulePhase::Security,
             None,

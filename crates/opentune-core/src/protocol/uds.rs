@@ -187,20 +187,28 @@ impl<'a> UdsClient<'a> {
     /// key (0x35) and an exhausted counter (0x36) map to [`Error::SecurityDenied`]
     /// so the caller treats them as a failed unlock; 0x37 stays a raw negative
     /// response so a retry can honor the delay.
+    ///
+    /// Use [`send_key_detailed`](Self::send_key_detailed) to keep the ECU's
+    /// exact NRC instead.
     pub fn send_key(&mut self, level: u8, key: &[u8]) -> Result<()> {
-        let mut req = vec![sid::SECURITY_ACCESS, level];
-        req.extend_from_slice(key);
-        match self.call(&req) {
-            Ok(resp) => {
-                // The positive response echoes the (even) send-key level.
-                check_subfunction_echo(sid::SECURITY_ACCESS, level, &resp)?;
-                Ok(())
-            }
+        match self.send_key_detailed(level, key) {
             Err(Error::NegativeResponse {
                 code: 0x35 | 0x36, ..
             }) => Err(Error::SecurityDenied),
-            Err(e) => Err(e),
+            other => other,
         }
+    }
+
+    /// [`send_key`](Self::send_key) without folding the refusal: an invalid
+    /// key (0x35), exhausted attempts (0x36) and an unexpired delay (0x37) all
+    /// come back as [`Error::NegativeResponse`] with the ECU's NRC. Classify
+    /// one with [`KeyRejection::of`].
+    pub fn send_key_detailed(&mut self, level: u8, key: &[u8]) -> Result<()> {
+        let mut req = vec![sid::SECURITY_ACCESS, level];
+        req.extend_from_slice(key);
+        let resp = self.call(&req)?;
+        // The positive response echoes the (even) send-key level.
+        check_subfunction_echo(sid::SECURITY_ACCESS, level, &resp)
     }
 
     /// `RoutineControl` (0x31). ISO 14229 §9.9: the positive response echoes the
@@ -344,6 +352,48 @@ impl<'a> UdsClient<'a> {
     /// take time (checksum / erase), so it runs under the P2\* budget.
     pub fn transfer_exit(&mut self) -> Result<Vec<u8>> {
         self.call_pending(&[sid::TRANSFER_EXIT])
+    }
+}
+
+/// Why an ECU refused a SecurityAccess key (ISO 14229-1 §10.4), from the NRC
+/// kept by [`UdsClient::send_key_detailed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyRejection {
+    /// NRC 0x35 `invalidKey`: wrong key, attempts remain.
+    InvalidKey,
+    /// NRC 0x36 `exceededNumberOfAttempts`: the delay timer has started.
+    ExceededAttempts,
+    /// NRC 0x37 `requiredTimeDelayNotExpired`: wait before trying again.
+    DelayNotExpired,
+}
+
+impl KeyRejection {
+    /// Classify a SecurityAccess error: a 0x27 negative response with NRC
+    /// 0x35 / 0x36 / 0x37. Anything else (including the folded
+    /// [`Error::SecurityDenied`] of [`UdsClient::send_key`]) is `None`.
+    pub fn of(e: &Error) -> Option<Self> {
+        match e {
+            Error::NegativeResponse {
+                service: sid::SECURITY_ACCESS,
+                code,
+                ..
+            } => match code {
+                0x35 => Some(Self::InvalidKey),
+                0x36 => Some(Self::ExceededAttempts),
+                0x37 => Some(Self::DelayNotExpired),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The NRC this rejection stands for.
+    pub fn nrc(self) -> u8 {
+        match self {
+            Self::InvalidKey => 0x35,
+            Self::ExceededAttempts => 0x36,
+            Self::DelayNotExpired => 0x37,
+        }
     }
 }
 
@@ -544,6 +594,38 @@ mod tests {
         assert!(check_subfunction_echo(0x10, 0x03, &[0x03]).is_ok());
         assert!(check_subfunction_echo(0x10, 0x03, &[0x04]).is_err());
         assert!(check_subfunction_echo(0x10, 0x03, &[]).is_err());
+    }
+
+    #[test]
+    fn send_key_detailed_keeps_the_nrc() {
+        for (nrc, want) in [
+            (0x35, KeyRejection::InvalidKey),
+            (0x36, KeyRejection::ExceededAttempts),
+            (0x37, KeyRejection::DelayNotExpired),
+        ] {
+            let mut t = Script::new(vec![vec![0x7F, 0x27, nrc]]);
+            let e = UdsClient::new(&mut t)
+                .send_key_detailed(0x02, &[1, 2])
+                .unwrap_err();
+            assert_eq!(KeyRejection::of(&e), Some(want));
+            assert_eq!(want.nrc(), nrc);
+        }
+        // The folding send_key is unchanged: 0x35/0x36 → SecurityDenied,
+        // 0x37 stays a raw negative response.
+        for nrc in [0x35, 0x36] {
+            let mut t = Script::new(vec![vec![0x7F, 0x27, nrc]]);
+            assert!(matches!(
+                UdsClient::new(&mut t).send_key(0x02, &[1]),
+                Err(Error::SecurityDenied)
+            ));
+        }
+        let mut t = Script::new(vec![vec![0x7F, 0x27, 0x37]]);
+        let e = UdsClient::new(&mut t).send_key(0x02, &[1]).unwrap_err();
+        assert_eq!(KeyRejection::of(&e), Some(KeyRejection::DelayNotExpired));
+        assert_eq!(KeyRejection::of(&Error::SecurityDenied), None);
+        // A positive answer still checks the level echo.
+        let mut t = Script::new(vec![vec![0x67, 0x02]]);
+        assert!(UdsClient::new(&mut t).send_key_detailed(0x02, &[1]).is_ok());
     }
 
     #[test]
