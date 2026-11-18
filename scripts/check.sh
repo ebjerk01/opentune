@@ -107,6 +107,10 @@ if [ "$fast" = 0 ]; then
     if [ -d "$ROOT/database" ] && opentune db --help >/dev/null 2>&1; then
         step "db validate" opentune db validate
     fi
+    # The Android app bundles a copy of ecudefs/; it must match the root set.
+    if [ -x "$ROOT/android/sync-ecudefs.sh" ]; then
+        step "android ecudefs in sync" "$ROOT/android/sync-ecudefs.sh" --check
+    fi
 fi
 
 # --- desktop (CI job: desktop) ---------------------------------------------
