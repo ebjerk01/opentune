@@ -1,0 +1,20 @@
+{
+  "id": "siemens-pcr21-03l907425c",
+  "name": "Continental Simos PCR2.1, VW 1.6 TDI CR, 03L907425C (identification only)",
+  "maker": "Continental",
+  "family": "Simos PCR2.1",
+  "notes": "IDENTIFICATION ONLY. Identified live via elm327obd 2026-11-18; no image read. A VW Passat B7 1.6 TDI common-rail (EA189) engine ECU answered UDS ReadDataByIdentifier on HS-CAN 7E0/7E8 with ECU name (DID 0xF197) 'R4 1.6l TDI' and hardware/part number (DID 0xF191) '03L907425C'. This definition carries identity keys and addressing only: no flash layout, no regions, no maps, no checksum or seed/key claim (checksum and seedkey are null, flash_size is unset). Family attribution is from PUBLIC parts/repair listings, evidence level MEDIUM: they cross-reference 03L907425C to the Continental/Siemens-VDO number 5WP42902AA and list it as a Simos PCR2.1 unit for VAG 1.6 TDI CR (e.g. CAYC/CAYD); no public source found ties 03L907425* to Bosch EDC17C46 (EDC17C46 listings carry 03L907309* hardware numbers). Not yet confirmed from this unit's own flash. If a full read confirms PCR2.1, start from the family definition siemens-pcr21 (checksum pcr21) and confirm per software version before any write. The ECU name 'R4 1.6l TDI' is recorded here only and is deliberately NOT a match key: VAG uses it for 1.6 TDI engine ECUs from both suppliers.",
+  "protocol": "iso_tp",
+  "diag_layer": "uds",
+  "bitrate": 500000,
+  "tx_id": 2016,
+  "rx_id": 2024,
+  "checksum": null,
+  "seedkey": null,
+  "identify": {
+    "part_numbers": [
+      "03L907425C"
+    ],
+    "sw_numbers": []
+  }
+}
