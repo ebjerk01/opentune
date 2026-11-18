@@ -93,6 +93,7 @@ a top-level command is added without a row here.
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
 | `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
 | `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
+| `opentune bsl` | C167/ST10 bootstrap-mode memory read for EDC15 boards: `presets`, `plan` (dry run, every byte exchange), `read` (unverified on hardware, needs `--i-understand`; `--port sim` for the simulated C167) ([`C167-BSL.md`](C167-BSL.md)) |
 
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.

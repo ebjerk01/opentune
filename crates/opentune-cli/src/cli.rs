@@ -1,5 +1,5 @@
 //! The clap definitions of the public command tree.
-use crate::{candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
+use crate::{bsl_cmd, candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -490,6 +490,12 @@ pub enum Command {
     Haldex {
         #[command(subcommand)]
         action: haldex_cmd::HaldexAction,
+    },
+    /// C167/ST10 bootstrap-mode (BSL) memory read for EDC15 boards:
+    /// `presets`, `plan` (dry run) and `read` (unverified, --i-understand).
+    Bsl {
+        #[command(subcommand)]
+        action: bsl_cmd::BslAction,
     },
 }
 
