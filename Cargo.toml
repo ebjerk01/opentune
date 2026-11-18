@@ -48,6 +48,7 @@ members = [
     "crates/opentune-haldex",
     "crates/opentune-tsini",
     "crates/opentune-tsproto",
+    "crates/opentune-c167bsl",
 ]
 
 [workspace.package]

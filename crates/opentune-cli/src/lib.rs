@@ -41,6 +41,7 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::process::ExitCode;
 
+mod bsl_cmd;
 mod candump;
 mod cli;
 mod commands;

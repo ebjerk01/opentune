@@ -95,6 +95,7 @@ a top-level command is added without a row here.
 | `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
 | `opentune doip` | DoIP (ISO 13400) over Ethernet: `discover` entities by vehicle identification request (all / `--eid` / `--vin`, broadcast, unicast or IPv6 multicast) or `--listen` for announcements, optionally `--activate` routing on each; `status` (entity status) and `power` (diagnostic power mode) over UDP; `--sim` for the simulated entity, `--json` |
 | `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
+| `opentune bsl` | C167/ST10 bootstrap-mode memory read for EDC15 boards: `presets`, `plan` (dry run, every byte exchange), `read` (unverified on hardware, needs `--i-understand`; `--port sim` for the simulated C167) ([`C167-BSL.md`](C167-BSL.md)) |
 
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.
@@ -179,6 +180,7 @@ apps that need it.
 | `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), simulated units ([`HALDEX.md`](HALDEX.md)) |
 | `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
 | `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
+| `opentune-c167bsl` | C167/ST10 bootstrap-loader (BSL) client, read only: autobaud + ID byte, 32-byte loader, user-supplied monitor kernel, register setup with read-back, checksummed block reads; EDC15 presets as data, dry-run plan, simulated BSL responder ([`C167-BSL.md`](C167-BSL.md)) |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`

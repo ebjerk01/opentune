@@ -1109,6 +1109,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-c167bsl"
+version = "0.5.0"
+dependencies = [
+ "serialport",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-candump"
 version = "0.5.0"
 dependencies = [
@@ -1144,6 +1152,7 @@ dependencies = [
  "opentune-adaptation",
  "opentune-attest",
  "opentune-autoscan",
+ "opentune-c167bsl",
  "opentune-candump",
  "opentune-cbf",
  "opentune-checksum",

@@ -91,6 +91,17 @@ reads the INI and `.msq` formats as the open projects above document them.
 The driver's USB access uses [kevinmehall/nusb](https://github.com/kevinmehall/nusb)
 (Apache-2.0 OR MIT) as a library dependency.
 
+## C166 / C167 bootstrap loader (EDC15 bootstrap-mode read)
+
+| Project / document | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| Siemens *SAB 80C166 Family ApNotes — Bootstrap Loader C165/C167* (ed. 1.94, 1996) | — | public vendor document | The BSL itself: entry by `P0L.4` low through a hardware reset (≈ 8 kΩ pull-down; `P0L.2/3/5` high), the zero byte the BSL times for its baud rate, identification bytes `55h`/`A5h`/`B5h`, exactly 32 bytes stored at `00'FA40h..00'FA5Fh` then executed, the register state in BSL mode (watchdog off, `SYSCON` `0E00h`), the `T6`/`S0BRL` autobaud formula and the ±2.5 % deviation limit (`protocol::baud_check` reproduces the note's worked example), the `ROMS1`/`ROMEN` mapping, and its warning about half-duplex links. Facts only; its example assembly is not used. |
+| Infineon C167CR derivatives user manual V3.1, ch. 14 (as quoted on comp.arch.embedded, [embeddedrelated.com](https://www.embeddedrelated.com/showthread/comp.arch.embedded/7562-1.php)) | — | public vendor document | The later identification bytes: `C5h` = C167 derivatives, `D5h` = devices with identification registers. |
+| [EcuProg7/C167BootTool](https://github.com/EcuProg7/C167BootTool) (`ME7BootTool.py`) | — | GPL-3.0 | The monitor-kernel protocol `opentune-c167bsl` speaks: command bytes (`0x93` test, `0x82` write word, `0xCD` read word, `0x85` read block, `0x33` block checksum), acknowledges `AAh`/`EAh`, reply shapes, the XOR block checksum, the K-line echo handling, `AAh` on the hello meaning "kernel already running", the `01h`/`03h` loader/kernel started bytes, the SFR addresses, and the register values of the presets (internal-ROM read: `SYSCON F604h`, buses off, read from `01'0000h`; EDC15 external flash: `ADDRSEL3 4008h`, `BUSCON3 848Eh`, `BUSCON0 04ADh`, `SYSCON E204h`). Fresh Rust implementation; no code copied. GPL-3.0 → compatible. |
+| [NefMoto/NefMotoOpenSource](https://github.com/NefMoto/NefMotoOpenSource) | — | GPL-3.0 | Bootmode derived from C167BootTool; its EDC15 external-flash read setup (register order, `BUSCON1 040Dh`) and docs give the EDC15 flash base `0x400000`, the `FDh` NAK seen with CH340 cables, the bench entry practice (strap at power-up, release after 2–3 s), the 57600/38400 baud advice for KKL cables, and the observation that a lone hello echo means no BSL answered. GPL-3.0 → compatible. |
+
+Both GPL-3 tools bundle **Infineon MiniMon**'s K-line primary loader and monitor kernel (`LOADK.bin`, 32 bytes; `MINIMONK.bin`, 394 bytes) as binaries only. MiniMon is Infineon freeware, not GPL and without source, so OpenTune does **not** ship it: the loader and kernel are user-supplied files, recognised by SHA-256 only (`protocol::KNOWN_PAYLOADS`). See [C167-BSL.md](C167-BSL.md).
+
 ## Licence compatibility
 
 OpenTune is **GPL-3.0-or-later**. The rules we follow when drawing on the work
@@ -102,7 +113,8 @@ above:
   cantools, SavvyCAN, esp32-isotp-ble-bridge.
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
-  FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur.
+  FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
+  NefMotoOpenSource.
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
   RomRaider, pyA2L, Speeduino and LibreTune.

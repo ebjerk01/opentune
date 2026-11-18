@@ -54,6 +54,7 @@ opentune-haldex = { path = "../opentune-haldex" }
 opentune-tsini = { path = "../opentune-tsini" }
 opentune-tsproto = { path = "../opentune-tsproto" }
 opentune-sa2 = { path = "../opentune-sa2" }
+opentune-c167bsl = { path = "../opentune-c167bsl" }
 # Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
 ctrlc = "3"
 
