@@ -422,12 +422,40 @@ pause longer than the module's idle timeout, disconnect, a silent module and a
 busy bus; slcan through its real ASCII line protocol, socketcan and gsusb
 through their frame layer. Not yet bench- or vehicle-tested.
 
+## 3g. `isotp-ble`: a bridge that does ISO-TP itself
+
+The `isotp-ble` driver (`crates/drivers/isotp-ble-bridge`) drives an ESP32
+running the open-source esp32-isotp-ble-bridge firmware. Unlike the raw-CAN
+drivers it does **not** implement `CanLink`: the device runs ISO-TP, so the
+driver exchanges whole ISO-TP payloads in the firmware's framed protocol and
+implements `DiagTransport` directly, which `UdsClient` runs on. That is the
+pattern for any adapter with on-board ISO-TP.
+
+Layers: a dependency-free `codec` (frames, BLE split/reassembly, settings), a
+`Link` byte-transport trait (USB serial built in; BLE via `btleplug` behind
+the optional `btleplug` cargo feature, off by default), a `Bridge` session
+(answer matching, responsePending, stale-answer skipping) and a `mock` of the
+firmware for tests. `IsoTpBleDriver::open_with_link` opens over any `Link`,
+which is also how a front end with its own BLE stack (the Android app) can
+plug in.
+
+Limits come from the firmware: CAN at 500 kbit/s, 11-bit ids, and only the
+id pairs 7E0/7E8, 7E1/7E9, 7E5/7ED and 700/7E8 (others are refused at `open`
+unless `any_ids=1`). No TP2.0, K-line or raw capture. Options and the wire
+format: [`ISOTP-BLE-BRIDGE.md`](ISOTP-BLE-BRIDGE.md).
+
+**Validation state: unverified (Bench tier).** Synthetic-tested only:
+codec round trips at many MTUs and payload sizes, and UDS through the
+simulated firmware over BLE (MTU 23 and 247) and serial — multi-frame DIDs,
+4095-byte upload/download blocks, responsePending, settings, persist frames —
+against the `opentune-udssim` server. The BLE link compiles but has never run.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
 are listed in [`ARCHITECTURE.md`](ARCHITECTURE.md#drivers--cratesdrivers)):
 `mock`, `openport2`, `socketcan`, `elm327`, `kkl`, `kline-bridge`, `slcan`,
-`j2534`, `gsusb`, `elm327net`, `elm327obd`. A doc-drift test fails when a new id
+`j2534`, `gsusb`, `elm327net`, `elm327obd`, `vcar`, `udssim`, `isotp-ble`. A doc-drift test fails when a new id
 is registered without being added here.
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build

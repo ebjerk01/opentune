@@ -193,8 +193,10 @@ Each implements `Interface`. CAN drivers typically implement the lighter
 | `opentune-driver-elm327net` | `elm327net` | ELM327 over WiFi / Bluetooth |
 | `opentune-driver-elm327-obd` | `elm327obd` | ELM327 serial, OBD/UDS diagnostics (exposes `diag()`) |
 | `opentune-driver-vcar` | `vcar` | none — a simulated six-module vehicle ([`VIRTUAL-CAR.md`](VIRTUAL-CAR.md)) |
+| `opentune-driver-isotp-ble` | `isotp-ble` | ESP32 running the open-source esp32-isotp-ble-bridge firmware, over USB serial or BLE (optional `btleplug` feature); unverified ([`ISOTP-BLE-BRIDGE.md`](ISOTP-BLE-BRIDGE.md)) |
 
-These twelve are registered in the CLI's `Registry` (`opentune drivers`). The
+These thirteen are registered in the CLI's `Registry` (`opentune drivers`); the
+desktop lists `isotp-ble` in alpha builds only (Bench tier). The
 `opentune-driver-esp32` crate (ESP32-S3 open interface) is in the workspace but
 not yet in the CLI registry.
 
