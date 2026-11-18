@@ -360,6 +360,8 @@ jobs:
           CLI: \`opentune-$TAG-<target>\` archives. \`*.sig\` = updater signatures,
           \`SHA256SUMS.txt\` = checksums of every asset. Installers are not
           OS-code-signed (expect a SmartScreen warning on Windows).
+
+          Code signing policy: https://github.com/${{ github.repository }}/blob/main/CODE_SIGNING_POLICY.md
           EOF
 
           if state=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null); then
