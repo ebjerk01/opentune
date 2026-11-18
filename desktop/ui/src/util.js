@@ -218,11 +218,29 @@
     return { d, lo, hi };
   }
 
+  // ---- aftermarket ECU editor (feat_ts.js) --------------------------------------
+  // A number in a constant's digits (null/undefined -> "—").
+  function tsFmt(v, digits) {
+    if (v == null || !isFinite(v)) return "—";
+    return digits != null ? Number(v).toFixed(Math.min(9, digits)) : String(+Number(v).toPrecision(10));
+  }
+  // Client-side pre-check of a typed value against a constant's INI limits
+  // (the backend checks again and is authoritative): an error text or null.
+  function tsCheckValue(meta, x) {
+    if (typeof x !== "number" || !isFinite(x)) return (meta && meta.name ? meta.name + ": " : "") + "not a number";
+    const lo = meta && typeof meta.min === "number" ? meta.min : null;
+    const hi = meta && typeof meta.max === "number" ? meta.max : null;
+    if ((lo != null && x < lo) || (hi != null && x > hi)) {
+      return `${meta.name} = ${x} is outside ${lo == null ? "-∞" : lo}..${hi == null ? "∞" : hi}${meta.units ? " " + meta.units : ""}`;
+    }
+    return null;
+  }
+
   const OTUtil = {
     esc, baseName, hex8, parseHexInput, fmtCell, fmtAxis, clone2d, heatColor, splitList,
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
-    logModeBadge, fmtLogRate, seriesPath,
+    logModeBadge, fmtLogRate, seriesPath, tsFmt, tsCheckValue,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;

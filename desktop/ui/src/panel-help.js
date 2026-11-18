@@ -28,6 +28,7 @@
     logging: ["Load a logger definition", "Pick parameters and Start", "Save the log as CSV"],
     logview: ["Open a CSV log and tick channels to plot", "Zoom with the wheel, drag to pan, read values at the cursor", "Map overlay: definition, map, image, X/Y channels → Overlay"],
     haldex: ["Tick Simulated unit to try it, or connect to the drivetrain CAN", "Read status; change the mode only when stationary (confirm + read-back)", "Decode a CAN capture offline: lock, clutch and temperature charts"],
+    ts: ["Load the INI for the ECU's firmware (and a .msq, or read the ECU)", "Edit tables and settings: values outside the INI's limits are refused", "Connect (port or sim), Plan write, then Write: backup first, verify, burn"],
     candump: ["Detect a CAN-capable adapter on the right bus", "Choose format and file, then Start", "Stop to close the file; watch Dropped"],
     coding: ["Load a coding definition and set the target module", "Read, change a value, preview the diff", "Confirm and Write: backup first, read-back verify after"],
     adaptation: ["Load an adaptation definition and set the target", "Read channels before changing anything", "Routines and tests ask for confirmation"],

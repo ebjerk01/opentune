@@ -495,5 +495,8 @@ table.lv-stats td.num, table.lv-stats th.num { text-align: right; font-variant-n
 .hx-svg { width: 100%; height: 70px; display: block; margin: 4px 0; }
 .hx-svg .line { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 
+table.heat.ts-heat td.cell.ro { cursor: default; opacity: .8; }
+#tsValTbl td.ts-val { cursor: pointer; }
+
 table.heat.lv-heat td.cell { cursor: default; }
 table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted); font-weight: 400; }

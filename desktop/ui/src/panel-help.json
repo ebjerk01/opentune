@@ -132,6 +132,13 @@
     "risk": "writes-ecu",
     "guide": "36-haldex"
   },
+  "ts": {
+    "title": "Aftermarket ECU",
+    "summary": "Speeduino, rusEFI and MegaSquirt through their TunerStudio INI: load and edit tunes (.msq) offline with the INI's limits, then connect over serial (or the simulated ECU), check the signature, read, plan a write, and write with a backup first, read-back verify and an optional burn. Live channel tiles.",
+    "needs": ["TunerStudio INI for the firmware", "USB serial to the ECU (or sim)", "Engine off, ignition on, stable supply for writes"],
+    "risk": "writes-ecu",
+    "guide": "37-aftermarket-ECU"
+  },
   "candump": {
     "title": "CAN dump",
     "summary": "Capture all CAN bus traffic to a candump log, CSV or Vector ASC file with a live per-ID table. Listen-only where the adapter supports it.",

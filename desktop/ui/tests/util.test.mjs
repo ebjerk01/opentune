@@ -178,6 +178,20 @@ test("seriesPath scales a series into its box", () => {
   assert.equal(U.seriesPath([1], [7], 10, 10).d, "M5,5");
 });
 
+test("tsFmt and tsCheckValue follow the INI's digits and limits", () => {
+  assert.equal(U.tsFmt(12.345, 1), "12.3");
+  assert.equal(U.tsFmt(7, 0), "7");
+  assert.equal(U.tsFmt(0.1 + 0.2, null), "0.3");
+  assert.equal(U.tsFmt(null, 2), "—");
+  const m = { name: "reqFuel", min: 0, max: 25.5, units: "ms" };
+  assert.equal(U.tsCheckValue(m, 12), null);
+  assert.equal(U.tsCheckValue(m, 25.5), null);
+  assert.equal(U.tsCheckValue(m, 30), "reqFuel = 30 is outside 0..25.5 ms");
+  assert.match(U.tsCheckValue(m, NaN), /not a number/);
+  // Expression limits ({ expr }) are left to the backend.
+  assert.equal(U.tsCheckValue({ name: "x", min: { expr: "a" }, max: null }, -5), null);
+});
+
 test("fmtLogRate shows samples/s and requests per sample", () => {
   assert.equal(U.fmtLogRate(null), "");
   assert.equal(U.fmtLogRate({ ticks: 0 }), "");
