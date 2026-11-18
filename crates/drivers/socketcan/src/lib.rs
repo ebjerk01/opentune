@@ -7,8 +7,11 @@
 //! `battery_millivolts` returns `None`.
 //!
 //! Config ([`ConnectConfig::options`]):
-//! - `iface`: CAN interface name (default `can0`). Bring it up first, e.g.
+//! - `iface`: CAN interface name (default: option `port` unless it is a device
+//!   path, else `can0`). Bring it up first, e.g.
 //!   `ip link set can0 up type can bitrate 500000`.
+//! - `transport=tp20` + `tp20_addr=<module>`: open a VW TP2.0 channel
+//!   (KWP2000) instead of ISO-TP; see [`opentune_core::protocol::tp20channel`].
 //!
 //! This is Linux-only. On other targets the whole implementation is replaced by
 //! a stub whose operations return [`Error::Unsupported`], so the crate still
@@ -21,6 +24,7 @@ mod imp {
     use opentune_core::protocol::diag::DiagTransport;
     use opentune_core::protocol::isotp::{CanLink, IsoTp};
     use opentune_core::protocol::seedkey::SeedKey;
+    use opentune_core::protocol::tp20channel::{CanDiag, CanTransportKind, Tp20Options};
     use opentune_core::protocol::uds::UdsClient;
     use opentune_core::{
         Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
@@ -84,7 +88,8 @@ mod imp {
 
     #[derive(Default)]
     pub struct SocketCanDriver {
-        transport: Option<IsoTp>,
+        /// ISO-TP (default) or a VW TP2.0 channel, built on `open`.
+        transport: Option<CanDiag>,
         cfg: Option<ConnectConfig>,
         /// Optional seed/key handler for UDS security access (service 0x27). No
         /// OEM algorithm ships with OpenTune; the application supplies one.
@@ -106,7 +111,35 @@ mod imp {
         }
 
         fn transport(&mut self) -> Result<&mut IsoTp> {
-            self.transport.as_mut().ok_or(Error::NotConnected)
+            self.transport
+                .as_mut()
+                .ok_or(Error::NotConnected)?
+                .isotp("socketcan")
+        }
+
+        /// Open over a ready [`CanLink`] instead of a SocketCAN interface
+        /// (tests, or another frame source). Same transport selection as
+        /// [`Interface::open`]: ISO-TP by default, a VW TP2.0 channel with
+        /// `transport=tp20`.
+        pub fn open_with_link(
+            &mut self,
+            link: Box<dyn CanLink + Send>,
+            cfg: &ConnectConfig,
+        ) -> Result<()> {
+            Tp20Options::from_config(cfg)?;
+            self.close()?;
+            let transport = CanDiag::open(link, cfg).map_err(|e| match e {
+                Error::Protocol(m) => Error::Protocol(format!("socketcan: {m}")),
+                other => other,
+            })?;
+            self.transport = Some(transport);
+            self.cfg = Some(cfg.clone());
+            Ok(())
+        }
+
+        /// The transport `open` built, if any.
+        pub fn transport_kind(&self) -> Option<CanTransportKind> {
+            self.transport.as_ref().map(CanDiag::kind)
         }
 
         fn begin_session(&mut self) -> Result<()> {
@@ -123,7 +156,11 @@ mod imp {
             let level = seedkey_level(self.cfg.as_ref(), 0x11);
             // Disjoint field borrows: `seed_key` (shared), `transport` (unique).
             let sk = self.seed_key.as_deref();
-            let transport = self.transport.as_mut().ok_or(Error::NotConnected)?;
+            let transport = self
+                .transport
+                .as_mut()
+                .ok_or(Error::NotConnected)?
+                .isotp("socketcan")?;
             uds_security_access(transport, sk, level, required)
         }
     }
@@ -135,9 +172,13 @@ mod imp {
         }
 
         fn info(&self) -> InterfaceInfo {
+            let display_name = match &self.transport {
+                Some(t @ CanDiag::Tp20(_)) => format!("SocketCAN, {}", t.describe()),
+                _ => "SocketCAN".into(),
+            };
             InterfaceInfo {
                 id: "socketcan".into(),
-                display_name: "SocketCAN".into(),
+                display_name,
                 firmware: None,
                 serial: None,
             }
@@ -152,38 +193,48 @@ mod imp {
                 can: true,
                 read_memory: true,
                 write_memory: true,
+                vwtp20: true,
                 ..Default::default()
             }
         }
 
-        /// Expose the host-side ISO-TP over the SocketCAN interface as a [`DiagTransport`] so the coding/adaptation/
-        /// auto-scan/service/logging engines (and the raw-request console) can
-        /// drive this adapter. `None` until `open()` succeeds.
+        /// Expose the transport over the SocketCAN interface (host-side ISO-TP,
+        /// or the VW TP2.0 channel with `transport=tp20`) as a
+        /// [`DiagTransport`] so the coding/adaptation/auto-scan/service/logging
+        /// engines (and the raw-request console) can drive this adapter.
+        /// `None` until `open()` succeeds.
         fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
             self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
         }
 
         fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
-            if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
+            let tp20 = Tp20Options::from_config(cfg)?;
+            if tp20.is_none() && !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
                 return Err(Error::Unsupported(
-                    "SocketCAN driver supports CAN/ISO-TP protocols only".into(),
+                    "SocketCAN driver supports CAN/ISO-TP protocols, and VW TP2.0 with \
+                     transport=tp20"
+                        .into(),
                 ));
             }
+            // `port` (the CLI's --port, the desktop's port field) names the
+            // interface too, as for the monitor; a device path cannot be one.
             let iface = cfg
                 .options
                 .get("iface")
+                .or_else(|| cfg.options.get("port").filter(|p| !p.contains('/')))
                 .map(String::as_str)
                 .unwrap_or("can0");
             let socket = CanSocket::open(iface)
                 .map_err(|e| Error::Config(format!("cannot open CAN interface {iface}: {e}")))?;
-            let link = SocketCanLink { socket };
-            self.transport = Some(IsoTp::new(Box::new(link), cfg.tx_id, cfg.rx_id));
-            self.cfg = Some(cfg.clone());
-            Ok(())
+            self.open_with_link(Box::new(SocketCanLink { socket }), cfg)
         }
 
+        /// Close: a TP2.0 channel stops its keep-alive and sends the
+        /// disconnect (`A8`) first.
         fn close(&mut self) -> Result<()> {
-            self.transport = None;
+            if let Some(mut t) = self.transport.take() {
+                t.close();
+            }
             self.cfg = None;
             Ok(())
         }
@@ -453,7 +504,7 @@ mod imp {
         fn diag_exposes_isotp_after_connect() {
             let mut d = SocketCanDriver::new();
             assert!(d.diag().is_none(), "no transport before open");
-            d.transport = Some(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8));
+            d.transport = Some(CanDiag::IsoTp(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8)));
             assert!(
                 d.diag().is_some(),
                 "diag() must expose the ISO-TP transport"
