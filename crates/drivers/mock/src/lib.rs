@@ -264,6 +264,31 @@ impl Interface for MockDriver {
         Ok(out)
     }
 
+    /// The mock sends nothing on any bus; its plan is the one file slice a
+    /// read would copy, checked exactly like [`read_memory`](Self::read_memory).
+    fn plan_read_memory(&mut self, region: MemoryRegion) -> Option<Result<Vec<String>>> {
+        let plan = (|| {
+            if !self.open {
+                return Err(Error::NotConnected);
+            }
+            let start = self.offset(region.address)?;
+            let end = start
+                .checked_add(region.length as usize)
+                .filter(|&e| e <= self.data.len())
+                .ok_or_else(|| Error::Config("read past end of image".into()))?;
+            let file = self
+                .path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<no file>".into());
+            Ok(vec![format!(
+                "copy {file} [0x{start:X}..0x{end:X}] ({} bytes)",
+                region.length
+            )])
+        })();
+        Some(plan)
+    }
+
     fn write_memory(
         &mut self,
         region: MemoryRegion,

@@ -767,6 +767,15 @@ impl Interface for Elm327Obd {
         true
     }
 
+    /// The lines of [`Elm327Obd::plan_read_memory`] (adapter `AT` pacing and
+    /// hex requests, in order). Sends nothing.
+    fn plan_read_memory(&mut self, region: MemoryRegion) -> Option<Result<Vec<String>>> {
+        Some(
+            Elm327Obd::plan_read_memory(self, region)
+                .map(|plan| plan.into_iter().map(|p| p.line).collect()),
+        )
+    }
+
     /// Expose the UDS/OBD diagnostic transport so the coding/adaptation/auto-scan/
     /// service/logging engines (and the raw-request console) can drive this
     /// adapter. Available once `open()` has brought the ELM327 up.
@@ -1446,8 +1455,17 @@ mod tests {
         let region = MemoryRegion::new(0x8000_0000, 0x90);
         let plan = d.plan_read_memory(region).unwrap();
         assert!(lines(&written).is_empty(), "a dry run writes nothing");
+        // The trait method (what a registry-opened driver offers) gives the same lines.
+        let via_trait = Interface::plan_read_memory(&mut d, region)
+            .expect("elm327obd can plan")
+            .unwrap();
+        assert!(
+            lines(&written).is_empty(),
+            "the trait dry run writes nothing"
+        );
         d.read_memory(region, &mut |_| {}).unwrap();
         let planned: Vec<String> = plan.iter().map(|p| p.line.clone()).collect();
+        assert_eq!(planned, via_trait);
         assert_eq!(planned, lines(&written));
     }
 

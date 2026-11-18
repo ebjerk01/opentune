@@ -47,6 +47,19 @@ pub trait Interface {
         progress: &mut dyn FnMut(Progress),
     ) -> Result<()>;
 
+    /// Dry run of [`read_memory`](Interface::read_memory) on the opened driver:
+    /// the exact lines the read would write to the adapter, in order (adapter
+    /// commands and request hex, as the driver defines them). **Sends nothing.**
+    ///
+    /// `Some(Err(_))` means the read itself would be refused before reaching
+    /// the bus (bad options, a request format that does not fit, security
+    /// required without a handler). The default returns `None`: the driver
+    /// cannot plan, and a caller must say so rather than read for real.
+    fn plan_read_memory(&mut self, region: MemoryRegion) -> Option<Result<Vec<String>>> {
+        let _ = region;
+        None
+    }
+
     /// Borrow this driver's request/response [`DiagTransport`] for raw UDS/KWP
     /// exchanges (module coding, routines, DIDs), when the driver can expose one.
     ///
@@ -138,5 +151,11 @@ mod tests {
     fn drivers_without_an_unlock_step_refuse_a_seed_key() {
         let mut d: Box<dyn Interface> = Box::new(Bare);
         assert!(!d.set_seed_key(Box::new(Echo)));
+    }
+
+    #[test]
+    fn drivers_cannot_plan_a_read_by_default() {
+        let mut d: Box<dyn Interface> = Box::new(Bare);
+        assert!(d.plan_read_memory(MemoryRegion::new(0, 16)).is_none());
     }
 }
