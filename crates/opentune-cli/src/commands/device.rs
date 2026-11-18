@@ -39,16 +39,42 @@ pub fn info(ctx: &CliContext, conn: ConnectArgs) -> Result<()> {
     Ok(())
 }
 
+/// `read --plan` / `dump --plan`: open the driver, print the lines a read of
+/// `region` would write (stdout, one per line; a summary on stderr) and close.
+/// Nothing is read or archived.
+fn print_plan(ctx: &CliContext, conn: &ConnectArgs, region: MemoryRegion) -> Result<()> {
+    let mut drv = ctx.open_connect(conn)?;
+    let lines = ctx.plan_read(drv.as_mut(), &conn.driver, region);
+    drv.close()?;
+    let lines = lines?;
+    eprintln!(
+        "Dry run: read of {} bytes @0x{:08X} via {} - {} line(s), nothing sent",
+        region.length,
+        region.address,
+        conn.driver,
+        lines.len()
+    );
+    for l in &lines {
+        println!("{l}");
+    }
+    Ok(())
+}
+
 /// `read`
 pub fn read(
     ctx: &CliContext,
     conn: ConnectArgs,
     addr: String,
     len: String,
-    out: PathBuf,
+    out: Option<PathBuf>,
+    plan: bool,
 ) -> Result<()> {
-    let mut drv = ctx.open_connect(&conn)?;
     let region = MemoryRegion::new(parse_num(&addr)?, parse_num(&len)?);
+    if plan {
+        return print_plan(ctx, &conn, region);
+    }
+    let out = out.ok_or_else(|| anyhow!("--out is required (or use --plan)"))?;
+    let mut drv = ctx.open_connect(&conn)?;
     let data = drv.read_memory(region, &mut noprogress)?;
     std::fs::write(&out, &data)?;
     println!(
@@ -157,9 +183,13 @@ pub fn dump(
     addr: String,
     len: String,
     vault: PathBuf,
+    plan: bool,
 ) -> Result<()> {
-    let mut drv = ctx.open_connect(&conn)?;
     let region = MemoryRegion::new(parse_num(&addr)?, parse_num(&len)?);
+    if plan {
+        return print_plan(ctx, &conn, region);
+    }
+    let mut drv = ctx.open_connect(&conn)?;
     let id = drv.read_ecu_id().unwrap_or_default();
     let data = drv.read_memory(region, &mut noprogress)?;
     let path = opentune_flash::vault::save_backup(&vault, &id, region, &data)

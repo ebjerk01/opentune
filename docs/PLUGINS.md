@@ -285,7 +285,7 @@ fn my_seedkeys(id: &str) -> Option<Box<dyn SeedKey>> {
 
 /// `my-tool bench-read --driver kkl --seedkey my-unit ...`
 fn bench_read(m: &clap::ArgMatches, ctx: &CliContext) -> anyhow::Result<()> {
-    let conn = ConnectArgs::from_arg_matches(m)?; // --driver/--file/--base/--seedkey
+    let conn = ConnectArgs::from_arg_matches(m)?; // --driver/--port/--tx-id/--opt/...
     let mut drv = ctx.open_connect(&conn)?; // seed key attached before open
     // ... drv.read_memory(...), ctx.checksum("my-algo"), ...
     drv.close()?;
@@ -316,10 +316,25 @@ fn main() -> std::process::ExitCode {
 | `CliConfig` | `name` (help and `--version`, default `opentune`), `about`, `seedkeys`, `checksums`, `drivers` (`(id, description, fn() -> Box<dyn Interface>)`, listed after the public drivers), `extra` subcommands. `Default` = the public CLI. |
 | `SeedKeyResolver` / `ChecksumResolver` | `fn(&str) -> Option<Box<dyn SeedKey>>` / `fn(&str) -> Option<Box<dyn ChecksumAlgo>>`, the desktop's shapes. Tried in order; checksum ids fall back to the public `opentune_checksum::get`. |
 | `ExtraCommand { command, run }` | A `clap::Command` merged into the top-level tree and its `fn(&ArgMatches, &CliContext) -> anyhow::Result<()>`. A name or alias that collides with a core subcommand, `help` or another extra (or an extra driver id that repeats a public one) is refused at startup; `check_config` reports the same check. |
-| `CliContext` | `registry()`, `checksum(id)` / `require_checksum(id)`, `seed_key(id)` / `require_seed_key(id)`, `open_driver(driver, &ConnectConfig, seedkey)`, `open_connect(&ConnectArgs)`, `attach_seed_key(drv, driver, id)`. |
-| `ConnectArgs` | The public `--driver --file --base --seedkey` group, to flatten into extra commands. |
+| `CliContext` | `registry()`, `checksum(id)` / `require_checksum(id)`, `seed_key(id)` / `require_seed_key(id)`, `open_driver(driver, &ConnectConfig, seedkey)`, `open_connect(&ConnectArgs)`, `attach_seed_key(drv, driver, id)`, `plan_read(drv, driver, region)` (dry run through `Interface::plan_read_memory`; errors with "driver cannot plan" when the driver has none). |
+| `ConnectArgs` | The public connection group, to flatten into extra commands: `--driver --seedkey`, the adapter flags `--port --baud --bus --tx-id --rx-id --opt KEY=VALUE` (repeatable), and `--file --base` for the mock. `config()` gives the `ConnectConfig` it opens with. |
 | `command(cfg)` | The merged clap tree (e.g. to render help in tests). |
 | `ExitStatus(n)` | Return `Err(ExitStatus(n).into())` to end with exit code `n` and no error message. |
+
+`ConnectArgs::config` maps the adapter flags the way the desktop's adapter
+settings do: `--tx-id`/`--rx-id` (hex, `0x` optional, both or neither, default
+7E0/7E8) set `ConnectConfig::tx_id`/`rx_id`; `--port`, `--baud` and `--bus`
+become the `port`/`baud`/`bus` options; each `--opt KEY=VALUE` becomes an
+option (e.g. `read_mode=upload`, `timeout_ms=5000` for `elm327obd`). It
+refuses before any driver is made: a malformed or over-29-bit id, a 29-bit id
+on `elm327obd` (11-bit only), only one of the two ids, a non-numeric baud, an
+`--opt` without `=`, an option given twice, and `--opt` for a key a flag owns
+(`port`, `baud`, `bus`, `file`, `base`, `tx_id`, `rx_id`). An extra command
+that flattens `ConnectArgs` must not define these flag names itself.
+
+`read --plan` and `dump --plan` open the driver and print the lines
+`CliContext::plan_read` returns, sending nothing; a driver without a dry run
+is an error ("driver cannot plan").
 
 `--seedkey <id>` on `info`, `read`, `flash`, `dump` and `identify` resolves the
 id through the context and hands it to the driver with `Interface::set_seed_key`

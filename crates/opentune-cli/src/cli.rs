@@ -30,9 +30,14 @@ pub enum Command {
         /// Length in bytes, hex or decimal.
         #[arg(long)]
         len: String,
-        /// Output file.
+        /// Output file (not needed with --plan).
+        #[arg(long, required_unless_present = "plan")]
+        out: Option<PathBuf>,
+        /// Dry run: print the exact lines the read would write to the adapter
+        /// and send nothing. Fails with "driver cannot plan" for a driver
+        /// without a dry run.
         #[arg(long)]
-        out: PathBuf,
+        plan: bool,
     },
     /// Byte-diff two images and summarise changed regions.
     Diff { a: PathBuf, b: PathBuf },
@@ -83,6 +88,10 @@ pub enum Command {
         /// Vault directory to archive the dump into.
         #[arg(long, default_value = "backups")]
         vault: PathBuf,
+        /// Dry run: print the exact lines the read would write to the adapter
+        /// and send nothing (no identity read, nothing archived).
+        #[arg(long)]
+        plan: bool,
     },
     /// Find candidate calibration maps: in ONE image (axis/header heuristics,
     /// ranked with evidence), or by clustering the diff of a stock/tuned pair.
@@ -659,7 +668,8 @@ pub enum ChecksumAction {
 
 /// The driver options shared by `info`, `read`, `flash`, `dump` and
 /// `identify`. An extra command can flatten it into its own arguments and open
-/// the driver with [`CliContext::open_connect`](crate::CliContext::open_connect).
+/// the driver with [`CliContext::open_connect`](crate::CliContext::open_connect);
+/// [`ConnectArgs::config`] is the `ConnectConfig` it opens with.
 #[derive(clap::Args, Debug, Clone)]
 pub struct ConnectArgs {
     /// Driver id (see `drivers`).
@@ -675,4 +685,253 @@ pub struct ConnectArgs {
     /// by the embedding build; the public OpenTune ships none.
     #[arg(long, value_name = "ID")]
     pub seedkey: Option<String>,
+    /// Adapter port: serial device (e.g. /dev/ttyUSB0), CAN interface or
+    /// host:port, as the driver expects (driver option `port`).
+    #[arg(long, value_name = "PORT")]
+    pub port: Option<String>,
+    /// Serial baud of the adapter link (driver option `baud`).
+    #[arg(long, value_name = "BAUD")]
+    pub baud: Option<String>,
+    /// Vehicle bus: `hs` or `ms` for the ELM327 drivers, or a driver-specific
+    /// value (driver option `bus`).
+    #[arg(long, value_name = "BUS")]
+    pub bus: Option<String>,
+    /// Diagnostic request CAN id, hex (default 7E0). Give --rx-id too.
+    #[arg(long, value_name = "HEX")]
+    pub tx_id: Option<String>,
+    /// Diagnostic response CAN id, hex (default 7E8). Give --tx-id too.
+    #[arg(long, value_name = "HEX")]
+    pub rx_id: Option<String>,
+    /// Extra driver option, e.g. `--opt read_mode=upload --opt timeout_ms=5000`
+    /// (repeatable; see docs/DRIVERS.md for each driver's options).
+    #[arg(long = "opt", value_name = "KEY=VALUE")]
+    pub opts: Vec<String>,
+}
+
+/// Drivers that program only 11-bit CAN headers: a 29-bit id would be
+/// truncated to a different module, so it is refused instead.
+const ELEVEN_BIT_ONLY: &[&str] = &["elm327obd"];
+
+/// Option keys a dedicated flag owns; `--opt` refuses them.
+const FLAG_KEYS: &[(&str, &str)] = &[
+    ("file", "--file"),
+    ("base", "--base"),
+    ("port", "--port"),
+    ("baud", "--baud"),
+    ("bus", "--bus"),
+    ("tx_id", "--tx-id"),
+    ("rx_id", "--rx-id"),
+];
+
+/// A non-blank flag value, trimmed (a blank value counts as not given).
+fn given(v: &Option<String>) -> Option<&str> {
+    v.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// A CAN id: hex with or without `0x` (`7E0`, `0x7E0`), at most 29 bits.
+fn parse_can_id(flag: &str, s: &str) -> anyhow::Result<u32> {
+    let h = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
+    let v = u32::from_str_radix(h, 16)
+        .map_err(|_| anyhow::anyhow!("{flag} '{s}': not a hex CAN id (e.g. 7E0)"))?;
+    if v > 0x1FFF_FFFF {
+        anyhow::bail!("{flag} '{s}': larger than a 29-bit CAN id");
+    }
+    Ok(v)
+}
+
+impl ConnectArgs {
+    /// The `ConnectConfig` these flags describe, mapped like the desktop app's
+    /// adapter settings: `--tx-id`/`--rx-id` (both or neither; default
+    /// 7E0/7E8) set the request/response ids, `--port`/`--baud`/`--bus` and
+    /// every `--opt KEY=VALUE` go into `options`, and `--file`/`--base` keep
+    /// feeding the mock driver. Bad values are refused before any driver is
+    /// made: a malformed hex id or `--opt`, a non-numeric baud, a 29-bit id on
+    /// an 11-bit-only driver, or an option given twice.
+    pub fn config(&self) -> anyhow::Result<opentune_core::ConnectConfig> {
+        let mut cfg = opentune_core::ConnectConfig::default();
+        match (given(&self.tx_id), given(&self.rx_id)) {
+            (Some(t), Some(r)) => {
+                cfg.tx_id = parse_can_id("--tx-id", t)?;
+                cfg.rx_id = parse_can_id("--rx-id", r)?;
+            }
+            (None, None) => {}
+            _ => anyhow::bail!(
+                "set both --tx-id and --rx-id (or neither for the engine ECU, 7E0/7E8)"
+            ),
+        }
+        if ELEVEN_BIT_ONLY.contains(&self.driver.as_str())
+            && (cfg.tx_id > 0x7FF || cfg.rx_id > 0x7FF)
+        {
+            anyhow::bail!(
+                "the {} driver supports 11-bit CAN ids only (got {:X}/{:X})",
+                self.driver,
+                cfg.tx_id,
+                cfg.rx_id
+            );
+        }
+        for raw in &self.opts {
+            let (k, v) = raw
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("--opt '{raw}': expected KEY=VALUE"))?;
+            let k = k.trim();
+            if k.is_empty() {
+                anyhow::bail!("--opt '{raw}': empty option name");
+            }
+            if let Some((_, flag)) = FLAG_KEYS.iter().find(|(key, _)| *key == k) {
+                anyhow::bail!("--opt '{raw}': use {flag} for '{k}'");
+            }
+            if cfg
+                .options
+                .insert(k.to_owned(), v.trim().to_owned())
+                .is_some()
+            {
+                anyhow::bail!("--opt: option '{k}' given more than once");
+            }
+        }
+        if let Some(f) = &self.file {
+            cfg.options
+                .insert("file".into(), f.to_string_lossy().into_owned());
+        }
+        cfg.options.insert("base".into(), self.base.clone());
+        if let Some(b) = given(&self.baud) {
+            if !b.parse::<u32>().is_ok_and(|n| n > 0) {
+                anyhow::bail!("--baud '{b}': expected a positive whole number (e.g. 38400)");
+            }
+        }
+        for (key, v) in [
+            ("port", &self.port),
+            ("baud", &self.baud),
+            ("bus", &self.bus),
+        ] {
+            if let Some(v) = given(v) {
+                cfg.options.insert(key.into(), v.to_owned());
+            }
+        }
+        Ok(cfg)
+    }
+}
+
+#[cfg(test)]
+mod connect_tests {
+    use super::ConnectArgs;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct T {
+        #[command(flatten)]
+        conn: ConnectArgs,
+    }
+
+    fn parse(args: &[&str]) -> ConnectArgs {
+        T::try_parse_from(std::iter::once("t").chain(args.iter().copied()))
+            .expect("parse")
+            .conn
+    }
+
+    fn err(args: &[&str]) -> String {
+        format!("{:#}", parse(args).config().expect_err("expected an error"))
+    }
+
+    #[test]
+    fn defaults_are_unchanged() {
+        let cfg = parse(&[]).config().unwrap();
+        let def = opentune_core::ConnectConfig::default();
+        assert_eq!((cfg.tx_id, cfg.rx_id), (def.tx_id, def.rx_id));
+        assert_eq!(cfg.bitrate, def.bitrate);
+        let keys: Vec<&str> = cfg.options.keys().map(String::as_str).collect();
+        assert_eq!(keys, ["base"], "only the mock's base by default");
+        assert_eq!(cfg.options["base"], "0x0");
+
+        let cfg = parse(&["--file", "img.bin", "--base", "0x8000"])
+            .config()
+            .unwrap();
+        assert_eq!(cfg.options["file"], "img.bin");
+        assert_eq!(cfg.options["base"], "0x8000");
+    }
+
+    #[test]
+    fn adapter_flags_map_into_the_config() {
+        let cfg = parse(&[
+            "--driver",
+            "elm327obd",
+            "--port",
+            "/dev/ttyUSB1",
+            "--baud",
+            "115200",
+            "--bus",
+            "ms",
+            "--tx-id",
+            "726",
+            "--rx-id",
+            "0x72E",
+            "--opt",
+            "read_mode=upload",
+            "--opt",
+            "timeout_ms = 5000",
+            "--opt",
+            "alfid=",
+        ])
+        .config()
+        .unwrap();
+        assert_eq!((cfg.tx_id, cfg.rx_id), (0x726, 0x72E));
+        let o = &cfg.options;
+        assert_eq!(o["port"], "/dev/ttyUSB1");
+        assert_eq!(o["baud"], "115200");
+        assert_eq!(o["bus"], "ms");
+        assert_eq!(o["read_mode"], "upload");
+        assert_eq!(o["timeout_ms"], "5000");
+        assert_eq!(o["alfid"], "", "an empty value is passed through");
+        // A value may itself contain '='.
+        let cfg = parse(&["--opt", "x=a=b"]).config().unwrap();
+        assert_eq!(cfg.options["x"], "a=b");
+    }
+
+    #[test]
+    fn twenty_nine_bit_ids_only_where_the_driver_supports_them() {
+        let ext = ["--tx-id", "18DA10F1", "--rx-id", "18DAF110"];
+        let mut args = vec!["--driver", "elm327"];
+        args.extend(ext);
+        let cfg = parse(&args).config().unwrap();
+        assert_eq!((cfg.tx_id, cfg.rx_id), (0x18DA_10F1, 0x18DA_F110));
+        let mut args = vec!["--driver", "elm327obd"];
+        args.extend(ext);
+        let e = err(&args);
+        assert!(e.contains("11-bit CAN ids only"), "{e}");
+    }
+
+    #[test]
+    fn bad_values_are_refused_clearly() {
+        for (args, want) in [
+            (
+                &["--tx-id", "7G0", "--rx-id", "7E8"][..],
+                "--tx-id '7G0': not a hex CAN id",
+            ),
+            (
+                &["--tx-id", "7E0", "--rx-id", "zz"][..],
+                "--rx-id 'zz': not a hex CAN id",
+            ),
+            (
+                &["--tx-id", "20000000", "--rx-id", "7E8"][..],
+                "larger than a 29-bit",
+            ),
+            (&["--tx-id", "7E0"][..], "set both --tx-id and --rx-id"),
+            (&["--rx-id", "7E8"][..], "set both --tx-id and --rx-id"),
+            (&["--opt", "read_mode"][..], "expected KEY=VALUE"),
+            (&["--opt", "=1"][..], "empty option name"),
+            (&["--opt", "port=/dev/x"][..], "use --port"),
+            (&["--opt", "file=x"][..], "use --file"),
+            (
+                &["--opt", "a=1", "--opt", "a=2"][..],
+                "given more than once",
+            ),
+            (&["--baud", "fast"][..], "--baud 'fast'"),
+            (&["--baud", "0"][..], "--baud '0'"),
+        ] {
+            let e = err(args);
+            assert!(e.contains(want), "{args:?}: {e}");
+        }
+    }
 }

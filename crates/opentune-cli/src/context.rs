@@ -4,7 +4,7 @@ use crate::{ChecksumResolver, CliConfig, SeedKeyResolver};
 use anyhow::{anyhow, bail, Result};
 use opentune_checksum::ChecksumAlgo;
 use opentune_core::protocol::seedkey::SeedKey;
-use opentune_core::{ConnectConfig, Interface, Registry};
+use opentune_core::{ConnectConfig, Interface, MemoryRegion, Registry};
 
 /// Run-time context handed to every command, core or extra: the driver
 /// registry (public drivers plus the embedder's) and the embedder's checksum
@@ -103,15 +103,32 @@ impl CliContext {
         Ok(drv)
     }
 
-    /// Open the driver a [`ConnectArgs`] names (`--driver`, `--file`, `--base`,
-    /// `--seedkey`).
+    /// Open the driver a [`ConnectArgs`] names (`--driver`, `--seedkey`) with
+    /// the config [`ConnectArgs::config`] builds from its adapter flags
+    /// (`--port --baud --bus --tx-id --rx-id --opt`, and `--file --base` for
+    /// the mock). Bad flag values fail before any driver is made.
     pub fn open_connect(&self, conn: &ConnectArgs) -> Result<Box<dyn Interface>> {
-        let mut cfg = ConnectConfig::default();
-        if let Some(f) = &conn.file {
-            cfg.options
-                .insert("file".into(), f.to_string_lossy().into_owned());
-        }
-        cfg.options.insert("base".into(), conn.base.clone());
+        let cfg = conn.config()?;
         self.open_driver(&conn.driver, &cfg, conn.seedkey.as_deref())
+    }
+
+    /// Dry run of a block read on the opened `drv` (registry id `driver`, for
+    /// the message): the exact lines [`Interface::plan_read_memory`] says the
+    /// read would write, **without sending anything**. Errors when the driver
+    /// cannot plan (`None`) or when the read would be refused before reaching
+    /// the bus.
+    pub fn plan_read(
+        &self,
+        drv: &mut dyn Interface,
+        driver: &str,
+        region: MemoryRegion,
+    ) -> Result<Vec<String>> {
+        match drv.plan_read_memory(region) {
+            Some(plan) => plan.map_err(|e| anyhow!("plan read with {driver}: {e}")),
+            None => bail!(
+                "driver cannot plan: '{driver}' offers no dry run of a memory read \
+                 (nothing was sent)"
+            ),
+        }
     }
 }
