@@ -36,7 +36,7 @@
 //! directly (as the slcan simulator does) gives every immediate behaviour;
 //! time-based ones need [`Tp20Ecu::advance`] calls.
 use crate::protocol::isotp::CanLink;
-use crate::protocol::vwtp20::{decode_timing, BROADCAST_ID};
+use crate::protocol::vwtp20::{decode_timing, effective_block_size, BROADCAST_ID};
 use crate::{Error, Result};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -83,7 +83,13 @@ pub enum FaultAction {
     /// The frame arrives twice.
     Duplicate,
     /// The frame arrives this many virtual ms late (after later frames).
+    /// Many frames can pass in no virtual time, so a delayed *data* frame
+    /// can come back more than 15 frames late, beyond what TP2.0's 4-bit
+    /// sequence can detect; use [`Reorder`](Self::Reorder) for data.
     Delay(u64),
+    /// The frame swaps places with the next frame in the same direction
+    /// (or arrives at the next wait if none follows).
+    Reorder,
     /// Add this to the low nibble (sequence) of a data/ACK frame.
     WrongSeq(u8),
     /// The frame vanishes and the module closes the channel (`A8` to the
@@ -232,6 +238,9 @@ pub struct Tp20Ecu {
     order: u64,
     fault_hits: Vec<usize>,
     fault_fired: Vec<bool>,
+    /// A frame held back by [`FaultAction::Reorder`], per direction.
+    held_in: Option<(u32, Vec<u8>)>,
+    held_out: Option<(u32, Vec<u8>)>,
     /// Every frame the tester sent, in order.
     pub log: Vec<(u32, Vec<u8>)>,
     /// Complete request telegrams handed to the application.
@@ -262,6 +271,11 @@ pub struct Tp20Ecu {
     pub gave_up: usize,
     /// Frames the scripted faults hit.
     pub faults_fired: usize,
+    /// With [`Tp20Ecu::record_wire`] set: every frame as the tester sent it
+    /// (`ToEcu`) or received it (`ToTester`, after the faults), with the
+    /// virtual time, filled in by [`Tp20SimLink`]. For debugging scripts.
+    pub wire: Vec<(u64, FaultDir, u32, Vec<u8>)>,
+    pub record_wire: bool,
 }
 
 const DATA_ACK_NOW: u8 = 0x00;
@@ -313,6 +327,8 @@ impl Tp20Ecu {
             order: 0,
             fault_hits: vec![0; n],
             fault_fired: vec![false; n],
+            held_in: None,
+            held_out: None,
             log: Vec::new(),
             requests: Vec::new(),
             setups: 0,
@@ -330,6 +346,8 @@ impl Tp20Ecu {
             pending_sent: 0,
             gave_up: 0,
             faults_fired: 0,
+            wire: Vec::new(),
+            record_wire: false,
         }
     }
 
@@ -359,13 +377,23 @@ impl Tp20Ecu {
     }
 
     fn params(&self) -> Vec<u8> {
-        vec![0xA1, self.cfg.block_size, self.cfg.t1, 0xFF, self.cfg.t3, 0xFF]
+        vec![
+            0xA1,
+            self.cfg.block_size,
+            self.cfg.t1,
+            0xFF,
+            self.cfg.t3,
+            0xFF,
+        ]
     }
 
     fn reset_channel(&mut self) {
         self.assigned = false;
         self.open = false;
+        // A new channel numbers from 0 in both directions.
         self.rx = Rx {
+            expected: Some(0),
+            ack_seq: Some(0),
             at_boundary: true,
             ..Rx::default()
         };
@@ -379,6 +407,8 @@ impl Tp20Ecu {
         // The module flushes its queues; nothing of the old channel is left
         // in flight.
         self.events.clear();
+        self.held_in = None;
+        self.held_out = None;
     }
 
     fn schedule(&mut self, at: u64, ev: Ev) {
@@ -390,15 +420,20 @@ impl Tp20Ecu {
     fn fault_for(&mut self, dir: FaultDir, id: u32, data: &[u8]) -> Option<FaultAction> {
         let class = classify(id, data);
         let mut hit = None;
-        for i in 0..self.cfg.faults.len() {
-            let f = self.cfg.faults[i];
+        let rules = self
+            .cfg
+            .faults
+            .iter()
+            .zip(self.fault_hits.iter_mut())
+            .zip(self.fault_fired.iter_mut());
+        for ((f, hits), fired) in rules {
             if f.dir != dir || (f.class != FrameClass::Any && f.class != class) {
                 continue;
             }
-            let n = self.fault_hits[i];
-            self.fault_hits[i] += 1;
-            if n == f.nth && !self.fault_fired[i] && hit.is_none() {
-                self.fault_fired[i] = true;
+            let n = *hits;
+            *hits += 1;
+            if n == f.nth && !*fired && hit.is_none() {
+                *fired = true;
                 self.faults_fired += 1;
                 hit = Some(f.action);
             }
@@ -420,9 +455,16 @@ impl Tp20Ecu {
             return self.emit(out);
         }
         let mut data = data.to_vec();
-        let out = match self.fault_for(FaultDir::ToEcu, id, &data) {
+        // A frame held back by an earlier Reorder goes in after this one.
+        let release = self.held_in.take();
+        let mut out = match self.fault_for(FaultDir::ToEcu, id, &data) {
             None => self.process(id, &data),
             Some(FaultAction::Drop) => Vec::new(),
+            Some(FaultAction::Reorder) => {
+                // Released after the next tester frame.
+                self.held_in = Some((id, data));
+                Vec::new()
+            }
             Some(FaultAction::Duplicate) => {
                 let mut out = self.process(id, &data);
                 out.extend(self.process(id, &data));
@@ -440,6 +482,9 @@ impl Tp20Ecu {
             }
             Some(FaultAction::Disconnect) => self.module_break(),
         };
+        if let Some((i, d)) = release {
+            out.extend(self.process(i, &d));
+        }
         self.emit(out)
     }
 
@@ -460,8 +505,16 @@ impl Tp20Ecu {
         }
         let mut out = Vec::new();
         for (id, mut data) in frames {
-            match self.fault_for(FaultDir::ToTester, id, &data) {
-                None => out.push((id, data)),
+            let fault = self.fault_for(FaultDir::ToTester, id, &data);
+            if fault == Some(FaultAction::Reorder) {
+                if let Some(prev) = self.held_out.replace((id, data)) {
+                    out.push(prev);
+                }
+                continue;
+            }
+            let release = self.held_out.take();
+            match fault {
+                None | Some(FaultAction::Reorder) => out.push((id, data)),
                 Some(FaultAction::Drop) => {}
                 Some(FaultAction::Duplicate) => {
                     out.push((id, data.clone()));
@@ -481,6 +534,8 @@ impl Tp20Ecu {
                     break;
                 }
             }
+            // The held frame goes out after the one that overtook it.
+            out.extend(release);
         }
         out
     }
@@ -489,6 +544,17 @@ impl Tp20Ecu {
     /// the module sends something, and return those frames (empty when
     /// nothing happened within `max_ms`).
     pub fn advance(&mut self, max_ms: u64) -> Vec<(u32, Vec<u8>)> {
+        // A frame held back for reordering and not overtaken arrives late.
+        if let Some(f) = self.held_out.take() {
+            return vec![f];
+        }
+        if let Some((id, data)) = self.held_in.take() {
+            let o = self.process(id, &data);
+            let o = self.emit(o);
+            if !o.is_empty() {
+                return o;
+            }
+        }
         let until = self.now_ms.saturating_add(max_ms);
         loop {
             let next_ev = self.events.iter().map(|e| e.0).min();
@@ -640,7 +706,9 @@ impl Tp20Ecu {
         let (kind, seq) = (data[0] & 0xF0, data[0] & 0x0F);
         match kind {
             0xB0 | 0x90 => self.on_ack(kind, seq, data[0]),
-            DATA_ACK_NOW | DATA_LAST | DATA_MORE | DATA_LAST_NO_ACK => self.on_data(kind, seq, data),
+            DATA_ACK_NOW | DATA_LAST | DATA_MORE | DATA_LAST_NO_ACK => {
+                self.on_data(kind, seq, data)
+            }
             _ => {
                 self.errors.push(format!("unknown opcode {:02X}", data[0]));
                 Vec::new()
@@ -725,7 +793,8 @@ impl Tp20Ecu {
             .is_some_and(|(s, n)| (seq.wrapping_sub(s) & 0x0F) < n);
         if dup_frame || (self.rx.at_boundary && in_last) {
             self.duplicates += 1;
-            if let (false, Some((s, n)), Some(a)) = (dup_frame, self.rx.last_block, self.rx.last_ack)
+            if let (false, Some((s, n)), Some(a)) =
+                (dup_frame, self.rx.last_block, self.rx.last_ack)
             {
                 if seq == (s + n - 1) & 0x0F && (kind == DATA_ACK_NOW || kind == DATA_LAST) {
                     return vec![(tx, vec![0xB0 | a])];
@@ -812,7 +881,8 @@ impl Tp20Ecu {
         let mut telegram = vec![((resp.len() >> 8) & 0x0F) as u8, resp.len() as u8];
         telegram.extend_from_slice(resp);
         let n = telegram.len().div_ceil(7);
-        let bs = self.tester_bs as usize;
+        // Never more than 15 frames per ACK (see `effective_block_size`).
+        let bs = effective_block_size(self.tester_bs) as usize;
         for (i, chunk) in telegram.chunks(7).enumerate() {
             let op = if i + 1 == n {
                 if self.cfg.last_without_ack {
@@ -895,11 +965,22 @@ impl CanLink for Tp20SimLink {
         if data.len() > 8 {
             return Err(Error::Protocol("CAN frame too long".into()));
         }
-        let out = self
-            .ecu
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .on_frame(id, data);
+        let out = {
+            let mut e = self.ecu.lock().unwrap_or_else(|e| e.into_inner());
+            if e.record_wire {
+                let t = e.now_ms;
+                e.wire.push((t, FaultDir::ToEcu, id, data.to_vec()));
+            }
+            let out = e.on_frame(id, data);
+            if e.record_wire {
+                let t = e.now_ms;
+                e.wire.extend(
+                    out.iter()
+                        .map(|(i, d)| (t, FaultDir::ToTester, *i, d.clone())),
+                );
+            }
+            out
+        };
         self.queue(out);
         Ok(())
     }
@@ -909,11 +990,18 @@ impl CanLink for Tp20SimLink {
             return Ok(f);
         }
         let wait = if self.noise.is_some() { 1 } else { timeout_ms };
-        let out = self
-            .ecu
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .advance(wait);
+        let out = {
+            let mut e = self.ecu.lock().unwrap_or_else(|e| e.into_inner());
+            let out = e.advance(wait);
+            if e.record_wire {
+                let t = e.now_ms;
+                e.wire.extend(
+                    out.iter()
+                        .map(|(i, d)| (t, FaultDir::ToTester, *i, d.clone())),
+                );
+            }
+            out
+        };
         self.queue(out);
         if let Some(f) = self.inbox.pop_front() {
             return Ok(f);

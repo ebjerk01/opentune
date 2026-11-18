@@ -43,9 +43,11 @@
 //!
 //! ## Recovery rules (see `docs/PROTOCOL-NOTES.md`, "TP2.0 hardening")
 //!
-//! * **Sequence numbers** run continuously per direction for the channel's
-//!   life (4 bits, `0xF` wraps to `0x0`); the first data frame after a
-//!   (re-)open synchronises the receive counter.
+//! * **Sequence numbers** start at 0 on every new channel and run
+//!   continuously per direction for the channel's life (4 bits, `0xF` wraps
+//!   to `0x0`). The receiver never re-synchronises on whatever frame comes
+//!   first: if the first frame was lost, the next one would be taken for the
+//!   start of the telegram.
 //! * **ACK loss on transmit.** After an ACK-requiring frame we wait the
 //!   module's `T1` (from its `A1`, at least [`ACK_WAIT_FLOOR_MS`], at most the
 //!   request timeout). Without the matching `0xB_` we send `A4` ("break:
@@ -65,7 +67,7 @@
 //!   and the next request sets up a new one. A module `A8` does the same.
 //!   Either way the module's KWP session is gone: callers restart it.
 //! * Every wait is bounded; no input makes this transport panic.
-use crate::protocol::diag::DiagTransport;
+use crate::protocol::diag::{is_response_pending, DiagTransport};
 use crate::protocol::isotp::CanLink;
 use crate::{Error, Result};
 use std::collections::VecDeque;
@@ -108,6 +110,18 @@ mod param {
 
 fn next_seq(seq: u8) -> u8 {
     (seq + 1) & 0x0F
+}
+
+/// The block size we honour for a requested one: at most 15 frames per ACK,
+/// and 0 ("no ACK until the last frame") also means 15. A longer block
+/// could not be retransmitted unambiguously: its replay would restart on
+/// the very sequence number the receiver expects next and be taken as new
+/// data.
+pub fn effective_block_size(bs: u8) -> u8 {
+    match bs {
+        0 => 0x0F,
+        b => b.min(0x0F),
+    }
 }
 
 fn is_data(b0: u8) -> bool {
@@ -182,8 +196,11 @@ struct Rx {
 }
 
 impl Rx {
+    /// A new channel: both sides number their data frames from 0.
     fn reset(&mut self) {
         *self = Rx {
+            expected: Some(0),
+            ack_seq: Some(0),
             at_boundary: true,
             ..Rx::default()
         };
@@ -245,8 +262,8 @@ pub struct VwTp20<L: CanLink + ?Sized = dyn CanLink> {
     /// Block size: before `open`, the one we *request* in our `A0` (the ECU
     /// should ACK-gate its transmissions to us every this many frames); after
     /// `open`, the one the ECU asked for in its `A1` (we wait for an ACK after
-    /// this many frames, clamped to 15 so the 4-bit sequence stays
-    /// unambiguous). 0 = only the last frame.
+    /// this many frames; see [`effective_block_size`]: 0 and values above
+    /// 15 both mean 15, so a retransmitted block stays unambiguous).
     pub block_size: u8,
     /// ECU-requested inter-frame separation (`T3`), as a raw timing byte.
     pub st_min: u8,
@@ -427,7 +444,7 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
     /// Store the module's `A1` parameters (the ones we honour when sending).
     fn take_params(&mut self, data: &[u8]) {
         if data.len() >= 5 {
-            self.block_size = data[1].min(0x0F);
+            self.block_size = effective_block_size(data[1]);
             self.t1 = data[2];
             self.st_min = data[4];
         }
@@ -680,7 +697,7 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
         telegram.push((payload.len() & 0xFF) as u8);
         telegram.extend_from_slice(payload);
 
-        let bs = self.block_size.min(0x0F) as u32;
+        let bs = effective_block_size(self.block_size) as u32;
         let mut idx = 0usize;
         let mut frames_in_block: u32 = 0;
         let (mut block_idx, mut block_seq) = (0usize, self.tx_seq);
@@ -881,7 +898,7 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
             // KWP/UDS responsePending (NRC 0x78) for *this* service: keep
             // waiting, with the extended P2* timeout. A 0x78 echoing another
             // service is returned for the client to flag as mis-correlated.
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 && resp[1] == req[0] {
+            if is_response_pending(req, &resp) {
                 pending += 1;
                 self.stats.response_pending += 1;
                 if pending > self.max_response_pending {
