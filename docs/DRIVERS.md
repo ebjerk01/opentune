@@ -319,6 +319,18 @@ switch) at 38400 baud, with only `AT` commands and no vehicle attached:
 - `ATSP` is stored in the adapter's EEPROM. The probe left it at protocol 6,
   which is where it started.
 
+**On a car (2026-11-18):** with the same clone on HS-CAN (`ATSP6`, 7E0/7E8),
+`opentune info` / `identify --driver elm327obd` read the battery voltage, ECU
+name, part number and VIN from a VW EDC17 1.6 TDI (EA189) on the first try:
+the first real-ECU exchange of this driver. Not yet exercised on a car: DTC
+read/clear, block reads and anything that needs security access.
+
+Observed with a separate script on the same clone (not this driver): after
+retargeting mid-session with `ATSH 7E1` (and `ATCRA 7E9`), going back to
+functional `ATSH 7DF` lost the engine-only PIDs until the next `ATZ`. The
+driver is not exposed to this: it resets with `ATZ` on every connect and
+addresses one ECU physically per session. A clean isolation test is pending.
+
 Not yet validated against a real ECU. The first car session (read-only, see
 [`FIRST-CAR-TEST.md`](FIRST-CAR-TEST.md)) should start with
 `plan_read_memory` and a small region.
