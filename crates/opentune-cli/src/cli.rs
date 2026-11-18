@@ -46,16 +46,17 @@ pub enum Command {
         #[command(subcommand)]
         action: ChecksumAction,
     },
-    /// Write a region through the safety orchestrator (backup → write → verify).
+    /// Write a region through the safety orchestrator (backup → write → verify),
+    /// or with --uds-module program a control module over UDS from a container.
     Flash {
         #[command(flatten)]
         conn: ConnectArgs,
         /// Address to write at (hex).
-        #[arg(long)]
-        addr: String,
+        #[arg(long, required_unless_present = "container")]
+        addr: Option<String>,
         /// File of the exact bytes to write at `addr`.
-        #[arg(long)]
-        data: PathBuf,
+        #[arg(long, required_unless_present = "container")]
+        data: Option<PathBuf>,
         /// Minimum battery mV gate (0 disables).
         #[arg(long, default_value_t = 12_000)]
         min_mv: u32,
@@ -74,6 +75,8 @@ pub enum Command {
         /// Write chunk size in bytes for the resumable path (0 = default).
         #[arg(long, default_value_t = 0)]
         chunk_size: usize,
+        #[command(flatten)]
+        module: Box<crate::commands::module_flash::ModuleFlashArgs>,
     },
     /// Full read via a driver, archived to the backup vault with ECU id.
     Dump {

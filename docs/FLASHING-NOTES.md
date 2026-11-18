@@ -1,5 +1,8 @@
 # Flashing Notes — Bosch EDC16 / EDC17 (VAG), end to end
 
+> The container-driven **UDS module flash** (`opentune flash --uds-module`,
+> `opentune_flash::module`) is described in [FLASHING.md](FLASHING.md).
+
 This is the real, step-by-step sequence an OpenTune driver runs to reflash a
 Bosch EDC16 (KWP2000) or EDC17 (UDS) engine ECU on a VAG vehicle, mapped to the
 concrete service clients in `opentune-core`:

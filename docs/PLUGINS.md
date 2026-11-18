@@ -346,8 +346,10 @@ becomes the script runner's `KeyProvider` for its SecurityAccess steps.
 Safety expectations for a CLI front end:
 
 - **The embedder owns every algorithm it registers.** OpenTune ships no OEM
-  seed/key algorithm and registers no seed-key resolver, so `--seedkey` fails
-  in the public build; checksum algorithms the public set lacks come only from
+  seed/key algorithm; the only id the public build resolves is the simulator's
+  test-only `udssim-test` (it unlocks nothing but the `udssim` driver), and an
+  embedder's resolvers are tried first. Any other `--seedkey` fails in the
+  public build; checksum algorithms the public set lacks come only from
   the embedder. Keep them in the embedder's own repository.
 - Extra commands that write, start a routine or attempt security access follow
   the same rules as desktop plugin commands: explicit target, explicit

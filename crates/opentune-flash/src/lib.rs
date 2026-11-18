@@ -17,12 +17,23 @@
 //!   target, the payload carries a checksum attestation bound to its bytes, and
 //!   the post-write read-back matches. See [`policy`] for the full contract and
 //!   its documented limitations.
+//!
+//! A third entry point programs a **control module over UDS** from a decoded
+//! flash container: [`module::flash_module`] (erase → RequestDownload →
+//! TransferData → RequestTransferExit → checksum routine per block, behind the
+//! same [`FlashSafetyPolicy`], resumable per erase region) and its dry run
+//! [`module::plan_module_flash`].
 pub mod hash;
+pub mod module;
 pub mod policy;
 pub mod resume;
 pub mod transcript;
 pub mod vault;
 
+pub use module::{
+    flash_module, flash_module_on, plan_module_flash, ModuleFlashOptions, ModuleFlashReport,
+    ModuleImage, ModuleProtocol,
+};
 pub use policy::{
     ChecksumAttestation, FlashSafetyPolicy, FlashTarget, PolicyViolation, ProgrammingProcedure,
     TargetIdentity, VoltagePolicy, WriteMode,

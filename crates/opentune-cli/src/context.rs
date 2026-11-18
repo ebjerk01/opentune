@@ -51,9 +51,14 @@ impl CliContext {
     }
 
     /// Resolve a seed-key handler id through the embedder's resolvers, in
-    /// order. The public build has none, so this is `None` there.
+    /// order, then the `udssim` simulator's test-only handler
+    /// (`udssim-test`, `seed XOR 0xA5` — it unlocks only the simulator). The
+    /// public build ships no other.
     pub fn seed_key(&self, id: &str) -> Option<Box<dyn SeedKey>> {
-        self.seedkeys.iter().find_map(|r| r(id))
+        self.seedkeys
+            .iter()
+            .find_map(|r| r(id))
+            .or_else(|| opentune_udssim::driver::test_seed_key(id))
     }
 
     /// [`seed_key`](Self::seed_key), erroring on an unknown id.

@@ -16,6 +16,7 @@
 //!
 //! [`UdsClient`]: opentune_core::protocol::UdsClient
 
+use crate::flash::{Ctx as FlashCtx, FlashConfig, FlashEcu, Outcome as FlashOutcome};
 use crate::security::{SecurityChecker, XorSecurity};
 use std::collections::BTreeMap;
 
@@ -183,6 +184,8 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone)]
 struct TransferState {
     is_download: bool,
+    /// Start address of the transfer (downloads are written here).
+    address: u64,
     /// The next expected `blockSequenceCounter` (starts at 0x01, wraps 0xFF→0x00).
     next_seq: u8,
     /// Bytes received so far (download).
@@ -210,6 +213,12 @@ pub struct UdsServer {
     memory: BTreeMap<u64, Vec<u8>>,
     /// Dynamically defined DIDs (0x2C): DID → ordered source elements.
     dynamic: BTreeMap<u16, Vec<DddidSource>>,
+    /// The request-seed (odd) level of the current unlock, if any.
+    unlocked_level: Option<u8>,
+    /// The optional flashable-ECU model (see [`crate::flash`]).
+    flash: Option<FlashEcu>,
+    /// `responsePending` frames to interpose before the last reply.
+    pending: usize,
 }
 
 impl Default for UdsServer {
@@ -242,7 +251,97 @@ impl UdsServer {
             transfer: None,
             memory: BTreeMap::new(),
             dynamic: BTreeMap::new(),
+            unlocked_level: None,
+            flash: None,
+            pending: 0,
         }
+    }
+
+    /// Turn this ECU into a flashable one (see [`crate::flash`]): programming
+    /// session, erase / check routines, download into a persistent flash
+    /// memory. Replaces any previous flash model.
+    pub fn enable_flash(&mut self, config: FlashConfig) {
+        if !self
+            .config
+            .supported_sessions
+            .contains(&config.programming_session)
+        {
+            self.config
+                .supported_sessions
+                .push(config.programming_session);
+        }
+        self.flash = Some(FlashEcu::new(config));
+    }
+
+    /// The flash model, if enabled (memory, stats, validity).
+    pub fn flash(&self) -> Option<&FlashEcu> {
+        self.flash.as_ref()
+    }
+
+    /// The flash model, mutably (e.g. to arm a fault mid-test).
+    pub fn flash_mut(&mut self) -> Option<&mut FlashEcu> {
+        self.flash.as_mut()
+    }
+
+    /// The request-seed (odd) level SecurityAccess is unlocked at, if any.
+    pub fn unlocked_level(&self) -> Option<u8> {
+        if self.security_unlocked {
+            self.unlocked_level
+        } else {
+            None
+        }
+    }
+
+    /// How many `responsePending` (0x78) frames the ECU sends before the reply
+    /// to the last request (a slow erase). Reading clears it. A transport
+    /// interposes them before the reply; see [`crate::SimTransport`].
+    pub fn take_pending(&mut self) -> usize {
+        std::mem::take(&mut self.pending)
+    }
+
+    /// Reboot (power cycle): default session, locked, transfers aborted.
+    /// Flash memory persists.
+    pub fn power_cycle(&mut self) {
+        self.session = 0x01;
+        self.security_unlocked = false;
+        self.unlocked_level = None;
+        self.current_seed = None;
+        self.transfer = None;
+        self.dynamic.clear();
+        if let Some(f) = self.flash.as_mut() {
+            f.on_reboot();
+        }
+    }
+
+    /// Handle one UDS request; `None` when the ECU sends no response at all
+    /// (an injected lost response or power loss of the flash model). Without
+    /// a flash model this is always `Some(`[`handle`](Self::handle)`)`.
+    pub fn respond(&mut self, req: &[u8]) -> Option<Vec<u8>> {
+        self.pending = 0;
+        if let Some(flash) = self.flash.as_mut() {
+            let ctx = FlashCtx {
+                session: self.session,
+                unlocked_level: if self.security_unlocked {
+                    self.unlocked_level
+                } else {
+                    None
+                },
+                generic_transfer_active: self.transfer.is_some(),
+            };
+            match flash.handle(req, ctx) {
+                FlashOutcome::Pass => {}
+                FlashOutcome::Reply(r) => {
+                    self.pending = flash.take_pending();
+                    return Some(r);
+                }
+                FlashOutcome::Silent => return None,
+                FlashOutcome::PowerLoss => {
+                    self.power_cycle();
+                    return None;
+                }
+            }
+        }
+        Some(self.dispatch(req))
     }
 
     /// Install the seed→key relationship the ECU enforces for 0x27. The checker
@@ -350,8 +449,14 @@ impl UdsServer {
         self.transfer.as_ref().map(|t| t.received.as_slice())
     }
 
-    /// Handle one UDS request, returning the raw UDS response bytes.
+    /// Handle one UDS request, returning the raw UDS response bytes. A
+    /// suppressed response (flash-model fault, see [`respond`](Self::respond))
+    /// comes back empty.
     pub fn handle(&mut self, req: &[u8]) -> Vec<u8> {
+        self.respond(req).unwrap_or_default()
+    }
+
+    fn dispatch(&mut self, req: &[u8]) -> Vec<u8> {
         let Some(&service) = req.first() else {
             // An empty request cannot carry a service id; answer generalReject
             // against SID 0 so the frame is still a well-formed negative response.
@@ -389,6 +494,7 @@ impl UdsServer {
         self.session = session;
         // Changing session relocks security (ISO 14229-1 §9.4.1).
         self.security_unlocked = false;
+        self.unlocked_level = None;
         self.current_seed = None;
         // Dynamically defined DIDs do not survive a session transition. ISO
         // 14229-1 requires at least the return to the default session to clear
@@ -407,6 +513,7 @@ impl UdsServer {
         // A reset returns the ECU to default session, locked.
         self.session = 0x01;
         self.security_unlocked = false;
+        self.unlocked_level = None;
         self.current_seed = None;
         self.transfer = None;
         self.dynamic.clear();
@@ -454,6 +561,20 @@ impl UdsServer {
             }
             None => neg(sid::READ_DATA_BY_ID, nrc::REQUEST_OUT_OF_RANGE),
         }
+    }
+
+    /// What an upload of `size` bytes at `address` hands out: the flash
+    /// model's memory (when it maps the span and allows reads), else the
+    /// mapped memory, else the historical deterministic ramp (byte `i` =
+    /// `i & 0xFF`) for unmapped addresses.
+    fn upload_source(&self, address: u64, size: usize) -> Vec<u8> {
+        let from_flash = self.flash.as_ref().and_then(|f| {
+            let addr = u32::try_from(address).ok()?;
+            f.config.readable.then(|| f.read(addr, size)).flatten()
+        });
+        from_flash
+            .or_else(|| self.read_memory(address, size))
+            .unwrap_or_else(|| (0..size).map(|i| (i & 0xFF) as u8).collect())
     }
 
     /// `size` bytes of mapped memory at `address`, if the span lies wholly
@@ -742,6 +863,7 @@ impl UdsServer {
             let expected = self.checker.expected_key(&seed, request_level);
             if key == expected.as_slice() {
                 self.security_unlocked = true;
+                self.unlocked_level = Some(request_level);
                 self.current_seed = None;
                 self.sec_attempts_left = self.config.max_sec_attempts;
                 // 67 <level>.
@@ -797,18 +919,25 @@ impl UdsServer {
         if addr_bytes == 0 || size_bytes == 0 || req.len() != 3 + addr_bytes + size_bytes {
             return neg(service, nrc::INCORRECT_LENGTH);
         }
+        let address = be_to_u64(&req[3..3 + addr_bytes]);
         let size = be_to_usize(&req[3 + addr_bytes..3 + addr_bytes + size_bytes]);
         if size == 0 {
             return neg(service, nrc::UPLOAD_DOWNLOAD_NOT_ACCEPTED);
         }
         let upload_remaining = if is_download {
+            // Downloads persist into the memory map, so a later upload /
+            // ReadMemoryByAddress reads them back. An unmapped target gets a
+            // fresh (erased, 0xFF) region.
+            if self.read_memory(address, size).is_none() {
+                self.memory.insert(address, vec![0xFF; size]);
+            }
             Vec::new()
         } else {
-            // Hand out a deterministic ramp for upload reads.
-            (0..size).map(|i| (i & 0xFF) as u8).collect()
+            self.upload_source(address, size)
         };
         self.transfer = Some(TransferState {
             is_download,
+            address,
             next_seq: 0x01,
             received: Vec::new(),
             upload_remaining,
@@ -833,7 +962,13 @@ impl UdsServer {
             return neg(sid::TRANSFER_DATA, nrc::WRONG_BLOCK_SEQUENCE_COUNTER);
         }
         if state.is_download {
+            let at = state.address + state.received.len() as u64;
             state.received.extend_from_slice(&req[2..]);
+            let data = req[2..].to_vec();
+            self.write_memory(at, &data);
+            let Some(state) = self.transfer.as_mut() else {
+                return neg(sid::TRANSFER_DATA, nrc::REQUEST_SEQUENCE_ERROR);
+            };
             state.next_seq = state.next_seq.wrapping_add(1);
             // 76 <blockSequenceCounter>.
             vec![0x76, seq]
@@ -1019,6 +1154,7 @@ mod tests {
         let mut s = UdsServer::new();
         s.transfer = Some(TransferState {
             is_download: true,
+            address: 0,
             next_seq: 0xFF,
             received: Vec::new(),
             upload_remaining: Vec::new(),

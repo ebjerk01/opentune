@@ -33,6 +33,16 @@
 //!   RoutineControl (0x31), RequestDownload /
 //!   RequestUpload (0x34 / 0x35), TransferData (0x36, with block-counter
 //!   tracking), RequestTransferExit (0x37) and TesterPresent (0x3E).
+//! - [`flash::FlashEcu`] — an optional **flashable ECU** model
+//!   ([`UdsServer::enable_flash`]): programming session with preconditions,
+//!   programming-level SecurityAccess, eraseMemory (0xFF00) / checksum (0x0202,
+//!   configurable) / checkProgrammingDependencies (0xFF01) routines, download
+//!   into a persistent flash memory with ISO block-counter rules, NRC 0x78 on
+//!   slow erase, and fault injection (power loss mid-transfer, lost response,
+//!   erase refused, corrupt write, failing checksum).
+//! - [`driver::UdssimDriver`] — the `udssim` registry driver: an in-process
+//!   flashable ECU behind the `Interface` trait (diag, UDS block read/write,
+//!   a documented test seed-key provider), so front ends run offline.
 //! - [`transport::SimTransport`] — wraps the server as an `opentune_core`
 //!   [`DiagTransport`], so [`UdsClient`] drives it directly.
 //! - [`doip::DoIpSimStream`] — a loopback ISO 13400 DoIP entity, so the real
@@ -48,6 +58,7 @@
 //! [`UdsClient`]: opentune_core::protocol::UdsClient
 //! [`UdsServer::handle`]: server::UdsServer::handle
 //! [`UdsServer::set_memory`]: server::UdsServer::set_memory
+//! [`UdsServer::enable_flash`]: server::UdsServer::enable_flash
 //! [`DiagTransport`]: opentune_core::protocol::DiagTransport
 //! [`DoIpTransport`]: opentune_core::protocol::DoIpTransport
 //! [`pylessard/python-udsoncan`]: https://github.com/pylessard/python-udsoncan
@@ -57,14 +68,18 @@
 #![warn(missing_docs)]
 
 pub mod doip;
+pub mod driver;
 pub mod fault;
+pub mod flash;
 pub mod security;
 pub mod server;
 pub mod trace;
 pub mod transport;
 
 pub use doip::DoIpSimStream;
+pub use driver::{TestSeedKey, UdssimDriver};
 pub use fault::{Fault, FaultPlan};
+pub use flash::{FlashConfig, FlashEcu, FlashFaults, FlashRegion, FlashStats};
 pub use security::{AlwaysReject, SecurityChecker, XorSecurity};
 pub use server::{DddidConfig, DtcRecord, ServerConfig, UdsServer, DYNAMIC_DID_RANGE};
 pub use trace::{Direction, Trace, TraceEntry};

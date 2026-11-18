@@ -74,38 +74,55 @@ impl SimTransport {
 }
 
 impl DiagTransport for SimTransport {
-    fn request(&mut self, req: &[u8], _timeout_ms: u64) -> Result<Vec<u8>> {
+    fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
         self.request_count += 1;
         self.trace.push(Direction::ClientRequest, req, None);
         let sid = req.first().copied().unwrap_or(0);
+        let pending_frame = fault::negative(sid, 0x78);
 
         let resp = match self.faults.take(sid) {
             Some(Fault::NegativeResponse(code)) => {
                 // The ECU refused: do not run the service.
-                fault::negative(sid, code)
+                Some(fault::negative(sid, code))
             }
             Some(Fault::ResponsePending { count }) => {
                 // Interpose `count` 0x78 frames (a correct transport drains them
                 // without re-sending), then return the one real answer.
-                let pending = fault::negative(sid, 0x78);
                 for _ in 0..count {
                     self.trace.push(
                         Direction::ServerPending,
-                        &pending,
+                        &pending_frame,
                         Some("responsePending".into()),
                     );
                 }
-                self.server.handle(req)
+                self.server.respond(req)
             }
             Some(other) => {
                 // WrongEcho / Truncate / MisCorrelate: shape the real response.
-                let canonical = self.server.handle(req);
-                fault::transform_response(sid, canonical, other)
+                self.server
+                    .respond(req)
+                    .map(|canonical| fault::transform_response(sid, canonical, other))
             }
-            None => self.server.handle(req),
+            None => self.server.respond(req),
         };
 
-        self.trace.push(Direction::ServerResponse, &resp, None);
-        Ok(resp)
+        // The ECU itself may answer responsePending first (a slow erase in the
+        // flash model); a correct transport drains those too.
+        for _ in 0..self.server.take_pending() {
+            self.trace.push(
+                Direction::ServerPending,
+                &pending_frame,
+                Some("responsePending (ECU)".into()),
+            );
+        }
+
+        match resp {
+            Some(resp) => {
+                self.trace.push(Direction::ServerResponse, &resp, None);
+                Ok(resp)
+            }
+            // No response at all (lost frame / power loss): the tester times out.
+            None => Err(opentune_core::Error::Timeout(timeout_ms)),
+        }
     }
 }

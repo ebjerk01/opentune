@@ -12,6 +12,7 @@ pub mod device;
 pub mod engines;
 pub mod formats;
 pub mod image;
+pub mod module_flash;
 pub mod reference;
 
 /// Run one parsed core subcommand.
@@ -38,9 +39,30 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             resume,
             transcript,
             chunk_size,
-        } => device::flash(
-            ctx, conn, addr, data, min_mv, vault, resume, transcript, chunk_size,
-        ),
+            module,
+        } => {
+            if module.uds_module {
+                return module_flash::run(
+                    ctx,
+                    module_flash::FlashCommon {
+                        conn,
+                        addr,
+                        data,
+                        min_mv,
+                        vault,
+                        resume,
+                        transcript,
+                    },
+                    *module,
+                );
+            }
+            let (Some(addr), Some(data)) = (addr, data) else {
+                anyhow::bail!("flash needs --addr and --data (or --uds-module --container)");
+            };
+            device::flash(
+                ctx, conn, addr, data, min_mv, vault, resume, transcript, chunk_size,
+            )
+        }
         Command::Dump {
             conn,
             addr,

@@ -46,6 +46,11 @@ pub(crate) fn registry() -> Registry {
     r.register("vcar", "Virtual car (offline simulator)", || {
         Box::new(opentune_driver_vcar::VcarDriver::new())
     });
+    r.register(
+        opentune_udssim::driver::DRIVER_ID,
+        opentune_udssim::driver::DRIVER_NAME,
+        || Box::new(opentune_udssim::UdssimDriver::new()),
+    );
     r
 }
 
