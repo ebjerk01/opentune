@@ -9,7 +9,7 @@ desktop app bundles this folder and opens its file pickers here.
 | Pack | Contents | License | Sources |
 |------|----------|---------|---------|
 | [`generic-obd2`](generic-obd2/) | Auto-scan module lists (ISO 15765-4 physical `0x7E0`-`0x7E7` and functional `0x7DF`), a mode-01 logger for 34 common PIDs, 6 service scripts (readiness, stored / pending / permanent DTCs, VIN, **mode-04 clear = write**) | GPL-3.0-or-later | SAE J1979 / ISO 15031-5, ISO 15765-4 |
-| [`iso14229-identification`](iso14229-identification/) | Logger def of the identification DIDs `0xF180`-`0xF19F`, 4 read-only DID scripts (VIN, active session, spare part number, ECU serial) | GPL-3.0-or-later | ISO 14229-1 Annex C; names cross-checked with [opendbc `uds.py`](https://github.com/commaai/opendbc/blob/master/opendbc/car/uds.py) (MIT) |
+| [`iso14229-identification`](iso14229-identification/) | Logger def of the identification DIDs `0xF180`-`0xF19F` (shown as text / BCD dates / hex records in the live logger), 4 read-only DID scripts (VIN, active session, spare part number, ECU serial) | GPL-3.0-or-later | ISO 14229-1 Annex C; names cross-checked with [opendbc `uds.py`](https://github.com/commaai/opendbc/blob/master/opendbc/car/uds.py) (MIT) |
 | [`vag-modules`](vag-modules/) | Auto-scan list of 7 VAG modules on UDS/CAN (engine, DSG, airbag, EPS, ACC radar, front camera, Haldex) | GPL-3.0-or-later | [opendbc](https://github.com/commaai/opendbc/tree/master/opendbc/car/volkswagen) (MIT, © comma.ai), [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) (BSD-2-Clause, © Brian Ledbetter and contributors) — cited per entry |
 | [`_template`](_template/) | Copy-me scaffold (not loaded: `_`-prefixed folders are skipped) | GPL-3.0-or-later | — |
 

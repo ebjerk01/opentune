@@ -272,9 +272,81 @@ pub async fn obd_read(
     read_impl(&hub, conn, pids)
 }
 
+/// Header every Dashboard recording starts with: the Live-log CSV layout the
+/// Log viewer reads (`opentune_logview`, "OpenTune Live log").
+pub const RECORD_HEADER: &str = "ts,param_id,name,raw,value,units,note,text";
+
+fn record_write(path: &str, csv: &str, append: bool) -> Result<Value, String> {
+    use std::io::Write;
+    if !path.to_ascii_lowercase().ends_with(".csv") {
+        return Err(format!("a recording is a .csv file, not {path}"));
+    }
+    if !append && !csv.starts_with(RECORD_HEADER) {
+        return Err("a new recording must start with the Live-log CSV header".into());
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(append)
+        .truncate(!append)
+        .open(path)
+        .map_err(|e| crate::common::write_error(path, &e))?;
+    f.write_all(csv.as_bytes())
+        .map_err(|e| crate::common::write_error(path, &e))?;
+    let bytes = f.metadata().map(|m| m.len()).unwrap_or(0);
+    Ok(json!({ "path": path, "bytes": bytes }))
+}
+
+/// Dashboard **Record**: create (`append: false`, `csv` starting with
+/// [`RECORD_HEADER`]) or extend (`append: true`) a Live-log CSV at `path`.
+/// The panel batches the polled rows and flushes them about once a second.
+/// Returns `{ path, bytes }` (the file size after the write).
+#[tauri::command]
+pub async fn dash_record_write(path: String, csv: String, append: bool) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || record_write(&path, &csv, append))
+        .await
+        .map_err(|e| format!("record task failed: {e}"))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recording_writes_a_live_log_the_log_viewer_opens() {
+        let dir = std::env::temp_dir().join(format!("ot-dash-rec-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("rec.csv").to_string_lossy().into_owned();
+        // The panel's flushes: header first, then batches of rows.
+        record_write(&p, &format!("{RECORD_HEADER}\n"), false).unwrap();
+        record_write(
+            &p,
+            "1700000000000,rpm,Engine speed,,800,rpm,,\n\
+             1700000000000,vin,VIN,,,text,,WVWZZZ00000000000\n",
+            true,
+        )
+        .unwrap();
+        let r = record_write(&p, "1700000000500,rpm,Engine speed,,900,rpm,,\n", true).unwrap();
+        assert!(r["bytes"].as_u64().unwrap() > 0);
+        let log = opentune_logview::parse_file(
+            std::path::Path::new(&p),
+            &opentune_logview::ParseOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(log.format, opentune_logview::LogFormat::OpentuneLong);
+        assert_eq!(log.t, vec![0.0, 0.5]);
+        assert_eq!(log.channels.len(), 1, "the VIN is listed, not plotted");
+        assert_eq!(log.channels[0].values, vec![800.0, 900.0]);
+        // A new recording truncates; refusals for other files / no header.
+        record_write(&p, &format!("{RECORD_HEADER}\n"), false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&p).unwrap(),
+            format!("{RECORD_HEADER}\n")
+        );
+        assert!(record_write(&dir.join("x.bin").to_string_lossy(), "", true).is_err());
+        assert!(record_write(&p, "1,rpm\n", false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     use crate::adapter::Opener;
     use opentune_core::protocol::DiagTransport;
     use opentune_core::RawDiag;

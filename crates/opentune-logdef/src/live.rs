@@ -26,7 +26,7 @@
 //! adds a faster mode over UDS `0x2C` (DynamicallyDefineDataIdentifier) that
 //! reads many channels with one request and falls back to this loop.
 
-use crate::model::{Addressing, ConversionFit, LogDef, LogParam};
+use crate::model::{Addressing, ConversionFit, LogDef, LogParam, ValueKind};
 use opentune_core::ecudef::{DataType, Endian};
 use opentune_core::RawDiag;
 use std::io::Write;
@@ -54,6 +54,80 @@ pub struct Sample {
     pub units: String,
     /// Why `raw`/`value` is missing, or any caveat (empty when fully decoded).
     pub note: String,
+    /// The decoded text of a text channel ([`LogParam::value_kind`] not
+    /// `Number`); `raw` and `value` are then empty.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub text: Option<String>,
+}
+
+impl Sample {
+    /// The channel answered: a number or a text came back.
+    pub fn answered(&self) -> bool {
+        self.raw.is_some() || self.value.is_some() || self.text.is_some()
+    }
+}
+
+/// Decode a whole record as text of the given kind. Returns the text and a
+/// caveat (empty when clean). [`ValueKind::Number`] yields hex, like `Hex`.
+pub fn decode_text(kind: ValueKind, bytes: &[u8]) -> (String, String) {
+    match kind {
+        ValueKind::Text => {
+            let end = bytes
+                .iter()
+                .rposition(|b| !matches!(b, 0x00 | 0xFF | b' '))
+                .map_or(0, |i| i + 1);
+            let mut odd = 0usize;
+            let text: String = bytes[..end]
+                .iter()
+                .map(|&b| {
+                    if (0x20..0x7F).contains(&b) {
+                        b as char
+                    } else {
+                        odd += 1;
+                        '.'
+                    }
+                })
+                .collect();
+            let note = if odd > 0 {
+                format!("{odd} non-printable byte(s) shown as '.'")
+            } else {
+                String::new()
+            };
+            (text, note)
+        }
+        ValueKind::Bcd => {
+            let mut digits: Vec<u8> = bytes.iter().flat_map(|b| [b >> 4, b & 0x0F]).collect();
+            while digits.last() == Some(&0x0F) {
+                digits.pop();
+            }
+            let bad = digits.iter().filter(|d| **d > 9).count();
+            let text: String = digits
+                .iter()
+                .map(|d| char::from_digit(u32::from(*d), 16).unwrap_or('?'))
+                .collect::<String>()
+                .to_ascii_uppercase();
+            let note = if bad > 0 {
+                format!("not valid BCD: {bad} nibble(s) above 9")
+            } else {
+                String::new()
+            };
+            (text, note)
+        }
+        ValueKind::Hex | ValueKind::Number => (
+            bytes.iter().map(|b| format!("{b:02X}")).collect(),
+            String::new(),
+        ),
+    }
+}
+
+/// Fill a text channel's sample from its record bytes.
+fn apply_text(s: &mut Sample, p: &LogParam, bytes: &[u8]) {
+    let (text, note) = decode_text(p.value_kind, bytes);
+    s.text = Some(text);
+    s.note = note;
+    if s.units.is_empty() {
+        s.units = p.value_kind.as_str().into();
+    }
 }
 
 /// Decode `bytes` as an unsigned integer (up to 8 bytes) with the given endian.
@@ -136,12 +210,18 @@ pub(crate) fn blank_sample(p: &LogParam) -> Sample {
         value: None,
         units: p.units.clone(),
         note: String::new(),
+        text: None,
     }
 }
 
 /// Decode a UDS DID's data record (the bytes after `62 <did>`): up to the
-/// first 8 bytes as one integer in the parameter's endian, then convert.
+/// first 8 bytes as one integer in the parameter's endian, then convert; a
+/// text channel decodes the whole record as text.
 pub(crate) fn decode_did_record(s: &mut Sample, p: &LogParam, data: &[u8]) {
+    if !p.value_kind.is_number() {
+        apply_text(s, p, data);
+        return;
+    }
     let raw = decode_uint(data, p.endian);
     s.raw = Some(raw);
     apply_conversion(s, p, raw);
@@ -161,6 +241,10 @@ pub(crate) fn decode_memory(
             "short response, expected {length} data byte(s), got {}: {data:02X?}",
             data.len()
         );
+        return;
+    }
+    if !p.value_kind.is_number() && bit.is_none() {
+        apply_text(s, p, &data[..usize::from(length)]);
         return;
     }
     let word = decode_uint(data, p.endian);
@@ -206,7 +290,13 @@ pub(crate) fn poll_param(diag: &mut dyn RawDiag, p: &LogParam) -> Sample {
             let req = [0x01u8, *pid];
             match diag.request(&req) {
                 Ok(resp) => {
-                    if resp.len() >= 3 && resp[0] == 0x41 && resp[1] == *pid {
+                    if resp.len() >= 3
+                        && resp[0] == 0x41
+                        && resp[1] == *pid
+                        && !p.value_kind.is_number()
+                    {
+                        apply_text(&mut s, p, &resp[2..]);
+                    } else if resp.len() >= 3 && resp[0] == 0x41 && resp[1] == *pid {
                         let raw = decode_uint(&resp[2..], p.endian);
                         s.raw = Some(raw);
                         apply_conversion(&mut s, p, raw);
@@ -275,6 +365,25 @@ pub fn poll_once(diag: &mut dyn RawDiag, def: &LogDef, ids: &[&str]) -> Vec<Samp
         .collect()
 }
 
+/// Header of the CSV [`poll_to_csv`] and [`LiveSession::run_csv`](crate::LiveSession::run_csv)
+/// write. `text` (last, so readers that index the first seven columns keep
+/// working) carries a text channel's decoded text; its `value` is empty.
+pub const CSV_HEADER: &str = "round,param_id,name,raw,value,units,note,text";
+
+/// One CSV row (single-line and comma-safe).
+pub(crate) fn write_csv_row(out: &mut impl Write, round: usize, s: &Sample) -> std::io::Result<()> {
+    let raw = s.raw.map(|v| v.to_string()).unwrap_or_default();
+    let value = s.value.map(|v| v.to_string()).unwrap_or_default();
+    let name = s.name.replace(',', ";");
+    let note = s.note.replace(['\n', ','], " ");
+    let text = s.text.as_deref().unwrap_or("").replace(['\n', ','], " ");
+    writeln!(
+        out,
+        "{round},{},{name},{raw},{value},{},{note},{text}",
+        s.param_id, s.units
+    )
+}
+
 /// Poll `rounds` times, writing a CSV (header + one row per sample per round) to
 /// `out`. Between rounds it sleeps `interval_ms` (0 = no sleep, e.g. in tests).
 pub fn poll_to_csv(
@@ -285,19 +394,10 @@ pub fn poll_to_csv(
     interval_ms: u64,
     out: &mut impl Write,
 ) -> std::io::Result<()> {
-    writeln!(out, "round,param_id,name,raw,value,units,note")?;
+    writeln!(out, "{CSV_HEADER}")?;
     for r in 0..rounds {
         for s in poll_once(diag, def, ids) {
-            let raw = s.raw.map(|v| v.to_string()).unwrap_or_default();
-            let value = s.value.map(|v| v.to_string()).unwrap_or_default();
-            // Keep the CSV single-line and comma-safe.
-            let name = s.name.replace(',', ";");
-            let note = s.note.replace(['\n', ','], " ");
-            writeln!(
-                out,
-                "{r},{},{name},{raw},{value},{},{note}",
-                s.param_id, s.units
-            )?;
+            write_csv_row(out, r, &s)?;
         }
         if interval_ms > 0 && r + 1 < rounds {
             std::thread::sleep(std::time::Duration::from_millis(interval_ms));

@@ -27,12 +27,12 @@
     defPath: null,
     params: [], // [{id,name,units}]
     timer: null, // setInterval handle while live
-    rows: [], // accumulated samples for CSV: {ts,paramId,name,raw,value,units,note}
+    rows: [], // accumulated samples for CSV: {ts,paramId,name,raw,value,units,note,text}
     liveCells: {}, // paramId -> { value, units, note } <td> elements (in-place update)
     started: 0, // ticks since Start (for the status line)
     fast: false, // the running stream is a log_start session
   };
-  const { logModeBadge, fmtLogRate } = window.OTUtil;
+  const { logModeBadge, fmtLogRate, liveLogRow, liveLogCsv, liveShown } = window.OTUtil;
 
   // ---- build the nav item + panel -----------------------------------------
   function mount() {
@@ -385,22 +385,14 @@
     samples.forEach((s) => {
       const cell = S.liveCells[s.paramId];
       if (cell) {
-        let shown = "—";
-        if (s.value != null) shown = fmtNum(s.value);
-        else if (s.raw != null) shown = String(s.raw);
-        cell.value.textContent = shown;
+        // Text channels (identification DIDs) show their decoded text.
+        cell.value.textContent = liveShown(s, fmtNum);
+        cell.value.style.textAlign = s.text != null ? "left" : "right";
+        cell.value.classList.toggle("live-text", s.text != null);
         if (s.units) cell.units.textContent = s.units;
         cell.note.textContent = s.note || "";
       }
-      S.rows.push({
-        ts,
-        paramId: s.paramId,
-        name: s.name,
-        raw: s.raw == null ? "" : s.raw,
-        value: s.value == null ? "" : s.value,
-        units: s.units || "",
-        note: s.note || "",
-      });
+      S.rows.push(liveLogRow(ts, s));
     });
     status(`live — ${S.started} tick(s), ${S.rows.length} row(s)`);
   }
@@ -413,16 +405,7 @@
   // ---- CSV export ----------------------------------------------------------
   function saveCsv() {
     if (!S.rows.length) return status("nothing captured yet", true);
-    const head = ["ts", "param_id", "name", "raw", "value", "units", "note"];
-    const q = (v) => {
-      const s = String(v == null ? "" : v);
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
-    const lines = [head.join(",")];
-    S.rows.forEach((r) => {
-      lines.push([r.ts, r.paramId, r.name, r.raw, r.value, r.units, r.note].map(q).join(","));
-    });
-    const csv = lines.join("\n") + "\n";
+    const csv = liveLogCsv(S.rows);
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

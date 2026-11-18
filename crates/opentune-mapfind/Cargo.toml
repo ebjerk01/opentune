@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
-description = "Single-image calibration map finder: axis/header heuristics that propose candidate MapDefs with a score and the evidence."
+description = "Single-image calibration map finder (axis/header heuristics that propose candidate MapDefs with a score and the evidence) and content-signature relocation of a definition onto sibling software."
 
 [dependencies]
 opentune-core = { path = "../opentune-core" }

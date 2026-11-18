@@ -369,6 +369,11 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
 .tile { background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; padding: 11px 13px 9px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .tile.na { opacity: .5; }
+/* Text tiles (VIN, identification): the text itself, no sparkline. */
+.tile.text .t-val { font-size: 15px; word-break: break-all; }
+.tile.text .spark { visibility: hidden; }
+.live-text { font-family: var(--mono); word-break: break-all; }
+#dashRec.rec-on { color: var(--bad); border-color: var(--bad); }
 .t-label { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 .t-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }

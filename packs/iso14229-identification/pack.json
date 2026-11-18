@@ -1,7 +1,7 @@
 {
   "id": "iso14229-identification",
   "name": "ISO 14229-1 identification DIDs",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "maker": "Any",
   "platform": "UDS (ISO 14229-1)",
   "vehicles": [

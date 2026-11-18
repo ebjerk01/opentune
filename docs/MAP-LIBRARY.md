@@ -311,6 +311,49 @@ A stock/tuned pair of one 02E software would settle them
 
 ---
 
+## Relocating maps to sibling software
+
+The addresses above are valid for one software each. For a sibling software of
+the same family (tables moved, calibration different), relocate the definition
+from the read it was built for onto your read:
+
+```sh
+opentune ecudefs relocate --def siemens-pcr21 --source casm2k30.bin \
+    --image my_casm2l95.bin -o my-pcr21.json [--min-confidence 0.6] [--evidence]
+```
+
+Each map is located by a content signature taken from the source read
+(`opentune_mapfind::relocate`): stored axes and an inline dimension header
+**must** be byte-identical; cell values may differ (scored by identical cells
+and shape correlation); unique byte windows around the map that moved by the
+same shift ("bracketed") and neighbouring maps with the same shift add
+evidence. Ambiguous (two candidates within 0.1), low-confidence and
+already-claimed locations are **refused**; two maps that are byte-identical in
+the source are placed only by position. The derived definition keeps only the
+relocated maps; every map's notes carry the shift, a confidence score, the
+evidence and an honesty label never above the source map's.
+
+Measured on the fixture reads (`crates/opentune-mapfind/tests/relocate_fixtures.rs`,
+default settings; precision/recall against the documented offsets):
+
+| Source def / read | Target read | Placed | Precision | Recall |
+|---|---|---|---|---|
+| PCR2.1 CASM2K30 | CASM2L95, owner's read (1 byte short at the start) | 47/47 | 1.00 | 1.00 (47/47) |
+| PCR2.1 CASM2K30 | CASM2L95, second dataset | 33/47 | 1.00 | 0.70 |
+| DQ250 `02E300041N` | `02E300042F` / `042G` (group A +0x15A6, drive-off) | 21/31 each | 1.00 | 1.00 (11/11) |
+| DQ250 `02E300041N` | `02E300046K` / `042M` (same build, other engine) | 8 / 17 of 31 | 1.00 | 0.26 / 0.55 |
+| DQ250 `02E300041N` | R32 / `02E300011C` | 1/31 each | 1.00 | 0.09 / 1.00 |
+| EDC16U34 `1037382088` | P447 `1037381814` / `389289` | 3 / 2 of 18 | no ground truth | — |
+
+The PCR2.1 truth is one constant shift per table family (A/B +0x7D8, C +0x5F8,
+D +0xB18 on the full read), pinned by byte-identical tables at both ends of
+each family. On EDC16 most refusals are real differences (torque limiter,
+boost limiter and duration tables have changed axes in the siblings) or genuine
+ambiguity (the driver's-wish family exists twice); the relocated conversion map
+is one the sibling tunes changed. On `02E300042F`/`G` the content also places
+group B (immediately in front of group A); those placements have no external
+ground truth.
+
 ## Reproducing / validating
 
 ```bash

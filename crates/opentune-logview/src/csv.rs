@@ -3,9 +3,11 @@
 //! Two layouts are understood:
 //!
 //! - **OpenTune Live log** (long format), as written by the desktop *Live log*
-//!   panel: `ts,param_id,name,raw,value,units,note` with one row per parameter
-//!   per tick and `ts` in Unix milliseconds. Rows sharing a `ts` become one
-//!   sample; each `param_id` becomes a channel.
+//!   panel: `ts,param_id,name,raw,value,units,note[,text]` with one row per
+//!   parameter per tick and `ts` in Unix milliseconds. Rows sharing a `ts`
+//!   become one sample; each `param_id` becomes a channel. The optional
+//!   trailing `text` column carries text channels (identification DIDs, whose
+//!   `value` is empty): they are listed in the notes, not plotted.
 //! - **Wide CSV**: one column per channel, optionally a time column. Channel
 //!   units come from a trailing `[unit]` / `(unit)` in the header name or from
 //!   a units row directly under the header.
@@ -316,6 +318,7 @@ pub fn parse(text: &str, opts: &ParseOptions) -> Result<Log> {
             has("name"),
             val,
             has("units"),
+            has("text"),
             opts,
             &mut notes,
         )?
@@ -372,10 +375,14 @@ fn pivot_long(
     name: Option<usize>,
     val: usize,
     units: Option<usize>,
+    text: Option<usize>,
     opts: &ParseOptions,
     notes: &mut Vec<String>,
 ) -> Result<Log> {
     let n = cols[ts].cells.len();
+    // Per id: did any row carry a number, and the last text (text channels).
+    let mut numeric: Vec<bool> = Vec::new();
+    let mut texts: Vec<Option<String>> = Vec::new();
     let mut ids: Vec<String> = Vec::new();
     let mut id_index = std::collections::HashMap::new();
     let mut labels: Vec<(String, String)> = Vec::new(); // (name, unit) per id
@@ -400,6 +407,8 @@ fn pivot_long(
             for r in rows.iter_mut() {
                 r.push(f64::NAN);
             }
+            numeric.push(false);
+            texts.push(None);
             ids.len() - 1
         });
         if labels[k].1.is_empty() {
@@ -413,9 +422,12 @@ fn pivot_long(
             last_ts = Some(ts_s.clone());
         }
         if let Some(v) = num(&cols[val].cells[i], false) {
+            numeric[k] = true;
             if let Some(row) = rows.last_mut() {
                 row[k] = v;
             }
+        } else if let Some(t) = text.map(|c| &cols[c].cells[i]).filter(|s| !s.is_empty()) {
+            texts[k] = Some(t.clone());
         }
     }
     if bad_time > 0 {
@@ -456,7 +468,24 @@ fn pivot_long(
                 .collect(),
         });
     }
-    log.channels = channels;
+    // Text channels (identification DIDs) have nothing to plot: list them with
+    // their last text instead of showing an empty trace.
+    let mut shown_text = Vec::new();
+    let mut kept = Vec::with_capacity(channels.len());
+    for (k, ch) in channels.into_iter().enumerate() {
+        match &texts[k] {
+            Some(t) if !numeric[k] => shown_text.push(format!("{} = {t}", ch.name)),
+            _ => kept.push(ch),
+        }
+    }
+    if !shown_text.is_empty() {
+        notes.push(format!(
+            "{} text channel(s) not plotted (last value): {}",
+            shown_text.len(),
+            shown_text.join("; ")
+        ));
+    }
+    log.channels = kept;
     Ok(log)
 }
 
@@ -1000,6 +1029,27 @@ mod tests {
         let c = log.channel("Coolant").unwrap();
         assert_eq!(c.values[0], 50.0);
         assert!(c.values[1].is_nan());
+    }
+
+    #[test]
+    fn live_log_text_channels_are_listed_not_plotted() {
+        // The `text` column is optional and last: older 7-column logs still parse.
+        let csv = "ts,param_id,name,raw,value,units,note,text\n\
+            1700000000000,P1,Engine speed,3200,800,rpm,,\n\
+            1700000000000,F190,VIN,,,text,,WVWZZZ00000000000\n\
+            1700000000500,P1,Engine speed,3600,900,rpm,,\n\
+            1700000000500,F190,VIN,,,text,,WVWZZZ00000000000\n";
+        let log = p(csv);
+        assert_eq!(log.format, LogFormat::OpentuneLong);
+        assert_eq!(log.channels.len(), 1);
+        assert_eq!(log.channels[0].values, vec![800.0, 900.0]);
+        assert!(
+            log.notes
+                .iter()
+                .any(|n| n.contains("VIN = WVWZZZ00000000000")),
+            "{:?}",
+            log.notes
+        );
     }
 
     #[test]

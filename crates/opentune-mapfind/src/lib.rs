@@ -29,6 +29,10 @@
 //! *raw* values, and [`MapCandidate::to_mapdef`] marks the produced
 //! [`MapDef`] as an unverified candidate in its `notes`.
 //!
+//! [`relocate`] is the companion for a definition that already exists: it
+//! moves the maps of a definition built for one software onto a sibling
+//! software's read by content signature (axes/header, cells, surroundings).
+//!
 //! Ideas credited (re-implemented, no code copied): the general approach of
 //! scanning for monotonic axis pairs and promoting the following block to a
 //! table, and of labelling tables only probabilistically, follows
@@ -53,6 +57,8 @@
 use opentune_core::ecudef::{AxisDef, DataType, Endian, MapDef, Scaling};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
+
+pub mod relocate;
 
 /// How a candidate was located in the image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

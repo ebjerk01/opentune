@@ -666,6 +666,37 @@ pub enum EcudefsAction {
         #[arg(long)]
         warnings: bool,
     },
+    /// Relocate a definition's maps onto a sibling software's read by content
+    /// signature (axes/header must match; cell values may differ) and emit a
+    /// derived definition with per-map evidence and confidence. Ambiguous and
+    /// low-confidence maps are refused, never guessed.
+    Relocate {
+        /// Definition id (looked up in --ecudefs) or a definition *.json file,
+        /// built for the --source read.
+        #[arg(long)]
+        def: String,
+        /// The read the definition's addresses are valid for (software A).
+        #[arg(long)]
+        source: PathBuf,
+        /// The sibling read to relocate the maps into (software B).
+        #[arg(long)]
+        image: PathBuf,
+        /// Write the derived definition (only the relocated maps) here.
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+        /// Refuse placements below this confidence (0..1).
+        #[arg(long, default_value_t = 0.6)]
+        min_confidence: f64,
+        /// Directory of ECU definitions (for an id in --def).
+        #[arg(long, default_value = "ecudefs")]
+        ecudefs: PathBuf,
+        /// Print the per-map evidence.
+        #[arg(long)]
+        evidence: bool,
+        /// Print the full result as JSON instead of the table.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]

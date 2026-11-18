@@ -11,7 +11,7 @@ use roxmltree::{Document, Node};
 use crate::convert::{fit_equation, parse_address, storage_type};
 use crate::model::{
     Addressing, AltAddress, Conversion, ConvertFactor, EcuGroup, LogDef, LogParam, ProtocolGroup,
-    ProtocolKind, SourceFormat,
+    ProtocolKind, SourceFormat, ValueKind,
 };
 use crate::{Error, Result};
 use opentune_core::ecudef::{DataType, Endian};
@@ -166,7 +166,9 @@ fn parse_logger(root: Node) -> Result<LogDef> {
             let mode = params.attribute("mode");
             let kind = classify(&id, mode, &mut warnings);
             for p in params.children().filter(|n| n.has_tag_name("parameter")) {
-                if let Some(param) = logger_parameter(p, &kind, &mut warnings) {
+                if let Some(param) =
+                    logger_parameter(p, &kind, &mut warnings).map(|x| with_kind(x, p))
+                {
                     std_params.push(param);
                 }
             }
@@ -395,18 +397,21 @@ fn logger_ecuparam(
             &format!("ecuparam '{id}' / ecu '{ecu_id}'"),
             warnings,
         );
-        let param = finish_param(
-            id.clone(),
-            name.clone(),
-            desc.clone(),
-            kind.clone(),
-            addressing,
-            st,
-            endian,
-            conversions.clone(),
-            depends_on.clone(),
-            None,
-            None,
+        let param = with_kind(
+            finish_param(
+                id.clone(),
+                name.clone(),
+                desc.clone(),
+                kind.clone(),
+                addressing,
+                st,
+                endian,
+                conversions.clone(),
+                depends_on.clone(),
+                None,
+                None,
+            ),
+            ep,
         );
         match groups
             .iter_mut()
@@ -467,7 +472,9 @@ fn parse_ecus(root: Node) -> Result<LogDef> {
                 .map(str::to_string);
             let mut params = Vec::new();
             for p in ecu.children().filter(|n| n.has_tag_name("parameter")) {
-                if let Some(param) = ecus_parameter(p, &kind, &mut warnings) {
+                if let Some(param) =
+                    ecus_parameter(p, &kind, &mut warnings).map(|x| with_kind(x, p))
+                {
                     params.push(param);
                 }
             }
@@ -502,7 +509,7 @@ fn ecus_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) -> O
     let desc = p.attribute("desc").unwrap_or("").to_string();
     let st = p.attribute("storagetype").and_then(|s| {
         let parsed = storage_type(s);
-        if parsed.is_none() {
+        if parsed.is_none() && ValueKind::from_storage(s).is_none() {
             warnings.push(format!("parameter '{id}': unknown storagetype '{s}'"));
         }
         parsed
@@ -645,5 +652,22 @@ fn finish_param_full(
         depends_on,
         convert_group,
         enabled,
+        value_kind: ValueKind::Number,
     }
+}
+
+/// The text kind a parameter node's `storagetype` (its own, or one of its
+/// `<conversion>`s') implies, if any.
+fn node_value_kind(n: Node) -> ValueKind {
+    n.descendants()
+        .filter(|d| d == &n || d.has_tag_name("conversion"))
+        .filter_map(|d| d.attribute("storagetype"))
+        .find_map(ValueKind::from_storage)
+        .unwrap_or_default()
+}
+
+/// `p` with the value kind its definition node implies.
+fn with_kind(mut p: LogParam, n: Node) -> LogParam {
+    p.value_kind = node_value_kind(n);
+    p
 }

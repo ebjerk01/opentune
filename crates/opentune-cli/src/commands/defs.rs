@@ -19,6 +19,25 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
                 );
             }
         }
+        EcudefsAction::Relocate {
+            def,
+            source,
+            image,
+            out,
+            min_confidence,
+            ecudefs,
+            evidence,
+            json,
+        } => relocate(RelocateArgs {
+            def,
+            source,
+            image,
+            out,
+            min_confidence,
+            ecudefs,
+            evidence,
+            json,
+        })?,
         EcudefsAction::Validate {
             path,
             image,
@@ -102,6 +121,122 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
             if total_errors > 0 {
                 return Err(crate::ExitStatus(2).into());
             }
+        }
+    }
+    Ok(())
+}
+
+/// Arguments of `ecudefs relocate`.
+struct RelocateArgs {
+    def: String,
+    source: PathBuf,
+    image: PathBuf,
+    out: Option<PathBuf>,
+    min_confidence: f64,
+    ecudefs: PathBuf,
+    evidence: bool,
+    json: bool,
+}
+
+/// `ecudefs relocate`: move a definition's maps onto a sibling software read.
+fn relocate(a: RelocateArgs) -> Result<()> {
+    use opentune_mapfind::relocate::{derive_def, relocate, RelocateOptions, RelocationStatus};
+    if !(0.0..=1.0).contains(&a.min_confidence) {
+        return Err(anyhow!("--min-confidence must be within 0..1"));
+    }
+    let def_path = PathBuf::from(&a.def);
+    let def = if def_path.extension().is_some_and(|e| e == "json") || def_path.is_file() {
+        let text = std::fs::read_to_string(&def_path)
+            .with_context(|| format!("read {}", def_path.display()))?;
+        opentune_core::ecudef::EcuDef::from_json(&text).map_err(|e| anyhow!("{e}"))?
+    } else {
+        opentune_core::ecudef::load_dir(&a.ecudefs)
+            .map_err(|e| anyhow!("load {}: {e}", a.ecudefs.display()))?
+            .into_iter()
+            .find(|d| d.id == a.def)
+            .ok_or_else(|| anyhow!("no definition '{}' in {}", a.def, a.ecudefs.display()))?
+    };
+    if def.maps.is_empty() {
+        return Err(anyhow!("definition '{}' has no maps to relocate", def.id));
+    }
+    let src = std::fs::read(&a.source).with_context(|| format!("read {}", a.source.display()))?;
+    let img = std::fs::read(&a.image).with_context(|| format!("read {}", a.image.display()))?;
+    let opts = RelocateOptions {
+        min_confidence: a.min_confidence,
+        ..RelocateOptions::default()
+    };
+    let rel = relocate(&src, &def.maps, &img, &opts);
+    let label = |p: &PathBuf| {
+        let n = p.file_name().and_then(|s| s.to_str()).unwrap_or("?");
+        let len = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        format!("'{n}' ({len} bytes)")
+    };
+    if a.json {
+        println!("{}", serde_json::to_string_pretty(&rel)?);
+    } else {
+        println!(
+            "Relocating '{}' ({} map(s)) from {} onto {}: {} alignment window(s).",
+            def.id,
+            def.maps.len(),
+            label(&a.source),
+            label(&a.image),
+            rel.anchors
+        );
+        println!(
+            "  {:<9} {:>10} {:>10} {:>10} {:>5}  map / reason",
+            "status", "source", "target", "shift", "conf"
+        );
+        for m in &rel.maps {
+            let placed = m.status == RelocationStatus::Relocated;
+            println!(
+                "  {:<9} 0x{:08X} {:>10} {:>10} {:>5.2}  {}{}",
+                if placed { "relocated" } else { "refused" },
+                m.source_address,
+                m.address.map_or("-".into(), |x| format!("0x{x:08X}")),
+                m.shift.map_or("-".into(), |s| if s < 0 {
+                    format!("-0x{:X}", -s)
+                } else {
+                    format!("+0x{s:X}")
+                }),
+                m.confidence,
+                m.name,
+                m.reason
+                    .as_deref()
+                    .map(|r| format!("\n{:>50}{r}", ""))
+                    .unwrap_or_default()
+            );
+            if a.evidence && placed {
+                for e in &m.evidence {
+                    println!("{:>50}evidence: {e}", "");
+                }
+            }
+        }
+        for n in &rel.notes {
+            println!("note: {n}");
+        }
+        println!(
+            "{} of {} map(s) relocated (min confidence {:.2}); refused maps are left out. \
+             Verify every relocated map against your own read before any write.",
+            rel.relocated(),
+            rel.maps.len(),
+            a.min_confidence
+        );
+    }
+    if let Some(out) = &a.out {
+        let id = out
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{}-relocated", def.id));
+        let derived = derive_def(&def, &rel, &id, &label(&a.source), &label(&a.image));
+        std::fs::write(out, serde_json::to_string_pretty(&derived)? + "\n")
+            .with_context(|| format!("write {}", out.display()))?;
+        if !a.json {
+            println!(
+                "wrote derived definition '{id}' ({} map(s)) -> {}",
+                derived.maps.len(),
+                out.display()
+            );
         }
     }
     Ok(())

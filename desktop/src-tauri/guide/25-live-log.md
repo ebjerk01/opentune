@@ -60,7 +60,14 @@ Validation state: **synthetic-tested** (UDS simulator). Not yet tested on a car.
 
 - **Value** and **Units** per parameter. **Note** explains a missing value.
 - UDS parameters (service `0x22`, read by identifier), OBD-II mode-01 PIDs and UDS `0x23` memory reads are read. SSM and other protocols come back with a note instead of a value.
-- The CSV has one row per parameter per tick: timestamp (ms), parameter id, name, raw value, scaled value, units and note.
+- **Text channels** — identification data such as the VIN (`F190`), part and
+  serial numbers (`F187`, `F18C`) or programming dates (`F199`) is not a number.
+  A definition marks such a channel as text, BCD or hex (`value_kind` in a pack's
+  logger JSON, `storagetype="string"`/`"bcd"`/`"hex"` in a `logger.xml`), and the
+  table shows the decoded text of the **whole** record instead of a number.
+  Non-printable bytes are shown as `.` and noted. The bundled
+  `iso14229-identification` logger marks all its DIDs this way.
+- The CSV has one row per parameter per tick: timestamp (ms), parameter id, name, raw value, scaled value, units, note and text. A text channel leaves `raw` and `value` empty and fills `text`. The **Log viewer** opens the file; text channels are listed in its notes rather than plotted.
 
 ## Common errors
 

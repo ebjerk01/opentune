@@ -32,6 +32,8 @@
   const hist = {};
   const mm = {};
   const sensors = {}; // key -> sorted sensor indexes that have reported a value (EGT)
+  const texts = {}; // key -> last text of a text channel (the VIN, string values)
+  const VIN = { key: "vin", name: "VIN", unit: "", group: "vehicle" };
 
   // ---- units ---------------------------------------------------------------
   function shown(key, v) {
@@ -119,7 +121,9 @@
           <button type="button" data-u="bar">bar</button><button type="button" data-u="kPa">kPa</button>
         </div>
         <button class="btn sm" id="dashPick" type="button">Choose values…</button>
+        <button class="btn sm" id="dashRec" type="button" aria-pressed="false" title="Record the polled values to a Live-log CSV (opens in the Log viewer)">● Record</button>
         <span class="pill neutral" id="dashStatus">idle</span>
+        <span class="small muted mono" id="dashRecInfo" aria-live="polite"></span>
       </div>
       <div id="dashPicker" class="pid-picker" hidden></div>
     </div>
@@ -157,7 +161,7 @@
   }
 
   function tileKeys() {
-    const out = [];
+    const out = texts.vin != null ? ["vin"] : [];
     selection().forEach((k) => {
       if (sensors[k] && sensors[k].length) sensors[k].forEach((i) => out.push(k + "#" + i));
       else out.push(k);
@@ -175,7 +179,7 @@
     grid.innerHTML = "";
     tileKeys().forEach((tk) => {
       const k = tk.split("#")[0];
-      const off = supported && !supported.has(k);
+      const off = texts[k] == null && supported && !supported.has(k);
       const d = document.createElement("div");
       d.className = "tile" + (off ? " na" : "");
       d.dataset.k = tk;
@@ -193,6 +197,16 @@
 
   function paintTile(d, tk) {
     const k = tk.split("#")[0];
+    if (texts[tk] != null) {
+      // A text channel: the text itself, no gauge colour, sparkline or min/max.
+      d.querySelector(".t-val").textContent = texts[tk];
+      d.querySelector(".t-unit").textContent = "";
+      d.className = "tile live text";
+      const f = d.querySelectorAll(".t-foot span");
+      f[0].textContent = "text";
+      f[1].textContent = "";
+      return;
+    }
     const h = hist[tk] || [];
     const last = h.length ? h[h.length - 1] : null;
     const s = shown(k, last);
@@ -250,7 +264,10 @@
     let reshape = false;
     Object.keys(vals).forEach((k) => {
       const v = vals[k];
-      if (Array.isArray(v)) {
+      if (typeof v === "string") {
+        if (texts[k] == null) reshape = true;
+        texts[k] = v;
+      } else if (Array.isArray(v)) {
         // Backends report fixed sensor slots with null for absent sensors; tile
         // only the sensors that have ever answered.
         const seen = (sensors[k] = sensors[k] || []);
@@ -270,15 +287,87 @@
     panel.querySelectorAll(".tile").forEach((d) => { if (!d.classList.contains("na")) paintTile(d, d.dataset.k); });
   }
 
+  // ---- record (Live-log CSV) -------------------------------------------------
+  // rec = { path, t0, samples, buf: rows not yet written, flushing, timer }.
+  let rec = null;
+  let failures = 0; // consecutive non-busy poll errors (a dropped connection)
+  const { liveLogCsv, dashLogRows, fmtElapsed, baseName } = window.OTUtil;
+  function recInfo() {
+    const b = $("dashRec");
+    b.classList.toggle("rec-on", !!rec);
+    b.setAttribute("aria-pressed", rec ? "true" : "false");
+    b.textContent = rec ? "■ Stop recording" : "● Record";
+    if (rec) $("dashRecInfo").textContent = `REC ${fmtElapsed(Date.now() - rec.t0)} · ${rec.samples} sample(s) · ${baseName(rec.path)}`;
+  }
+  async function flush() {
+    const r = rec;
+    if (!r || r.flushing || !r.buf.length) return;
+    const rows = r.buf.splice(0);
+    r.flushing = true;
+    try {
+      await invoke("dash_record_write", { path: r.path, csv: liveLogCsv(rows, true), append: true });
+    } catch (e) {
+      r.flushing = false;
+      stopRecord("write failed: " + (typeof e === "string" ? e : (e && e.message) || "error"));
+      return;
+    }
+    r.flushing = false;
+  }
+  async function startRecord() {
+    if (rec) return;
+    const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+    let path;
+    try {
+      path = await window.__TAURI__.dialog.save({ title: "Record the dashboard to a Live-log CSV", defaultPath: `dashboard-${stamp}.csv`, filters: [{ name: "Live-log CSV", extensions: ["csv"] }] });
+    } catch (e) { path = null; }
+    if (!path) return;
+    if (!/\.csv$/i.test(path)) path += ".csv";
+    try {
+      await invoke("dash_record_write", { path, csv: liveLogCsv([]), append: false });
+    } catch (e) {
+      $("dashRecInfo").textContent = "record: " + (typeof e === "string" ? e : "could not create the file");
+      return;
+    }
+    rec = { path, t0: Date.now(), samples: 0, buf: [], flushing: false, timer: setInterval(() => { recInfo(); flush(); }, 1000) };
+    recInfo();
+    if (!timer) start();
+  }
+  // Stop recording (after writing what is buffered) and say where it went.
+  function stopRecord(why) {
+    const r = rec;
+    if (!r) return;
+    clearInterval(r.timer);
+    const done = () => {
+      rec = null;
+      recInfo();
+      const secs = fmtElapsed(Date.now() - r.t0);
+      $("dashRecInfo").textContent = `recorded ${r.samples} sample(s), ${secs} → ${baseName(r.path)}${why ? " (" + why + ")" : ""} — open it in the Log viewer`;
+    };
+    if (r.buf.length && !/write failed/.test(why || "")) {
+      const rows = r.buf.splice(0);
+      invoke("dash_record_write", { path: r.path, csv: liveLogCsv(rows, true), append: true }).catch(() => {}).finally(done);
+    } else done();
+  }
+
   async function poll() {
     if (inFlight) return;
     inFlight = true;
     try {
-      ingest(await invoke("obd_read", { ...window.OT.connArgs(), pids: pidsFor(selection()) }));
+      const r = await invoke("obd_read", { ...window.OT.connArgs(), pids: pidsFor(selection()) });
+      ingest(r);
+      failures = 0;
+      if (rec) {
+        const vals = Object.assign({}, r && r.values);
+        if (texts.vin != null) vals.vin = texts.vin;
+        rec.buf.push(...dashLogRows((r && r.t_ms) || Date.now(), vals, byKey, r && r.errors));
+        rec.samples += 1;
+      }
       status("ok", "live");
     } catch (e) {
       const m = typeof e === "string" ? e : (e && e.message) || "error";
-      status(/busy/i.test(m) ? "accent" : "bad", /busy/i.test(m) ? "adapter busy — retrying" : m);
+      const busy = /busy/i.test(m);
+      status(busy ? "accent" : "bad", busy ? "adapter busy — retrying" : m);
+      if (!busy && ++failures >= 3) stopRecord("connection lost");
     } finally {
       inFlight = false;
     }
@@ -292,6 +381,9 @@
       const s = await invoke("obd_supported", { ...window.OT.connArgs() });
       const pids = new Set(s.pids || []);
       supported = new Set(table.filter((t) => t.pid != null && pids.has(t.pid)).map((t) => t.key));
+      // The VIN (mode 09 / UDS F190) is shown as a text tile.
+      if (s.vin) texts.vin = String(s.vin);
+      else delete texts.vin;
       if (BOOST.needs.every((k) => supported.has(k))) supported.add("boost_kpa");
     } catch (e) {
       $("dashStart").disabled = false;
@@ -306,6 +398,7 @@
     timer = setInterval(poll, parseInt($("dashRate").value, 10) || 500);
   }
   function stop() {
+    stopRecord("stopped");
     if (timer) clearInterval(timer);
     timer = null;
     $("dashStart").disabled = false;
@@ -336,15 +429,25 @@
   $("dashPick").addEventListener("click", () => { const p = $("dashPicker"); p.hidden = !p.hidden; if (!p.hidden) drawPicker(); });
   $("dashStart").addEventListener("click", start);
   $("dashStop").addEventListener("click", stop);
+  $("dashRec").addEventListener("click", () => (rec ? stopRecord() : startRecord()));
+  // A recording ends when the panel is hidden, the adapter goes away or the
+  // window closes (polling itself carries on as before).
+  new MutationObserver(() => {
+    if (rec && !panel.classList.contains("active")) stopRecord("panel hidden");
+  }).observe(panel, { attributes: true, attributeFilter: ["class"] });
+  window.addEventListener("beforeunload", () => stopRecord("window closed"));
   if (window.OT && window.OT.gate) {
-    window.OT.gate(panel, ["can"], "the dashboard", { disable: ["#dashStart"] });
-    window.OT.onCaps(() => { if (!window.OT.has(["can"])) stop(); });
+    window.OT.gate(panel, ["can"], "the dashboard", { disable: ["#dashStart", "#dashRec"] });
+    window.OT.onCaps((st) => {
+      if (rec && st && st.connected === false) stopRecord("adapter disconnected");
+      if (!window.OT.has(["can"])) stop();
+    });
   }
 
   async function init() {
     try { table = await invoke("obd_pid_table"); } catch (e) { table = []; }
     table = table.concat([BOOST]);
-    byKey = {};
+    byKey = { vin: VIN };
     table.forEach((t) => { byKey[t.key] = t; });
     drawGauges();
     drawTiles();

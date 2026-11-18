@@ -51,6 +51,15 @@
 //! or a `GetLogParam("…")` cross-parameter reference) is flagged
 //! [`ConversionFit::NonLinear`] rather than silently approximated.
 //!
+//! ## Text channels
+//!
+//! A parameter whose [`LogParam::value_kind`] is not
+//! [`ValueKind::Number`] (identification DIDs such as `F187`, `F18C`, `F190`)
+//! is decoded as ASCII, packed BCD or hex text into [`Sample::text`], with
+//! `raw`/`value` left empty. A `storagetype` of `string`/`ascii`, `bcd` or
+//! `hex`/`bytes` in a `logger.xml` sets it; a pack's JSON logger sets
+//! `"value_kind": "text"` (or `bcd`/`hex`) directly.
+//!
 //! ## What v1 does not do (recorded, never silent)
 //!
 //! * Dependencies (`<depends>`/`<dependson>` refs and `GetLogParam` references)
@@ -70,12 +79,12 @@ mod parse;
 
 pub use model::{
     Addressing, AltAddress, Conversion, ConversionFit, ConvertFactor, EcuGroup, LogDef, LogParam,
-    ProtocolGroup, ProtocolKind, SourceFormat,
+    ProtocolGroup, ProtocolKind, SourceFormat, ValueKind,
 };
 pub use parse::parse;
 
 pub mod live;
-pub use live::{poll_once, poll_to_csv, Sample};
+pub use live::{decode_text, poll_once, poll_to_csv, Sample, CSV_HEADER};
 
 pub mod fast;
 pub use fast::{
@@ -378,6 +387,56 @@ mod tests {
     }
 
     // ---- Errors & serde ----
+
+    #[test]
+    fn text_storagetypes_set_the_value_kind() {
+        let xml = r##"<logger><protocols><protocol id="UDS">
+          <parameters mode="22">
+            <parameter id="VIN" name="VIN" desc="">
+              <address length="17">0xF190</address>
+              <conversions><conversion units="" expr="x" storagetype="string"/></conversions>
+            </parameter>
+            <parameter id="RPM" name="RPM" desc="">
+              <address length="2">0xF40C</address>
+              <conversions><conversion units="rpm" expr="x/4" storagetype="uint16"/></conversions>
+            </parameter>
+          </parameters></protocol></protocols></logger>"##;
+        let def = parse(xml).unwrap();
+        let kind = |id: &str| {
+            def.params()
+                .find(|(_, _, p)| p.id == id)
+                .unwrap()
+                .2
+                .value_kind
+        };
+        assert_eq!(kind("VIN"), ValueKind::Text);
+        assert_eq!(kind("RPM"), ValueKind::Number);
+
+        let ecus = r##"<ecus><logprotocols><logprotocol type="SSM"><ecu id="b">
+          <parameter id="Date" offset="#0100" storagetype="bcd" expr="[value]" metric=""/>
+        </ecu></logprotocol></logprotocols></ecus>"##;
+        let def = parse(ecus).unwrap();
+        assert_eq!(def.params().next().unwrap().2.value_kind, ValueKind::Bcd);
+        assert!(
+            def.warnings.iter().all(|w| !w.contains("storagetype")),
+            "{:?}",
+            def.warnings
+        );
+
+        // Pack JSON: absent = number (and not written back), `ascii` aliases text.
+        let (_, _, p) = parse(SSM_LOGGER)
+            .unwrap()
+            .params()
+            .next()
+            .map(|(a, b, c)| (a.clone(), b.clone(), c.clone()))
+            .unwrap();
+        let mut v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("value_kind").is_none());
+        v["value_kind"] = "ascii".into();
+        let back: LogParam = serde_json::from_value(v).unwrap();
+        assert_eq!(back.value_kind, ValueKind::Text);
+        assert_eq!(serde_json::to_value(&back).unwrap()["value_kind"], "text");
+    }
 
     #[test]
     fn unknown_root_errors() {
