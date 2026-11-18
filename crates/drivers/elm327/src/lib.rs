@@ -1059,6 +1059,42 @@ mod tests {
         assert!(!log.contains("ATPB"));
     }
 
+    /// Clone quirk (docs/DRIVERS.md): a bare `ATCRA` is rejected and does NOT
+    /// reset the receive filter, so once `ATCRA <id>` is set only `ATZ` clears
+    /// it. Re-binding to another module must therefore go through a full
+    /// re-init: `ATZ` before the new filter, and never a bare `ATCRA`. Scans
+    /// re-bind by opening a fresh driver per module, so every open must start
+    /// with `ATZ` ahead of its one `ATCRA <id>`.
+    #[test]
+    fn every_open_resets_with_atz_and_never_sends_bare_atcra() {
+        for (tx, rx) in [(0x7E0, 0x7E8), (0x7E1, 0x7E9)] {
+            let cfg = ConnectConfig {
+                tx_id: tx,
+                rx_id: rx,
+                ..ConnectConfig::default()
+            };
+            let log = handshake_log(&cfg);
+            let cmds: Vec<&str> = log
+                .split(['\r', '\n'])
+                .map(str::trim)
+                .filter(|c| !c.is_empty())
+                .collect();
+            assert!(
+                !cmds.iter().any(|c| c.eq_ignore_ascii_case("ATCRA")),
+                "bare ATCRA sent: {cmds:?}"
+            );
+            let filter = format!("ATCRA {rx:03X}");
+            let atz = cmds.iter().position(|c| *c == "ATZ").expect("ATZ");
+            let filt_pos = cmds.iter().position(|c| *c == filter).expect("filter");
+            assert!(atz < filt_pos, "ATZ must precede {filter}: {cmds:?}");
+            assert_eq!(
+                cmds.iter().filter(|c| c.starts_with("ATCRA")).count(),
+                1,
+                "one receive filter per open: {cmds:?}"
+            );
+        }
+    }
+
     #[test]
     fn init_handshake_ms_can_programs_protocol_b() {
         let mut cfg = ConnectConfig::default();
