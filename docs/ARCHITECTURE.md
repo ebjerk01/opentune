@@ -63,7 +63,7 @@ a top-level command is added without a row here.
 | `opentune dump` | Full read via a driver, archived to the backup vault with ECU id |
 | `opentune findmaps` | Find candidate calibration maps in one image (scored, with evidence), or from the diff of two images |
 | `opentune recipe` | Portable tune recipes: `create` from a stock/tuned pair, `apply` only to a matching image (checksum-fixed + attested), `show` |
-| `opentune ecudefs` | List / validate ECU-definition files |
+| `opentune ecudefs` | List / validate ECU-definition files; `relocate` moves a definition's maps onto a sibling software's read by content signature |
 | `opentune identify` | Read the connected ECU's identity and match it to a definition |
 | `opentune db` | Control-unit reference database: list, show, validate |
 | `opentune dtc` | Look up a diagnostic trouble code |
