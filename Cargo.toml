@@ -20,6 +20,7 @@ members = [
     "crates/drivers/vcar",
     "crates/drivers/efp02c",
     "crates/drivers/isotp-ble-bridge",
+    "crates/drivers/doip",
     "crates/opentune-dtc",
     "crates/opentune-xdf",
     "crates/opentune-a2l",

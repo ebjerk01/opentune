@@ -131,7 +131,8 @@ The abstraction every app talks to and every driver implements.
   - `doip_discovery` — `DoIpUdpClient`: UDP vehicle identification (all / by
     EID / by VIN, de-duplicated), announcement listening, entity status and
     power mode, strict header checks; `connect_entity` turns a discovered
-    entity into an activated `DoIpTransport`.
+    entity into an activated `DoIpTransport`. The `doip` driver
+    (`opentune-driver-doip`) wraps both behind `Interface`.
   - `seedkey` — the `SeedKey` plugin interface for security access.
 - `ecudef` — `EcuDef` and `load_dir`: data describing a known ECU (protocol,
   memory map, checksum id, seed/key id), loaded from JSON in
@@ -205,9 +206,10 @@ Each implements `Interface`. CAN drivers typically implement the lighter
 | `opentune-driver-efp02c` | `efp02c` | EFI Technology EFP02C USB-CAN, via `nusb` (unverified: 1 Mbit/s, 11-bit, no writes) |
 | `opentune-driver-vcar` | `vcar` | none — a simulated six-module vehicle ([`VIRTUAL-CAR.md`](VIRTUAL-CAR.md)) |
 | `opentune-driver-isotp-ble` | `isotp-ble` | ESP32 running the open-source esp32-isotp-ble-bridge firmware, over USB serial or BLE (optional `btleplug` feature); unverified ([`ISOTP-BLE-BRIDGE.md`](ISOTP-BLE-BRIDGE.md)) |
+| `opentune-driver-doip` | `doip` | none — an Ethernet port to the vehicle's DoIP (ISO 13400) entity: UDS over TCP after routing activation, optional UDP discovery (exposes `diag()`; loopback-tested only, [`DRIVERS.md`](DRIVERS.md#3i-doip-uds-over-ethernet-iso-13400)) |
 
-These fourteen are registered in the CLI's `Registry` (`opentune drivers`); the
-desktop lists `isotp-ble` in alpha builds only (Bench tier). The
+These fifteen are registered in the CLI's `Registry` (`opentune drivers`); the
+desktop lists `isotp-ble` and `doip` in alpha builds only (Bench tier). The
 `opentune-driver-esp32` crate (ESP32-S3 open interface) is in the workspace but
 not yet in the CLI registry.
 

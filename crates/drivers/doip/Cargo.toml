@@ -1,0 +1,28 @@
+# DoIP (ISO 13400) interface driver: UDS to a vehicle's DoIP entity over
+# Ethernet, through opentune-core's DoipTransport (TCP data socket + routing
+# activation) and DoIpUdpClient (UDP vehicle identification). No adapter
+# hardware: an Ethernet port and the vehicle's DoIP connection are enough.
+# Validation state: tested against the opentune-udssim DoIP entity on
+# loopback only (Bench tier until vehicle-tested).
+[package]
+name = "opentune-driver-doip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "DoIP (ISO 13400) driver for OpenTune: UDS over Ethernet to a vehicle's DoIP entity, with optional UDP discovery."
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+
+[dev-dependencies]
+# The loopback tests run the real engines against the simulated DoIP entity.
+opentune-udssim = { path = "../../opentune-udssim" }
+opentune-autoscan = { path = "../../opentune-autoscan" }
+opentune-coding = { path = "../../opentune-coding" }
+opentune-adaptation = { path = "../../opentune-adaptation" }
+opentune-servicefn = { path = "../../opentune-servicefn" }
+opentune-logdef = { path = "../../opentune-logdef" }

@@ -61,5 +61,11 @@ pub fn public_registry() -> Registry {
         opentune_driver_isotp_ble::DRIVER_NAME,
         || Box::new(opentune_driver_isotp_ble::IsoTpBleDriver::new()),
     );
+    // Loopback-tested against the simulated DoIP entity only.
+    r.register(
+        opentune_driver_doip::DRIVER_ID,
+        opentune_driver_doip::DRIVER_NAME,
+        || Box::new(opentune_driver_doip::DoipDriver::new()),
+    );
     r
 }
