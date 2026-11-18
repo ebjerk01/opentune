@@ -47,6 +47,7 @@ they are here only to indicate relative reach, not to rank quality.
 | Project | Stars (approx) | Licence | What OpenTune learned |
 |---|---|---|---|
 | [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0 | The community reference for an ECU-definition XML / TunerPro-XDF-style table model: `table` type (2D/3D), `storagetype`+`endian`, `sizex`/`sizey`, address, and per-axis sub-tables with scaling and min/max. The backbone of our `MapDef`/`AxisDef` shape. GPL-2.0-only → **learn-only**. |
+| [miikasyvanen/FastECU](https://github.com/miikasyvanen/FastECU) | — | GPL-3.0 | Subaru flashing/tuning suite that reads EcuFlash and RomRaider definitions directly. Studied for how it interprets them — hex `startpos`/`interval` cell addressing, switch/selection tables, big-endian floats, the `wrx02` 0x8000 address fold, `<include>`/`base=` resolution — and its WinOLS MapPack-CSV column layout. `opentune_ecuflash::fastecu` is a fresh implementation of that behaviour; no source copied. GPL-3.0 → compatible. |
 | [christoph2/pyA2L](https://github.com/christoph2/pyA2L) | ~200 | GPL-2.0 | An ASAM A2L/ASAP2 parser — the OEM calibration description format. Taught us the `CHARACTERISTIC` / `AXIS_PTS` / `COMPU_METHOD` model and the three-way axis description (`STD_AXIS`/`COM_AXIS`/`FIX_AXIS`) that our axis styles mirror. GPL-2.0-only → **learn-only**. |
 
 ## Haldex AWD

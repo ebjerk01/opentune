@@ -91,6 +91,8 @@ fn push_axis(out: &mut String, id: &str, ax: &AxisDef, fallback_count: u32) {
             size_bits(ax.data_type),
             type_flags(ax.data_type, ax.endian)
         ));
+        // Declare the source explicitly: embedded (read from the image).
+        out.push_str("      <embedinfo type=\"1\"/>\n");
     }
     out.push_str(&format!(
         "      <MATH equation=\"{}\"/>\n",
@@ -177,7 +179,7 @@ mod tests {
                 address: 0x1D30BC,
                 data_type: DataType::U16,
                 endian: Endian::Big,
-                rows: 16,
+                rows: 3,
                 cols: 13,
                 scaling: Scaling {
                     factor: 0.01,
@@ -201,7 +203,7 @@ mod tests {
                 y_axis: Some(AxisDef {
                     name: "rpm".into(),
                     unit: "rpm".into(),
-                    count: 16,
+                    count: 3,
                     values: vec![800.0, 1200.0, 1600.0],
                     scaling: Scaling {
                         factor: 1.0,
@@ -239,6 +241,12 @@ mod tests {
         let xml = export_xdf(Some("Fleet"), &maps);
         let back = parse_xdf(&xml).expect("re-import");
         assert_eq!(back.title.as_deref(), Some("Fleet"));
+        // Our own export must re-import strictly clean.
+        assert!(
+            back.strict_failures().is_empty(),
+            "{:?}",
+            back.strict_failures()
+        );
         assert_eq!(back.maps.len(), maps.len());
 
         for (a, b) in maps.iter().zip(back.maps.iter()) {

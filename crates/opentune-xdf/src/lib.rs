@@ -23,8 +23,14 @@
 //! OpenTune scaling is strictly linear (`physical = raw * factor + offset`).
 //! A non-linear `<MATH>`/`ZEq` equation is imported **pre-scaled**
 //! (`factor = 1`, `offset = 0`) with the original equation recorded in `notes`
-//! — never guessed. Uncertain or defaulted fields (missing element size,
-//! defaulted endianness, exotic strides) are likewise flagged in `notes`.
+//! — never guessed. Every table, function, constant, flag, patch and checksum
+//! block ends in one [`report::ObjectReport`] (clean / warned / refused with a
+//! reason) in [`XdfImport::reports`]; warnings are also written into the map's
+//! `notes`. A construct that would otherwise produce a silently wrong address
+//! or cell decoding (non-contiguous strides, unsupported widths, data outside
+//! the declared image, an un-rebasable address) is refused, never
+//! approximated. [`XdfImport::into_strict`] turns any warning or refusal on a
+//! table/function/constant into an error.
 
 use opentune_core::ecudef::{DataType, Endian, MapDef, Scaling};
 use std::fmt;
@@ -32,9 +38,11 @@ use std::fmt;
 pub mod export;
 pub mod legacy;
 pub mod math;
+pub mod report;
 pub mod xml;
 
 pub use export::export_xdf;
+pub use report::{ObjectKind, ObjectReport, Status, Summary};
 
 /// Result of importing one XDF file.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -46,7 +54,11 @@ pub struct XdfImport {
     /// `BaseOffset`. It has already been applied to every `MapDef.address`, and
     /// is kept here so the maintainer can see / re-derive the mapping.
     pub base_offset: u32,
-    /// The imported maps, one per `<XDFTABLE>` / `%%TABLE%%`.
+    /// Whether [`base_offset`](Self::base_offset) is subtracted (a
+    /// `BASEOFFSET subtract="1"` or a negative text-form `<baseoffset>`).
+    pub base_subtract: bool,
+    /// The imported maps, one per importable `<XDFTABLE>` / `<XDFFUNCTION>` /
+    /// `%%TABLE%%` (functions become 1×N curves).
     pub maps: Vec<MapDef>,
     /// Scalar constants imported from `<XDFCONSTANT>` entries (modern XML only).
     /// These are single values, not tables, so they are kept in their own list
@@ -57,8 +69,52 @@ pub struct XdfImport {
     /// rebasing underflowed, categorical axis labels that the numeric axis model
     /// cannot store, or a swap-XY storage flag OpenTune does not yet model. A
     /// caller should surface these so a seemingly complete import does not hide a
-    /// silent loss. Empty means nothing lossy was detected.
+    /// silent loss. Empty means nothing lossy was detected. One line per issue
+    /// of every non-clean entry in [`reports`](Self::reports).
     pub warnings: Vec<String>,
+    /// Per-object outcome (clean / warned / refused + reasons) for every
+    /// table, function, constant, flag, patch and checksum block, in document
+    /// order.
+    pub reports: Vec<ObjectReport>,
+}
+
+impl XdfImport {
+    /// Counts of clean / warned / refused objects and the issue-kind histogram.
+    pub fn summary(&self) -> Summary {
+        report::summarize(&self.reports)
+    }
+
+    /// Why a strict import would fail (one line per non-clean table, function
+    /// or constant). Empty means the file imports cleanly.
+    pub fn strict_failures(&self) -> Vec<String> {
+        report::strict_failures(&self.reports)
+    }
+
+    /// Strict mode: `Err(Error::Strict)` unless every table, function and
+    /// constant imported cleanly. Out-of-scope objects (flags, patches,
+    /// checksums) are refused-with-reason in [`reports`](Self::reports) but do
+    /// not fail strict mode.
+    pub fn into_strict(self) -> Result<Self> {
+        let f = self.strict_failures();
+        if f.is_empty() {
+            Ok(self)
+        } else {
+            Err(Error::Strict(f))
+        }
+    }
+}
+
+/// One warning line per issue of every non-clean report.
+pub(crate) fn warning_lines(reports: &[ObjectReport]) -> Vec<String> {
+    reports
+        .iter()
+        .filter(|r| r.status != Status::Clean)
+        .flat_map(|r| {
+            r.issues
+                .iter()
+                .map(move |i| format!("{} \"{}\": {i}", r.object, r.name))
+        })
+        .collect()
 }
 
 /// A scalar constant imported from an `<XDFCONSTANT>`.
@@ -98,6 +154,12 @@ pub enum Error {
     Xml(String),
     /// The document parsed but contained no usable table.
     Empty,
+    /// A binary (pre-XML) TunerPro definition; only XML and the legacy text
+    /// format are readable.
+    Binary,
+    /// Strict mode: at least one table/function/constant was warned or
+    /// refused (one line each).
+    Strict(Vec<String>),
 }
 
 impl fmt::Display for Error {
@@ -106,6 +168,17 @@ impl fmt::Display for Error {
             Error::UnknownFormat => write!(f, "input is not a recognizable TunerPro XDF file"),
             Error::Xml(e) => write!(f, "XDF XML parse error: {e}"),
             Error::Empty => write!(f, "XDF contained no importable tables"),
+            Error::Binary => write!(
+                f,
+                "binary TunerPro definition (pre-XML format) is not supported; open it in \
+                 TunerPro and save it as an XML .xdf"
+            ),
+            Error::Strict(lines) => write!(
+                f,
+                "strict import refused: {} object(s) not imported cleanly:\n  {}",
+                lines.len(),
+                lines.join("\n  ")
+            ),
         }
     }
 }
@@ -133,9 +206,21 @@ pub fn parse_xdf(src: &str) -> Result<XdfImport> {
         legacy::parse(src)
     } else if head.contains("<XDFFORMAT") || head.contains("<XDFTABLE") {
         xml::parse(src)
+    } else if head
+        .chars()
+        .take(64)
+        .any(|c| c == '\0' || (c.is_control() && !c.is_whitespace()))
+    {
+        Err(Error::Binary)
     } else {
         Err(Error::UnknownFormat)
     }
+}
+
+/// [`parse_xdf`] in strict mode: refuses the whole file unless every table,
+/// function and constant imports cleanly (see [`XdfImport::into_strict`]).
+pub fn parse_xdf_strict(src: &str) -> Result<XdfImport> {
+    parse_xdf(src)?.into_strict()
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +243,21 @@ pub(crate) fn parse_num_u64(s: &str) -> Option<u64> {
 /// Parse a possibly-hex unsigned 32-bit value, saturating.
 pub(crate) fn parse_u32(s: &str) -> Option<u32> {
     parse_num_u64(s).map(|v| v.min(u32::MAX as u64) as u32)
+}
+
+/// Parse a signed decimal or (`-`)`0x`-hex integer (base offsets, strides).
+pub(crate) fn parse_i64(s: &str) -> Option<i64> {
+    let t = s.trim();
+    let (neg, body) = match t.strip_prefix('-') {
+        Some(rest) => (true, rest.trim_start()),
+        None => (false, t.strip_prefix('+').unwrap_or(t)),
+    };
+    let mag = if let Some(h) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
+        i64::from_str_radix(h, 16).ok()?
+    } else {
+        body.parse::<i64>().ok()?
+    };
+    Some(if neg { -mag } else { mag })
 }
 
 /// TunerPro `mmedtypeflags` bit meanings, as interpreted by this crate. These
@@ -184,28 +284,23 @@ pub mod typeflags {
 
 /// Derive a [`DataType`] from an element size in bits plus the type flags.
 ///
-/// Unknown / zero sizes default to `U8`. A float flag on a 32-bit element
-/// yields `F32`.
-pub(crate) fn datatype_from(size_bits: u32, flags: u32) -> (DataType, bool) {
+/// Only exactly representable cells map: 8/16/32-bit integers and 32-bit
+/// IEEE floats. Anything else (24-bit, 64-bit, a float flag on a non-32-bit
+/// cell, size 0) is `None` — the caller refuses rather than approximates.
+pub(crate) fn datatype_from(size_bits: u32, flags: u32) -> Option<DataType> {
     let signed = flags & typeflags::SIGNED != 0;
     let is_float = flags & typeflags::FLOAT != 0;
-    let dt = match (size_bits, signed, is_float) {
-        (_, _, true) => DataType::F32,
-        (0 | 8, false, _) => DataType::U8,
+    Some(match (size_bits, signed, is_float) {
+        (32, _, true) => DataType::F32,
+        (_, _, true) => return None,
+        (8, false, _) => DataType::U8,
         (8, true, _) => DataType::S8,
         (16, false, _) => DataType::U16,
         (16, true, _) => DataType::S16,
         (32, false, _) => DataType::U32,
         (32, true, _) => DataType::S32,
-        // Unusual width (24-bit etc.) — approximate by the next type up and let
-        // the caller note it.
-        (w, false, _) if w <= 16 => DataType::U16,
-        (_, false, _) => DataType::U32,
-        (w, true, _) if w <= 16 => DataType::S16,
-        (_, true, _) => DataType::S32,
-    };
-    let exact = matches!(size_bits, 0 | 8 | 16 | 32);
-    (dt, exact)
+        _ => return None,
+    })
 }
 
 /// Derive an [`Endian`] from the type flags.
@@ -223,15 +318,36 @@ mod tests {
 
     #[test]
     fn datatype_mapping() {
-        assert_eq!(datatype_from(8, 0).0, DataType::U8);
-        assert_eq!(datatype_from(8, typeflags::SIGNED).0, DataType::S8);
-        assert_eq!(datatype_from(16, 0).0, DataType::U16);
-        assert_eq!(datatype_from(16, typeflags::SIGNED).0, DataType::S16);
-        assert_eq!(datatype_from(32, 0).0, DataType::U32);
-        assert_eq!(datatype_from(32, typeflags::SIGNED).0, DataType::S32);
-        assert_eq!(datatype_from(32, typeflags::FLOAT).0, DataType::F32);
-        assert_eq!(datatype_from(0, 0).0, DataType::U8);
-        assert!(!datatype_from(24, 0).1, "24-bit must be marked inexact");
+        assert_eq!(datatype_from(8, 0), Some(DataType::U8));
+        assert_eq!(datatype_from(8, typeflags::SIGNED), Some(DataType::S8));
+        assert_eq!(datatype_from(16, 0), Some(DataType::U16));
+        assert_eq!(datatype_from(16, typeflags::SIGNED), Some(DataType::S16));
+        assert_eq!(datatype_from(32, 0), Some(DataType::U32));
+        assert_eq!(datatype_from(32, typeflags::SIGNED), Some(DataType::S32));
+        assert_eq!(datatype_from(32, typeflags::FLOAT), Some(DataType::F32));
+        assert_eq!(datatype_from(0, 0), None);
+        assert_eq!(
+            datatype_from(24, 0),
+            None,
+            "24-bit must not be approximated"
+        );
+        assert_eq!(datatype_from(64, typeflags::FLOAT), None);
+        assert_eq!(datatype_from(16, typeflags::FLOAT), None);
+    }
+
+    #[test]
+    fn signed_parsing() {
+        assert_eq!(parse_i64("-49152"), Some(-49152));
+        assert_eq!(parse_i64("0x10"), Some(16));
+        assert_eq!(parse_i64("-0x10"), Some(-16));
+        assert_eq!(parse_i64("+5"), Some(5));
+        assert_eq!(parse_i64("x"), None);
+    }
+
+    #[test]
+    fn binary_xdf_is_named_not_unknown() {
+        let s = String::from_utf8_lossy(&[0x05, b'"', 0xE3, 0x00, 0x01, 0x02]).into_owned();
+        assert_eq!(parse_xdf(&s), Err(Error::Binary));
     }
 
     #[test]

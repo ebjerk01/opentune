@@ -14,7 +14,7 @@
 /// A tiny recursive-descent evaluator for the four arithmetic operators,
 /// parentheses, unary minus, decimal/hex numeric literals and the single
 /// variable `X` (case-insensitive). Returns `None` on any token it does not
-/// understand (an unknown identifier, a function call, `^`, bad syntax), which
+/// understand (an unknown identifier, a function call, bad syntax), which
 /// is exactly what we want: such equations are treated as non-linear.
 /// Maximum parenthesis / unary-operator nesting the evaluator will descend. The
 /// evaluator is recursive, so an equation such as `((((…X…))))` with very deep
@@ -68,20 +68,40 @@ impl<'a> Eval<'a> {
     }
 
     fn term(&mut self) -> Option<f64> {
-        let mut v = self.factor()?;
+        let mut v = self.power()?;
         loop {
             match self.peek() {
                 Some(b'*') => {
                     self.pos += 1;
-                    v *= self.factor()?;
+                    v *= self.power()?;
                 }
                 Some(b'/') => {
                     self.pos += 1;
-                    v /= self.factor()?;
+                    v /= self.power()?;
                 }
                 _ => return Some(v),
             }
         }
+    }
+
+    /// `a ^ b` (TunerPro exponent, right-associative, binds tighter than
+    /// `*`/`/`). Common in fixed-point scalings such as `X/2^14`; a power of
+    /// `X` itself (`X^2`) evaluates fine and is then rejected by the
+    /// linearity check, so this never lets a non-linear equation through.
+    fn power(&mut self) -> Option<f64> {
+        let base = self.factor()?;
+        if self.peek() == Some(b'^') {
+            self.pos += 1;
+            self.depth += 1;
+            if self.depth > MAX_EVAL_DEPTH {
+                self.depth -= 1;
+                return None;
+            }
+            let exp = self.power();
+            self.depth -= 1;
+            return Some(base.powf(exp?));
+        }
+        Some(base)
     }
 
     fn factor(&mut self) -> Option<f64> {
@@ -283,8 +303,24 @@ mod tests {
     #[test]
     fn unknown_tokens_are_unparsable() {
         assert_eq!(linear_from_equation("sqrt(X)"), LinearFit::Unparsable);
-        assert_eq!(linear_from_equation("X^2"), LinearFit::Unparsable);
         assert_eq!(linear_from_equation("X + THROTTLE"), LinearFit::Unparsable);
+    }
+
+    #[test]
+    fn power_operator() {
+        // A power of X is evaluated and rejected as non-linear.
+        assert_eq!(linear_from_equation("X^2"), LinearFit::NonLinear);
+        // A constant power is just a constant: fixed-point scalings are linear.
+        let (f, o) = lin("x/2^14");
+        assert!((f - 1.0 / 16384.0).abs() < 1e-15 && o == 0.0);
+        let (f, _) = lin("X*2^-3");
+        assert!((f - 0.125).abs() < 1e-15);
+        // Right-associative: 2^3^2 = 2^9.
+        let (f, _) = lin("X*2^3^2");
+        assert!((f - 512.0).abs() < 1e-9);
+        // Deep exponent chains hit the depth cap instead of the stack.
+        let deep = format!("X*{}2", "2^".repeat(10_000));
+        let _ = linear_from_equation(&deep);
     }
 
     #[test]

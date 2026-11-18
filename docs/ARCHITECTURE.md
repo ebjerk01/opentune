@@ -70,8 +70,9 @@ a top-level command is added without a row here.
 | `opentune vin` | Decode a VIN |
 | `opentune decode-part` | Parse a VAG or Bosch ECU part number |
 | `opentune compare` | Compare two calibrations map-by-map through an ECU definition |
-| `opentune import-xdf` | Import a TunerPro XDF definition |
+| `opentune import-xdf` | Import a TunerPro XDF definition (per-object clean/warned/refused report, `-o` JSON, `--strict`) |
 | `opentune import-ecuflash` | Import an EcuFlash / RomRaider XML ROM definition |
+| `opentune import-fastecu` | Import a definition the way FastECU reads it (EcuFlash/RomRaider XML + FastECU extensions, or a WinOLS MapPack CSV; `--rom`, `--base-dir`, `-o`, `--strict`) |
 | `opentune import-ols` | Import a WinOLS `.ols` project's map definitions |
 | `opentune import-a2l` | Import an ASAM A2L description |
 | `opentune a2l2xdf` | Convert an A2L straight into a TunerPro XDF |
@@ -149,7 +150,7 @@ apps that need it.
 
 | Crate | Role |
 |---|---|
-| `opentune-a2l`, `opentune-xdf`, `opentune-ecuflash`, `opentune-ols` | Import ASAM A2L, TunerPro XDF, EcuFlash/RomRaider XML and WinOLS `.ols` map definitions (A2L/XDF export too) |
+| `opentune-a2l`, `opentune-xdf`, `opentune-ecuflash`, `opentune-ols` | Import ASAM A2L, TunerPro XDF, EcuFlash/RomRaider XML (plus FastECU's reading of them and MapPack CSV, `opentune_ecuflash::fastecu`) and WinOLS `.ols` map definitions (A2L/XDF export too). `opentune_xdf::report` is the shared per-object clean/warned/refused report |
 | `opentune-image` | Sparse addressed image model with Intel HEX / Motorola SREC I/O |
 | `opentune-container` | VAG flash containers (FRF / ODX / ODX-F / SGO) |
 | `opentune-cbf` | Mercedes CBF diagnostic-description parser |

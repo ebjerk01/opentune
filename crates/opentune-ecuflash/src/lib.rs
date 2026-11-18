@@ -61,6 +61,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod fastecu;
+
 use opentune_core::ecudef::{AxisDef, DataType, Endian, MapDef, Scaling};
 use opentune_xdf::math::{linear_from_equation, LinearFit};
 use roxmltree::{Document, Node};
@@ -73,6 +75,12 @@ pub enum Error {
     Xml(String),
     /// No `<rom>` element was found.
     NoRom,
+    /// The requested `<rom>` (by xmlid) is not in the document.
+    RomNotFound(String),
+    /// A MapPack CSV could not be read.
+    Csv(String),
+    /// Strict mode: at least one table was warned or refused (one line each).
+    Strict(Vec<String>),
 }
 
 impl std::fmt::Display for Error {
@@ -80,6 +88,14 @@ impl std::fmt::Display for Error {
         match self {
             Error::Xml(s) => write!(f, "XML parse error: {s}"),
             Error::NoRom => write!(f, "no <rom> element in document"),
+            Error::RomNotFound(id) => write!(f, "no <rom> with xmlid `{id}` in document"),
+            Error::Csv(s) => write!(f, "MapPack CSV: {s}"),
+            Error::Strict(l) => write!(
+                f,
+                "strict import refused: {} table(s) not imported cleanly:\n  {}",
+                l.len(),
+                l.join("\n  ")
+            ),
         }
     }
 }
@@ -604,6 +620,37 @@ fn parse_table(
     build_plain_map(dialect, table, scalings, warnings)
 }
 
+/// Flag little-endian floats on a big-endian CPU. Subaru RomRaider defs
+/// declare `endian="little"` on float axes of SH705x ROMs whose bytes are
+/// big-endian (FastECU reads every float big-endian); this importer keeps the
+/// declared order, so it must say so rather than decode silently wrong.
+fn float_endian_warning(rom_id: &RomId, maps: &[MapDef], warnings: &mut Vec<String>) {
+    if !fastecu::big_endian_memmodel(&rom_id.memmodel) {
+        return;
+    }
+    let n = maps
+        .iter()
+        .flat_map(|m| {
+            let cell = (m.data_type, m.endian);
+            let axes = [m.x_axis.as_ref(), m.y_axis.as_ref()]
+                .into_iter()
+                .flatten()
+                .filter(|a| a.address.is_some())
+                .map(|a| (a.data_type, a.endian));
+            std::iter::once(cell).chain(axes)
+        })
+        .filter(|(dt, e)| *dt == DataType::F32 && *e == Endian::Little)
+        .count();
+    if n > 0 {
+        warnings.push(format!(
+            "{n} float table/axis cell block(s) declare endian=\"little\" on big-endian memory \
+             model `{}`; imported as declared, but RomRaider/FastECU read such floats \
+             big-endian — verify, or use `import-fastecu`",
+            rom_id.memmodel
+        ));
+    }
+}
+
 /// Parse an EcuFlash / RomRaider XML definition into an [`EcuflashImport`].
 ///
 /// The dialect is auto-detected; see the crate docs. Only the **first** `<rom>`
@@ -670,6 +717,7 @@ pub fn parse_ecuflash(src: &str) -> Result<EcuflashImport> {
         .filter(|c| c.is_element() && c.tag_name().name() == "table")
         .filter_map(|t| parse_table(dialect, t, &scalings, &mut warnings))
         .collect();
+    float_endian_warning(&rom_id, &maps, &mut warnings);
 
     Ok(EcuflashImport {
         rom_id,
@@ -1070,8 +1118,10 @@ where
         }
     }
 
+    let rom_id = parse_romid(main_rom);
+    float_endian_warning(&rom_id, &maps, &mut warnings);
     Ok(EcuflashImport {
-        rom_id: parse_romid(main_rom),
+        rom_id,
         includes: main_base_ids,
         maps,
         warnings,
@@ -1317,6 +1367,23 @@ mod tests {
     </table>
   </rom>
 </roms>"##;
+
+    #[test]
+    fn little_endian_floats_on_big_endian_cpu_are_flagged() {
+        // RR declares float axes endian="little" on an SH7058 rom.
+        let imp = parse_ecuflash(RR).unwrap();
+        assert!(
+            imp.warnings
+                .iter()
+                .any(|w| w.contains("endian=\"little\"") && w.contains("SH7058")),
+            "{:?}",
+            imp.warnings
+        );
+        // No such warning for a little-endian memory model.
+        let tc = RR.replace("<memmodel>SH7058", "<memmodel>TC1796");
+        let imp = parse_ecuflash(&tc).unwrap();
+        assert!(!imp.warnings.iter().any(|w| w.contains("big-endian memory")));
+    }
 
     #[test]
     fn detects_romraider_dialect() {

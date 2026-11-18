@@ -172,6 +172,33 @@ pub enum Command {
         /// (existing maps with the same name are left untouched).
         #[arg(long)]
         into: Option<PathBuf>,
+        /// Write the imported maps, constants and per-object report as JSON.
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+        /// Refuse the whole file if any table/function/constant is warned or refused.
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Import a FastECU definition (EcuFlash / RomRaider XML with FastECU's
+    /// extensions, or a WinOLS MapPack CSV) and list (or merge) its maps.
+    ImportFastecu {
+        /// Path to the definition (.xml or MapPack .csv).
+        file: PathBuf,
+        /// `<rom>` to import by xmlid (default: the first non-base rom).
+        #[arg(long)]
+        rom: Option<String>,
+        /// Directory searched (recursively) for included / base definitions by xmlid.
+        #[arg(long)]
+        base_dir: Option<PathBuf>,
+        /// Optional ECU-definition JSON to merge the imported maps into.
+        #[arg(long)]
+        into: Option<PathBuf>,
+        /// Write the imported maps and per-object report as JSON.
+        #[arg(short = 'o', long)]
+        out: Option<PathBuf>,
+        /// Refuse the whole file if any table is warned or refused.
+        #[arg(long)]
+        strict: bool,
     },
     /// Import an EcuFlash / RomRaider XML ROM definition and list (or merge) its maps.
     ImportEcuflash {

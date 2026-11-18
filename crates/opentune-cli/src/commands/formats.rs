@@ -3,20 +3,170 @@ use crate::util::parse_num;
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 
+/// Print the per-object import report: a summary line, then every non-clean
+/// object with its issues.
+fn print_import_report(reports: &[opentune_xdf::ObjectReport]) {
+    let s = opentune_xdf::report::summarize(reports);
+    println!("Import report: {s}");
+    for r in reports
+        .iter()
+        .filter(|r| r.status != opentune_xdf::Status::Clean)
+    {
+        println!("  ! {}", r.describe());
+    }
+}
+
+/// The per-object report as JSON.
+fn report_json(reports: &[opentune_xdf::ObjectReport]) -> serde_json::Value {
+    serde_json::Value::Array(
+        reports
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "object": r.object.as_str(),
+                    "status": r.status.as_str(),
+                    "issues": r.issues.iter().map(|i| serde_json::json!({
+                        "kind": i.kind,
+                        "message": i.message,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Strict mode: bail (before anything is written) if any map-like object is
+/// not clean.
+fn enforce_strict(strict: bool, reports: &[opentune_xdf::ObjectReport]) -> Result<()> {
+    let f = opentune_xdf::report::strict_failures(reports);
+    if strict && !f.is_empty() {
+        return Err(anyhow!(
+            "--strict: {} object(s) not imported cleanly; nothing written:\n  {}",
+            f.len(),
+            f.join("\n  ")
+        ));
+    }
+    Ok(())
+}
+
+fn write_json(path: &PathBuf, v: &serde_json::Value) -> Result<()> {
+    std::fs::write(path, serde_json::to_string_pretty(v)?)
+        .map_err(|e| anyhow!("write {}: {e}", path.display()))?;
+    println!("Wrote {}", path.display());
+    Ok(())
+}
+
+/// Merge maps into an ECU-definition JSON (existing names are kept).
+fn merge_into(into: &PathBuf, maps: Vec<opentune_core::ecudef::MapDef>) -> Result<()> {
+    let txt = std::fs::read_to_string(into).map_err(|e| anyhow!("read {}: {e}", into.display()))?;
+    let mut def: opentune_core::ecudef::EcuDef =
+        serde_json::from_str(&txt).map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
+    let have: std::collections::HashSet<String> = def.maps.iter().map(|m| m.name.clone()).collect();
+    let mut added = 0usize;
+    for m in maps {
+        if !have.contains(&m.name) {
+            def.maps.push(m);
+            added += 1;
+        }
+    }
+    std::fs::write(into, serde_json::to_string_pretty(&def)?)
+        .map_err(|e| anyhow!("write {}: {e}", into.display()))?;
+    println!(
+        "Merged {added} new map(s) into {} ({} total).",
+        into.display(),
+        def.maps.len()
+    );
+    Ok(())
+}
+
+/// `import-fastecu`
+pub fn import_fastecu(
+    file: PathBuf,
+    rom: Option<String>,
+    base_dir: Option<PathBuf>,
+    into: Option<PathBuf>,
+    out: Option<PathBuf>,
+    strict: bool,
+) -> Result<()> {
+    use opentune_ecuflash::fastecu;
+    let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
+    let src = String::from_utf8_lossy(&raw);
+    let bases = match &base_dir {
+        Some(d) => fastecu::index_base_dir(d).map_err(|e| anyhow!("{}: {e}", d.display()))?,
+        None => Default::default(),
+    };
+    let opts = fastecu::Options { rom };
+    let import = fastecu::parse_fastecu(&src, &opts, |id| fastecu::load_base(&bases, id))
+        .map_err(|e| anyhow!("{e}"))?;
+    let r = &import.rom_id;
+    println!(
+        "FastECU ({}): {} {} {} [{}] ({}) — {} map(s)",
+        import.source,
+        r.make,
+        r.model,
+        r.year,
+        r.xmlid,
+        r.memmodel,
+        import.maps.len()
+    );
+    for w in &import.warnings {
+        println!("  ! warning: {w}");
+    }
+    print_import_report(&import.reports);
+    enforce_strict(strict, &import.reports)?;
+    for m in &import.maps {
+        println!(
+            "  {:<28} @0x{:06X}  {}x{}  {:?}/{:?}  x{}{:+}",
+            m.name,
+            m.address,
+            m.rows,
+            m.cols,
+            m.data_type,
+            m.endian,
+            m.scaling.factor,
+            m.scaling.offset,
+        );
+    }
+    if let Some(out) = &out {
+        write_json(
+            out,
+            &serde_json::json!({
+                "source": format!("fastecu:{}", import.source),
+                "rom": r.xmlid,
+                "maps": import.maps,
+                "report": report_json(&import.reports),
+            }),
+        )?;
+    }
+    if let Some(into) = into {
+        merge_into(&into, import.maps)?;
+    }
+    Ok(())
+}
+
 /// `import-xdf`
-pub fn import_xdf(file: PathBuf, into: Option<PathBuf>) -> Result<()> {
+pub fn import_xdf(
+    file: PathBuf,
+    into: Option<PathBuf>,
+    out: Option<PathBuf>,
+    strict: bool,
+) -> Result<()> {
     // XDF payloads in the wild are sometimes Windows-1251/Latin-1, not
     // UTF-8. The structure is ASCII; decode lossily so a non-UTF-8 unit
     // string can't abort the import (affected text is flagged, not lost).
     let raw = std::fs::read(&file).map_err(|e| anyhow!("read {}: {e}", file.display()))?;
     let src = String::from_utf8_lossy(&raw);
-    let import = opentune_xdf::parse_xdf(&src).map_err(|e| anyhow!("{e:?}"))?;
+    let import = opentune_xdf::parse_xdf(&src).map_err(|e| anyhow!("{e}"))?;
     println!(
-        "XDF: {}  (base offset 0x{:X}) — {} map(s)",
+        "XDF: {}  (base offset {}0x{:X}) — {} map(s)",
         import.title.as_deref().unwrap_or("(untitled)"),
+        if import.base_subtract { "-" } else { "" },
         import.base_offset,
         import.maps.len()
     );
+    print_import_report(&import.reports);
+    enforce_strict(strict, &import.reports)?;
     for m in &import.maps {
         let note = if m.notes.is_empty() {
             String::new()
@@ -64,33 +214,37 @@ pub fn import_xdf(file: PathBuf, into: Option<PathBuf>) -> Result<()> {
             );
         }
     }
-    // Import warnings were also dropped before; print them so a lossy /
-    // skipped-entry import is visible rather than silent.
-    for w in &import.warnings {
-        println!("  ! warning: {w}");
+    if let Some(out) = &out {
+        let constants: Vec<serde_json::Value> = import
+            .constants
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "notes": c.notes,
+                    "address": c.address,
+                    "data_type": c.data_type,
+                    "endian": c.endian,
+                    "scaling": c.scaling,
+                    "unit": c.unit,
+                    "min": c.min,
+                    "max": c.max,
+                })
+            })
+            .collect();
+        write_json(
+            out,
+            &serde_json::json!({
+                "source": "xdf",
+                "title": import.title,
+                "maps": import.maps,
+                "constants": constants,
+                "report": report_json(&import.reports),
+            }),
+        )?;
     }
     if let Some(into) = into {
-        let txt =
-            std::fs::read_to_string(&into).map_err(|e| anyhow!("read {}: {e}", into.display()))?;
-        let mut def: opentune_core::ecudef::EcuDef =
-            serde_json::from_str(&txt).map_err(|e| anyhow!("parse {}: {e}", into.display()))?;
-        let have: std::collections::HashSet<String> =
-            def.maps.iter().map(|m| m.name.clone()).collect();
-        let mut added = 0usize;
-        for m in import.maps {
-            if have.contains(&m.name) {
-                continue;
-            }
-            def.maps.push(m);
-            added += 1;
-        }
-        let out = serde_json::to_string_pretty(&def)?;
-        std::fs::write(&into, out).map_err(|e| anyhow!("write {}: {e}", into.display()))?;
-        println!(
-            "Merged {added} new map(s) into {} ({} total).",
-            into.display(),
-            def.maps.len()
-        );
+        merge_into(&into, import.maps)?;
     }
     Ok(())
 }
