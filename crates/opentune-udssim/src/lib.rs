@@ -51,6 +51,11 @@
 //!   The `doip_tcp_entity` example puts it on a loopback TCP port, and
 //!   `tools/conformance/` drives that with python-udsoncan / python-doipclient
 //!   as independent third-party clients.
+//! - [`doip_udp::DoIpUdpEntity`] — the entity's UDP side: vehicle
+//!   identification (all / by EID / by VIN), announcements, entity status and
+//!   power mode, with fault injection (no reply, bad version, NACK);
+//!   [`doip_udp::UdpEntityServer`] / [`doip_udp::TcpEntityServer`] put the UDP
+//!   and TCP sides on (loopback) sockets for OpenTune's discovery client.
 //! - [`fault::FaultPlan`] — programmable fault injection: response-pending
 //!   storms, injected NRCs, wrong correlation echoes, truncated responses and
 //!   mis-correlated replies, each firing deterministically at one point in a
@@ -71,6 +76,7 @@
 #![warn(missing_docs)]
 
 pub mod doip;
+pub mod doip_udp;
 pub mod driver;
 pub mod fault;
 pub mod flash;
@@ -80,6 +86,7 @@ pub mod trace;
 pub mod transport;
 
 pub use doip::DoIpSimStream;
+pub use doip_udp::{DoIpUdpEntity, EntityIdentity, TcpEntityServer, UdpEntityServer, UdpFault};
 pub use driver::{TestSeedKey, UdssimDriver};
 pub use fault::{Fault, FaultPlan};
 pub use flash::{FlashConfig, FlashEcu, FlashFaults, FlashRegion, FlashStats};
