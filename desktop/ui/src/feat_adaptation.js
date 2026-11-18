@@ -13,7 +13,6 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) =>
       String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    const baseName = (p) => (p ? String(p).split(/[\\/]/).pop() : "—");
 
     const nav = $("nav");
     const main = $("main");
@@ -34,10 +33,9 @@
       </header>
 
       <div class="card">
+        <div id="adpPackPick"></div>
         <div class="row">
-          <button class="btn primary" id="adpPick">Adaptation def…</button>
-          <span id="adpDefName" class="muted small mono">—</span>
-          <button class="btn" id="adpList">List channels</button>
+          <button class="btn primary" id="adpList">List channels</button>
         </div>
         <div class="row tight">
           <label>Timeout ms</label><input class="inp sm" id="adpTimeout" value="1000" />
@@ -140,21 +138,24 @@
     }
 
     // ---- actions -----------------------------------------------------------
-    $("adpPick").addEventListener("click", async () => {
-      try {
-        const r = await T.dialog.open({ filters: [{ name: "Adaptation def", extensions: ["json"] }] });
-        const path = Array.isArray(r) ? r[0] : r;
-        if (!path) return;
-        stAdp.defPath = path;
-        $("adpDefName").textContent = baseName(path);
-      } catch (e) {
-        $("adpDefInfo").innerHTML = errBanner(e);
-      }
+    // The AdaptationDef comes from a definition pack (or a loose file).
+    const packPick = window.OTPacks.picker({
+      panel: "adaptation",
+      kind: "adaptation",
+      filter: { name: "Adaptation def", extensions: ["json"] },
+      onChange: (sel) => {
+        stAdp.defPath = sel.path;
+        stAdp.channels = {};
+        $("adpChan").innerHTML = "";
+        $("adpDefInfo").innerHTML = "";
+        refreshForChannel();
+      },
     });
+    $("adpPackPick").appendChild(packPick.el);
 
     $("adpList").addEventListener("click", async () => {
       if (!stAdp.defPath) {
-        $("adpDefInfo").innerHTML = errBanner("Pick an AdaptationDef JSON first.");
+        $("adpDefInfo").innerHTML = errBanner("Choose an adaptation definition (a pack and its definition, or a file) first.");
         return;
       }
       try {

@@ -14,7 +14,7 @@ watch them in a live table, and save the samples as CSV.
 
 ## Step by step
 
-1. **Choose logger.xml…** (the picker opens in the bundled packs folder), then press **Load**. The parameters are listed.
+1. In the **Pack** picker choose a pack and its logger definition (e.g. *Generic OBD-II* → `obd2-mode01.json`), or press **File…** for a `logger.xml`. Then press **Load**. The parameters are listed.
 2. Tick the parameters to log, or use **Select all** / **Select none**. With none ticked, every parameter is logged.
 3. Set the **Interval** in ms (minimum 50, default 500).
 4. Press **Start**. The table updates in place.

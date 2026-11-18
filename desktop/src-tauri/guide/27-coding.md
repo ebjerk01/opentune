@@ -14,7 +14,7 @@ preview a change, and write it back with a backup and read-back verify.
 
 ## Step by step
 
-1. **Pick coding def…** and choose the definition.
+1. In the **Pack** picker choose a definition pack, then the module's coding definition. **Load pack…** opens a pack from disk; **File…** takes a single definition JSON. The line under the picker shows the pack's id, version and validation state.
 2. Press **Read coding**. The table lists each parameter: kind, current value, decoded label, and the allowed options.
 3. Click a row to put its name in the edit box. Type the new value (decimal, or hex such as `0x02`).
 4. Press **Preview**. Nothing is written. The report shows the parameter change and the exact bytes that would change.

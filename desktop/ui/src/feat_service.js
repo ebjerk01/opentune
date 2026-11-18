@@ -76,10 +76,7 @@
     </header>
     <div class="card">
       <h2>Script</h2>
-      <div class="row">
-        <button class="btn" id="svcPick">Choose script…</button>
-        <span class="mono small muted" id="svcPath">no script selected</span>
-      </div>
+      <div id="svcPackPick"></div>
       <div class="row">
         <label>Per-request timeout</label>
         <input class="inp" id="svcTimeout" value="2000" style="max-width:110px" />
@@ -130,21 +127,17 @@
     ackCb.addEventListener("change", syncRun);
     syncRun();
 
-    q("#svcPick").addEventListener("click", async () => {
-      try {
-        const r = TAURI.dialog ? await TAURI.dialog.open({ multiple: false, directory: false, filters: [{ name: "Service script", extensions: ["json"] }], defaultPath: (window.OT && window.OT.packsDir) || undefined }) : null;
-        const p = Array.isArray(r) ? r[0] : r;
-        if (p) {
-          scriptPath = p;
-          const sp = q("#svcPath");
-          sp.textContent = baseName(p);
-          sp.title = p;
-        }
-      } catch (e) { toast("pick: " + e, true); }
+    // The ServiceScript comes from a definition pack (or a loose file).
+    const packPick = window.OTPacks.picker({
+      panel: "service",
+      kind: "services",
+      filter: { name: "Service script", extensions: ["json"] },
+      onChange: (sel) => { scriptPath = sel.path; svcResult.innerHTML = ""; },
     });
+    q("#svcPackPick").appendChild(packPick.el);
 
     async function execute(cmd, isRun) {
-      if (!scriptPath) { svcResult.innerHTML = errHtml("Choose a ServiceScript JSON first."); return; }
+      if (!scriptPath) { svcResult.innerHTML = errHtml("Choose a service script (a pack and its script, or a file) first."); return; }
       const timeoutMs = parseInt(q("#svcTimeout").value, 10) || 2000;
       const conn = window.OT && window.OT.connArgs ? window.OT.connArgs() : {};
       const args = Object.assign({}, conn, { scriptPath, timeoutMs });

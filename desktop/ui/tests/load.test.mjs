@@ -29,6 +29,9 @@ test("index.html lists util.js first and every referenced script exists", () => 
   assert.deepEqual(app, ["app-core.js", "app-calibration.js", "app-maps.js", "app-tools.js", "app-boot.js"]);
   assert.ok(scripts.indexOf("nav.js") < scripts.indexOf("app-core.js"));
   assert.ok(scripts.indexOf("app-boot.js") < scripts.indexOf("feat_coding.js"));
+  const picker = scripts.indexOf("pack-picker.js");
+  assert.ok(picker > 0, "pack-picker.js is listed");
+  for (const s of scripts.filter((x) => x.startsWith("feat_"))) assert.ok(picker < scripts.indexOf(s), `pack-picker.js before ${s}`);
 });
 
 test("all scripts load in order and expose the shared globals", () => {
@@ -41,6 +44,7 @@ test("all scripts load in order and expose the shared globals", () => {
   assert.equal(typeof window.OT.conn, "object");
   assert.equal(window.OT.conn.driver, "elm327obd");
   assert.equal(typeof window.OTNav.register, "function");
+  assert.equal(typeof window.OTPacks.picker, "function");
   assert.equal(typeof window.OTHelp.add, "function");
   assert.equal(typeof window.OTUtil.renderMarkdown, "function");
   assert.ok(Array.isArray(window.OT_EXTENSIONS));
@@ -74,4 +78,5 @@ test("panels and ids plugins extend are present", () => {
   for (const id of ["main", "csAlgo", "skAlgo", "nav", "toast"]) assert.match(html, new RegExp(`id="${id}"`), `#${id} in index.html`);
   const auto = document.getElementById("panel-autodebug");
   assert.ok(auto && !auto.placeholder, "feat_autodebug.js creates #panel-autodebug");
+
 });

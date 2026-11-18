@@ -9,7 +9,6 @@
 (function () {
   const invoke = window.__TAURI__.core.invoke;
   const $ = (id) => document.getElementById(id);
-  const dlgOpen = (o) => window.__TAURI__.dialog.open(o);
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
@@ -28,10 +27,7 @@
       <p>Read, decode and write module coding over the connected adapter.</p>
     </header>
     <div class="card">
-      <div class="row">
-        <button class="btn" id="codPick">Pick coding def…</button>
-        <span class="mono small muted" id="codDefPath">no definition loaded</span>
-      </div>
+      <div id="codPackPick"></div>
       <div class="row" style="margin-top:8px">
         <button class="btn primary" id="codRead">Read coding</button>
         <span class="small muted" id="codDefInfo"></span>
@@ -196,21 +192,24 @@
   }
 
   // --- Actions ---------------------------------------------------------------
-  async function pickDef() {
-    try {
-      const p = await dlgOpen({ filters: [{ name: "Coding def", extensions: ["json"] }] });
-      if (!p) return;
-      defPath = p;
-      $("codDefPath").textContent = p;
-      showNote("Definition loaded — press “Read coding”.");
-    } catch (e) {
-      showErr(String(e));
-    }
-  }
+  // The coding definition comes from a definition pack (or a loose file).
+  const packPick = window.OTPacks.picker({
+    panel: "coding",
+    kind: "coding",
+    filter: { name: "Coding def", extensions: ["json"] },
+    onChange: (sel, how) => {
+      invalidatePreview();
+      defPath = sel.path;
+      $("codTableWrap").innerHTML = "";
+      $("codDefInfo").textContent = "";
+      if (how.user && defPath) showNote("Definition chosen — press “Read coding”.");
+    },
+  });
+  $("codPackPick").appendChild(packPick.el);
 
   function needDef() {
     if (!defPath) {
-      showErr("Pick a coding definition JSON file first.");
+      showErr("Choose a coding definition (a pack and its definition, or a file) first.");
       return false;
     }
     return true;
@@ -267,7 +266,6 @@
     }
   }
 
-  $("codPick").addEventListener("click", () => { invalidatePreview(); pickDef(); });
   $("codRead").addEventListener("click", doRead);
   $("codPreview").addEventListener("click", () => doEdit("coding_set_preview", "Preview"));
   $("codWrite").addEventListener("click", () => doEdit("coding_write", "Write"));

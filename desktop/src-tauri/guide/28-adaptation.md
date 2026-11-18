@@ -13,7 +13,7 @@ tests on a module, all from a data-defined channel set (an AdaptationDef JSON).
 
 ## Step by step
 
-1. **Adaptation def…**, then **List channels**. The card shows the module, the number of channels, whether SecurityAccess is required, and the module address (or a warning that none is set).
+1. Choose the module's adaptation definition in the **Pack** picker (a pack, then the definition; or **File…** for a single JSON), then **List channels**. The card shows the module, the number of channels, whether SecurityAccess is required, and the module address (or a warning that none is set).
 2. Choose a **Channel**. Its kind is shown: **value**, **routine** or **actuator**.
 3. **Value channel** — press **Read**. You get the raw value and the scaled value with its unit.
 4. **Routine channel** — choose **start**, **stop** or **request results**, optionally enter **extra** data (hex), tick the confirmation and press **Run test**. Start and stop ask once more before sending.

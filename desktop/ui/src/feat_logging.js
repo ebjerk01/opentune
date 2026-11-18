@@ -20,7 +20,6 @@
     String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
     );
-  const baseName = (p) => (p ? String(p).split(/[\\/]/).pop() : "—");
 
   // ---- panel state ---------------------------------------------------------
   const S = {
@@ -54,10 +53,10 @@
 
       <div class="card">
         <h2>Definition</h2>
+        <div id="logPackPick"></div>
         <div class="row">
-          <button class="btn" id="logPick">Choose logger.xml…</button>
-          <span class="muted small" id="logPathHint">no definition loaded</span>
           <button class="btn primary" id="logLoad">Load</button>
+          <span class="muted small">a logger definition from a pack, or a RomRaider <span class="mono">logger.xml</span> via File…</span>
         </div>
         <div id="logParamsBox" class="result" hidden>
           <div class="row">
@@ -105,8 +104,19 @@
     `;
     main.appendChild(sec);
 
-    // Wire controls.
-    sec.querySelector("#logPick").addEventListener("click", pick);
+    // Wire controls. The logger definition comes from a definition pack, or a
+    // loose logger.xml / LogDef JSON through the picker's File… button.
+    const packPick = window.OTPacks.picker({
+      panel: "logging",
+      kind: "loggers",
+      filter: { name: "Logger definition", extensions: ["xml", "json"] },
+      onChange: (sel) => {
+        S.defPath = sel.path;
+        const box = document.getElementById("logParamsBox");
+        if (box && !S.timer) box.hidden = true;
+      },
+    });
+    sec.querySelector("#logPackPick").appendChild(packPick.el);
     sec.querySelector("#logLoad").addEventListener("click", load);
     sec.querySelector("#logSelAll").addEventListener("click", () => setAll(true));
     sec.querySelector("#logSelNone").addEventListener("click", () => setAll(false));
@@ -133,27 +143,9 @@
     }
   }
 
-  // ---- definition picking + loading ---------------------------------------
-  async function pick() {
-    try {
-      const r = await T().dialog.open({
-        multiple: false,
-        directory: false,
-        filters: [{ name: "Logger definition", extensions: ["xml", "json"] }],
-        defaultPath: (window.OT && window.OT.packsDir) || undefined,
-      });
-      const path = Array.isArray(r) ? r[0] : r;
-      if (!path) return;
-      S.defPath = path;
-      const hint = document.getElementById("logPathHint");
-      if (hint) hint.textContent = baseName(path);
-    } catch (e) {
-      status("pick failed: " + msg(e), true);
-    }
-  }
-
+  // ---- definition loading ---------------------------------------------------
   async function load() {
-    if (!S.defPath) return status("choose a logger.xml first", true);
+    if (!S.defPath) return status("choose a logger definition first", true);
     const box = document.getElementById("logParamsBox");
     const list = document.getElementById("logParams");
     try {

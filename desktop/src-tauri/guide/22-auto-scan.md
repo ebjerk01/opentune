@@ -14,7 +14,7 @@ separate button clears codes.
 ## Step by step
 
 1. Set the adapter in the sidebar and press **Detect adapter**.
-2. Press **Choose modules JSON…** and pick the vehicle's list.
+2. In the **Pack** picker choose a definition pack and the vehicle's module list in it (one list is selected for you). **Load pack…** opens a pack from disk; **File…** takes a single module-list JSON. The line under the picker shows the pack's id, version and whether every file in it loaded.
 3. Press **Scan vehicle**. Each module is addressed on its own CAN ids.
 4. Read the table and the DTC details below it.
 5. Only if you mean to: **Clear all DTCs**, confirm, then scan again.

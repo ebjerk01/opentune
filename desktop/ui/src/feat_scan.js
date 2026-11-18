@@ -9,14 +9,12 @@
 (function () {
   const TAURI = window.__TAURI__ || {};
   const invoke = (cmd, args) => TAURI.core.invoke(cmd, args);
-  const dialog = () => TAURI.dialog;
 
   // Minimal local helpers (kept self-contained; does not lean on the app scripts' scope).
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]),
     );
-  const baseName = (p) => (p ? String(p).split(/[\\/]/).pop() : "");
 
   // Panel-local state: the chosen VehicleModules JSON path.
   const state = { modulesPath: null };
@@ -36,10 +34,7 @@
          trouble codes. The scan is read-only — it never writes to a module.</p>
     </header>
     <div class="card">
-      <div class="row">
-        <button class="btn" id="scanPick">Choose modules JSON…</button>
-        <span id="scanFile" class="muted small mono">— no module list chosen</span>
-      </div>
+      <div id="scanPackPick"></div>
       <div class="row">
         <button class="btn primary" id="scanRun">Scan vehicle</button>
         <button class="btn warn" id="scanClear">Clear all DTCs</button>
@@ -168,16 +163,18 @@
   }
 
   // ---- wiring --------------------------------------------------------------
-  $("scanPick").addEventListener("click", async () => {
-    try {
-      const r = await dialog().open({ filters: [{ name: "Modules", extensions: ["json"] }], defaultPath: (window.OT && window.OT.packsDir) || undefined });
-      if (!r) return;
-      state.modulesPath = Array.isArray(r) ? r[0] : r;
-      $("scanFile").textContent = baseName(state.modulesPath);
-    } catch (e) {
-      $("scanResult").innerHTML = errBanner(e);
-    }
+  // The module list comes from a definition pack (or a loose file).
+  const packPick = window.OTPacks.picker({
+    panel: "scan",
+    kind: "modules",
+    filter: { name: "Modules", extensions: ["json"] },
+    onChange: (sel) => {
+      state.modulesPath = sel.path;
+      $("scanResult").innerHTML = "";
+      $("scanClearResult").innerHTML = "";
+    },
   });
+  $("scanPackPick").appendChild(packPick.el);
 
   $("scanRun").addEventListener("click", async () => {
     if (!state.modulesPath) {
