@@ -174,10 +174,36 @@
       ${list ? `<ol class="ph-steps">${list}</ol>` : ""}`;
   }
 
+  // ---- live log (feat_logging.js) ---------------------------------------------
+  // Mode badge for a LiveStatus: { cls, text, title }, or null before a session.
+  function logModeBadge(st) {
+    if (!st || !st.mode) return null;
+    if (st.mode === "fast-2c") {
+      const dids = (st.dynamic_dids || [])
+        .map((d) => "0x" + Number(d.did).toString(16).toUpperCase().padStart(4, "0") + " (" + d.record_len + " B, " + (d.channels || []).length + " ch)");
+      const polled = (st.polled || []).length;
+      return {
+        cls: "ok",
+        text: "fast-2c",
+        title: "Dynamic DIDs: " + (dids.join(", ") || "none") + (polled ? "; " + polled + " channel(s) polled alongside" : "") +
+          (st.redefines ? "; re-defined " + st.redefines + "×" : ""),
+      };
+    }
+    return { cls: st.reason === "fast mode not requested" ? "neutral" : "accent", text: "polling", title: st.reason || "polling" };
+  }
+  // "12.3 samples/s · 1.00 req/sample" from a log_tick rate object.
+  function fmtLogRate(r) {
+    if (!r || !r.ticks) return "";
+    const sps = Number(r.samples_per_s) || 0;
+    const rps = Number(r.requests_per_sample) || 0;
+    return (sps >= 10 ? sps.toFixed(0) : sps.toFixed(1)) + " samples/s · " + rps.toFixed(2) + " req/sample";
+  }
+
   const OTUtil = {
     esc, baseName, hex8, parseHexInput, fmtCell, fmtAxis, clone2d, heatColor, splitList,
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
+    logModeBadge, fmtLogRate,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;

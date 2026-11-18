@@ -3,8 +3,15 @@
 // Self-contained: injects its own nav item + panel into the existing shell,
 // reuses the global adapter connection (window.OT) and the app's CSS classes.
 // The live loop runs here: on Start a setInterval calls the stateless backend
-// command `log_poll_once` every N ms, each tick opening+reading+closing the
-// adapter, and the table updates in place. Rows are accumulated for CSV export.
+// command `log_poll_once` every N ms (the hub reuses the opened adapter), and
+// the table updates in place. Rows are accumulated for CSV export.
+//
+// Fast (0x2C) toggle: Start opens a live session instead (`log_start`), which
+// packs the channels into dynamically defined DIDs where the ECU allows it and
+// otherwise polls (the badge shows which, and why). Ticks go to `log_tick`
+// (never overlapping) and Stop calls `log_stop`, which clears the DIDs. The
+// session holds the adapter, so it is stopped when the panel is hidden, the
+// adapter disappears or the window closes.
 "use strict";
 (function () {
   const T = () => window.__TAURI__ || {};
@@ -23,7 +30,9 @@
     rows: [], // accumulated samples for CSV: {ts,paramId,name,raw,value,units,note}
     liveCells: {}, // paramId -> { value, units, note } <td> elements (in-place update)
     started: 0, // ticks since Start (for the status line)
+    fast: false, // the running stream is a log_start session
   };
+  const { logModeBadge, fmtLogRate } = window.OTUtil;
 
   // ---- build the nav item + panel -----------------------------------------
   function mount() {
@@ -70,6 +79,19 @@
           <button class="btn" id="logSaveCsv" disabled>Save CSV</button>
           <span class="pill" id="logStatus">idle</span>
         </div>
+        <div class="row">
+          <label class="confirm" title="UDS 0x2C DynamicallyDefineDataIdentifier: one request per record instead of one per channel">
+            <input type="checkbox" id="logFast" /> Fast (0x2C)</label>
+          <label class="small muted" for="logDdid">Dynamic DID</label>
+          <input class="inp sm mono" id="logDdid" value="F200" title="First DDDID, 0xF200–0xF3FF" />
+          <label class="small muted" for="logMaxRec">Max record</label>
+          <input class="inp sm mono" id="logMaxRec" type="number" min="1" max="255" value="32" title="Bytes per dynamic DID (ECU limits vary)" />
+          <label class="small muted" for="logSess">Session</label>
+          <input class="inp sm mono" id="logSess" placeholder="keep" title="Diagnostic session to enter before defining, e.g. 03 (blank = leave as is)" />
+          <span class="pill neutral" id="logMode" hidden>—</span>
+          <span class="small muted mono" id="logRate"></span>
+        </div>
+        <p class="muted small" id="logModeWhy" hidden></p>
         <p class="muted small">
           Polling speed depends on the adapter — an ELM327 is slow, so expect only
           ~1–3 parameters/sec. The dongle's HS/MS-CAN switch must match the module's
@@ -89,8 +111,21 @@
     sec.querySelector("#logSelAll").addEventListener("click", () => setAll(true));
     sec.querySelector("#logSelNone").addEventListener("click", () => setAll(false));
     sec.querySelector("#logStart").addEventListener("click", start);
-    sec.querySelector("#logStop").addEventListener("click", stop);
+    sec.querySelector("#logStop").addEventListener("click", () => stop());
     sec.querySelector("#logSaveCsv").addEventListener("click", saveCsv);
+    sec.querySelector("#logFast").addEventListener("change", fastOpts);
+    fastOpts();
+
+    // A fast session holds the adapter: stop it when the panel is hidden, the
+    // adapter goes away or the window closes (the backend also stops a
+    // session that stops ticking).
+    new MutationObserver(() => {
+      if (S.fast && S.timer && !sec.classList.contains("active")) stop("panel closed");
+    }).observe(sec, { attributes: true, attributeFilter: ["class"] });
+    if (window.OT && typeof window.OT.onCaps === "function") {
+      window.OT.onCaps((st) => { if (S.fast && S.timer && !(st && st.connected)) stop("adapter disconnected"); });
+    }
+    window.addEventListener("beforeunload", () => { if (S.fast && S.timer) invoke("log_stop").catch(() => {}); });
 
     // Gate the panel on CAN capability (live datalogging needs a bus adapter).
     if (window.OT && typeof window.OT.gate === "function") {
@@ -161,11 +196,30 @@
       .map((c) => c.value);
   }
 
+  function fastOpts() {
+    const on = document.getElementById("logFast").checked;
+    ["logDdid", "logMaxRec", "logSess"].forEach((id) => (document.getElementById(id).disabled = !on || !!S.timer));
+  }
+
+  function showMode(st, rate) {
+    const pill = document.getElementById("logMode");
+    const why = document.getElementById("logModeWhy");
+    const b = logModeBadge(st);
+    pill.hidden = !b;
+    if (b) { pill.className = "pill " + b.cls; pill.textContent = b.text; pill.title = b.title; }
+    const reason = st && st.mode === "polling" ? st.reason : null;
+    why.hidden = !reason && !(st && st.polled && st.polled.length && st.mode === "fast-2c");
+    why.textContent = reason ? "Polling: " + reason
+      : st && st.polled && st.polled.length ? "Polled alongside the dynamic DIDs: " + st.polled.join(", ") : "";
+    document.getElementById("logRate").textContent = rate ? fmtLogRate(rate) : "";
+  }
+
   // ---- live loop -----------------------------------------------------------
-  function start() {
+  async function start() {
     if (S.timer) return; // already live
     const ids = selectedIds();
     if (!S.defPath) return status("choose a logger.xml first", true);
+    if (document.getElementById("logFast").checked) return startFast(ids);
 
     const intMs = Math.max(50, parseInt(document.getElementById("logInterval").value, 10) || 500);
     S.rows = [];
@@ -200,16 +254,84 @@
     status(`live @ ${intMs} ms`);
   }
 
-  function stop() {
+  // Fast mode: one live session on the adapter, ticked without overlap.
+  async function startFast(ids) {
+    const intMs = Math.max(20, parseInt(document.getElementById("logInterval").value, 10) || 500);
+    const maxRec = parseInt(document.getElementById("logMaxRec").value, 10);
+    document.getElementById("logStart").disabled = true;
+    status("starting fast session (probing DIDs, defining 0x2C records)…");
+    let res;
+    try {
+      res = await invoke("log_start", {
+        ...window.OT.connArgs(),
+        defPath: S.defPath,
+        ids,
+        timeoutMs: 1000,
+        fast: true,
+        dynamicDid: document.getElementById("logDdid").value || null,
+        maxRecord: isFinite(maxRec) ? maxRec : null,
+        fastSession: document.getElementById("logSess").value || null,
+      });
+    } catch (e) {
+      document.getElementById("logStart").disabled = false;
+      return status("start failed: " + msg(e), true);
+    }
+    S.rows = [];
+    S.started = 0;
+    S.fast = true;
+    buildTable(ids);
+    showMode(res.status, null);
+    document.getElementById("logStop").disabled = false;
+    document.getElementById("logSaveCsv").disabled = true;
+    document.getElementById("logInterval").disabled = true;
+    document.getElementById("logFast").disabled = true;
+    fastOpts();
+
+    let inFlight = false;
+    const tick = async () => {
+      if (inFlight || !S.timer) return; // never overlap ticks
+      inFlight = true;
+      try {
+        const r = await invoke("log_tick");
+        applySamples(r);
+        showMode(r.status, r.rate);
+      } catch (e) {
+        const m = msg(e);
+        if (/ended|no live log session/.test(m)) stop(null, m);
+        else status("tick error: " + m, true);
+      } finally {
+        inFlight = false;
+      }
+    };
+    S.timer = setInterval(tick, intMs);
+    tick();
+    status(`live (session) @ ${intMs} ms`);
+  }
+
+  async function stop(why, endedMsg) {
+    const wasFast = S.fast;
     if (S.timer) {
       clearInterval(S.timer);
       S.timer = null;
     }
+    S.fast = false;
     document.getElementById("logStart").disabled = false;
     document.getElementById("logStop").disabled = true;
     document.getElementById("logSaveCsv").disabled = S.rows.length === 0;
     document.getElementById("logInterval").disabled = false;
-    status(`stopped — ${S.rows.length} row(s) captured`);
+    document.getElementById("logFast").disabled = false;
+    fastOpts();
+    if (wasFast) {
+      try {
+        const r = await invoke("log_stop");
+        if (r && r.status) showMode(r.status, r.rate);
+        const ended = endedMsg || (r && r.ended);
+        if (ended) return status(`stopped — ${ended}`, true);
+      } catch (e) {
+        if (endedMsg) return status(`stopped — ${endedMsg}`, true);
+      }
+    }
+    status(`stopped${typeof why === "string" && why ? " (" + why + ")" : ""} — ${S.rows.length} row(s) captured`);
   }
 
   // Build the live table once per Start; cells are then updated in place.

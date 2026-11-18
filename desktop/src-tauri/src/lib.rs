@@ -167,6 +167,7 @@ pub fn builder_with(
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());
             app.manage(feat_candump::CandumpState::default());
+            app.manage(feat_logging::LiveLogState::default());
             startup::mark("setup plugin: done (state managed)");
             Ok(())
         })
@@ -216,6 +217,9 @@ macro_rules! core_command_list {
             feat_service::service_run,
             feat_logging::log_params,
             feat_logging::log_poll_once,
+            feat_logging::log_start,
+            feat_logging::log_tick,
+            feat_logging::log_stop,
             feat_logview::log_open,
             feat_logview::log_series,
             feat_logview::log_sample_at,

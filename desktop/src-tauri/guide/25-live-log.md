@@ -20,6 +20,42 @@ watch them in a live table, and save the samples as CSV.
 4. Press **Start**. The table updates in place.
 5. Press **Stop**, then **Save CSV**.
 
+## Fast mode (UDS 0x2C)
+
+Tick **Fast (0x2C)** before **Start** to read many channels with one request
+per sample instead of one per channel. OpenTune asks the ECU to build a
+*dynamically defined DID* (ISO 14229-1 service `0x2C`, range `0xF200`–`0xF3FF`)
+from the selected UDS DIDs and memory addresses, then reads that one DID each
+tick.
+
+- **Dynamic DID** — the first DID to define (default `F200`). Up to four are used.
+- **Max record** — bytes per dynamic DID (default 32). If the ECU refuses the size, lower it.
+- **Session** — a diagnostic session to enter before defining, e.g. `03` for an
+  ECU that only accepts `0x2C` in the extended session. Blank leaves the session alone.
+
+The badge shows the mode the session really runs in:
+
+- **fast-2c** — the ECU accepted the definition. Hover the badge for the dynamic
+  DIDs. Channels that cannot be packed (OBD-II PIDs, failed probes) are polled
+  alongside and listed under the badge.
+- **polling** — the ECU refused part of the setup (for example NRC `0x11`
+  *serviceNotSupported*, `0x31` *requestOutOfRange* or `0x33`
+  *securityAccessDenied*). The reason is shown and the log continues with one
+  request per channel. OpenTune never unlocks security access for logging.
+
+Next to the badge: the achieved **samples/s** and **req/sample** (requests per
+sample; 1.00 means one request read every channel).
+
+A fast session holds the adapter for as long as it runs, so other panels report
+*adapter busy*. It stops, and clears the dynamic DIDs on the ECU, when you press
+**Stop**, switch to another panel, the adapter disconnects, or no channel answers
+for five ticks in a row. If the app stops ticking for 15 s the session also
+stops itself.
+
+With the toggle off, the panel polls exactly as before.
+
+Validation state: **synthetic-tested** (UDS simulator). Not yet tested on a car.
+
 ## Reading the results
 
 - **Value** and **Units** per parameter. **Note** explains a missing value.
@@ -30,6 +66,7 @@ watch them in a live table, and save the samples as CSV.
 
 - **Slow updates** — an ELM327 manages roughly 1–3 parameters per second. Log fewer parameters or use a faster adapter. Ticks are skipped while the adapter is still busy with the previous one.
 - **Poll error: adapter busy** — another panel is using the adapter.
+- **Fast mode says polling** — the ECU does not offer `0x2C` in this session or for these sources. Try **Session** `03`, a smaller **Max record**, or log without fast mode.
 - **All values blank** — wrong bus, wrong target ids, or the definition does not match this ECU.
 
 ## Safety

@@ -152,3 +152,26 @@ test("panel help strip markup", () => {
   assert.ok(!bare.includes("ph-guide") && !bare.includes("ph-steps"));
   assert.match(U.helpStripHtml({ risk: "unknown-risk" }), /Offline/);
 });
+
+test("logModeBadge describes fast and polling sessions", () => {
+  assert.equal(U.logModeBadge(null), null);
+  const fast = U.logModeBadge({
+    mode: "fast-2c", reason: null, polled: ["obd_rpm"], redefines: 1,
+    dynamic_dids: [{ did: 0xf200, record_len: 13, channels: ["a", "b"] }],
+  });
+  assert.equal(fast.text, "fast-2c");
+  assert.equal(fast.cls, "ok");
+  assert.match(fast.title, /0xF200 \(13 B, 2 ch\)/);
+  assert.match(fast.title, /1 channel\(s\) polled/);
+  assert.match(fast.title, /re-defined 1×/);
+  const fb = U.logModeBadge({ mode: "polling", reason: "0x2C refused: NRC 0x11" });
+  assert.deepEqual([fb.text, fb.cls, fb.title], ["polling", "accent", "0x2C refused: NRC 0x11"]);
+  assert.equal(U.logModeBadge({ mode: "polling", reason: "fast mode not requested" }).cls, "neutral");
+});
+
+test("fmtLogRate shows samples/s and requests per sample", () => {
+  assert.equal(U.fmtLogRate(null), "");
+  assert.equal(U.fmtLogRate({ ticks: 0 }), "");
+  assert.equal(U.fmtLogRate({ ticks: 10, samples_per_s: 4.26, requests_per_sample: 1 }), "4.3 samples/s · 1.00 req/sample");
+  assert.equal(U.fmtLogRate({ ticks: 99, samples_per_s: 51.04, requests_per_sample: 3 }), "51 samples/s · 3.00 req/sample");
+});
