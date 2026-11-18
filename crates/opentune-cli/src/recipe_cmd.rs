@@ -64,6 +64,12 @@ pub enum RecipeAction {
         /// Also write the full per-patch report as JSON.
         #[arg(long)]
         report: Option<PathBuf>,
+        /// Write the output even when some checksum blocks CANNOT be verified
+        /// (e.g. an EDC17 nested sub-block the tune changed). The attestation
+        /// stays unsatisfied, so the flash policy refuses the image; for
+        /// inspection/bench use only. A failing checksum still refuses.
+        #[arg(long)]
+        allow_unverified: bool,
     },
     /// Print a recipe's identity and patches.
     Show {
@@ -196,6 +202,7 @@ pub fn run(ctx: &CliContext, action: RecipeAction) -> Result<()> {
             checksum,
             attestation,
             report,
+            allow_unverified,
         } => {
             let r = load(&recipe)?;
             let t = read(&target)?;
@@ -206,6 +213,7 @@ pub fn run(ctx: &CliContext, action: RecipeAction) -> Result<()> {
                     ApplyMode::Strict
                 },
                 checksum,
+                allow_unverified,
             };
             let rep = apply_with(&r, &t, &opts, &lookup);
             println!(
@@ -272,6 +280,14 @@ pub fn run(ctx: &CliContext, action: RecipeAction) -> Result<()> {
                 "Checksums ({}) corrected and attested: satisfied={} — {}",
                 att.algorithm, att.satisfied, att.note
             );
+            if !att.satisfied {
+                eprintln!(
+                    "WARNING: --allow-unverified: {} block(s) could not be verified ({}); the \
+                     attestation is NOT satisfied and the flash policy will refuse this image.",
+                    rep.unverified_blocks.len(),
+                    rep.unverified_blocks.join(", ")
+                );
+            }
             if rep.identical_to_recipe_result {
                 println!("Output is byte-identical to the recipe's tuned image.");
             }

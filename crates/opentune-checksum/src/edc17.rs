@@ -64,8 +64,12 @@
 //!
 //! * Small **nested "map-descriptor" sub-blocks** (e.g. CP42 `0x3005A8..`) also
 //!   carry a FADECAFE record but their CRC is NOT held invariant by a last-dword
-//!   comp word; they use a different (unconfirmed) rule. They are left as
-//!   `Unknown` here — surfaced, never written.
+//!   comp word; they use a different (unconfirmed) rule (neither a trailing
+//!   CRC-32/Bosch-CRC/word-sum of the body nor a CRC stored elsewhere in the
+//!   image — checked on all 15 pairs). They are left as `Unknown` here —
+//!   surfaced, never written, not even by `correct_with_reference`;
+//!   [`verify_with_reference`] accepts one only when it is byte-identical to
+//!   the owner's reference image.
 //! * The VAG constant for the owner's Passat CC (CFGB) CP14 is UNKNOWN: no VAG
 //!   EDC17 dump was available. The *algorithm* is identical, but `K` is
 //!   firmware-specific, so a VAG stock dump is needed to pin it (or bootstrap it
@@ -86,7 +90,11 @@ use opentune_core::{Error, MemoryRegion, Result};
 ///
 /// This is the exact CRC EDC17 uses over its calibration blocks.
 pub fn crc32(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0xFFFF_FFFF;
+    !crc32_update(0xFFFF_FFFF, data)
+}
+
+/// Run the (non-finalised) CRC-32 register over `data`, starting from `crc`.
+fn crc32_update(mut crc: u32, data: &[u8]) -> u32 {
     for &b in data {
         crc ^= b as u32;
         for _ in 0..8 {
@@ -94,7 +102,7 @@ pub fn crc32(data: &[u8]) -> u32 {
             crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
         }
     }
-    !crc
+    crc
 }
 
 /// The directory record marker pair, in file (little-endian) byte order.
@@ -236,6 +244,147 @@ pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
     out
 }
 
+/// `true` when `b` lies inside another, larger directory block — one of the
+/// small nested "map-descriptor" sub-blocks (e.g. CP42 `0x3005A8..`). Their
+/// CRC is NOT held on a constant by a last-dword compensation word (real tunes
+/// change it), so their rule is unknown: never forged, verified only as
+/// byte-identical to a reference image.
+pub fn is_nested(b: DirBlock, blocks: &[DirBlock]) -> bool {
+    blocks
+        .iter()
+        .any(|o| *o != b && o.start <= b.start && b.end <= o.end)
+}
+
+/// On what basis [`verify_with_reference`] judged a block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefBasis {
+    /// CRC checked against a validated library constant ([`KNOWN_CONSTS`]).
+    LibraryConstant,
+    /// CRC checked against `K = crc32(reference block)` — the firmware
+    /// constant recovered from the owner's stock dump, exactly the model
+    /// [`Edc17::correct_with_reference`] corrects to. Top-level blocks only.
+    ReferenceConstant,
+    /// The block's bytes are byte-identical to the reference image's, so
+    /// whatever its (possibly unknown) rule is, it holds exactly as it did in
+    /// the reference. Used for nested sub-blocks.
+    UnchangedFromReference,
+    /// Nested sub-block (unknown rule) whose bytes differ from the reference,
+    /// or a block the reference does not have: it CANNOT be verified.
+    Unverifiable,
+}
+
+/// One block judged by [`verify_with_reference`].
+#[derive(Debug, Clone)]
+pub struct RefBlockStatus {
+    /// The plain status (`ok` is `false` for [`RefBasis::Unverifiable`]).
+    pub status: BlockStatus,
+    /// How it was judged.
+    pub basis: RefBasis,
+}
+
+/// Verify every directory block of `image` with the help of a known-good
+/// `reference` (the owner's own untouched stock read of the same ECU).
+///
+/// Plain [`Edc17::verify`] can only confirm blocks with a validated library
+/// constant; every other block is reported not-ok, so no real EDC17 image ever
+/// attests (each carries code or nested sub-blocks without a library
+/// constant). With a reference, each block is judged honestly (see
+/// [`RefBasis`]):
+///
+/// * library constant → `crc == K`;
+/// * other top-level block present in the reference → `crc == crc32(ref)`
+///   (the reference-constant model `correct_with_reference` writes);
+/// * nested sub-block → ok only when byte-identical to the reference,
+///   otherwise [`RefBasis::Unverifiable`] (never claimed ok).
+///
+/// The reference must be the same size and must itself verify on every
+/// library-constant block; otherwise it is rejected (it is not a valid stock
+/// read of this firmware).
+pub fn verify_with_reference(image: &[u8], reference: &[u8]) -> Result<Vec<RefBlockStatus>> {
+    if image.len() != reference.len() {
+        return Err(Error::Config(format!(
+            "EDC17: reference is {} bytes but the image is {} bytes",
+            reference.len(),
+            image.len()
+        )));
+    }
+    let blocks = parse_directory(image);
+    if blocks.is_empty() {
+        return Err(Error::Config(
+            "no EDC17 checksum directory (FADECAFE/CAFEAFFE) found".into(),
+        ));
+    }
+    let ref_blocks = parse_directory(reference);
+    for b in &ref_blocks {
+        if let Some(kc) = known_const(b.start, b.end) {
+            let (s, e) = b.range();
+            if crc32(&reference[s..e]) != kc.k {
+                return Err(Error::Config(format!(
+                    "EDC17: the reference image fails its own {} block @0x{:06X}; \
+                     it is not a valid stock read",
+                    kc.variant, b.start
+                )));
+            }
+        }
+    }
+    let mut out = Vec::with_capacity(blocks.len());
+    for &b in &blocks {
+        let (s, e) = b.range();
+        let computed = crc32(&image[s..e]);
+        let region = MemoryRegion::new(b.start, b.end - b.start + 1);
+        let nested = is_nested(b, &blocks);
+        let in_ref = ref_blocks.contains(&b);
+        let unchanged = in_ref && image[s..e] == reference[s..e];
+        let (name, stored, basis, ok) = if let Some(kc) = known_const(b.start, b.end) {
+            (
+                format!("{}@0x{:06X}", kc.variant, b.start),
+                kc.k,
+                RefBasis::LibraryConstant,
+                computed == kc.k,
+            )
+        } else if !in_ref {
+            (
+                format!("edc17-unknown@0x{:06X}", b.start),
+                0,
+                RefBasis::Unverifiable,
+                false,
+            )
+        } else if nested {
+            let k = crc32(&reference[s..e]);
+            let name = format!("edc17-nested@0x{:06X}", b.start);
+            if unchanged {
+                (name, k, RefBasis::UnchangedFromReference, true)
+            } else {
+                (name, k, RefBasis::Unverifiable, false)
+            }
+        } else {
+            let k = crc32(&reference[s..e]);
+            let basis = if unchanged {
+                RefBasis::UnchangedFromReference
+            } else {
+                RefBasis::ReferenceConstant
+            };
+            (
+                format!("edc17@0x{:06X} (K from reference)", b.start),
+                k,
+                basis,
+                computed == k,
+            )
+        };
+        out.push(RefBlockStatus {
+            status: BlockStatus {
+                name,
+                region,
+                stored: stored as u64,
+                computed: computed as u64,
+                ok,
+            },
+            basis,
+        });
+    }
+    Ok(out)
+}
+
 /// Compute the trailing 4-byte compensation word that makes
 /// `crc32(block) == target`, by an affine GF(2) solve over the free last dword.
 ///
@@ -245,16 +394,15 @@ pub fn parse_directory(image: &[u8]) -> Vec<DirBlock> {
 pub fn forge_last_dword(block: &[u8], target: u32) -> [u8; 4] {
     assert!(block.len() >= 4 && block.len().is_multiple_of(4));
     let fp = block.len() - 4;
-    let mut scratch = block.to_vec();
-    let eval = |scratch: &mut Vec<u8>, x: u32| -> u32 {
-        scratch[fp..fp + 4].copy_from_slice(&x.to_le_bytes());
-        crc32(scratch)
-    };
-    let f0 = eval(&mut scratch, 0);
+    // The CRC register after the fixed prefix is computed once; each trial
+    // value of the free dword only runs the last 4 bytes from there.
+    let state = crc32_update(0xFFFF_FFFF, &block[..fp]);
+    let eval = |x: u32| -> u32 { !crc32_update(state, &x.to_le_bytes()) };
+    let f0 = eval(0);
     // Column i = effect of flipping input bit i of the free dword.
     let mut cols = [0u32; 32];
     for (i, col) in cols.iter_mut().enumerate() {
-        *col = eval(&mut scratch, 1u32 << i) ^ f0;
+        *col = eval(1u32 << i) ^ f0;
     }
     let tgt = target ^ f0;
     // Solve sum_{i in X} cols[i] == tgt over GF(2). Augmented matrix: 32 rows
@@ -392,6 +540,10 @@ impl ChecksumAlgo for Edc17 {
     /// directory are touched; when a validated library constant also exists for
     /// a block, the reference must agree with it or that block is skipped — so a
     /// wrong/mismatched reference can never silently corrupt the image.
+    ///
+    /// Nested sub-blocks ([`is_nested`]) are never written: their CRC is not
+    /// held invariant (real tunes change it), so forging them to the reference
+    /// CRC would write a value the ECU does not expect.
     fn correct_with_reference(&self, image: &mut [u8], reference: &[u8]) -> Result<Vec<Fix>> {
         let blocks = parse_directory(image);
         let ref_blocks = parse_directory(reference);
@@ -416,6 +568,9 @@ impl ChecksumAlgo for Edc17 {
         for b in shared {
             let (s, e) = b.range();
             if e > image.len() || e > reference.len() {
+                continue;
+            }
+            if known_const(b.start, b.end).is_none() && is_nested(b, &blocks) {
                 continue;
             }
             // K recovered from the owner's valid stock dump = the firmware's
@@ -576,6 +731,149 @@ mod tests {
         assert!(Edc17
             .correct_with_reference(&mut target.clone(), &foreign)
             .is_err());
+    }
+
+    /// Write a directory record `{start, end, FADECAFE, CAFEAFFE}` at `at`
+    /// for the file range `[start, end]` (inclusive).
+    fn record(img: &mut [u8], at: usize, start: u32, end: u32) {
+        img[at..at + 4].copy_from_slice(&(0x8000_0000 | start).to_le_bytes());
+        img[at + 4..at + 8].copy_from_slice(&(0x8000_0000 | end).to_le_bytes());
+        img[at + 8..at + 12].copy_from_slice(&0xFADE_CAFEu32.to_le_bytes());
+        img[at + 12..at + 16].copy_from_slice(&0xCAFE_AFFEu32.to_le_bytes());
+    }
+
+    fn forge(img: &mut [u8], start: usize, end_incl: usize, k: u32) {
+        let e = end_incl + 1;
+        let x = forge_last_dword(&img[start..e], k);
+        img[e - 4..e].copy_from_slice(&x);
+    }
+
+    /// Outer top-level block [0x100, 0x1FF] (K = 0x1234_ABCD, no library
+    /// constant) with a nested sub-block [0x140, 0x17F] inside it, whose last
+    /// dword is an opaque value (its rule is unknown).
+    fn nested_stock() -> Vec<u8> {
+        let mut img = vec![0u8; 0x2000];
+        record(&mut img, 0x40, 0x100, 0x1FF);
+        record(&mut img, 0x50, 0x140, 0x17F);
+        for (i, b) in img[0x100..0x1FC].iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(13).wrapping_add(1);
+        }
+        forge(&mut img, 0x100, 0x1FF, 0x1234_ABCD);
+        img
+    }
+
+    #[test]
+    fn nested_blocks_are_detected() {
+        let img = nested_stock();
+        let blocks = parse_directory(&img);
+        assert_eq!(blocks.len(), 2);
+        let outer = DirBlock {
+            start: 0x100,
+            end: 0x1FF,
+        };
+        let inner = DirBlock {
+            start: 0x140,
+            end: 0x17F,
+        };
+        assert!(is_nested(inner, &blocks));
+        assert!(!is_nested(outer, &blocks));
+    }
+
+    #[test]
+    fn correct_with_reference_never_writes_a_nested_block() {
+        let stock = nested_stock();
+        // A tune that changes data inside the nested sub-block (and so the
+        // outer block too).
+        let mut tuned = stock.clone();
+        tuned[0x150] ^= 0x77;
+        let fixes = Edc17.correct_with_reference(&mut tuned, &stock).unwrap();
+        // Only the outer block's compensation word was forged.
+        assert_eq!(fixes.len(), 1);
+        assert_eq!(fixes[0].offset, 0x1FC);
+        assert_eq!(
+            tuned[0x17C..0x180],
+            stock[0x17C..0x180],
+            "nested word untouched"
+        );
+        assert_eq!(crc32(&tuned[0x100..0x200]), 0x1234_ABCD);
+    }
+
+    #[test]
+    fn verify_with_reference_judges_each_block_honestly() {
+        let stock = nested_stock();
+        // Plain verify can confirm nothing here (no library constant).
+        assert!(Edc17.verify(&stock).unwrap().iter().all(|b| !b.ok));
+
+        // The stock image against itself: everything unchanged -> ok.
+        let v = verify_with_reference(&stock, &stock).unwrap();
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().all(|b| b.status.ok));
+        assert!(v
+            .iter()
+            .all(|b| b.basis == RefBasis::UnchangedFromReference));
+
+        // A tune outside the nested block, corrected: the outer block holds the
+        // reference constant, the nested block is byte-identical.
+        let mut t = stock.clone();
+        t[0x1A0] ^= 0x10;
+        Edc17.correct_with_reference(&mut t, &stock).unwrap();
+        let v = verify_with_reference(&t, &stock).unwrap();
+        let outer = v.iter().find(|b| b.status.region.address == 0x100).unwrap();
+        let inner = v.iter().find(|b| b.status.region.address == 0x140).unwrap();
+        assert_eq!(outer.basis, RefBasis::ReferenceConstant);
+        assert!(outer.status.ok);
+        assert_eq!(inner.basis, RefBasis::UnchangedFromReference);
+        assert!(inner.status.ok);
+
+        // The same tune uncorrected: the outer block FAILS (a real mismatch).
+        let mut u = stock.clone();
+        u[0x1A0] ^= 0x10;
+        let v = verify_with_reference(&u, &stock).unwrap();
+        let outer = v.iter().find(|b| b.status.region.address == 0x100).unwrap();
+        assert_eq!(outer.basis, RefBasis::ReferenceConstant);
+        assert!(!outer.status.ok);
+
+        // A tune inside the nested block: its rule is unknown, so even after
+        // the outer block is corrected it is unverifiable, never ok.
+        let mut n = stock.clone();
+        n[0x150] ^= 0x77;
+        Edc17.correct_with_reference(&mut n, &stock).unwrap();
+        let v = verify_with_reference(&n, &stock).unwrap();
+        let inner = v.iter().find(|b| b.status.region.address == 0x140).unwrap();
+        assert_eq!(inner.basis, RefBasis::Unverifiable);
+        assert!(!inner.status.ok);
+        let outer = v.iter().find(|b| b.status.region.address == 0x100).unwrap();
+        assert!(outer.status.ok);
+    }
+
+    #[test]
+    fn verify_with_reference_uses_library_constants_and_rejects_bad_references() {
+        // A CP14-shaped image: block [0x40000, 0x7FFFB] carries the validated
+        // library constant.
+        let mut stock = vec![0u8; 0x8_0000];
+        record(&mut stock, 0x40, 0x4_0000, 0x7_FFFB);
+        for (i, b) in stock[0x4_0000..0x7_FFF8].iter_mut().enumerate() {
+            *b = (i as u8) ^ 0x3C;
+        }
+        forge(&mut stock, 0x4_0000, 0x7_FFFB, 0xA185_64EC);
+        let v = verify_with_reference(&stock, &stock).unwrap();
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].basis, RefBasis::LibraryConstant);
+        assert!(v[0].status.ok);
+
+        // A reference that fails its own library block is not a valid stock read.
+        let mut broken = stock.clone();
+        broken[0x5_0000] ^= 1;
+        assert!(verify_with_reference(&stock, &broken).is_err());
+        // A different-size reference is rejected.
+        assert!(verify_with_reference(&stock, &stock[..0x4_0000]).is_err());
+        // A block the reference lacks is unverifiable.
+        let other = vec![0u8; stock.len()];
+        let v = verify_with_reference(&stock, &other).unwrap();
+        assert!(v[0].status.ok, "library constant needs no reference");
+        let v = verify_with_reference(&nested_stock(), &[0u8; 0x2000]).unwrap();
+        assert!(v.iter().all(|b| b.basis == RefBasis::Unverifiable));
+        assert!(v.iter().all(|b| !b.status.ok));
     }
 
     #[test]

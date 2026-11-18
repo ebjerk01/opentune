@@ -30,7 +30,8 @@ opentune recipe apply tune.otrecipe other_read.bin -o out.bin --relocate
 the structurally detected family), `--context N` (default 8 bytes per side),
 `--gap N` (changes closer than N unchanged bytes merge into one patch, default
 16), `--note`. `apply` options: `--relocate`, `--checksum <algo>` (override),
-`--attestation <path>`, `--report <path>` (full per-patch report as JSON).
+`--attestation <path>`, `--report <path>` (full per-patch report as JSON),
+`--allow-unverified` (see [EDC17](#edc17)).
 
 ## File format (version 1)
 
@@ -78,7 +79,7 @@ reader supports, is rejected.
 | `source.part_numbers` / `sw_numbers` | Identity strings found in the image (VAG/Bosch/Mercedes part numbers, `103…` software numbers). **VINs are never recorded.** |
 | `source.unchanged_sha256` | SHA-256 over the stock image with every patch range and checksum field removed (the remaining bytes concatenated in order). Equal only for the same software *and* calibration. |
 | `checksum` | `opentune-checksum` algorithm id used to correct the output; `null` if none was known (apply then needs `--checksum`). |
-| `checksum_fields` | Ranges the checksum correction rewrote in the tuned image. They are **not** patches: the correction recomputes them for the target. Detected at create time by reverting each small changed range and checking that the algorithm reproduces the tuned bytes exactly. |
+| `checksum_fields` | Ranges the checksum correction rewrote in the tuned image. They are **not** patches: the correction recomputes them for the target. Detected at create time by reverting each small changed range and checking that the algorithm reproduces the tuned bytes exactly. A checksum word inside a larger changed range (EDC17's compensation word right after edited calibration data) is carved out the same way: the bytes the correction writes there are reverted and must come back exactly; the patch is split around it. Patch context never extends into a field. |
 | `result_sha256` | Hash of the tuned image; `apply` reports when its output is byte-identical to it. |
 | `patches[].offset` | Offset of the first changed byte in the source image. |
 | `patches[].original` / `new` | Source bytes and replacement bytes (same length). Unchanged bytes inside a merged patch appear identically in both. |
@@ -112,9 +113,46 @@ never partially patched.
    target as the reference image (needed by EDC17). No known algorithm →
    refused.
 4. **Attestation.** `opentune-attest` verifies every checksum block of the
-   output. Only a satisfied attestation, bound to the output's SHA-256, lets
-   the image be written; it is saved next to it (`<out>.attestation.json`) for
-   the flash safety policy.
+   output, again with the untouched target as the reference
+   (`attest_image_with_reference`; only EDC17 uses it, every other algorithm
+   is self-contained). Only a satisfied attestation, bound to the output's
+   SHA-256, lets the image be written; it is saved next to it
+   (`<out>.attestation.json`) for the flash safety policy.
+
+## EDC17
+
+An EDC17 image carries more directory blocks than the calibration blocks with
+a validated library constant: code blocks, and small **nested** sub-blocks
+inside a larger block whose rule is not known. The plain `edc17` verify can
+only confirm the library-constant blocks, so before the reference-aware
+attestation **every** real EDC17 pair was refused, even the stock image
+itself. The reference-aware attestation judges each block on a stated basis:
+
+| Block | Verified when | Basis in the note |
+|---|---|---|
+| has a validated library constant | `crc32(block) == K` | by algorithm |
+| other top-level block | `crc32(block) == crc32(reference block)` (the constant `correct_with_reference` recovers and writes) | against the reference constant |
+| any block whose bytes equal the reference's | always (its checksum holds exactly as in the ECU's own image) | byte-identical to the reference |
+| nested sub-block changed vs the reference, or a block the reference lacks | **never** — its rule is unknown | cannot be verified |
+
+The reference must be the same size and verify on every library-constant
+block, otherwise the attestation errors. Nested sub-blocks are never written by
+`correct_with_reference` (forging them to the stock CRC is not what the ECU
+expects: real tunes change their CRC).
+
+A tune that changes a nested sub-block is therefore **refused** by default,
+naming the block. `--allow-unverified` (`ApplyOptions::allow_unverified`)
+writes the output anyway, but its attestation stays `satisfied: false`, so the
+flash safety policy will not write it; it is for inspection and bench work. It
+never overrides a block that was checked and **fails** (a real checksum
+mismatch still refuses).
+
+On the 15 real stock/tuned EDC17 pairs (EDC17C08, CP11, CP14, CP42),
+`create` → `apply` to the stock read gives: 13 byte-identical to the tuner's
+file with a satisfied attestation; the 2 CP42 pairs refused because the tune
+changed the nested map-descriptor sub-block at `0x3005A8` (with
+`--allow-unverified`: byte-identical, attestation unsatisfied). Before this,
+all 15 were refused.
 
 Relocation is for re-reads whose layout shifted (e.g. a different read range
 or a re-based dump) — **not** for moving a calibration onto different

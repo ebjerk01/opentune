@@ -51,6 +51,74 @@ fn golf_edc16_recipe_reproduces_the_tuned_file() {
     }
 }
 
+/// Every real EDC17 pair: the recipe never patches a compensation word, the
+/// output is attested against the stock read, and the result is the tuner's
+/// file byte-for-byte. A pair whose tune changed a nested sub-block of
+/// unknown rule (CP42) is refused by default and, with the explicit override,
+/// reproduces the tuned file while its attestation stays unsatisfied.
+#[test]
+fn edc17_pairs_apply_or_refuse_for_a_stated_reason() {
+    use opentune_checksum::edc17::{is_nested, parse_directory};
+    let Some(root) = fixtures() else { return };
+    let Ok(rd) = std::fs::read_dir(root.join("edc17")) else {
+        return;
+    };
+    let mut stocks: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.to_string_lossy().ends_with("_ori.bin"))
+        .collect();
+    stocks.sort();
+    let (mut identical, mut override_only) = (0, 0);
+    for (i, p) in stocks.iter().enumerate() {
+        let tuned_path = PathBuf::from(p.to_string_lossy().replace("_ori.bin", "_mod.bin"));
+        let (Ok(stock), Ok(tuned)) = (std::fs::read(p), std::fs::read(&tuned_path)) else {
+            continue;
+        };
+        let label = format!("edc17 pair #{i}");
+        let (r, _) = create(&stock, &tuned, &CreateOptions::default()).unwrap();
+        assert_eq!(r.checksum.as_deref(), Some("edc17"), "{label}");
+        let dir = parse_directory(&stock);
+        // No patch covers the compensation word of a top-level block.
+        for b in dir.iter().filter(|b| !is_nested(**b, &dir)) {
+            let w = b.store_offset() as u64;
+            for pa in &r.patches {
+                assert!(
+                    pa.offset + pa.len() as u64 <= w || pa.offset >= w + 4,
+                    "{label}: a patch covers the word @0x{w:X}"
+                );
+            }
+        }
+        // A changed nested sub-block cannot be verified.
+        let nested_changed = dir.iter().any(|b| {
+            let (s, e) = b.range();
+            is_nested(*b, &dir) && stock[s..e] != tuned[s..e]
+        });
+        let rep = apply(&r, &stock, &ApplyOptions::default());
+        if nested_changed {
+            let why = rep.refusal.expect("unverifiable nested block must refuse");
+            assert!(why.contains("cannot be verified"), "{label}: {why}");
+            let rep = apply(
+                &r,
+                &stock,
+                &ApplyOptions {
+                    allow_unverified: true,
+                    ..ApplyOptions::default()
+                },
+            );
+            assert_eq!(rep.refusal, None, "{label}");
+            assert!(!rep.attestation.unwrap().satisfied, "{label}");
+            assert_eq!(rep.output.as_deref(), Some(&tuned[..]), "{label}");
+            override_only += 1;
+        } else {
+            assert_eq!(rep.refusal, None, "{label}");
+            assert!(rep.attestation.unwrap().satisfied, "{label}");
+            assert_eq!(rep.output.as_deref(), Some(&tuned[..]), "{label}");
+            identical += 1;
+        }
+    }
+    eprintln!("EDC17 pairs: identical+attested={identical} override-only={override_only}");
+}
+
 #[test]
 fn pair_corpus_round_trip_summary() {
     let Some(root) = fixtures() else { return };
