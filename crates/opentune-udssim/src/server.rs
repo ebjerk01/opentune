@@ -184,6 +184,8 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone)]
 struct TransferState {
     is_download: bool,
+    /// Start address of the transfer (downloads are written here).
+    address: u64,
     /// The next expected `blockSequenceCounter` (starts at 0x01, wraps 0xFF→0x00).
     next_seq: u8,
     /// Bytes received so far (download).
@@ -561,6 +563,20 @@ impl UdsServer {
         }
     }
 
+    /// What an upload of `size` bytes at `address` hands out: the flash
+    /// model's memory (when it maps the span and allows reads), else the
+    /// mapped memory, else the historical deterministic ramp (byte `i` =
+    /// `i & 0xFF`) for unmapped addresses.
+    fn upload_source(&self, address: u64, size: usize) -> Vec<u8> {
+        let from_flash = self.flash.as_ref().and_then(|f| {
+            let addr = u32::try_from(address).ok()?;
+            f.config.readable.then(|| f.read(addr, size)).flatten()
+        });
+        from_flash
+            .or_else(|| self.read_memory(address, size))
+            .unwrap_or_else(|| (0..size).map(|i| (i & 0xFF) as u8).collect())
+    }
+
     /// `size` bytes of mapped memory at `address`, if the span lies wholly
     /// inside one region.
     fn read_memory(&self, address: u64, size: usize) -> Option<Vec<u8>> {
@@ -903,18 +919,25 @@ impl UdsServer {
         if addr_bytes == 0 || size_bytes == 0 || req.len() != 3 + addr_bytes + size_bytes {
             return neg(service, nrc::INCORRECT_LENGTH);
         }
+        let address = be_to_u64(&req[3..3 + addr_bytes]);
         let size = be_to_usize(&req[3 + addr_bytes..3 + addr_bytes + size_bytes]);
         if size == 0 {
             return neg(service, nrc::UPLOAD_DOWNLOAD_NOT_ACCEPTED);
         }
         let upload_remaining = if is_download {
+            // Downloads persist into the memory map, so a later upload /
+            // ReadMemoryByAddress reads them back. An unmapped target gets a
+            // fresh (erased, 0xFF) region.
+            if self.read_memory(address, size).is_none() {
+                self.memory.insert(address, vec![0xFF; size]);
+            }
             Vec::new()
         } else {
-            // Hand out a deterministic ramp for upload reads.
-            (0..size).map(|i| (i & 0xFF) as u8).collect()
+            self.upload_source(address, size)
         };
         self.transfer = Some(TransferState {
             is_download,
+            address,
             next_seq: 0x01,
             received: Vec::new(),
             upload_remaining,
@@ -939,7 +962,13 @@ impl UdsServer {
             return neg(sid::TRANSFER_DATA, nrc::WRONG_BLOCK_SEQUENCE_COUNTER);
         }
         if state.is_download {
+            let at = state.address + state.received.len() as u64;
             state.received.extend_from_slice(&req[2..]);
+            let data = req[2..].to_vec();
+            self.write_memory(at, &data);
+            let Some(state) = self.transfer.as_mut() else {
+                return neg(sid::TRANSFER_DATA, nrc::REQUEST_SEQUENCE_ERROR);
+            };
             state.next_seq = state.next_seq.wrapping_add(1);
             // 76 <blockSequenceCounter>.
             vec![0x76, seq]
@@ -1125,6 +1154,7 @@ mod tests {
         let mut s = UdsServer::new();
         s.transfer = Some(TransferState {
             is_download: true,
+            address: 0,
             next_seq: 0xFF,
             received: Vec::new(),
             upload_remaining: Vec::new(),

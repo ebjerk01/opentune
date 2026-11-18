@@ -183,6 +183,40 @@ fn unreadable_flash_refuses_reads_and_generic_memory_still_works() {
 }
 
 #[test]
+fn generic_download_persists_for_upload_and_read_back() {
+    let mut s = UdsServer::new();
+    // Download 4 bytes to unmapped 0x4000: the server maps it.
+    assert_eq!(
+        s.handle(&[0x34, 0x00, 0x44, 0, 0, 0x40, 0, 0, 0, 0, 4]),
+        vec![0x74, 0x20, 0x04, 0x02]
+    );
+    assert_eq!(s.handle(&[0x36, 0x01, 9, 8]), vec![0x76, 0x01]);
+    assert_eq!(s.handle(&[0x36, 0x02, 7, 6]), vec![0x76, 0x02]);
+    assert_eq!(s.handle(&[0x37]), vec![0x77]);
+    let mut r = vec![0x23];
+    r.extend(range(0x4000, 4));
+    assert_eq!(s.handle(&r), vec![0x63, 9, 8, 7, 6]);
+    // Upload reads the same memory.
+    s.handle(&[0x35, 0x00, 0x44, 0, 0, 0x40, 0, 0, 0, 0, 4]);
+    assert_eq!(s.handle(&[0x36, 0x01]), vec![0x76, 0x01, 9, 8, 7, 6]);
+    // Unmapped memory still uploads the historical ramp.
+    s.handle(&[0x35, 0x00, 0x44, 0, 0, 0x90, 0, 0, 0, 0, 3]);
+    assert_eq!(s.handle(&[0x36, 0x01]), vec![0x76, 0x01, 0, 1, 2]);
+}
+
+#[test]
+fn upload_reads_the_flash_model_memory() {
+    let mut s = server();
+    let mut r = vec![0x35, 0x00];
+    r.extend(range(BASE, 4));
+    s.handle(&r);
+    assert_eq!(
+        s.handle(&[0x36, 0x01]),
+        vec![0x76, 0x01, 0x55, 0x55, 0x55, 0x55]
+    );
+}
+
+#[test]
 fn without_a_flash_model_downloads_behave_as_before() {
     let mut s = UdsServer::new();
     assert!(s.flash().is_none());
