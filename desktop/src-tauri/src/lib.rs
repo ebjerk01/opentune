@@ -64,6 +64,7 @@ mod flash; // safety-gated file flash + backup vault
 mod guide; // in-app guide
 mod image; // Image / Identify / Analyze bin
 mod maps; // map lists, decode, editor write-back
+mod packs; // definition packs for the panels' pack picker
 mod project; // .otproj tuning projects
 mod state; // managed state: data dirs, channel, guards, debug log
 mod update; // self-update
@@ -264,6 +265,8 @@ macro_rules! core_command_list {
             feat_ts::ts_poll,
             drivers::list_drivers,
             state::data_paths,
+            packs::packs_list,
+            packs::packs_open,
             image::image_info,
             image::hex_preview,
             image::identify,

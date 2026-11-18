@@ -30,7 +30,17 @@ are treated as scaffolding and skipped, and so are pack *directories* starting w
 The repository ships starter packs in [`packs/`](../packs/) (listed with their
 sources in [`packs/README.md`](../packs/README.md)): `generic-obd2`,
 `iso14229-identification` and `vag-modules`. The desktop app bundles that folder
-as a resource; the Auto-scan, Service and Live-log file pickers open there.
+as a resource.
+
+In the desktop app, the Coding, Adaptation, Service fn, Auto-scan and Live log
+panels choose their definition with one **pack picker**: a pack (only those
+that carry the panel's kind are offered), then the definition inside it. It
+shows the pack's id, version, licence and validation state — a pack whose
+loader skipped files says how many, and lists each file with the reason.
+**Load pack…** opens a pack from anywhere on disk (its `pack.json`, its folder
+or a definition inside it); the app remembers it and offers it in every panel.
+**File…** still takes a single loose definition. Each panel remembers its last
+choice. Backend: `packs_list` / `packs_open` (`desktop/src-tauri/src/packs.rs`).
 
 ## Manifest (`pack.json`)
 

@@ -15,7 +15,7 @@ steps.
 
 ## Step by step
 
-1. **Choose script…** and pick the script.
+1. In the **Pack** picker choose a pack and the script (or **File…** for a single ServiceScript JSON).
 2. Set the **Per-request timeout** if needed (default 2000 ms).
 3. Press **Plan**. This validates the script and lists every step. **Nothing is sent.**
 4. Read the plan. Check the module and every step.

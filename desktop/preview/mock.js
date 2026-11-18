@@ -119,6 +119,7 @@
     if (name === "Adaptation def") return pack("packs/vcar-demo/adaptation/", "adp");
     if (name === "Service script") return pack("packs/vcar-demo/services/", "svc");
     if (name === "Modules") return "packs/vcar-demo/modules/vcar-demo.json";
+    if (name === "Definition pack") return "demo/community-pack/pack.json";
     if (name === "Logger definition") return "demo/preview-logger.json";
     if (name === "CSV log") return "demo/preview-drive-60s.csv";
     if (name === "CAN log") return "demo/preview-drivetrain.log";

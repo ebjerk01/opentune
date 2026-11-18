@@ -171,8 +171,12 @@ in for the Tauri backend, and the per-panel `desktop/preview/fixtures-*.js`.
 The vehicle panels answer from the `vcar` virtual car (its demo profile and
 `packs/vcar-demo`, bundled by `build.py`); the calibration panels work on a
 synthetic stock / tuned image pair and the log viewer on a synthetic 60 s log.
+The pack picker lists every shipped pack from `packs/` (also bundled by
+`build.py`), and its **Load pack…** opens a fictional community pack with one
+skipped file (`fixtures-packs.js`).
 Every command a panel invokes should have a fixture — a missing one shows as
-"Preview: '<cmd>' has no demo data yet". Keep the fixtures in step when a
+"Preview: '<cmd>' has no demo data yet", and `desktop/ui/tests/preview.test.mjs`
+fails when a core command in `lib.rs` has none. Keep the fixtures in step when a
 command's shape changes; their JS is syntax-checked by the `ui` gate. Demo data
 must be obviously fake (placeholder VINs such as `WVWZZZ00000000000`, the
 virtual car's `TESTVCAR…`), never taken from a real car or dump. Never run `cargo tauri build` as a

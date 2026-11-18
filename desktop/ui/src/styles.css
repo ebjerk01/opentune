@@ -505,3 +505,11 @@ table.heat.ts-heat td.cell.ro { cursor: default; opacity: .8; }
 
 table.heat.lv-heat td.cell { cursor: default; }
 table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted); font-weight: 400; }
+
+/* ---- Definition-pack picker (pack-picker.js) ----------------------------- */
+.pack-picker { margin-bottom: 10px; }
+.pack-picker .row { margin-bottom: 6px; }
+.pack-picker select.inp { max-width: 100%; }
+.pack-picker [data-pp="info"] { line-height: 1.6; overflow-wrap: anywhere; }
+.pack-picker details { margin-top: 4px; }
+.pack-picker summary { cursor: pointer; }
