@@ -51,6 +51,7 @@ opentune-recipe = { path = "../opentune-recipe" }
 opentune-haldex = { path = "../opentune-haldex" }
 opentune-tsini = { path = "../opentune-tsini" }
 opentune-tsproto = { path = "../opentune-tsproto" }
+opentune-sa2 = { path = "../opentune-sa2" }
 # Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
 ctrlc = "3"
 

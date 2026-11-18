@@ -50,6 +50,7 @@ mod mapfind_cmd;
 mod obd_cmd;
 mod recipe_cmd;
 mod registry;
+mod seedkey_cmd;
 mod ts_cmd;
 mod util;
 

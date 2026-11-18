@@ -87,8 +87,10 @@ detects this and skips sending a key.
 > a user-supplied `core::protocol::seedkey::SeedKey` implementation, wired into
 > each driver's `write_memory`/read path. Full details and the driver hook are in
 > [SEEDKEY.md](SEEDKEY.md). VW_Flash, by contrast, executes the **SA2** bytecode
-> script (found in the car's ODX container) against the seed; that is the kind of
-> algorithm a user would provide to OpenTune, not something OpenTune distributes.
+> script (found in the car's ODX container) against the seed; OpenTune's
+> `opentune-sa2` runs such a script too, but only one the user supplies — from
+> their own container (`opentune seedkey sa2 --container`, or `--seedkey
+> sa2:@file`). OpenTune distributes no script.
 
 ## 3. Erase — `0x31` RoutineControl (eraseMemory)
 

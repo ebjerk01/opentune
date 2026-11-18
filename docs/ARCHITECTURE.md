@@ -81,7 +81,8 @@ a top-level command is added without a row here.
 | `opentune packs` | Load definition packs and report their contents |
 | `opentune vault` | List archived reads in a backup vault directory |
 | `opentune scan` | Scan a directory of ECU dumps offline, emit identification JSON |
-| `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO) |
+| `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO); lists the SA2 seed/key scripts it declares |
+| `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
 | `opentune coding` | Module coding over UDS (read, decode, edit, write) |
 | `opentune adaptation` | Adaptation channels (value / routine / actuator) |
@@ -163,7 +164,7 @@ apps that need it.
 | `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |
 | `opentune-recipe` | Portable tune recipes: anchored patches + source identity, strict/relocating apply |
 | `opentune-packs` | Versioned definition packs (defs, labels, channels, scripts, …) |
-| `opentune-sa2` | Generic SA2 seed→key bytecode VM (caller-supplied program) |
+| `opentune-sa2` | VAG SA2 seed→key script VM (real instruction set; the script is always the user's own), disassembler and assembler |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
 | `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests; optional flashable-ECU model with fault injection |
