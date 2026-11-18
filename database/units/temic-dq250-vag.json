@@ -3,15 +3,15 @@
   "kind": "tcu",
   "maker": "Temic",
   "family": "DQ250",
-  "name": "VAG DQ250 / 02E DSG mechatronic (J743)",
+  "name": "VAG DQ250 / 02E DSG mechatronic (J743, PQ platforms)",
   "aliases": [
     "DQ250",
     "02E",
     "DSG6",
     "J743"
   ],
-  "cpu": null,
-  "flash_kib": null,
+  "cpu": "PowerPC, big-endian (observed in real reads); later 02E software on an Infineon TriCore",
+  "flash_kib": 416,
   "eeprom": null,
   "bus": [
     "can"
@@ -21,10 +21,10 @@
     "obd": "unknown",
     "bench": true,
     "boot": false,
-    "notes": "Bench over CAN on the 20-pin T20e plug (ecupinouts lists a K-line variant on pin 1; MaxxECU marks pin 1 K-line as unused). OBD programming capability and protocol are not documented in the cited sources."
+    "notes": "Bench over CAN on the 20-pin T20e plug (ecupinouts lists a K-line variant on pin 1; MaxxECU marks pin 1 K-line as unused). The PowerPC-generation software is handled as a 0x68000-byte (416 KiB) image (12 code sectors + one 32 KiB CAL sector); the TriCore-generation 02E300013N reads seen are 0xB0000 bytes with a 64 KiB CAL first. Reading the CAL over OBD and the OBD programming protocol are not documented in the cited sources; flash containers for 02E are VAG FRF/ODX files (method 0x11 table cipher + compression per vag-tcu-tools), not decoded by OpenTune for 02E yet."
   },
-  "checksum": "dq250",
-  "ecudef": null,
+  "checksum": "dq250-02e",
+  "ecudef": "temic-dq250-02e",
   "vehicles": [
     {
       "make": "Audi",
@@ -68,9 +68,17 @@
     "02E927770AE",
     "02E927770AJ",
     "02E927770AL",
-    "02E927770AM"
+    "02E927770AM",
+    "02E300011BL",
+    "02E300011C",
+    "02E300013N",
+    "02E300041N",
+    "02E300042F",
+    "02E300042G",
+    "02E300042M",
+    "02E300046K"
   ],
-  "notes": "Six-speed wet-clutch DSG (02E) with the mechatronic/TCU (J743) inside the gearbox. Checksum: OpenTune's dq250 algorithm targets the later DQ250-MQB (0D9) CAL/ASW layout; it is not validated on 02E software, so expect it to refuse. Vehicle list and part numbers from MaxxECU's DQ250 integration notes (not exhaustive). Protocols left empty: not stated by the sources.",
+  "notes": "Six-speed wet-clutch DSG (02E) with the mechatronic/TCU (J743) inside the gearbox. Two software generations were seen in real reads: PowerPC (big-endian; ecudef temic-dq250-02e, checksum dq250-02e = CRC-16/MCRF4XX sector table, real-image-tested on six reads) and a later Infineon TriCore build (02E300013N; ecudef temic-dq250-02e-tricore, checksum not located). The DQ250-MQB JAMCRC (checksum id dq250) does NOT apply to 02E. The 02E927770xx numbers are mechatronic (hardware) part numbers; 02E300xxx numbers are the software/gearbox part numbers found in the flash image. Vehicle list and 02E927770 part numbers from MaxxECU's DQ250 integration notes (not exhaustive). Protocols left empty: not stated by the sources.",
   "connectors": [
     {
       "name": "T20e",
@@ -185,6 +193,14 @@
     {
       "title": "ecupinouts.com: Temic DQ250 bench pinout",
       "url": "https://ecupinouts.com/en/temic-dq250/"
+    },
+    {
+      "title": "OpenTune docs/DSG.md: 02E layout and checksum analysis of real reads",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/DSG.md"
+    },
+    {
+      "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): FRF method 0x11 for DQ200/DQ250/DL382",
+      "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
     }
   ]
 }

@@ -1,0 +1,62 @@
+{
+  "id": "vag-dq200",
+  "kind": "tcu",
+  "maker": "VAG (supplier not confirmed)",
+  "family": "DQ200",
+  "name": "VAG DQ200 / 0AM (0CW) 7-speed dry DSG mechatronic",
+  "aliases": [
+    "DQ200",
+    "0AM",
+    "0CW",
+    "DSG7 dry"
+  ],
+  "cpu": null,
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": false,
+    "boot": false,
+    "notes": "No open source documents a read path or flash layout for DQ200 software. Factory flash containers are VAG FRF/ODX files using the method 0x11 table cipher + compression (vag-tcu-tools); OpenTune does not decode them for DQ200 yet."
+  },
+  "checksum": null,
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Polo",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Audi",
+      "model": "A3",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [
+    "0AM927769D",
+    "0AM927769G",
+    "0AM927769K"
+  ],
+  "notes": "Seven-speed dry-clutch DSG (0AM, later 0CW), 200 Nm class, mechatronic inside the gearbox. Identify only: no DQ200 read was available, so no definition, checksum or maps are claimed; opentune-scan recognises 0AM/0CW part numbers in an image as DQ200 (medium tier). Vehicle list per the cited listing (not exhaustive). No pinout is given: no open source with a pin-level drawing for this unit was found, so none is guessed.",
+  "connectors": [],
+  "bench": null,
+  "pinout_confidence": null,
+  "safety_note": null,
+  "sources": [
+    {
+      "title": "Actronics: DSG 7 DQ200 (0AM) TCU",
+      "url": "https://actronics.co.uk/tcu/dsg-7-dq200-0am"
+    },
+    {
+      "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): DQ200 0CW FRFs, method 0x11",
+      "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "temic-dq250-mqb-vag",
+  "kind": "tcu",
+  "maker": "Temic",
+  "family": "DQ250",
+  "name": "VAG DQ250-MQB / 0D9 6-speed DSG TCU",
+  "aliases": [
+    "DQ250-MQB",
+    "0D9",
+    "DSG6 MQB"
+  ],
+  "cpu": "Infineon TC1766 (TriCore)",
+  "flash_kib": 1536,
+  "eeprom": "external serial EEPROM on SSC0/SPI (per DQ250-MQB-Bench-Flash)",
+  "bus": [
+    "can"
+  ],
+  "protocols": [
+    "uds"
+  ],
+  "read_methods": {
+    "obd": "write-only",
+    "bench": true,
+    "boot": true,
+    "notes": "VW_Flash / mqb-flash-rs flash the CAL (0x20000) and ASW (0x130000) blocks over UDS on CAN (0x7E1/0x7E9) from an FRF/ODX container (DSG table cipher + LZSS) or a raw 0x180000-byte bin file; a full read uses the SBOOT bench path of DQ250-MQB-Bench-Flash (power-cycle window, RSA-1024 SBOOT check, uploaded flash manager). OpenTune has not validated either path on hardware."
+  },
+  "checksum": "dq250",
+  "ecudef": "temic-dq250-mqb",
+  "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "MQB-platform models with the 6-speed wet DSG",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [
+    "0D9300042M"
+  ],
+  "notes": "MQB-generation DQ250 (software 0D9300xxx). Layout and checksum facts come from the open flashing tools cited below; OpenTune's dq250 JAMCRC is algorithm-vector + synthetic validated only - no real 0D9 dump was available. No pinout is given: no open source with a pin-level drawing for this unit was found, so none is guessed.",
+  "connectors": [],
+  "bench": null,
+  "pinout_confidence": null,
+  "safety_note": null,
+  "sources": [
+    {
+      "title": "bri3d/VW_Flash (BSD-2-Clause): docs/dsg.md, lib/modules/dq250mqb.py, lib/dsg_checksum.py",
+      "url": "https://github.com/bri3d/VW_Flash"
+    },
+    {
+      "title": "bri3d/mqb-flash-rs (MIT): crates/mqb-modules/src/modules/dq250mqb.rs",
+      "url": "https://github.com/bri3d/mqb-flash-rs"
+    },
+    {
+      "title": "TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3.0): SBOOT bench read/flash, TC1766",
+      "url": "https://github.com/TheFlashBold/DQ250-MQB-Bench-Flash"
+    }
+  ]
+}

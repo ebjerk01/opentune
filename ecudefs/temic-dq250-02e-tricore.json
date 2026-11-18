@@ -1,0 +1,370 @@
+{
+  "id": "temic-dq250-02e-tricore",
+  "name": "VAG DQ250 / 02E 6-speed DSG TCU (Temic, TriCore generation)",
+  "maker": "Temic",
+  "family": "DQ250",
+  "notes": "Later 02E (DQ250, PQ35/PQ46) software built for a little-endian Infineon TriCore (the code decodes as TriCore; e.g. 02E300013N, Golf VI GTI / R). Read as 0xB0000 bytes: a 64 KiB calibration block at 0x0-0xFFFF (ident record '<nn>02E300013N  GSG DSG AG6 ... DCT' near 0x3668, version tag 'v0697...__getriebe_DSG_...' at 0xFFC0) followed by the code from 0x10000. No checksum is claimed: neither the 02E CRC-16 sector table nor the DQ250-MQB JAMCRC holds on the available reads, so checksum is null and edited images cannot be corrected. Diagnostics as for temic-dq250-02e (transport/layer unconfirmed; set to match the car); no OBD full-read path is documented. Maps: the two shift-speed schedule groups, located by structure only (raw, MEDIUM). Calibration only.",
+  "protocol": "iso_tp",
+  "diag_layer": "kwp2000",
+  "bitrate": 500000,
+  "tx_id": 2017,
+  "rx_id": 2025,
+  "flash_size": 720896,
+  "regions": [
+    {
+      "name": "full",
+      "region": {
+        "address": 0,
+        "length": 720896
+      },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": {
+        "address": 0,
+        "length": 65536
+      },
+      "writable": true
+    },
+    {
+      "name": "code",
+      "region": {
+        "address": 65536,
+        "length": 655360
+      },
+      "writable": false
+    }
+  ],
+  "checksum": null,
+  "seedkey": null,
+  "full_read": "bench_boot",
+  "maps": [
+    {
+      "name": "shift schedule 1 - upshift 1-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 1 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 1-2 upshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7476,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - upshift 2-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 2 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 2-3 upshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7572,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - upshift 3-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 3 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 3-4 upshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7668,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - upshift 4-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 4 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 4-5 upshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7764,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - upshift 5-6 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 5 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 5-6 upshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7860,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - downshift 2-1 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 1 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 2-1 downshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 7956,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - downshift 3-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 2 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 3-2 downshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8052,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - downshift 4-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 3 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 4-3 downshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8148,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - downshift 5-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 4 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 5-4 downshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8244,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 1 - downshift 6-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 5 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 6-5 downshift. Set 1 is the first of two groups; which driving programme each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8340,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - upshift 1-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 1 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 1-2 upshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8436,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - upshift 2-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 2 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 2-3 upshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8532,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - upshift 3-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 3 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 3-4 upshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8628,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - upshift 4-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 4 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 4-5 upshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8724,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - upshift 5-6 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 5 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 5-6 upshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8820,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - downshift 2-1 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 1 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 2-1 downshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 8916,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - downshift 3-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 2 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 3-2 downshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 9012,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - downshift 4-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 3 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 4-3 downshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 9108,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - downshift 5-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 4 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 5-4 downshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 9204,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule 2 - downshift 6-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of two real 02E300013N reads (no A2L/XDF/commercial map pack): the same 4x12 block structure and row shape as the shift schedules of the PowerPC-generation 02E software, located by structure only (the two available datasets of this software do not differ inside these blocks). 4 rows x 12 columns of u16 little-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 5 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 6-5 downshift. Set 2 is the second group (its upshift plateaus are higher, consistent with a sport programme - not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0xB0000-byte 02E300013N read (64 KiB CAL first, then code); other TriCore 02E software may differ - confirm by content in your own read before any write. No checksum is known for this layout, so a written image cannot be corrected by OpenTune.",
+      "address": 9300,
+      "data_type": "u16",
+      "endian": "little",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    }
+  ],
+  "identify": {
+    "part_numbers": [
+      "02E300013"
+    ],
+    "sw_numbers": []
+  }
+}
