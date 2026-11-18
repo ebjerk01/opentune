@@ -1,0 +1,27 @@
+opentune-tsini
+==============
+
+This crate reads ECU definitions written in the TunerStudio INI format and
+tunes in the .msq format, as the open aftermarket firmware projects publish
+and document them:
+
+    Speeduino -- https://github.com/noisymime/speeduino (reference/speeduino.ini)
+      Copyright (C) Josh Stewart and contributors, GPL-2.0.
+    rusEFI -- https://github.com/rusefi/rusefi (firmware/tunerstudio/*.ini)
+      Copyright (c) Andrey Belomutskiy and contributors, GPL-3.0.
+    MegaSquirt / MS-Extra INI files, whose [Constants] header comments
+      document scale/translate, array shapes and bit fields.
+
+The format knowledge (section and key names, constant classes, scale and
+translate, `lastOffset`, `[lo:hi+n]` bit labels, the preprocessor, the .msq
+XML layout) was learned by reading those files and their comments. No code is
+taken from them, and no third-party INI or tune file is included: the
+definitions under samples/ts/ are hand-written and synthetic.
+
+LibreTune (https://github.com/RallyPat/LibreTune, GPL-2.0) was surveyed as an
+open reference for behaviour only (learn-only under OpenTune's licence
+policy); none of its code is used.
+
+TunerStudio is proprietary software of EFI Analytics. OpenTune contains no
+code or assets from it; it only reads and writes the file format as the open
+projects above document it.

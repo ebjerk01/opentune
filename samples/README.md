@@ -77,3 +77,20 @@ Regenerate it with:
 ```sh
 python3 samples/generate_log.py samples/opentune-demo-log.csv
 ```
+
+## `ts/opentune-demo.ini`, `ts/opentune-demo-ms.ini`
+
+Two **hand-written, synthetic** ECU definitions in the TunerStudio INI format
+(see [`docs/AFTERMARKET-ECUS.md`](../docs/AFTERMARKET-ECUS.md)). They describe
+no real ECU. `opentune-demo.ini` is Speeduino-like (little-endian, CRC32
+msEnvelope framing, two pages, every constant class and type, `#if`
+settings, expression channels, tables, curves, menus); `opentune-demo-ms.ini`
+is MegaSquirt-like (big-endian, plain framing, one page). Try them with the
+simulated ECU:
+
+```sh
+opentune ts ini info samples/ts/opentune-demo.ini
+opentune ts read --port sim --ini samples/ts/opentune-demo.ini --out /tmp/demo.msq
+opentune ts msq show /tmp/demo.msq --ini samples/ts/opentune-demo.ini
+opentune ts log --port sim --ini samples/ts/opentune-demo.ini --rounds 20 --out /tmp/demo.csv
+```

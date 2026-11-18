@@ -1088,6 +1088,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-tsini"
+version = "0.1.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-udssim"
 version = "0.1.0"
 dependencies = [

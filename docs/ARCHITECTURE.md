@@ -164,6 +164,7 @@ apps that need it.
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
+| `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`
