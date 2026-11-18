@@ -1,28 +1,30 @@
-//! Typed errors for the SA2 bytecode VM.
+//! Typed errors for the SA2 seed/key VM, its decoder and its assembler.
 //!
-//! Every failure mode is explicit; the parser and executor never panic on
-//! malformed input, out-of-range operands, or runaway programs.
+//! Every failure mode is explicit; the decoder, the VM and the assembler never
+//! panic on malformed input, out-of-range operands or runaway programs.
 use thiserror::Error;
 
-/// An error raised while parsing or executing an SA2 program.
+/// An error raised while decoding, executing or assembling an SA2 script.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum Sa2Error {
-    /// The seed length is outside the supported 2..=8 byte range.
-    #[error("seed length {0} out of range (expected 2..=8 bytes)")]
+    /// The seed is not exactly four bytes (SA2 works on one 32-bit register).
+    #[error("seed length {0} not supported (SA2 seeds are exactly 4 bytes)")]
     SeedLength(usize),
 
-    /// The program byte stream ended in the middle of an instruction's operands.
+    /// The script ended in the middle of an instruction's operand bytes.
     #[error(
-        "program truncated: opcode 0x{opcode:02X} at offset {offset} needs more operand bytes"
+        "script truncated: opcode 0x{opcode:02X} at offset {offset} needs {needed} operand byte(s)"
     )]
     Truncated {
-        /// Offset of the opcode whose operands ran past the end of the program.
+        /// Offset of the opcode whose operands ran past the end of the script.
         offset: usize,
         /// The opcode byte that was being decoded.
         opcode: u8,
+        /// How many operand bytes the opcode takes.
+        needed: usize,
     },
 
-    /// An opcode byte that the instruction set does not define.
+    /// A byte that is not one of the ten SA2 opcodes.
     #[error("unknown opcode 0x{opcode:02X} at offset {offset}")]
     UnknownOpcode {
         /// Offset of the offending byte.
@@ -31,43 +33,43 @@ pub enum Sa2Error {
         opcode: u8,
     },
 
-    /// A register index operand referenced a register that does not exist.
-    #[error("register index {index} out of range (0..{count})")]
-    BadRegister {
-        /// The requested register index.
-        index: u8,
-        /// Number of registers the VM provides.
-        count: u8,
+    /// A loop (`0x68`) with an iteration count of zero. The public reference
+    /// implementations disagree on what it means (run once vs. 256 times) and
+    /// no known script uses it, so it is refused rather than guessed.
+    #[error("loop at offset {offset} has iteration count 0 (ambiguous; refused)")]
+    ZeroLoopCount {
+        /// Offset of the loop opcode.
+        offset: usize,
     },
 
-    /// A branch/call/loop target did not land on an instruction boundary.
-    #[error("branch target offset {target} is not a valid instruction boundary")]
-    BadTarget {
-        /// The byte offset the branch tried to jump to.
-        target: usize,
+    /// A loop end (`0x49`) executed with no open loop.
+    #[error("loop end (0x49) at offset {offset} without an open loop")]
+    NextWithoutLoop {
+        /// Offset of the loop-end opcode.
+        offset: usize,
     },
 
-    /// An operand value was outside the range an opcode accepts.
-    #[error("invalid operand for opcode 0x{opcode:02X}: {detail}")]
-    BadOperand {
-        /// The opcode whose operand was rejected.
-        opcode: u8,
-        /// Human-readable reason.
-        detail: &'static str,
-    },
+    /// More loops were open at once than the VM allows.
+    #[error("loop nesting deeper than {0}")]
+    LoopStackOverflow(usize),
 
-    /// `RET` executed with no matching `CALL` on the stack.
-    #[error("RET with empty call stack")]
-    CallStackUnderflow,
-
-    /// The call stack grew past its depth limit.
-    #[error("call stack overflow (depth limit {0})")]
-    CallStackOverflow(usize),
-
-    /// The program ran longer than the step budget (likely a non-terminating loop).
+    /// The script ran longer than the step budget.
     #[error("execution exceeded the step budget of {0} instructions")]
     StepBudgetExceeded(u64),
+
+    /// The text assembler rejected a line.
+    #[error("assembler line {line}: {msg}")]
+    Asm {
+        /// 1-based source line number.
+        line: usize,
+        /// What was wrong.
+        msg: String,
+    },
+
+    /// A hex string could not be decoded.
+    #[error("bad hex: {0}")]
+    BadHex(String),
 }
 
-/// Result type for SA2 VM operations.
+/// Result type for SA2 operations.
 pub type Sa2Result<T> = core::result::Result<T, Sa2Error>;

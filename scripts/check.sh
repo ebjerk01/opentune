@@ -95,6 +95,17 @@ conformance_py() {
     "$py" "$ROOT/tools/conformance/udsoncan_harness.py" --entity "$tgt/debug/examples/doip_tcp_entity" 2>/dev/null
 }
 
+# SA2 seed/key VM vs the public reference implementation (tools/sa2/). Opt-in:
+# runs only when OPENTUNE_SA2_PYTHON names an interpreter with sa2-seed-key.
+sa2_differential() {
+    cargo build -q -p opentune-sa2 --example sa2_eval || return 1
+    local tgt
+    tgt="$(cargo metadata --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+    "$OPENTUNE_SA2_PYTHON" -I "$ROOT/tools/sa2/sa2_differential.py" check \
+        --fixture "$ROOT/crates/opentune-sa2/tests/fixtures/sa2_vectors.txt" \
+        --eval "$tgt/debug/examples/sa2_eval" --fresh "${OPENTUNE_SA2_FRESH:-2000}"
+}
+
 # Pass test files explicitly: Node's directory/glob handling differs by version.
 node_test_ui() {
     local files=()
@@ -127,6 +138,9 @@ if [ "$fast" = 0 ]; then
         step "udssim conformance vs python-udsoncan" conformance_py
     else
         echo "check.sh: skipping the udsoncan conformance gate (CI runs it): pip install -r tools/conformance/requirements.txt, or set OPENTUNE_CONFORMANCE_PYTHON" >&2
+    fi
+    if [ -n "${OPENTUNE_SA2_PYTHON:-}" ]; then
+        step "sa2 VM vs reference sa2-seed-key" sa2_differential
     fi
 fi
 
