@@ -39,7 +39,7 @@
     <div class="card">
       <div class="card-title-row"><h2>Haldex Gen4 read (read-only)</h2>
         <label class="confirm"><input type="checkbox" id="hxG4Sim" checked /> Simulated unit</label></div>
-      ${banner("info", "The Gen4 (0AY 907 554 C, PQ35/PQ46) speaks KWP2000 over <b>VW TP2.0</b>. No OpenTune driver opens a TP2.0 channel yet, so a read on a real car is <b>refused</b> with that reason. The simulated unit runs the full TP2.0 + KWP2000 stack with synthetic data.")}
+      ${banner("info", "The Gen4 (0AY 907 554 C, PQ35/PQ46) speaks KWP2000 over <b>VW TP2.0</b>. A real read needs a raw-CAN adapter (SocketCAN, slcan/CANable or gs_usb/candleLight), which opens the TP2.0 channel to address 0x0A; the ELM327 drivers cannot and are <b>refused</b> with that reason. The simulated unit runs the full TP2.0 + KWP2000 stack with synthetic data.")}
       <div class="row">
         <label class="small muted" for="hxGroups">Groups</label>
         <input class="inp mono" id="hxGroups" value="1, 3, 125, 126" style="width:150px" />
@@ -152,7 +152,7 @@
     const groups = $("hxGroups").value.split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => n >= 0 && n <= 255);
     out.innerHTML = '<span class="muted small">reading…</span>';
     try {
-      const r = await invoke("haldex_gen4_read", { driver: conn().driver, sim: $("hxG4Sim").checked, groups, readDtcs: $("hxDtcs").checked });
+      const r = await invoke("haldex_gen4_read", { ...conn(), sim: $("hxG4Sim").checked, groups, readDtcs: $("hxDtcs").checked });
       out.innerHTML = gen4Html(r);
     } catch (e) {
       out.innerHTML = banner("bad", esc(msg(e)));

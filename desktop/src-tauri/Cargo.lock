@@ -2547,6 +2547,7 @@ dependencies = [
 name = "opentune-core"
 version = "0.1.0"
 dependencies = [
+ "opentune-dtc",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2587,10 +2588,13 @@ dependencies = [
  "opentune-driver-vcar",
  "opentune-dtc",
  "opentune-flash",
+ "opentune-haldex",
  "opentune-logdef",
  "opentune-logview",
  "opentune-scan",
  "opentune-servicefn",
+ "opentune-tsini",
+ "opentune-tsproto",
  "opentune-udssim",
  "opentune-vin",
  "opentune-xdf",
@@ -2707,6 +2711,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-haldex"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+]
+
+[[package]]
 name = "opentune-logdef"
 version = "0.1.0"
 dependencies = [
@@ -2745,6 +2757,24 @@ dependencies = [
  "opentune-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "opentune-tsini"
+version = "0.1.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-tsproto"
+version = "0.1.0"
+dependencies = [
+ "opentune-tsini",
+ "serialport",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

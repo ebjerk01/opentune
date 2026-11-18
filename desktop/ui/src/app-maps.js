@@ -317,13 +317,15 @@ async function edDoWrite(outPath) {
     else if (r.checksum && r.checksum.fixes) cs = r.checksum.fixes.length
       ? `<div class="banner ok">Checksum (${csWho}): ${r.checksum.fixes.length} fix(es) applied.</div><pre class="hexview">${esc(r.checksum.fixes.join("\n"))}</pre>`
       : `<div class="banner info">Checksum (${csWho}): already correct.</div>`;
-    $("mvResult").insertAdjacentHTML("afterbegin",
+    const summary =
       `<div class="banner ok">Wrote ${r.cells_changed} changed cell(s) to <b>${esc(baseName(r.out_path))}</b>${r.in_place ? " (in place)" : " (copy)"}.</div>
-       <div class="meta-grid"><div class="k">safety backup</div><div class="v">${esc(r.backup)}</div><div class="k">output</div><div class="v">${esc(r.out_path)}</div></div>${cs}`);
+       <div class="meta-grid"><div class="k">safety backup</div><div class="v">${esc(r.backup)}</div><div class="k">output</div><div class="v">${esc(r.out_path)}</div></div>${cs}`;
     // The written file is now the baseline; re-decode from it so further edits stack cleanly.
     ed.path = r.out_path; ed.orig = clone2d(ed.cells); state.edClamped = new Set();
     if (r.in_place && (ed.path === state.imagePath)) renderHex(state.hexOffset || 0);
+    // Re-render first: edRender() rewrites #mvResult, so the summary goes in after it.
     edRender();
+    $("mvResult").insertAdjacentHTML("afterbegin", summary);
     toast("Map written · backup saved");
   } catch (e) {
     const msg = typeof e === "string" ? e : (e && e.message) || "";

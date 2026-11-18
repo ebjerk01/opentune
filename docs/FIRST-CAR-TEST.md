@@ -20,7 +20,7 @@ once every read step has passed.
 | ECU family | Bus | Works with |
 |---|---|---|
 | Bosch EDC16 / EDC17, Simos PCR2.1, VAG DSG (UDS), Haldex Gen5 (MQB) | CAN (OBD pins 6/14) | ELM327, slcan/CANable, OpenPort 2.0, J2534 |
-| Haldex Gen4 (PQ, e.g. Passat CC 4Motion) | CAN, KWP2000 over VW TP2.0 | a raw-CAN adapter **with TP2.0 support in OpenTune** — none yet, see Stage H; **not** the ELM327 |
+| Haldex Gen4 (PQ, e.g. Passat CC 4Motion) | CAN, KWP2000 over VW TP2.0 | a raw-CAN adapter: CANable (slcan), candleLight (gs_usb) or SocketCAN, see Stage H; **not** the ELM327 |
 | Bosch EDC15 (incl. EDC15C6), older K-line ECUs | K-line (pin 7) | KKL 409.1 cable, OpenPort 2.0 — **not** a CAN-only ELM327 |
 | Body/comfort modules on MS-CAN (Ford, some others) | MS-CAN | ELM327 with MS-CAN switch, OpenPort |
 
@@ -71,18 +71,22 @@ no code clearing, no basic settings, no coding, no OpenHaldex mode changes.
 
 **Adapter.** The Gen4 is diagnosed with KWP2000 over **VW TP2.0** (logical address
 `0x0A`). OpenTune's ELM327 drivers refuse TP2.0, and an ELM327 v1.5 clone cannot
-be relied on to hold a TP2.0 channel (raw frames, per-block ACKs within ~100 ms,
-keep-alives). So **with the ELM327 v1.5 only step H.1 runs**; H.2-H.3 need a raw-CAN
-adapter (CANable/slcan, candleLight/gs_usb or SocketCAN) **and** TP2.0 wiring in
-that OpenTune driver, which does not exist yet — `opentune haldex gen4 --driver …`
-refuses until it does. Skip H.2-H.3 until then; run `opentune haldex gen4 --sim`
-at the desk to see what the read will show.
+hold a TP2.0 channel (raw frames, per-block ACKs within ~100 ms, keep-alives). So
+**with the ELM327 v1.5 only step H.1 runs** (passive). H.2-H.3 actively read the
+unit and need a raw-CAN adapter: a CANable (`--driver slcan --port /dev/ttyACM0`),
+a candleLight (`--driver gsusb --port can0`) or any SocketCAN interface
+(`--driver socketcan --port can0`). These drivers open the TP2.0 channel
+themselves (`opentune haldex gen4` implies `transport=tp20`, `tp20_addr=0x0A`);
+the TP2.0 path is synthetic-tested only, so this is its first real run. For
+gs_usb / SocketCAN bring the interface up first:
+`sudo ip link set can0 up type can bitrate 500000`. Run
+`opentune haldex gen4 --sim` at the desk first to see what the read will show.
 
 | Step | Car state | Do | Save | Pass when |
 |---|---|---|---|---|
 | H.0 | desk | `opentune haldex gen4 --sim` | — | Prints a simulated identity, "no codes", groups 1/3 decoded |
 | H.1 | ignition on, engine off | `opentune candump --driver elm327obd --bus hs --duration 30 --out H-1-obd.log`, then `opentune haldex decode H-1-obd.log` | `H-1-obd.log`, decode output | Capture runs. Note whether any `Allrad_1` 0x2C0 / `Bremse_4` 0x2A0 frames appear: at the OBD port they normally do **not** (the gateway keeps the drivetrain CAN off the diagnostic bus) — either answer is useful data |
-| H.2 | ignition on, engine off | `opentune haldex gen4 --driver <tp2.0 driver> --json > H-2-gen4.json` | `H-2-gen4.json`, Debug log | Identification answers: part number `0AY 907 554 …` or `0BS 907 554 …`, a software version and a "Haldex" component text; the code list is empty if the dash shows no AWD fault (and lists codes if it does); group 1 shows oil and plate temperature near ambient. If supply voltage reads implausibly (not ~12 V), record it — the voltage formula is community-sourced |
+| H.2 | ignition on, engine off | `opentune haldex gen4 --driver slcan --port /dev/ttyACM0 --json > H-2-gen4.json` (or `gsusb`/`socketcan --port can0`) | `H-2-gen4.json`, Debug log, the error text if the open fails | The TP2.0 channel opens (if not, the error names the step and CAN ids: no answer on `0x20A` = the unit is not reachable from the OBD port through the gateway, or the ignition/bitrate is wrong — record it). Identification answers: part number `0AY 907 554 …` or `0BS 907 554 …`, a software version and a "Haldex" component text; the code list is empty if the dash shows no AWD fault (and lists codes if it does); group 1 shows oil and plate temperature near ambient. If supply voltage reads implausibly (not ~12 V), record it — the voltage formula is community-sourced |
 | H.3 | engine running, stationary, no throttle | repeat H.2 with `--groups 1,3 > H-3-gen4.json` | `H-3-gen4.json` | Group 3 values are plausible and steady (low oil pressure / duty at rest); no new codes appear |
 
 Also write down the part number printed on the controller label if it is visible

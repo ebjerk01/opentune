@@ -14,3 +14,5 @@ serde.workspace = true
 
 [dev-dependencies]
 opentune-udssim = { path = "../opentune-udssim" }
+# End-to-end Gen4 read through the slcan driver's TP2.0 channel (simulated adapter).
+opentune-driver-slcan = { path = "../drivers/slcan" }

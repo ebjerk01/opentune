@@ -995,6 +995,7 @@ name = "opentune-haldex"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "opentune-driver-slcan",
  "opentune-udssim",
  "serde",
 ]

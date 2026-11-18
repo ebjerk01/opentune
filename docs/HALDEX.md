@@ -6,7 +6,8 @@ validated. Crate: [`opentune-haldex`](../crates/opentune-haldex); CLI:
 `opentune haldex`.
 
 **Status in one line:** passive CAN decode and the Gen4 identification/measuring
-decode are checked against **public real captures**; the Gen4 read and the
+decode are checked against **public real captures**; the Gen4 read (now also
+through the socketcan / slcan / gsusb drivers' TP2.0 channel) and the
 OpenHaldex client are **synthetic-tested** (simulated units); nothing is
 vehicle-tested yet; there is **no Gen4 checksum** and **no flashing**.
 
@@ -71,13 +72,25 @@ Gen4, `0AY 907 554 F` is a different unit that OpenHaldex treats as Gen5 (PQ).
   `0x10`, `0x1A`, `0x18`, `0x21`: never clears codes, writes coding, adapts,
   runs basic settings or flashes. VAG fault numbers are printed as the 5-digit
   number; there is **no VAG fault-text decode** yet.
-- **Adapter gap:** no shipped OpenTune driver opens a TP2.0 channel yet. The
-  ELM327 drivers refuse TP2.0 (and many ELM327 clones cannot hold a TP2.0
-  channel reliably anyway: it needs raw frames, per-block ACKs within ~100 ms
-  and keep-alives); socketcan / slcan / gs_usb build ISO-TP only. Until a raw-CAN
-  driver gets TP2.0 wiring (`Protocol::Vwtp20` -> `VwTp20` over its `CanLink`),
-  `opentune haldex gen4 --driver …` refuses with that explanation; `--sim`
-  runs the whole stack (real `VwTp20` + KWP2000 client) against a simulated unit.
+- **Adapter:** a raw-CAN adapter. The `socketcan`, `slcan` (CANable/CANtact)
+  and `gsusb` (candleLight) drivers open the TP2.0 channel with
+  `transport=tp20`, keep it alive while idle and disconnect on close
+  ([`DRIVERS.md` §3f](DRIVERS.md#3f-vw-tp20-on-the-raw-can-drivers-socketcan-slcan-gsusb));
+  `opentune haldex gen4` sets `transport=tp20` and `tp20_addr=0x0A` itself:
+
+  ```sh
+  opentune haldex gen4 --driver slcan --port /dev/ttyACM0
+  opentune haldex gen4 --driver socketcan --port can0 --opt tp20_keepalive_ms=500
+  ```
+
+  If the unit does not answer, the open fails naming the step and the CAN ids
+  (setup on `0x200`, answer expected on `0x20A`). The ELM327 drivers are still
+  refused: an ELM327 cannot send the raw frames, per-block ACKs (within
+  ~100 ms) and keep-alives a TP2.0 channel needs, so with one only the passive
+  decode below works. `--sim` runs the whole stack (real `VwTp20` + KWP2000
+  client) against a simulated unit. Whether the gateway passes the channel from
+  the OBD port to the drivetrain CAN on a given car is to be confirmed on the
+  car (Stage H).
 - `opentune haldex decode <log>` — passive decode of candump / OpenTune CSV /
   SavvyCAN CSV captures (works on the public OpenHaldex logs).
 - `ecudefs/borgwarner-haldex-gen4.json` — identify keys only (`0AY907554C`,
@@ -124,6 +137,7 @@ CAN, or use BLE / Wi-Fi.
 ```sh
 opentune haldex decode capture.log [--bus pq|mqb] [--frames] [--json]
 opentune haldex gen4 --sim [--groups 1,3] [--no-dtcs] [--json]
+opentune haldex gen4 --driver slcan --port /dev/ttyACM0 [--opt KEY=VALUE] [--json]
 opentune haldex status --driver socketcan --port can0 [--via can|uds] [--duration 3]
 opentune haldex mode list
 opentune haldex mode set 6040 --driver socketcan --port can0 --confirm
@@ -148,7 +162,7 @@ The desktop **Haldex AWD** panel (`desktop/src-tauri/src/feat_haldex.rs`, tier
 | Set mode | `OpenHaldexUds::set_mode(mode)` -> `LockStatus` | tier `bench`; show a confirm dialog; display the returned (read-back) mode, not the requested one |
 | Live status over CAN | `CanMonitor` + `can::decode_frame(id, ext, data, Bus::Auto)` | filter `0x6B0, 0x2C0, 0x2A0, 0x118`; `HaldexFrame` is `Serialize` |
 | Log viewer | `canlog::parse_log(text)` + `canlog::summarize(&log, bus)` | returns `HaldexSummary` + decoded frames |
-| Gen4 read | `gen4::read_gen4(&mut dyn DiagTransport, &Gen4ReadOptions)` -> `Gen4Report` | needs a TP2.0 transport (driver gap above) |
+| Gen4 read | `gen4::read_gen4(&mut dyn DiagTransport, &Gen4ReadOptions)` -> `Gen4Report` | over a raw-CAN driver opened with `transport=tp20`, `tp20_addr=0x0A` (`gen4::gen4_connect_config`); `gen4::tp20_refusal(driver)` gives the reason for other drivers. The panel opens the adapter for the read and closes it after |
 | BLE (mobile) | `openhaldex::BleStatus::decode(bytes)` | 17-byte Status, layout 1 |
 
 Per the sidebar tier rule, a panel that talks to the car stays tier `bench`
@@ -171,7 +185,8 @@ until vehicle-tested; the log decoder may be `public`.
 | `Allrad_03` / `ESP_19` (MQB) decode | synthetic-tested |
 | Log readers (candump, OpenTune CSV, SavvyCAN CSV) | synthetic-tested; SavvyCAN read on the public OpenHaldex captures |
 | Gen4 identification + measuring-block decode | checked against public real capture bytes |
-| Gen4 read engine over TP2.0 | synthetic-tested (`VwTp20` + simulated unit) |
+| Gen4 read engine over TP2.0 | synthetic-tested (`VwTp20` + simulated unit; end to end through the slcan driver's line protocol and the desktop hub) |
+| TP2.0 channel in socketcan / slcan / gsusb | synthetic-tested (simulated module: setup, ACK windows, keep-alive, disconnect, silent module) |
 | KWP2000 `0x21` / `0x18` / `0x14` client services | synthetic-tested |
 | OpenHaldex UDS client | synthetic-tested (against `opentune-udssim` and a simulator) |
 | Gen4 checksum | none |

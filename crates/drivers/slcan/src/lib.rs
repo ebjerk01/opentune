@@ -1,13 +1,16 @@
 //! slcan (LAWICEL) USB-CAN driver — for cheap serial CAN adapters like CANable
 //! / CANtact running slcan firmware, and the CH340 "USB-CAN" clones that speak
 //! the slcan ASCII protocol. Presents as a serial port; this driver implements
-//! the core `CanLink` over it and runs UDS/ISO-TP on top.
+//! the core `CanLink` over it and runs UDS/ISO-TP on top — or, with the option
+//! `transport=tp20` (plus `tp20_addr=<module>`), a VW TP2.0 channel carrying
+//! KWP2000 (see [`opentune_core::protocol::tp20channel`]).
 //!
 //! slcan ASCII protocol: `Sn\r` set bitrate preset, `O\r` open, `C\r` close,
 //! `t<iii><l><dd…>\r` standard frame, `T<iiiiiiii><l><dd…>\r` extended frame.
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
 use opentune_core::protocol::seedkey::SeedKey;
+use opentune_core::protocol::tp20channel::{CanDiag, CanTransportKind, Tp20Options};
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
@@ -17,9 +20,23 @@ use std::io::{Read, Write};
 use std::time::Duration;
 
 pub mod monitor;
+pub mod sim;
+
+/// The byte stream an slcan adapter is reached over: a serial port, or a
+/// scripted stand-in in tests ([`sim::SimSlcanPort`]).
+pub trait SlcanPort: Read + Write + Send {
+    /// Read timeout for the following reads.
+    fn set_read_timeout(&mut self, timeout: Duration) -> std::io::Result<()>;
+}
+
+impl SlcanPort for Box<dyn serialport::SerialPort> {
+    fn set_read_timeout(&mut self, timeout: Duration) -> std::io::Result<()> {
+        serialport::SerialPort::set_timeout(self.as_mut(), timeout).map_err(std::io::Error::other)
+    }
+}
 
 struct Slcan {
-    port: Box<dyn serialport::SerialPort>,
+    port: Box<dyn SlcanPort>,
     ext: bool,
 }
 
@@ -50,7 +67,7 @@ impl Slcan {
     /// Read one `\r`-terminated response line.
     fn read_line(&mut self, timeout_ms: u64) -> Result<String> {
         self.port
-            .set_timeout(Duration::from_millis(timeout_ms))
+            .set_read_timeout(Duration::from_millis(timeout_ms))
             .ok();
         let mut out = Vec::new();
         let mut b = [0u8; 1];
@@ -119,7 +136,8 @@ impl CanLink for Slcan {
 
 #[derive(Default)]
 pub struct SlcanDriver {
-    isotp: Option<IsoTp>,
+    /// ISO-TP (default) or a VW TP2.0 channel, built on `open`.
+    transport: Option<CanDiag>,
     cfg: Option<ConnectConfig>,
     /// Optional seed/key handler for UDS security access (service 0x27). No OEM
     /// algorithm ships with OpenTune; the application supplies one.
@@ -146,11 +164,45 @@ impl SlcanDriver {
     fn security_access(&mut self) -> Result<()> {
         let required = security_required(self.cfg.as_ref());
         let level = seedkey_level(self.cfg.as_ref(), 0x11);
-        // Disjoint field borrows: `seed_key` (shared), `isotp` (unique).
+        // Disjoint field borrows: `seed_key` (shared), `transport` (unique).
         let sk = self.seed_key.as_deref();
-        let tp = self.isotp.as_mut().ok_or(Error::NotConnected)?;
+        let tp = isotp_of(&mut self.transport)?;
         uds_security_access(tp, sk, level, required)
     }
+
+    /// Open over an already-opened slcan byte stream instead of the serial
+    /// device in `options["port"]` (a TCP-serial bridge, or
+    /// [`sim::SimSlcanPort`] in tests). Same configuration and transport
+    /// selection as [`Interface::open`].
+    pub fn open_with_port(&mut self, port: Box<dyn SlcanPort>, cfg: &ConnectConfig) -> Result<()> {
+        let tp20 = Tp20Options::from_config(cfg)?;
+        self.close()?;
+        let mut link = Slcan {
+            port,
+            // TP2.0 ids are always 11-bit.
+            ext: tp20.is_none() && cfg.tx_id > 0x7FF,
+        };
+        link.line("C").ok(); // ensure closed
+        link.line(bitrate_preset(cfg.bitrate))?;
+        link.line("O")?; // open channel
+        let transport = CanDiag::open(Box::new(link), cfg).map_err(|e| match e {
+            Error::Protocol(m) => Error::Protocol(format!("slcan: {m}")),
+            other => other,
+        })?;
+        self.transport = Some(transport);
+        self.cfg = Some(cfg.clone());
+        Ok(())
+    }
+
+    /// The transport `open` built, if any.
+    pub fn transport_kind(&self) -> Option<CanTransportKind> {
+        self.transport.as_ref().map(CanDiag::kind)
+    }
+}
+
+/// The ISO-TP transport for the UDS block flows, refusing on a TP2.0 channel.
+fn isotp_of(t: &mut Option<CanDiag>) -> Result<&mut IsoTp> {
+    t.as_mut().ok_or(Error::NotConnected)?.isotp("slcan")
 }
 
 impl Interface for SlcanDriver {
@@ -160,9 +212,13 @@ impl Interface for SlcanDriver {
     }
 
     fn info(&self) -> InterfaceInfo {
+        let mut display_name = "slcan USB-CAN (CANable/CANtact)".to_string();
+        if let Some(t @ CanDiag::Tp20(_)) = &self.transport {
+            display_name = format!("{display_name}, {}", t.describe());
+        }
         InterfaceInfo {
             id: "slcan".into(),
-            display_name: "slcan USB-CAN (CANable/CANtact)".into(),
+            display_name,
             firmware: None,
             serial: None,
         }
@@ -177,18 +233,23 @@ impl Interface for SlcanDriver {
             can: true,
             read_memory: true,
             write_memory: true,
+            vwtp20: true,
             ..Default::default()
         }
     }
 
-    /// Expose the host-side ISO-TP over the slcan link as a [`DiagTransport`] so the coding/adaptation/
-    /// auto-scan/service/logging engines (and the raw-request console) can
-    /// drive this adapter. `None` until `open()` succeeds.
+    /// Expose the transport over the slcan link as a [`DiagTransport`] so the
+    /// coding/adaptation/auto-scan/service/logging engines (and the
+    /// raw-request console) can drive this adapter: host-side ISO-TP by
+    /// default, the VW TP2.0 channel with `transport=tp20`. `None` until
+    /// `open()` succeeds.
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
-        self.isotp.as_mut().map(|t| t as &mut dyn DiagTransport)
+        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
+        // Refuse bad transport options before touching the port.
+        Tp20Options::from_config(cfg)?;
         let path = cfg
             .options
             .get("port")
@@ -197,26 +258,21 @@ impl Interface for SlcanDriver {
             .timeout(Duration::from_millis(1000))
             .open()
             .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-        let mut link = Slcan {
-            port,
-            ext: cfg.tx_id > 0x7FF,
-        };
-        link.line("C").ok(); // ensure closed
-        link.line(bitrate_preset(cfg.bitrate))?;
-        link.line("O")?; // open channel
-        self.isotp = Some(IsoTp::new(Box::new(link), cfg.tx_id, cfg.rx_id));
-        self.cfg = Some(cfg.clone());
-        Ok(())
+        self.open_with_port(Box::new(port), cfg)
     }
 
+    /// Close: a TP2.0 channel stops its keep-alive and sends the disconnect
+    /// (`A8`) first.
     fn close(&mut self) -> Result<()> {
-        self.isotp = None;
+        if let Some(mut t) = self.transport.take() {
+            t.close();
+        }
         self.cfg = None;
         Ok(())
     }
 
     fn read_ecu_id(&mut self) -> Result<EcuId> {
-        let tp = self.isotp.as_mut().ok_or(Error::NotConnected)?;
+        let tp = isotp_of(&mut self.transport)?;
         let mut uds = UdsClient::new(tp);
         let mut id = EcuId::default();
         for (name, did) in [("vin", 0xF190u16), ("sw", 0xF189), ("hw", 0xF191)] {
@@ -241,7 +297,7 @@ impl Interface for SlcanDriver {
         // A full read from a locked ECU needs security access too; a no-op when
         // no handler is set and security is not required.
         self.security_access()?;
-        let tp = self.isotp.as_mut().ok_or(Error::NotConnected)?;
+        let tp = isotp_of(&mut self.transport)?;
         let mut uds = UdsClient::new(tp);
         let max = uds.request_upload(0x00, region.address, region.length)?;
         let block = max.clamp(1, 4095);
@@ -274,7 +330,7 @@ impl Interface for SlcanDriver {
     ) -> Result<()> {
         // Unlock the ECU (service 0x27) before requestDownload if required.
         self.security_access()?;
-        let tp = self.isotp.as_mut().ok_or(Error::NotConnected)?;
+        let tp = isotp_of(&mut self.transport)?;
         let mut uds = UdsClient::new(tp);
         let max = uds.request_download(0x00, region.address, data.len() as u32)?;
         let block = max.clamp(2, 4095) - 1;
@@ -391,7 +447,7 @@ mod seedkey_hook_tests {
     fn diag_exposes_isotp_after_connect() {
         let mut d = SlcanDriver::new();
         assert!(d.diag().is_none(), "no transport before open");
-        d.isotp = Some(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8));
+        d.transport = Some(CanDiag::IsoTp(IsoTp::new(Box::new(IdleLink), 0x7E0, 0x7E8)));
         assert!(
             d.diag().is_some(),
             "diag() must expose the ISO-TP transport"

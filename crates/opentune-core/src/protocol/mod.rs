@@ -3,6 +3,9 @@
 //! - [`isotp`]: ISO 15765-2 transport over a raw CAN link (classic CAN).
 //! - [`canfd`]: CAN-FD frame abstraction + ISO 15765-2 in its CAN-FD mode.
 //! - [`vwtp20`]: VW TP2.0 (VAG) transport over a raw CAN link.
+//! - [`tp20channel`]: ISO-TP / TP2.0 transport selection for raw-CAN drivers,
+//!   with the TP2.0 keep-alive.
+//! - [`tp20sim`]: a simulated TP2.0 module + in-memory CAN link (tests).
 //! - [`doip`]: ISO 13400 Diagnostics-over-IP transport (UDS over TCP).
 //! - [`elm`]: ELM327 reply parsing + read loop shared by the ELM drivers.
 //! - [`diag`]: the request/response [`DiagTransport`] trait + NRC helpers.
@@ -15,6 +18,8 @@ pub mod elm;
 pub mod isotp;
 pub mod kwp2000;
 pub mod seedkey;
+pub mod tp20channel;
+pub mod tp20sim;
 pub mod uds;
 pub mod vwtp20;
 
@@ -24,5 +29,6 @@ pub use doip::{DoIpStream, DoIpTransport};
 pub use isotp::{CanLink, IsoTp};
 pub use kwp2000::Kwp2000Client;
 pub use seedkey::SeedKey;
+pub use tp20channel::{CanDiag, CanTransportKind, Tp20Channel, Tp20Options};
 pub use uds::UdsClient;
 pub use vwtp20::VwTp20;
