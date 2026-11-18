@@ -91,6 +91,7 @@ a top-level command is added without a row here.
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
 | `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
+| `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
 
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.
@@ -166,6 +167,8 @@ apps that need it.
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
 | `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), simulated units ([`HALDEX.md`](HALDEX.md)) |
+| `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
+| `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`

@@ -786,12 +786,15 @@ dependencies = [
  "opentune-flash",
  "opentune-haldex",
  "opentune-logdef",
+ "opentune-logview",
  "opentune-mapfind",
  "opentune-ols",
  "opentune-packs",
  "opentune-recipe",
  "opentune-scan",
  "opentune-servicefn",
+ "opentune-tsini",
+ "opentune-tsproto",
  "opentune-udssim",
  "opentune-vin",
  "opentune-xdf",
@@ -1095,6 +1098,25 @@ dependencies = [
  "opentune-udssim",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "opentune-tsini"
+version = "0.1.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-tsproto"
+version = "0.1.0"
+dependencies = [
+ "opentune-tsini",
+ "serialport",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -54,6 +54,17 @@ they are here only to indicate relative reach, not to rank quality.
 | [Forbes-Automotive/OpenHaldex-C6](https://github.com/Forbes-Automotive/OpenHaldex-C6) | — | MIT | The OpenHaldex controller: its mode set, CAN broadcast/command frames, BLE contract, supplier UDS DIDs, the Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, and public PQ/MQB CAN captures used as test vectors. `opentune-haldex` is written fresh from these facts (see [`HALDEX.md`](HALDEX.md)). |
 | [dandwyer/OpenHaldex-S3](https://github.com/dandwyer/OpenHaldex-S3), [ABangingDonk/OpenHaldexDue](https://github.com/ABangingDonk/OpenHaldexDue) | — | MIT | Cross-checks of the same Haldex frame layouts and the project lineage. |
 | [commaai/opendbc](https://github.com/commaai/opendbc) `vw_pq.dbc` / `vw_mqb.dbc` | — | MIT | Signal layouts of `Allrad_1`, `Bremse_4`, `Bremse_3`, `Motor_1` and `ESP_19` for the passive Haldex decoder. |
+## Aftermarket ECUs (TunerStudio-compatible)
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [noisymime/speeduino](https://github.com/noisymime/speeduino) | ~1.5k | GPL-2.0 | The INI definition format as a large real example (`reference/speeduino.ini`: pages, `lastOffset` aliases, `#if` settings, expression channels) and, from `comms.cpp`, the msEnvelope framing facts (big-endian length and CRC32, status codes, `p`/`M`/`b`/`d`/`r` commands). Read for format/protocol facts only → **learn-only**; `opentune-tsini`/`-tsproto` are independent implementations. |
+| [rusefi/rusefi](https://github.com/rusefi/rusefi) | ~1k | GPL-3.0 | Generated board INIs (large single-page layouts, F32 constants, empty burn commands) and the ECU side of the binary protocol in `tunerstudio*.cpp` (`S`/`R`/`C`/`B`/`k`/`O`, response codes, signature with NUL). GPL-3.0 → compatible; no code copied. |
+| [nearwood/msqur](https://github.com/nearwood/msqur) | ~30 | GPL-3.0 | An MSQ viewer whose collection of MS1/MS2/MS2Extra/MS3 INIs served as parser test input (kept outside the repo). |
+| [RallyPat/LibreTune](https://github.com/RallyPat/LibreTune) | ~50 | GPL-2.0 | An open TunerStudio-compatible tuner in Rust; surveyed as a behaviour reference for the overall feature set. GPL-2.0 → **learn-only**; no code used. |
+
+TunerStudio (EFI Analytics) is proprietary: nothing from it is used; OpenTune
+reads the INI and `.msq` formats as the open projects above document them.
 
 ## CAN tooling
 
@@ -74,10 +85,10 @@ above:
   cantools, SavvyCAN.
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
-  FastECU, freediag (2-or-later), caringcaribou.
+  FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur.
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
-  RomRaider and pyA2L.
+  RomRaider, pyA2L, Speeduino and LibreTune.
 
 In every case the design was informed by reading these projects; where a file in
 OpenTune is a close adaptation of permissively-licensed or GPL-compatible code,

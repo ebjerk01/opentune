@@ -1,5 +1,5 @@
 //! The clap definitions of the public command tree.
-use crate::{candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd};
+use crate::{candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -434,6 +434,14 @@ pub enum Command {
     /// listen-only where the adapter allows. Runs until `--duration` or Ctrl-C.
     /// With `--driver mock` it records synthetic traffic offline.
     Candump(candump::CandumpArgs),
+    /// TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI,
+    /// MegaSquirt): inspect INI definitions and .msq tunes, read / write
+    /// (verified, burn on --confirm) / log over serial. `--port sim` uses a
+    /// simulated ECU.
+    Ts {
+        #[command(subcommand)]
+        action: ts_cmd::TsAction,
+    },
     /// Run the in-memory UDS conformance server offline and exchange raw
     /// requests against it — no hardware, for testing and demos.
     Simulate {

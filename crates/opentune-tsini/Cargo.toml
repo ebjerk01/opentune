@@ -1,0 +1,24 @@
+# TunerStudio-compatible ECU definitions (.ini) and tunes (.msq) for the open
+# aftermarket ECUs (Speeduino, rusEFI, MegaSquirt). Pure parsing and value
+# mapping, no I/O beyond reading the files; the serial protocol is in
+# opentune-tsproto.
+[package]
+name = "opentune-tsini"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Parse TunerStudio INI ECU definitions and .msq tunes; map constants to page bytes and decode realtime channels."
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+# roxmltree 0.20.0 (2023-12-29): small pull-free DOM reader, already used by
+# opentune-xdf / -ecuflash / -logdef; reads the .msq XML.
+roxmltree = "0.20.0"
+
+[dev-dependencies]
+serde_json = { workspace = true }

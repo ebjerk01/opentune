@@ -1,0 +1,23 @@
+opentune-tsproto
+================
+
+This crate speaks the serial protocol of TunerStudio-compatible ECUs. The
+protocol facts -- the CRC32 "msEnvelope_1.0" framing (big-endian length and
+CRC), the response status codes, the page read/write/burn/CRC32 and realtime
+commands and their little-endian offset/count fields -- were taken from the
+open firmware sources that implement the ECU side:
+
+    Speeduino -- speeduino/comms.cpp, https://github.com/noisymime/speeduino
+      Copyright (C) Josh Stewart and contributors, GPL-2.0 (read for protocol
+      facts only; no code is taken).
+    rusEFI -- firmware/console/binary/tunerstudio.cpp, tunerstudio_io.cpp and
+      the generated rusefi_generated_*.h constants,
+      https://github.com/rusefi/rusefi, GPL-3.0.
+
+and from the command strings in the ECUs' own INI definitions. This crate is
+an independent implementation; its simulated ECU answers whatever commands
+the INI defines and is not derived from any firmware.
+
+LibreTune (https://github.com/RallyPat/LibreTune, GPL-2.0) was surveyed as a
+reference for behaviour only; none of its code is used. TunerStudio is
+proprietary (EFI Analytics); nothing from it is used.

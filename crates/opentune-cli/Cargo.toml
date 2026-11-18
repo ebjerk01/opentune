@@ -49,6 +49,8 @@ opentune-candump = { path = "../opentune-candump" }
 opentune-mapfind = { path = "../opentune-mapfind" }
 opentune-recipe = { path = "../opentune-recipe" }
 opentune-haldex = { path = "../opentune-haldex" }
+opentune-tsini = { path = "../opentune-tsini" }
+opentune-tsproto = { path = "../opentune-tsproto" }
 # Ctrl-C ends a `candump` capture cleanly (file finished, adapter released).
 ctrlc = "3"
 
@@ -56,3 +58,5 @@ ctrlc = "3"
 # Re-import the generated XDF in the a2l2xdf round-trip integration test.
 opentune-xdf = { path = "../opentune-xdf" }
 opentune-core = { path = "../opentune-core" }
+# The `ts log` smoke test opens its CSV with the log viewer's parser.
+opentune-logview = { path = "../opentune-logview" }
