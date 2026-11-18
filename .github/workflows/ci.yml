@@ -79,6 +79,37 @@ jobs:
       - name: Run the harness
         run: python tools/conformance/udsoncan_harness.py --entity target/debug/examples/doip_tcp_entity
 
+  # The SA2 seed/key VM against the public reference implementation
+  # (bri3d/sa2_seed_key, MIT): re-checks the committed vectors and runs fresh
+  # synthetic programs through both. Test-only; no OEM script is involved.
+  # See tools/sa2/README.md.
+  sa2:
+    name: sa2 VM · reference sa2-seed-key
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the reference implementation
+        run: pip install -r tools/sa2/requirements.txt
+
+      - name: Build the evaluator
+        run: cargo build -p opentune-sa2 --example sa2_eval
+
+      - name: Differential check
+        run: python -I tools/sa2/sa2_differential.py check --fixture crates/opentune-sa2/tests/fixtures/sa2_vectors.txt --eval target/debug/examples/sa2_eval --fresh 2000
+
   # Gate every PR on the ECU-definition library: parse + the format / honesty /
   # scope rules in docs/CONTRIBUTING-ECUDEFS.md. Fails the build on any
   # validation error (warnings are advisory and do not fail). See

@@ -56,6 +56,8 @@ for the full set); each calls straight into the OpenTune crates.
   `_decode_log` / `_export_csv`, `ts_load_ini` / `_load_msq` / `_save_msq` /
   `_diff_msq` / `_values` / `_get` / `_set` / `_table` / `_curve` / `_status` /
   `_connect` / `_disconnect` / `_read` / `_plan_write` / `_write` / `_poll`.
+- **Definition packs** — `packs_list` (installed packs), `packs_open` (a pack
+  from disk), used by the shared pack picker in the engine panels.
 - **Utilities** — `vin_decode`, `part_decode`, `dtc_lookup`, `seedkey_algos`,
   `seedkey_compute`, `data_paths`, `guide_list`, `guide_read`.
 - **Debug** — `debug_raw_request` and `debug_simulate` (refuse to run unless
