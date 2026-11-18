@@ -59,6 +59,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Android bundled ecudefs match the root set
+        run: android/sync-ecudefs.sh --check
+
       - name: Install system dependencies (libudev for the serialport crate)
         run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
 
