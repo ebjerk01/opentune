@@ -147,6 +147,97 @@ equivalent with the standard ISO 14229-1 `0x2C` service so it works on any
 ECU that implements it. No VW_Flash code was used. Multi-DID `0x22` batching
 is a possible later addition.
 
+## GPS channels
+
+An optional GPS/GNSS receiver adds position and true ground speed to a log
+(`opentune-gps`, parsed by OpenTune itself — no gpsd). A u-blox style
+receiver enumerates as a plain USB CDC-ACM serial port (`/dev/ttyACM0` on
+Linux, `COMx` on Windows) and streams NMEA 0183 at 1–10 Hz:
+
+```sh
+opentune gps --list-ports                       # likely GNSS receivers first (u-blox VID 0x1546)
+opentune gps /dev/ttyACM0 --count 5             # one CSV row per second + NMEA counters
+opentune gps drive.nmea                         # replay a recorded NMEA file, one row per epoch
+opentune log --def logger.xml --driver <id> --rounds 500 --out run.csv \
+  --gps /dev/ttyACM0 [--gps-baud 9600] [--gps-speed-param vss] [IDS…]
+```
+
+`--gps` takes a serial port or a recorded NMEA file. A file is **replayed one
+epoch per logged sample** (an epoch is every sentence sharing one UTC time),
+so the same ECU log + NMEA recording always produce the same CSV — useful for
+tests and offline analysis. A port is read live; the log waits up to 2.5 s
+for its first sentence before the first sample. USB CDC-ACM ignores the baud
+rate; a UART receiver needs its configured rate (`--gps-baud`, default 9600).
+
+Each round of the CSV gets these rows after the ECU channels (same
+`round,param_id,name,raw,value,units,note,text` columns):
+
+| `param_id` | Value | Units |
+|---|---|---|
+| `gps_lat`, `gps_lon` | signed decimal degrees (north / east positive) | `deg` |
+| `gps_alt_m` | altitude above mean sea level (GGA) | `m` |
+| `gps_speed_kmh` | speed over ground (VTG km/h, else RMC/VTG knots × 1.852) | `km/h` |
+| `gps_course_deg` | course over ground, true | `deg` |
+| `gps_sats` | satellites used (GGA) | `count` |
+| `gps_fix` | GGA fix quality: 0 none, 1 GPS, 2 DGPS, 4 RTK fixed, 5 RTK float, 6 estimated; 1 from an RMC `A` status when no GGA is sent | |
+| `gps_hdop` | horizontal dilution of precision | |
+| `speed_error_kmh` | vehicle speed − GPS speed (only when the log has a vehicle-speed channel) | `km/h` |
+
+**Good fix, stale, flagged.** Position, altitude, speed and course are filled
+only while the fix is *good*: a position from RMC status `A` / GGA quality
+1–5 (estimated, manual and simulated fixes do not count), mode indicator not
+`N`/`E`, updated within the staleness limit (2 s: a 1 Hz receiver has missed a
+whole epoch). `gps_sats`, `gps_fix` and `gps_hdop` stay filled while the
+receiver is talking without a fix. When nothing usable is known the value is
+empty and the row's `note` says why — `no NMEA received yet`,
+`stale: no NMEA for 3.0 s`, `no fix (GGA quality 0 RMC status V mode N)`,
+`replay ended after 20 epoch(s)`. A GPS problem never stops the ECU log.
+
+**Speed error.** The vehicle-speed channel is `--gps-speed-param`, else the
+first OBD-II PID `0x0D` channel, else an id such as `vss` / `speed` /
+`vehicle_speed`, else a name containing "vehicle speed". Its value is
+converted from `km/h`, `mph` or `m/s` (a unit-less PID `0x0D` is km/h by
+definition). `speed_error_kmh` is filled only with a good fix and a GPS speed
+of at least 5 km/h (below that GPS speed noise dominates); positive means
+the vehicle reads high, as speedometers usually do.
+
+**Parser.** `$--RMC`, `$--GGA` and `$--VTG` from any talker (`GP`, `GN`,
+`GL`, `GA`, `GB`/`BD`, …), including the NMEA 1.x `VTG` without unit
+letters. The `*hh` checksum is required and verified. Other sentences (`GSV`,
+`GSA`, `GLL`, `TXT`, proprietary `$P…`) and binary UBX traffic are skipped.
+Every rejected line is counted, never fatal; the CLI prints the counters at
+the end:
+
+| Counter | Line |
+|---|---|
+| `bad_checksum` | `*hh` does not match |
+| `partial` | no `*hh` (cut off mid-sentence, e.g. at port open) |
+| `malformed` | an RMC/GGA/VTG field that does not parse (time, coordinates, status, units, …), a bad address or checksum field |
+| `noise` | does not start with `$` |
+| `overlong` | longer than 160 bytes (dropped) |
+| `ignored` | valid sentence of another type |
+
+Serial reads arrive in arbitrary chunks; lines are reassembled across reads,
+and a `$` inside a line starts a new one (the cut-off part counts as
+`partial`). The reader runs on a background thread with a 200 ms read
+timeout and keeps only the latest merged fix, so the log loop never waits on
+the receiver.
+
+**Desktop.** The *Live log* and *Dashboard* panels (Bench tier) carry an
+optional GPS card: pick a port (or an NMEA file, replayed in a loop), Open,
+and the tiles show position, speed, altitude, course, satellites, fix, HDOP
+and the speed error against the panel's vehicle speed (Live log: its
+vehicle-speed channel; Dashboard: OBD `speed`). While a GPS source is open
+the Live log CSV gets the `gps_*` rows too. Backend: `gps_ports`,
+`gps_open`, `gps_fix`, `gps_close` (`desktop/src-tauri/src/feat_gps.rs`).
+
+**Validation state:** synthetic-tested — hand-made NMEA fixtures with valid
+checksums (a made-up route in open water; multi-talker, NMEA 1.x VTG, broken
+checksums, partial / overlong / noise lines, fix loss and recovery), a
+chunked serial-like reader, and replay into `LiveSession` against the UDS
+simulator and through `opentune log --gps`. Not yet tested with a real
+receiver or in a car.
+
 ## Backend API for the desktop panel
 
 The desktop **Live log** panel's *Fast (0x2C)* toggle uses this API
