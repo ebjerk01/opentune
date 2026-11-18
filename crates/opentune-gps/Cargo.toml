@@ -1,0 +1,25 @@
+# Optional GPS/GNSS source for live logging: a dependency-light NMEA 0183
+# parser ($--RMC / $--GGA / $--VTG, any talker, checksum-verified), a latest-fix
+# tracker with staleness, a background serial reader (u-blox style CDC-ACM
+# receivers) and a deterministic file-replay source for tests and offline
+# analysis. Own code; no gpsd.
+[package]
+name = "opentune-gps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "NMEA 0183 GPS/GNSS source for OpenTune live logging: parser, latest-fix tracker, serial reader and file replay."
+
+[features]
+# The serial reader (`GpsReader::open_serial`, `open_source`, `list_ports`).
+# Off for consumers that only need the parser / replay (opentune-logdef).
+default = ["serial"]
+serial = ["dep:serialport"]
+
+[dependencies]
+serde = { workspace = true }
+serialport = { workspace = true, optional = true }

@@ -50,6 +50,7 @@ members = [
     "crates/opentune-tsini",
     "crates/opentune-tsproto",
     "crates/opentune-c167bsl",
+    "crates/opentune-gps",
 ]
 
 [workspace.package]
