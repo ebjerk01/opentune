@@ -75,6 +75,7 @@ reads the INI and `.msq` formats as the open projects above document them.
 |---|---|---|---|
 | [cantools/cantools](https://github.com/cantools/cantools) | ~1.1k | MIT | DBC/signal handling: `scale`, `offset`, `minimum`, `maximum`, `unit`, byte order and signedness, with `physical = raw*scale + offset`. This is exactly the linear scaling model OpenTune adopted for map cells and axes. MIT → reusable. |
 | [collin80/SavvyCAN](https://github.com/collin80/SavvyCAN) | ~1.1k | MIT | A CAN reverse-engineering/capture tool; a reference for frame capture workflows and signal discovery that sit upstream of writing a definition. MIT → reusable. |
+| [Switchleg1/esp32-isotp-ble-bridge](https://github.com/Switchleg1/esp32-isotp-ble-bridge) (fork of [bri3d/esp32-isotp-ble-bridge](https://github.com/bri3d/esp32-isotp-ble-bridge)) | — | MIT (bundles lishen2/isotp-c, MIT) | ESP32 firmware that bridges BLE (or USB serial) to ISO-TP on CAN. Recommended as OpenTune's BLE companion firmware and **not vendored** (pinned at v1.03); the `isotp-ble` driver is an independent implementation of its host protocol, written up in [ISOTP-BLE-BRIDGE.md](ISOTP-BLE-BRIDGE.md). MIT → compatible. |
 | [CaringCaribou/caringcaribou](https://github.com/CaringCaribou/caringcaribou) | ~800 | GPL-3.0 | A CAN/automotive security toolkit (UDS/ISO-TP discovery, DCM/XCM fuzzing); informed how we think about safely probing an unknown ECU before trusting a definition. GPL-3.0 → compatible. |
 
 ## Interface protocols from own-hardware captures
@@ -94,7 +95,7 @@ above:
 - **MIT / BSD (permissive)** — code and patterns may be reused in OpenTune,
   keeping the original copyright/licence notice. Covers VW_Flash, ME7Sum,
   moto-ecu-checksum, OpenVehicleDiag, python-udsoncan, python-can-isotp,
-  cantools, SavvyCAN.
+  cantools, SavvyCAN, esp32-isotp-ble-bridge.
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur.

@@ -202,6 +202,73 @@ host driver. It implements `opentune-core`'s `Interface` trait over this protoco
   also exposes the device's raw CAN as a `CanLink`, so the host-side `IsoTp` can
   be used instead of the device's if wanted.
 
+## Companion BLE firmware: esp32-isotp-ble-bridge
+
+For a **wireless** link (phone, laptop without a USB cable in the car) OpenTune
+recommends the existing open-source BLE bridge firmware
+[Switchleg1/esp32-isotp-ble-bridge](https://github.com/Switchleg1/esp32-isotp-ble-bridge)
+(MIT) instead of growing a BLE stack in our own firmware. It is the bridge
+SimosTools and VW_Flash already use, and OpenTune's `isotp-ble` driver
+([`crates/drivers/isotp-ble-bridge`](../crates/drivers/isotp-ble-bridge/))
+speaks its protocol over BLE or its USB serial port. The protocol, the link
+table and the firmware's quirks are written up in
+[`ISOTP-BLE-BRIDGE.md`](ISOTP-BLE-BRIDGE.md).
+
+**How the two firmwares relate.** Ours (`hardware/firmware/esp32-s3`) stays
+OpenTune's reference interface: USB-CDC, CAN *and* K-line, raw CAN, battery
+sense, and the transports a phone bridge cannot do (TP2.0 is planned there).
+The Switchleg1 firmware is a separate, narrower device: UDS over ISO-TP on CAN
+only, at 500 kbit/s, on a fixed table of four id pairs (engine 7E0/7E8,
+gearbox 7E1/7E9, "haldex" 7E5/7ED, 700/7E8), with ISO-TP done on the device.
+Use it where a BLE link to a UDS-on-CAN module is what you need; use our board
+(or a USB CAN adapter) for everything else.
+
+| | OpenTune ESP32-S3 firmware | esp32-isotp-ble-bridge (Switchleg1) |
+|---|---|---|
+| Chip | ESP32-S3 | classic ESP32 (Macchina A0, DIY clone) |
+| Host link | USB-CDC | BLE GATT, or USB-UART at 250000 baud |
+| Buses | CAN + K-line | CAN only, fixed 500 kbit/s |
+| ISO-TP ids | any (configured per session) | four fixed pairs |
+| Raw CAN / TP2.0 | raw CAN yes; TP2.0 planned | no |
+| Licence | GPL-3.0-or-later (in this repo) | MIT (external, not vendored) |
+| OpenTune driver | `esp32-opentune` | `isotp-ble` (Bench tier, unverified) |
+
+**Not vendored.** The firmware source is not copied into this repository; we
+pin it by commit instead: tag **v1.03**,
+`276e97c04881a7bc1ac71a39e0ffe97cdfd144ae` (the `BridgeLEG` branch head
+`e7c95845fcafa76fc74641316fb33e1504ddf121` changes only the README). The
+original project is [bri3d/esp32-isotp-ble-bridge](https://github.com/bri3d/esp32-isotp-ble-bridge)
+(same licence, unmaintained since 2021, older framing); target Switchleg1's.
+
+**ESP32-S3.** The pinned firmware targets the classic ESP32. Running it on our
+ESP32-S3 board would be a port (new target and sdkconfig, ESP-IDF 5 task-
+watchdog API, our CAN pins); that port has not been done.
+
+### Flashing it (owner, later)
+
+The project's GitHub release ships a Windows installer only; build from source
+instead. It needs **ESP-IDF 4.4** (the code uses the v4 task-watchdog call; our
+own firmware is on 5.3.2, so keep a separate IDF checkout):
+
+```sh
+git clone https://github.com/Switchleg1/esp32-isotp-ble-bridge
+cd esp32-isotp-ble-bridge
+git checkout 276e97c04881a7bc1ac71a39e0ffe97cdfd144ae    # v1.03
+. $HOME/esp/esp-idf-v4.4/export.sh
+# The committed sdkconfig already targets esp32: do NOT run `idf.py
+# set-target`, which would replace it with defaults.
+idf.py build
+idf.py -p /dev/ttyUSB0 flash monitor
+```
+
+Wiring for a DIY board: a 3.3 V CAN transceiver (SN65HVD230 or similar) with
+its TX on GPIO 5 and RX on GPIO 4 (pins from the firmware's `constants.h`;
+GPIO 21 is driven low for the A0's transceiver standby pin), CAN_H/CAN_L to
+OBD pins 6/14, and a 12 V → 5 V supply from OBD pin 16. After flashing, the
+device advertises as `BLE_TO_ISOTP20`; check it with
+`opentune info --driver isotp-ble --port /dev/ttyUSB0` (USB) on an ECU on the
+bench before going wireless. Nothing of this has been tried yet.
+
 ## Licence
 
 Hardware design files (schematic, PCB, BOM, production files) for the OpenTune

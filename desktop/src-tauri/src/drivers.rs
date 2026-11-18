@@ -56,6 +56,13 @@ pub(crate) fn registry() -> Registry {
         opentune_udssim::driver::DRIVER_NAME,
         || Box::new(opentune_udssim::UdssimDriver::new()),
     );
+    // Bench tier until bench/vehicle-tested: only alpha builds list it.
+    #[cfg(feature = "alpha")]
+    r.register(
+        opentune_driver_isotp_ble::DRIVER_ID,
+        opentune_driver_isotp_ble::DRIVER_NAME,
+        || Box::new(opentune_driver_isotp_ble::IsoTpBleDriver::new()),
+    );
     r
 }
 

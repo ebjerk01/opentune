@@ -1,0 +1,34 @@
+# Host driver for the open-source esp32-isotp-ble-bridge firmware
+# (github.com/Switchleg1/esp32-isotp-ble-bridge, MIT). The device does ISO-TP
+# itself; this crate speaks its framed BLE/serial protocol and implements
+# opentune-core's `Interface`, so `UdsClient` runs over it. Validation state:
+# unverified (mock-tested only). See docs/ISOTP-BLE-BRIDGE.md.
+[package]
+name = "opentune-driver-isotp-ble"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Host driver for the esp32-isotp-ble-bridge firmware (ISO-TP over BLE GATT or USB serial)."
+
+[features]
+default = []
+# BLE transport through btleplug (BlueZ/D-Bus on Linux, WinRT, CoreBluetooth).
+# Off by default so the default build and CI pull no BLE or D-Bus crates;
+# without it the driver still works over the firmware's USB serial port.
+btleplug = ["dep:btleplug", "dep:tokio", "dep:futures", "dep:uuid"]
+
+[dependencies]
+opentune-core = { path = "../../opentune-core" }
+serialport.workspace = true
+btleplug = { version = "0.13", optional = true }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "time"] }
+futures = { version = "0.3", optional = true }
+uuid = { version = "1", optional = true }
+
+[dev-dependencies]
+# Independent UDS server used as the ECU behind the mock bridge in the tests.
+opentune-udssim = { path = "../../opentune-udssim" }

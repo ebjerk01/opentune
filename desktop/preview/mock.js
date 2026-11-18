@@ -60,6 +60,8 @@
       ["slcan", "SLCAN (serial CAN)"], ["elm327", "K-line (ELM327)"], ["kkl", "K-line (KKL 409.1 raw)"],
       ["elm327obd", "ELM327 serial (OBD diagnostics + CAN memory read)"], ["elm327net", "ELM327 over WiFi / Bluetooth"],
       ["gsusb", "gs_usb / candleLight USB-CAN"], ["j2534", "J2534 PassThru (generic)"], ["efp02c", "EFI EFP02C USB-CAN (unverified)"], ["vcar", "Virtual car (offline simulator)"], ["udssim", "UDS simulator (offline)"],
+      // alpha builds only (Bench tier)
+      ["isotp-ble", "ESP32 ISO-TP BLE bridge (Switchleg1 fw, unverified)"],
     ].map(([id, name]) => ({ id, name })),
     data_paths: () => ({ ecudefs: "ecudefs/", catalog: "catalog/", guide: "guide/", packs: "packs/" }),
     list_ecudefs: () => P.ecudefs || [],
