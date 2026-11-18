@@ -60,6 +60,8 @@ opentune-adaptation = { path = "../../crates/opentune-adaptation" }
 opentune-autoscan = { path = "../../crates/opentune-autoscan" }
 opentune-servicefn = { path = "../../crates/opentune-servicefn" }
 opentune-logdef = { path = "../../crates/opentune-logdef" }
+# Definition packs: the panels' pack picker lists them.
+opentune-packs = { path = "../../crates/opentune-packs" }
 opentune-udssim = { path = "../../crates/opentune-udssim" }
 
 # Control-unit reference database (Database panel).
