@@ -124,7 +124,7 @@ bench ECU are available.
 ## Cross-cutting / tooling
 - [x] Documentation — architecture, driver authoring, ECU defs, checksums, hardware, Android, ideas backlog (`docs/`)
 - [~] **ECU-library scanner** (`opentune-scan` crate + `opentune scan` CLI + the desktop Analyze-bin) — structural ECU-family detection + string/part-number/VIN extraction as metadata enrichment; **not** reliable auto-sort-by-car (needs better vehicle DBs — measured ~11% confident full-car on a messy library; the growing Euro catalog helps)
-- [~] **Signed, reproducible releases** — Linux portable build + macOS/Windows bundle targets done; **Tauri updater signing key generated + wired** (needs the private key as a CI secret); Gradle wrapper committed; a synthetic demo `.bin` ships in `samples/`. App/installer code-signing (Apple/Windows certs) still pending.
+- [~] **Signed, reproducible releases** — Linux portable build + macOS/Windows bundle targets done; **Tauri updater signing key wired as a CI secret** — first signed public release **v0.5.0** (2026-11-18, `latest.json` + SHA256SUMS); Gradle wrapper committed; a synthetic demo `.bin` ships in `samples/`. OS code-signing (Apple/Windows certificates) still open — SignPath Foundation declined for now (project too new).
 - [x] Protocol-layer CI coverage — 20 ISO-TP / TP2.0 / KWP edge-case tests; `docs/CONTRIBUTING-ECUDEFS.md` for community defs
 
 ---
@@ -139,24 +139,23 @@ All `[ ]` = planned.
 - [x] **ME7** (Bosch Motronic petrol; VAG/Porsche) — verify+correct **real-image-validated** (33/33 blocks
   on a real Passat ME7.5): ROMSYS 16-bit word-sums + multipoint block descriptors, located by data-independent
   signature. The CAL-CRC32 block is firmware-specific — exposed as an extension point, **not** auto-located (documented limit). Ref: nyetlabs/ME7Sum (BSD).
-- [~] **TCU checksums** — **DQ381 CRC32-VW real-image-validated** (CAL block on a real dump). Remaining:
-  expose **BOOT/ASW/CAL separately** (all three independently confirmed via cross-check) + extracted-block support.
-  **DQ250 JAMCRC: synthetic-only** (no MQB bench dump found). **CRC-CCITT: generic primitive, NOT** established ZF-8HP
+- [~] **TCU checksums** — **DQ381 CRC32-VW real-image-validated**, BOOT/ASW/CAL reported separately (all three
+  independently confirmed via cross-check). Remaining: **DQ250 JAMCRC: synthetic-only** (no MQB bench dump found). **CRC-CCITT: generic primitive, NOT** established ZF-8HP
   family support. Refs: dspl1236/vag-tcu-tools (MIT), TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3).
-- [ ] **Representation-aware checksum reports** — distinguish raw full image / extracted programming block /
+- [x] **Representation-aware checksum reports** — distinguish raw full image / extracted programming block /
   container segment, and embedded-vs-transfer checksums, and *recognised* vs *merely mathematically consistent* input.
-- [ ] **Importer fidelity (XDF)** before more TCU maps: checked rebasing (refuse below-base underflow, not wrap),
+- [x] **Importer fidelity (XDF)** before more TCU maps: checked rebasing (refuse below-base underflow, not wrap),
   preserve categorical shift/mode axis labels (or report loss), import omitted scalar constants, explicit
   unsupported-layout reports, and verify swap-XY (0x04) semantics before changing storage order.
 - [~] **ZF-8HP (AL551, method 0x22) CAL CRC-32** and **Haldex Gen5** per-block word-sum — implemented (refs: vag-tcu-tools MIT,
   VW_Flash BSD-2), **algorithm-vector + synthetic only** (no real dumps); ZF-8HP `correct` needs a validating stock reference.
 - [ ] **Further family leads** (research-only until independent fixtures + provenance): Subaru M32R/SH7055/MH8104 (avoid the reproduced old-source carry/order bugs),
   Volvo/Aisin TF80-P2 (CRC-16/XMODEM) / AW55 (open) — keep each at its actual evidence level, no guessed correctors.
-- [ ] Cross-validate our EDC15/EDC16 correctors against a native-Rust implementation. Ref: **LeZed97/ZedSuite** (GPL-3, Rust — directly liftable).
-- [ ] Concrete VAG algos to compare/absorb: CRC32-VW, ECM3 64-bit summation, Simos counter-XOR. Ref: **dspl1236/simos-suite** (MIT; verify vs known-good dumps — AI-assisted).
+- [x] Cross-validate our EDC15/EDC16 correctors against a native-Rust implementation — 77 dumps, full agreement where both find blocks (build order item 7). Ref: **LeZed97/ZedSuite** (GPL-3, Rust).
+- [~] Concrete VAG algos to compare/absorb: CRC32-VW, ECM3 64-bit summation, Simos counter-XOR — `simos-crc` (Continental block-CRC headers) landed; ECM3 / Simos 8–18 still need reads. Ref: **dspl1236/simos-suite** (MIT; verify vs known-good dumps — AI-assisted).
 
 ### Seed/key (security access) — new plugin layer
-- [~] **SA2 bytecode VM** shipped (`opentune-sa2`, implements `SeedKey` as `sa2`) — runs a caller-supplied SA2 program; **no OEM bytecode bundled**. Still open below: any optional per-brand plugin set.
+- [~] **SA2 bytecode VM** (`opentune-sa2`, implements `SeedKey` as `sa2`) — runs a caller-supplied SA2 program; **no OEM bytecode bundled**. The current opcode encoding is OpenTune's own, so it cannot run a real script from an FRF/ODX yet; being replaced with the real VAG SA2 encoding (differential-tested against a public reference). Still open below: any optional per-brand plugin set.
 - [ ] Ship an optional **SA2 seed/key** plugin set (user-enabled, never auto-applied — keeps the "you supply the algorithm" stance): **Daimler/Mercedes** (Standard/Mod/RefG), VW SA2+VGS, Bosch/Conti, Delphi. Ref: **jglim/UnlockECU** (MIT, C# → port to Rust). Daimler algos also feed the EDC15C6 programming-access follow-ups below.
 - [ ] **Ford/Mazda module flashing** uses the optional, user-enabled `SeedKey` plugin layer — OpenTune ships no OEM seed/key algorithm; security access takes a caller-supplied key provider. The open-source FoCCCus (GPLv3) is a reference for the on-wire handshake format only.
 
@@ -189,7 +188,7 @@ The block checksum is solved from the dumps (see above). Remaining, optional:
 
 ### Hardware 🔒 (mostly)
 - [ ] Adopt **Switchleg1/esp32-isotp-ble-bridge** (MIT) as the companion ESP32-S3 BLE/ISO-TP firmware instead of writing it from scratch. *(porting is offline; compile/flash/on-bench is 🔒)*
-- [ ] Reference ECUFlash/RomRaider definition parsers from **FastECU** (GPL-3) for broader def import. *(offline)*
+- [x] ECUFlash/RomRaider definition import referenced against **FastECU** (GPL-3) — `import-fastecu` (EcuFlash/RomRaider + MapPack CSV).
 
 ---
 
@@ -250,7 +249,7 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 
 **Offline — buildable now**
 *(Done since the last revision: ME7 checksum, FRF/ODX/SGO decode, TCU checksums, definition-format breadth, DoIP over a loopback entity, EDC15C6 checksum, map finder, tune recipes, log viewer, OBD inspection, virtual car, starter packs.)*
-1. **ELM327 CAN memory read — follow-ups**: block read landed (`elm327obd`: 0x23 or 0x35–0x37 upload, session + plugin seed-key, dry-run `plan_read_memory`, mock-tested; writes bench-only single-frame). Next: a CLI `read --plan` dry run, first real read on the car, and the compact address format for `kline-elm327` on CAN. Clone quirks in `docs/DRIVERS.md`.
+1. **ELM327 CAN memory read — follow-ups**: block read landed (`elm327obd`: 0x23 or 0x35–0x37 upload, session + plugin seed-key, dry-run `plan_read_memory` + CLI `read --plan`, mock-tested; writes bench-only single-frame). Next: first real read on the car, and the compact address format for `kline-elm327` on CAN. Clone quirks in `docs/DRIVERS.md`.
 2. **Fast logging via UDS 0x2C — desktop wiring**: the engine landed (`opentune_logdef::LiveSession`: channels by DID and memory address packed into dynamic DIDs 0xF200+, one 0x22 per record, automatic fallback to polling with the reason reported; udssim implements 0x2C/0x23; CLI `log --fast`; 8 channels → 1 request per sample instead of 8; `docs/LIVE-LOGGING.md`). Desktop wiring landed (Live log "Fast (0x2C)" toggle, mode badge + fallback reason, samples/s). Next: a real-ECU test. Approach credit: VW_Flash (batched reads).
 3. **Open aftermarket ECUs — desktop panel + hardware test**: library + CLI landed (`opentune-tsini`: TunerStudio INI + `.msq`, all 82 public Speeduino/rusEFI/MegaSquirt INIs parse; `opentune-tsproto`: CRC32-envelope and plain serial framing, chunked page read/write, verified write → burn only after read-back, realtime channels; CLI `opentune ts`; simulator-tested only; `docs/AFTERMARKET-ECUS.md`). Desktop **Aftermarket ECU** panel landed (Bench tier: INI + msq load/save/diff, table/curve/settings editors with limit checks, online read → plan → confirmed write with backup + read-back verify + optional burn, live tiles). Next: a first test on real Speeduino/rusEFI hardware.
 4. **Recipes on EDC17** — fixed: verify/attest against the stock reference, no nested-block writes, check words carved out of patches → 13/15 EDC17 pairs byte-identical (42/45 overall). Open: the CP42 nested block at 0x3005A8 (rule unknown; refused unless `--allow-unverified`, which still leaves the attestation unsatisfied).
