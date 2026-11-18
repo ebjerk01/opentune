@@ -40,6 +40,11 @@ pub fn public_registry() -> Registry {
         || Box::new(opentune_driver_elm327_obd::Elm327Obd::new()),
     );
     r.register(
+        opentune_driver_efp02c::DRIVER_ID,
+        opentune_driver_efp02c::DRIVER_NAME,
+        || Box::new(opentune_driver_efp02c::Efp02cDriver::new()),
+    );
+    r.register(
         "vcar",
         "Virtual car (offline multi-module simulator)",
         || Box::new(opentune_driver_vcar::VcarDriver::new()),

@@ -790,7 +790,7 @@ pub struct ConnectArgs {
 
 /// Drivers that program only 11-bit CAN headers: a 29-bit id would be
 /// truncated to a different module, so it is refused instead.
-const ELEVEN_BIT_ONLY: &[&str] = &["elm327obd"];
+const ELEVEN_BIT_ONLY: &[&str] = &["elm327obd", "efp02c"];
 
 /// Option keys a dedicated flag owns; `--opt` refuses them.
 const FLAG_KEYS: &[(&str, &str)] = &[
