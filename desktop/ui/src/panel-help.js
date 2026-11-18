@@ -20,6 +20,7 @@
     flash: ["Choose the target file and the data file", "Set the address to write at", "Write: vault backup → write → read-back verify"],
     vault: ["Choose the backup folder", "Verify recomputes each CRC-32", "Restore by copying the .bin you need"],
     project: ["Edit maps, then Add to project", "Save the .otproj next to the image", "Reopen it to continue later"],
+    sa2: ["Paste a script, load a file, or open your own container and pick a candidate", "Read the disassembly and lints", "Enter a seed you know the key for and Compute key"],
     database: ["Search by name, part number or car", "Open a unit for read methods and checksum", "Check the pinout confidence before wiring a bench"],
     scan: ["Detect the adapter (HS/MS switch on the module bus)", "Choose the vehicle's module list and Scan", "Clear codes per module only after fixing the cause"],
     dashboard: ["Detect the adapter, engine running", "Pick a preset or your own values", "Start: only values the ECU reports are shown"],

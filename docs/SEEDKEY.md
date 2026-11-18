@@ -112,7 +112,8 @@ The driver reads these keys from `ConnectConfig.options`
 So an ECU definition that sets `seedkey` already signals that a handler must be
 present.
 
-In the desktop app, handlers come only from a plugin build: its
+In the desktop app, handlers come from a plugin build, or from the user's own
+SA2 script (see [VAG SA2 scripts](#vag-sa2-scripts)): its
 `DesktopConfig::seedkeys` resolvers are asked by id for service scripts that
 name a `seedkey`, for the Utilities calculator and, through
 `adapter::apply_seed_key`, for the plugin's own commands. See
@@ -209,6 +210,16 @@ For the commands that unlock a live ECU (`flash --uds-module`, `service`,
 `read`, …), `--seedkey sa2:<hex>` or `--seedkey sa2:@<file>` builds the `sa2`
 handler from your script. In Rust: `Sa2SeedKey::new(script)` /
 `Sa2SeedKey::from_hex(..)`, or `opentune_sa2::execute(seed, script)`.
+
+In the desktop app, the **SA2 script** panel does the same offline: paste the
+script (hex or assembler), load a file, or open your own container (with your
+FRF key file for an `.frf`) and pick one of its candidates; it shows the
+disassembly with lints and computes the key for a seed, with an optional
+bounded step trace. In alpha / bench builds it can also **arm** the script as
+seed/key id `sa2` for the rest of the run (Bench tier until vehicle-tested):
+a service script naming `"seedkey": "sa2"` then unlocks with it. The desktop
+also resolves an inline `sa2:<hex>` id (not `sa2:@<file>`). Plugin resolvers
+are asked first, so a plugin that provides `sa2` itself keeps precedence.
 
 ---
 

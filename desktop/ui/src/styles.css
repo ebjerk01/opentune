@@ -513,3 +513,7 @@ table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted
 .pack-picker [data-pp="info"] { line-height: 1.6; overflow-wrap: anywhere; }
 .pack-picker details { margin-top: 4px; }
 .pack-picker summary { cursor: pointer; }
+
+/* ---- SA2 script (feat_sa2.js) -------------------------------------------- */
+textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: vertical; margin: 8px 0; box-sizing: border-box; font-family: var(--mono); }
+.sa2-scroll { max-height: 360px; overflow: auto; }

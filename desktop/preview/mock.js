@@ -124,6 +124,9 @@
     if (name === "CSV log") return "demo/preview-drive-60s.csv";
     if (name === "CAN log") return "demo/preview-drivetrain.log";
     if (name === "Definition") return "demo/preview-logview-def.json";
+    if (name === "SA2 script") return "demo/synthetic.sa2";
+    if (name === "Flash container") return "demo/synthetic-sa2.odx";
+    if (name === "FRF key") return "demo/frf.key";
     if (/XDF|A2L/.test(name)) return "demo/preview-demo.xdf";
     if (ext.includes("otproj")) return "demo/preview-tune.otproj";
     if (ext.includes("ini")) return "demo/speeduino-demo.ini";
