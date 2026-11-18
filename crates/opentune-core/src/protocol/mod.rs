@@ -7,6 +7,8 @@
 //!   with the TP2.0 keep-alive.
 //! - [`tp20sim`]: a simulated TP2.0 module + in-memory CAN link (tests).
 //! - [`doip`]: ISO 13400 Diagnostics-over-IP transport (UDS over TCP).
+//! - [`doip_discovery`]: DoIP vehicle discovery, entity status and power mode
+//!   over UDP, and discovered entity → activated [`DoIpTransport`].
 //! - [`elm`]: ELM327 reply parsing + read loop shared by the ELM drivers.
 //! - [`diag`]: the request/response [`DiagTransport`] trait + NRC helpers.
 //! - [`uds`] / [`kwp2000`]: service clients over a `DiagTransport`.
@@ -14,6 +16,7 @@
 pub mod canfd;
 pub mod diag;
 pub mod doip;
+pub mod doip_discovery;
 pub mod elm;
 pub mod isotp;
 pub mod kwp2000;
@@ -26,6 +29,7 @@ pub mod vwtp20;
 pub use canfd::{CanFrame, IsoTpFd};
 pub use diag::{check_response, nrc_name, DiagTransport};
 pub use doip::{DoIpStream, DoIpTransport};
+pub use doip_discovery::{DiscoveredEntity, Discovery, DoIpUdpClient, VehicleIdRequest};
 pub use isotp::{CanLink, IsoTp};
 pub use kwp2000::Kwp2000Client;
 pub use seedkey::SeedKey;

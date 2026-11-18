@@ -19,13 +19,27 @@
 //!   --flash                  enable the flashable-ECU model (2x 0x78 on erase)
 //!   --alive-check            send an alive check request after routing activation
 //!   --no-pos-ack             no diagnostic positive ack (0x8002)
+//!   --udp-port N             UDP discovery port on 127.0.0.1 (0 = ephemeral; default 0)
+//!   --vin VIN                announced VIN (17 chars; default the placeholder)
+//!   --eid HEX                announced EID / GID (6 bytes hex)
+//!   --further-action 0xNN    announced further-action byte (0x10 = central security)
+//!   --power-mode 0xNN        diagnostic power mode (default 0x01 ready)
+//!   --udp-fault F            every UDP answer misbehaves: no-reply | bad-version | nack:CODE
+//!   --announce-to IP:PORT    send 3 vehicle announcements there at start-up
+//!   --announce-interval-ms N gap between announcements (default 500)
 //! ```
 //!
-//! Prints `LISTENING <port>` once bound, and one line per notable event
-//! (`ALIVE_CHECK_RESPONSE 0x0E00`, `CLOSED`), all flushed, on stdout.
+//! Prints `LISTENING <port> UDP <udp-port>` once bound, and one line per
+//! notable event (`ALIVE_CHECK_RESPONSE 0x0E00`, `CLOSED`), all flushed, on
+//! stdout. The UDP side ([`UdpEntityServer`]) answers vehicle identification
+//! (all / EID / VIN), entity status and power mode.
 
+use opentune_core::protocol::doip_discovery::{PowerMode, VehicleIdRequest};
 use opentune_core::protocol::DoIpStream;
-use opentune_udssim::{DoIpSimStream, FlashConfig, ServerConfig, UdsServer};
+use opentune_udssim::{
+    DoIpSimStream, DoIpUdpEntity, EntityIdentity, FlashConfig, ServerConfig, UdpEntityServer,
+    UdpFault, UdsServer,
+};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
@@ -44,6 +58,14 @@ struct Opts {
     flash: bool,
     alive_check: bool,
     no_pos_ack: bool,
+    udp_port: u16,
+    vin: Option<String>,
+    eid: Option<String>,
+    further_action: Option<u8>,
+    power_mode: Option<u8>,
+    udp_fault: Option<UdpFault>,
+    announce_to: Option<std::net::SocketAddr>,
+    announce_interval_ms: u64,
 }
 
 fn num(s: &str) -> u64 {
@@ -65,6 +87,7 @@ fn pair(s: &str) -> (u64, &str) {
 fn parse() -> Opts {
     let mut o = Opts {
         ecu: 0x0010,
+        announce_interval_ms: 500,
         ..Opts::default()
     };
     let mut args = std::env::args().skip(1);
@@ -96,6 +119,17 @@ fn parse() -> Opts {
             "--flash" => o.flash = true,
             "--alive-check" => o.alive_check = true,
             "--no-pos-ack" => o.no_pos_ack = true,
+            "--udp-port" => o.udp_port = num(&val()) as u16,
+            "--vin" => o.vin = Some(val()),
+            "--eid" => o.eid = Some(val()),
+            "--further-action" => o.further_action = Some(num(&val()) as u8),
+            "--power-mode" => o.power_mode = Some(num(&val()) as u8),
+            "--udp-fault" => o.udp_fault = Some(val().parse().unwrap_or_else(|e| panic!("{e}"))),
+            "--announce-to" => {
+                let v = val();
+                o.announce_to = Some(v.parse().unwrap_or_else(|_| panic!("bad address {v:?}")));
+            }
+            "--announce-interval-ms" => o.announce_interval_ms = num(&val()),
             other => panic!("unknown option {other}"),
         }
     }
@@ -179,11 +213,48 @@ fn serve(mut sock: TcpStream, o: &Opts) -> std::io::Result<()> {
     }
 }
 
+/// The UDP side's identity and faults from the options.
+fn udp_entity(o: &Opts) -> DoIpUdpEntity {
+    let mut id = EntityIdentity::new(o.ecu);
+    if let Some(v) = &o.vin {
+        match VehicleIdRequest::by_vin(v) {
+            Ok(VehicleIdRequest::ByVin(vin)) => id.info.vin = vin,
+            _ => panic!("--vin needs 17 ASCII characters"),
+        }
+    }
+    if let Some(e) = &o.eid {
+        match VehicleIdRequest::by_eid(e) {
+            Ok(VehicleIdRequest::ByEid(eid)) => {
+                id.info.eid = eid;
+                id.info.gid = eid;
+            }
+            _ => panic!("--eid needs 6 hex bytes"),
+        }
+    }
+    if let Some(f) = o.further_action {
+        id.info.further_action = f;
+    }
+    if let Some(p) = o.power_mode {
+        id.power_mode = PowerMode::from_byte(p);
+    }
+    let mut e = DoIpUdpEntity::new(id);
+    e.set_fault(o.udp_fault);
+    e
+}
+
 fn main() -> std::io::Result<()> {
     let o = parse();
     let listener = TcpListener::bind(("127.0.0.1", o.port))?;
-    println!("LISTENING {}", listener.local_addr()?.port());
+    let udp = UdpEntityServer::spawn(([127, 0, 0, 1], o.udp_port).into(), udp_entity(&o))?;
+    println!(
+        "LISTENING {} UDP {}",
+        listener.local_addr()?.port(),
+        udp.local_addr()?.port()
+    );
     std::io::stdout().flush()?;
+    if let Some(to) = o.announce_to {
+        udp.announce(to, 3, Duration::from_millis(o.announce_interval_ms))?;
+    }
     for conn in listener.incoming() {
         let r = serve(conn?, &o);
         println!("CLOSED {}", if r.is_ok() { "ok" } else { "error" });

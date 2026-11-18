@@ -33,6 +33,39 @@ Added:
 - **UDP discovery.** `discover(bind, dest, timeout, broadcast)` sends one
   identification request and collects every announcement within the timeout.
   Offline-tested unicast to a localhost entity; the broadcast path is 🔒.
+  Since batch 4 it wraps `doip_discovery::DoIpUdpClient` (below).
+
+### Discovery, entity status, power mode (`doip_discovery`)
+
+- `DoIpUdpClient::identify` / `identify_first`: vehicle identification request
+  `0x0001` (all), `0x0002` (by EID) or `0x0003` (by VIN) — `VehicleIdRequest` —
+  to unicast, IPv4 broadcast or IPv6 `ff02::1` (with a scope id), collecting
+  `0x0004` answers into a `Discovery`: one `DiscoveredEntity` per (IP, logical
+  address, EID), repeats counted in `duplicates`, generic NACKs in `nacks`,
+  malformed datagrams in `rejected`, other messages in `ignored`.
+- `DoIpUdpClient::listener` + `listen`: unsolicited announcements on the
+  discovery port (`[::]` also joins `ff02::1`).
+- `entity_status` (`0x4001` → `0x4002`: node type, max / open TCP sockets,
+  optional max data size) and `power_mode` (`0x4003` → `0x4004`). A generic
+  NACK is an error naming the code; a timeout during which only malformed
+  answers arrived says so.
+- Header validation shared with the simulator: `doip::check_header` (version
+  and inverse, versions 0x01-0x03, 0xFF for identification requests only, max
+  payload) and `doip_discovery::parse_datagram` (exactly one message per
+  datagram, per-type payload length from `doip::payload_len_valid`), returning
+  the generic NACK code an entity answers with.
+- `connect_entity(&DiscoveredEntity, &ConnectOptions)`: TCP connect to the
+  entity's address (scope id kept) on the data port, routing activation with
+  the default type — or central security `0xE0` when the entity announced
+  further action `0x10` — targeting the announced logical address. Returns the
+  activated `DoIpTransport` for a `UdsClient`.
+- Entity side: `opentune-udssim::doip_udp` (`DoIpUdpEntity`, `UdpEntityServer`,
+  `TcpEntityServer`) with no-reply / bad-version / NACK fault injection; the
+  integration test `crates/opentune-udssim/tests/doip_discovery.rs` and the
+  python-doipclient cases in `tools/conformance/` drive it. CLI:
+  `opentune doip discover|status|power` (`--sim` for the simulated entity).
+- 🔒 Broadcast / multicast on a real vehicle network and a real gateway's
+  answers are untested.
 - **Routing activation hardening.** `activate_with(type, …)` allows non-default
   activation types (WWH-OBD, central security). The entity's logical address is
   learned from the response (`entity_address()`). The response is now validated
@@ -108,7 +141,8 @@ stays the transport's responsibility (where it re-reads without re-sending).
   `ecu_reset`, `request_seed`, `send_key` now return `Error::Protocol` if an ECU
   echoes the wrong DID / sub-function. This is stricter than before — intended —
   but if a non-conformant ECU is encountered in the field, that is where to look.
-- A CLI/driver wiring DoIP would: `DoIpTransport::connect(ip, DEFAULT_PORT, …)`
-  (or `discover` first to find the entity + VIN), then `activate()`, then drive
-  `UdsClient` as usual. A `--doip <ip>` flag is the natural surface; not added
-  here (CLI is out of scope).
+- A driver wiring DoIP would: `DoIpUdpClient::identify` to find the entity +
+  VIN, then `connect_entity` (TCP + routing activation), then drive `UdsClient`
+  as usual. `opentune doip discover --activate` exercises exactly that path; a
+  DoIP *registry driver* (so `--driver doip` works for the engines) is not
+  added yet.

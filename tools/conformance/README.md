@@ -8,7 +8,9 @@ OpenTune's *own* client; this harness closes the loop from the other side, so a
 simulator that merely agrees with OpenTune's assumptions is caught.
 
 The server runs as the `doip_tcp_entity` example: a loopback TCP bridge in front
-of `DoIpSimStream` (127.0.0.1, ephemeral port, one fresh ECU per connection).
+of `DoIpSimStream` (127.0.0.1, ephemeral port, one fresh ECU per connection),
+plus the entity's UDP side (`DoIpUdpEntity`, its own ephemeral port; the
+example prints `LISTENING <tcp> UDP <udp>`).
 Each case starts its own entity with the options it needs (fault injection,
 security policy, session restrictions, the flash model). Offline only.
 
@@ -27,13 +29,14 @@ saves the results. Exit status is non-zero when a case fails.
 (or `python3`) can import both packages, and skips it with a notice otherwise; CI
 runs it in the `conformance` job.
 
-## Coverage (25 cases)
+## Coverage (34 cases)
 
 | Area | Cases |
 |---|---|
 | DoIP routing activation | default + WWH-OBD accepted; unsupported type → `0x06`; a second tester on the socket → `0x02` |
 | DoIP alive check | tester-initiated (`request_alive_check`); entity-initiated, answered by doipclient while it waits for a UDS reply |
 | DoIP NACKs | diagnostic message before activation → diagnostic NACK `0x02`; unknown target → `0x03`; unknown payload type → generic NACK `0x01` |
+| DoIP over UDP | vehicle identification (all, by EID, by VIN; another VIN gets no answer) checked field by field (VIN, logical address, EID, GID, further action, sync status); unsolicited vehicle announcement (`await_vehicle_announcement`); entity status; diagnostic power mode; bad request headers / TCP-only type / bad length → generic NACK `0x00` / `0x01` / `0x04`; injected faults: NACK surfaces as doipclient's `IOError`, a bad-version reply is dropped by doipclient's parser |
 | 0x10 / 0x3E / 0x11 | session echo + P2/P2* timing record; unsupported session `0x12`; suppressPosRspMsgIndicationBit (no answer, nothing stray on the wire); reserved TesterPresent / ECUReset sub-functions `0x12`; rapid power shutdown time |
 | 0x27 | unlock; already-unlocked zero seed; invalid key `0x35`; exceeded attempts `0x36`; delay timer `0x37`, then unlock; key without seed `0x24` |
 | 0x22 / 0x2E | single and multi-DID read; unknown DID `0x31`; malformed `0x13`; unknown service `0x11`; write needs security `0x33`; service not in active session `0x7F` |

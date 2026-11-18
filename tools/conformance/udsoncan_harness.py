@@ -15,6 +15,7 @@ See README.md next to this file.
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -27,6 +28,8 @@ from udsoncan import DynamicDidDefinition, MemoryLocation
 from udsoncan.client import Client
 from udsoncan.exceptions import NegativeResponseException
 from doipclient import DoIPClient
+from doipclient.client import Parser
+from doipclient.messages import GenericDoIPNegativeAcknowledge
 from doipclient.connectors import DoIPClientUDSConnector
 
 ECU = 0x0010
@@ -51,10 +54,20 @@ class Entity:
     """The simulated ECU as a DoIP entity on an ephemeral loopback port."""
 
     def __init__(self, exe, args):
+        # "{announce}" in an argument becomes the address of a UDP socket bound
+        # here first, so unsolicited announcements cannot race the listener.
+        self.announce_sock = None
+        if any("{announce}" in a for a in args):
+            self.announce_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.announce_sock.bind(("127.0.0.1", 0))
+            where = f"127.0.0.1:{self.announce_sock.getsockname()[1]}"
+            args = [a.replace("{announce}", where) for a in args]
         self.proc = subprocess.Popen([exe, "--port", "0", *args], stdout=subprocess.PIPE, text=True)
         line = self.proc.stdout.readline().split()
         assert line and line[0] == "LISTENING", f"entity did not start: {line}"
         self.port = int(line[1])
+        # "LISTENING <tcp> UDP <udp>": the UDP discovery side on loopback.
+        self.udp_port = int(line[3]) if len(line) >= 4 and line[2] == "UDP" else None
         self.events = []
         self._t = threading.Thread(target=self._drain, daemon=True)
         self._t.start()
@@ -73,6 +86,8 @@ class Entity:
         return []
 
     def stop(self):
+        if self.announce_sock:
+            self.announce_sock.close()
         self.proc.terminate()
         self.proc.wait(timeout=5)
 
@@ -86,8 +101,8 @@ def wrong_key(level, seed, params=None):
 
 
 def doip(entity, activation=0, tester=TESTER):
-    return DoIPClient("127.0.0.1", ECU, tcp_port=entity.port, client_logical_address=tester,
-                      activation_type=activation)
+    return DoIPClient("127.0.0.1", ECU, tcp_port=entity.port, udp_port=entity.udp_port,
+                      client_logical_address=tester, activation_type=activation)
 
 
 def uds(entity, **overrides):
@@ -213,6 +228,122 @@ def doip_unknown_payload_type_generic_nack(e):
     else:
         raise AssertionError("no generic NACK for an unknown payload type")
     c.close()
+
+
+# ------------------------------------------------------------- DoIP over UDP
+
+EID = bytes.fromhex("020000000010")  # the simulator's placeholder EID
+
+
+def check_identity(r, further_action=0):
+    assert r.vin == VIN, r.vin
+    assert r.logical_address == ECU, hex(r.logical_address)
+    assert bytes(r.eid) == EID and bytes(r.gid) == EID, (r.eid, r.gid)
+    assert r.further_action_required == further_action, r.further_action_required
+    assert r.vin_sync_status == 0x00, r.vin_sync_status
+
+
+def udp_raw(e, datagram):
+    """Send one raw datagram to the entity's UDP port; parse the answer."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2)
+    try:
+        s.sendto(datagram, ("127.0.0.1", e.udp_port))
+        data, _ = s.recvfrom(1024)
+    finally:
+        s.close()
+    return Parser().read_message(data)
+
+
+@case()
+def doip_udp_vehicle_identification(e):
+    c = doip(e, activation=None)
+    check_identity(c.request_vehicle_identification())
+    c.close()
+
+
+@case("--further-action", "0x10")
+def doip_udp_vehicle_identification_by_eid_and_vin(e):
+    c = doip(e, activation=None)
+    check_identity(c.request_vehicle_identification(eid=EID), further_action=0x10)
+    check_identity(c.request_vehicle_identification(vin=VIN), further_action=0x10)
+    c.close()
+
+
+@case()
+def doip_udp_identification_other_vin_is_silent(e):
+    c = doip(e, activation=None)
+    try:
+        c.request_vehicle_identification(vin="XXXXXXXXXXXXXXXXX")
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("an entity answered a request for another VIN")
+    c.close()
+
+
+@case()
+def doip_udp_entity_status(e):
+    c = doip(e, activation=None)
+    r = c.request_entity_status()
+    assert r.node_type == 0x01, r.node_type
+    assert (r.max_concurrent_sockets, r.currently_open_sockets) == (1, 0), r
+    assert r.max_data_size == 0x0FFF, r.max_data_size
+    c.close()
+
+
+@case("--power-mode", "0x00")
+def doip_udp_power_mode(e):
+    c = doip(e, activation=None)
+    r = c.request_diagnostic_power_mode()
+    assert r.diagnostic_power_mode == 0x00, r.diagnostic_power_mode
+    c.close()
+
+
+@case("--announce-to", "{announce}", "--announce-interval-ms", "50")
+def doip_udp_vehicle_announcement(e):
+    addr, r = DoIPClient.await_vehicle_announcement(timeout=3, sock=e.announce_sock)
+    assert addr == ("127.0.0.1", e.udp_port), addr
+    check_identity(r)
+
+
+@case("--udp-fault", "nack:0x03")
+def doip_udp_fault_nack(e):
+    c = doip(e, activation=None)
+    try:
+        c.request_entity_status()
+    except IOError as err:
+        assert "NACK Code: 3" in str(err), err
+    else:
+        raise AssertionError("no generic NACK from the faulted entity")
+    c.close()
+
+
+@case("--udp-fault", "bad-version")
+def doip_udp_fault_bad_version_is_dropped(e):
+    c = doip(e, activation=None)
+    try:
+        c.request_diagnostic_power_mode()
+    except TimeoutError:
+        pass  # doipclient's parser rejects the header, as OpenTune's does
+    else:
+        raise AssertionError("doipclient accepted a reply with a bad protocol version")
+    c.close()
+
+
+@case()
+def doip_udp_bad_requests_nacked(e):
+    hdr = DoIPClient._pack_doip
+    cases = [
+        (bytes([0x02, 0x02, 0x00, 0x01, 0, 0, 0, 0]), 0x00),  # inverse mismatch
+        (hdr(0x09, 0x0001, b""), 0x00),  # unsupported version
+        (hdr(0x02, 0x0007, b""), 0x01),  # alive check is TCP-only
+        (hdr(0x02, 0x0003, b"ABC"), 0x04),  # VIN selector must be 17 bytes
+    ]
+    for datagram, code in cases:
+        r = udp_raw(e, datagram)
+        assert type(r) == GenericDoIPNegativeAcknowledge, (datagram, r)
+        assert r.nack_code == code, (datagram, r.nack_code)
 
 
 # ---------------------------------------------------------------------- UDS

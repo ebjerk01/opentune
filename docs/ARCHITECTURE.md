@@ -92,6 +92,7 @@ a top-level command is added without a row here.
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
 | `opentune simulate` | Exchange raw requests with the offline UDS conformance server |
 | `opentune haldex` | Haldex AWD: `decode` Haldex CAN frames in a log, read-only `gen4` controller read (KWP2000/TP2.0), OpenHaldex `status` and `mode list`/`set` (see [`HALDEX.md`](HALDEX.md)) |
+| `opentune doip` | DoIP (ISO 13400) over Ethernet: `discover` entities by vehicle identification request (all / `--eid` / `--vin`, broadcast, unicast or IPv6 multicast) or `--listen` for announcements, optionally `--activate` routing on each; `status` (entity status) and `power` (diagnostic power mode) over UDP; `--sim` for the simulated entity, `--json` |
 | `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
 
 ### Core — `opentune-core`
@@ -124,6 +125,10 @@ The abstraction every app talks to and every driver implements.
   - `vwtp20` — VW TP2.0 transport (KWP2000 over CAN on older VAG).
   - `canfd` — CAN-FD frames + `IsoTpFd` (ISO-TP over CAN-FD).
   - `doip` — `DoIpTransport` (ISO 13400 diagnostics over IP).
+  - `doip_discovery` — `DoIpUdpClient`: UDP vehicle identification (all / by
+    EID / by VIN, de-duplicated), announcement listening, entity status and
+    power mode, strict header checks; `connect_entity` turns a discovered
+    entity into an activated `DoIpTransport`.
   - `seedkey` — the `SeedKey` plugin interface for security access.
 - `ecudef` — `EcuDef` and `load_dir`: data describing a known ECU (protocol,
   memory map, checksum id, seed/key id), loaded from JSON in
@@ -166,7 +171,7 @@ apps that need it.
 | `opentune-sa2` | Generic SA2 seed→key bytecode VM (caller-supplied program) |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
-| `opentune-udssim` | In-memory UDS ECU + DoIP entity for conformance tests; optional flashable-ECU model with fault injection |
+| `opentune-udssim` | In-memory UDS ECU + DoIP entity (TCP data side and UDP discovery / status side, loopback socket servers) for conformance tests; optional flashable-ECU model with fault injection |
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |

@@ -1,5 +1,5 @@
 //! The clap definitions of the public command tree.
-use crate::{candump, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
+use crate::{candump, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -490,6 +490,13 @@ pub enum Command {
     Haldex {
         #[command(subcommand)]
         action: haldex_cmd::HaldexAction,
+    },
+    /// DoIP (ISO 13400) over Ethernet: discover entities (vehicle
+    /// identification / announcements), entity status, diagnostic power mode.
+    /// Read-only. `--sim` uses a simulated entity on loopback.
+    Doip {
+        #[command(subcommand)]
+        action: doip_cmd::DoipAction,
     },
 }
 

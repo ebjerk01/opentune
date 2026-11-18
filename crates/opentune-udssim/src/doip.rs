@@ -15,8 +15,9 @@
 //! default / WWH-OBD / central security (others `0x06`), one tester per socket
 //! (`0x02`), diagnostic messages only from the routed tester (diagnostic NACK
 //! `0x02`) to this entity or the functional group (NACK `0x03`), generic header
-//! NACKs for an incorrect pattern (`0x00`), an unknown payload type (`0x01`)
-//! and a bad payload length (`0x04`), and alive checks in both directions. A
+//! NACKs for an incorrect pattern or unsupported protocol version (`0x00`), an
+//! unknown payload type (`0x01`), an oversized message (`0x02`) and a bad
+//! payload length (`0x04`), and alive checks in both directions. A
 //! suppressed or lost UDS response sends no diagnostic message.
 //!
 //! Offline conformance only.
@@ -28,12 +29,16 @@ use crate::fault::{self, Fault, FaultPlan};
 use crate::server::UdsServer;
 use crate::trace::{Direction, Trace};
 use opentune_core::protocol::doip::{
-    diag_nack, generic_nack, payload_type, routing_activation, DoIpMessage,
+    check_header, diag_nack, generic_nack, payload_type, routing_activation, DoIpMessage,
     FUNCTIONAL_GROUP_ADDRESS, HEADER_LEN,
 };
 use opentune_core::protocol::DoIpStream;
 use opentune_core::{Error, Result};
 use std::collections::VecDeque;
+
+/// Largest declared payload the TCP entity accepts before answering generic
+/// NACK `messageTooLarge` (16 MiB; the client refuses the same).
+pub const MAX_TCP_PAYLOAD: usize = 0x0100_0000;
 
 /// A loopback DoIP entity exposing a [`UdsServer`] over the [`DoIpStream`]
 /// interface the real `DoIpTransport` client runs on.
@@ -314,13 +319,14 @@ impl DoIpSimStream {
             if self.inbound.len() < HEADER_LEN {
                 return;
             }
-            let (ptype, plen) = match DoIpMessage::parse_header(&self.inbound[..HEADER_LEN]) {
-                Ok(v) => v,
-                Err(_) => {
-                    // Incorrect pattern (version / inverse version): generic
-                    // NACK 0x00, then drop the buffer (a real entity closes the
+            let (ptype, plen) = match check_header(&self.inbound[..HEADER_LEN], MAX_TCP_PAYLOAD) {
+                Ok((_, ptype, plen)) => (ptype, plen),
+                Err(code) => {
+                    // Incorrect pattern (version / inverse version, an
+                    // unsupported version) or an oversized message: generic
+                    // NACK, then drop the buffer (a real entity closes the
                     // socket) so we do not loop.
-                    self.generic_nack(generic_nack::INCORRECT_PATTERN);
+                    self.generic_nack(code);
                     self.inbound.clear();
                     return;
                 }

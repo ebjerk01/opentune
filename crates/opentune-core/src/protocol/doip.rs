@@ -22,6 +22,11 @@ use std::time::{Duration, Instant};
 /// bitwise inverse for validation.
 pub const PROTOCOL_VERSION: u8 = 0x02;
 
+/// The "default" protocol version (ISO 13400-2 Table 16): a tester that does
+/// not know an entity's version may send its vehicle identification requests
+/// (`0x0001`..=`0x0003`) with version `0xFF`. Not valid for any other message.
+pub const DEFAULT_PROTOCOL_VERSION: u8 = 0xFF;
+
 /// The fixed DoIP header length: version, inverse version, payload type (2),
 /// payload length (4).
 pub const HEADER_LEN: usize = 8;
@@ -61,6 +66,14 @@ pub mod payload_type {
     pub const ROUTING_ACTIVATION_RESPONSE: u16 = 0x0006;
     pub const ALIVE_CHECK_REQUEST: u16 = 0x0007;
     pub const ALIVE_CHECK_RESPONSE: u16 = 0x0008;
+    /// DoIP entity status request (UDP, empty payload).
+    pub const ENTITY_STATUS_REQUEST: u16 = 0x4001;
+    /// DoIP entity status response: node type, socket counts, max data size.
+    pub const ENTITY_STATUS_RESPONSE: u16 = 0x4002;
+    /// Diagnostic power mode information request (UDP, empty payload).
+    pub const POWER_MODE_REQUEST: u16 = 0x4003;
+    /// Diagnostic power mode information response (1 byte).
+    pub const POWER_MODE_RESPONSE: u16 = 0x4004;
     pub const DIAGNOSTIC_MESSAGE: u16 = 0x8001;
     pub const DIAGNOSTIC_MESSAGE_POS_ACK: u16 = 0x8002;
     pub const DIAGNOSTIC_MESSAGE_NEG_ACK: u16 = 0x8003;
@@ -198,12 +211,103 @@ impl VehicleInfo {
         })
     }
 
+    /// Encode as a vehicle announcement / identification response payload (32
+    /// bytes, or 33 with the sync status) — the inverse of [`parse`](Self::parse).
+    pub fn to_payload(&self) -> Vec<u8> {
+        let mut p = Vec::with_capacity(Self::MIN_LEN + 1);
+        p.extend_from_slice(&self.vin);
+        p.extend_from_slice(&self.logical_address.to_be_bytes());
+        p.extend_from_slice(&self.eid);
+        p.extend_from_slice(&self.gid);
+        p.push(self.further_action);
+        if let Some(s) = self.sync_status {
+            p.push(s);
+        }
+        p
+    }
+
+    /// The EID as colon-separated hex (it is usually a MAC address).
+    pub fn eid_string(&self) -> String {
+        hex_colon(&self.eid)
+    }
+
+    /// The GID as colon-separated hex.
+    pub fn gid_string(&self) -> String {
+        hex_colon(&self.gid)
+    }
+
     /// The VIN as a trimmed ASCII string (trailing NULs/spaces removed).
     pub fn vin_string(&self) -> String {
         String::from_utf8_lossy(&self.vin)
             .trim_end_matches(['\0', ' '])
             .to_string()
     }
+}
+
+fn hex_colon(b: &[u8]) -> String {
+    b.iter()
+        .map(|x| format!("{x:02X}"))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+/// Whether `version` is a protocol version an ISO 13400-2 entity accepts for
+/// `payload_type`: 0x01 (2010), 0x02 (2012) and 0x03 (2019) for everything,
+/// plus the default version 0xFF for vehicle identification requests only.
+pub fn version_supported(version: u8, payload_type: u16) -> bool {
+    matches!(version, 0x01..=0x03)
+        || (version == DEFAULT_PROTOCOL_VERSION
+            && matches!(
+                payload_type,
+                payload_type::VEHICLE_ID_REQUEST
+                    | payload_type::VEHICLE_ID_REQUEST_EID
+                    | payload_type::VEHICLE_ID_REQUEST_VIN
+            ))
+}
+
+/// Whether `len` is a valid payload length for `ptype` (ISO 13400-2 Tables
+/// 2-11 and 19-27). `None` for a payload type this crate does not know.
+pub fn payload_len_valid(ptype: u16, len: usize) -> Option<bool> {
+    use payload_type::*;
+    Some(match ptype {
+        GENERIC_NEGATIVE_ACK => len == 1,
+        VEHICLE_ID_REQUEST | ALIVE_CHECK_REQUEST | ENTITY_STATUS_REQUEST | POWER_MODE_REQUEST => {
+            len == 0
+        }
+        VEHICLE_ID_REQUEST_EID => len == 6,
+        VEHICLE_ID_REQUEST_VIN => len == 17,
+        VEHICLE_ANNOUNCEMENT => len == 32 || len == 33,
+        ROUTING_ACTIVATION_REQUEST => len == 7 || len == 11,
+        ROUTING_ACTIVATION_RESPONSE => len == 9 || len == 13,
+        ALIVE_CHECK_RESPONSE => len == 2,
+        ENTITY_STATUS_RESPONSE => len == 3 || len == 7,
+        POWER_MODE_RESPONSE => len == 1,
+        DIAGNOSTIC_MESSAGE | DIAGNOSTIC_MESSAGE_POS_ACK | DIAGNOSTIC_MESSAGE_NEG_ACK => len >= 5,
+        _ => return None,
+    })
+}
+
+/// The strict generic-header check an ISO 13400-2 entity runs on every
+/// message (§6.6, Figure 7), in its order: a short header, an inverse-version
+/// mismatch or an unsupported version is `incorrectPatternFormat` (0x00), a
+/// declared payload longer than `max_payload` is `messageTooLarge` (0x02).
+/// Returns `(version, payload type, payload length)`, or the generic NACK code
+/// to answer with. Payload-type and payload-length checks (0x01 / 0x04) depend
+/// on the transport and are left to the caller ([`payload_len_valid`]).
+pub fn check_header(hdr: &[u8], max_payload: usize) -> std::result::Result<(u8, u16, usize), u8> {
+    if hdr.len() < HEADER_LEN || hdr[1] != !hdr[0] {
+        return Err(generic_nack::INCORRECT_PATTERN);
+    }
+    let version = hdr[0];
+    let ptype = u16::from_be_bytes([hdr[2], hdr[3]]);
+    if !version_supported(version, ptype) {
+        return Err(generic_nack::INCORRECT_PATTERN);
+    }
+    let plen = u32::from_be_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]) as usize;
+    if plen > max_payload {
+        return Err(generic_nack::MESSAGE_TOO_LARGE);
+    }
+    Ok((version, ptype, plen))
 }
 
 /// Build an (unselective) vehicle identification request (payload type 0x0001,
@@ -230,9 +334,15 @@ impl DoIpMessage {
 
     /// Encode the message with its 8-byte DoIP header.
     pub fn encode(&self) -> Vec<u8> {
+        self.encode_with_version(PROTOCOL_VERSION)
+    }
+
+    /// Encode with an explicit protocol version in the header (e.g.
+    /// [`DEFAULT_PROTOCOL_VERSION`] for a vehicle identification request).
+    pub fn encode_with_version(&self, version: u8) -> Vec<u8> {
         let mut out = Vec::with_capacity(HEADER_LEN + self.payload.len());
-        out.push(PROTOCOL_VERSION);
-        out.push(!PROTOCOL_VERSION);
+        out.push(version);
+        out.push(!version);
         out.extend_from_slice(&self.payload_type.to_be_bytes());
         out.extend_from_slice(&(self.payload.len() as u32).to_be_bytes());
         out.extend_from_slice(&self.payload);
@@ -313,7 +423,7 @@ pub struct DoIpTransport<S: DoIpStream> {
 /// Remaining time until `deadline`, as whole milliseconds clamped to a minimum of
 /// 1 (so a read always gets a non-zero timeout); `None` once the deadline has
 /// passed.
-fn remaining_ms(deadline: Instant) -> Option<u64> {
+pub(crate) fn remaining_ms(deadline: Instant) -> Option<u64> {
     let left = deadline.saturating_duration_since(Instant::now());
     if left.is_zero() {
         None
@@ -667,55 +777,32 @@ impl<S: DoIpStream> DiagTransport for DoIpTransport<S> {
 /// Binds `bind_addr`, sends one vehicle identification request to `dest_addr`,
 /// and collects every vehicle announcement that arrives within `timeout_ms`
 /// (each entity answers once; a bus may hold several). Set `broadcast` to send
-/// to a broadcast/multicast address.
+/// to a broadcast/multicast address. Repeated answers from one entity are
+/// reported once.
+///
+/// A thin wrapper over [`DoIpUdpClient::identify`], which also reports
+/// negative acks and rejected datagrams and takes an EID / VIN selector.
 ///
 /// 🔒 The real-network broadcast path (`dest_addr` = `255.255.255.255:13400`,
 /// `broadcast = true`) is untested against physical silicon; the offline
 /// loopback/unicast path is exercised in the tests.
+///
+/// [`DoIpUdpClient::identify`]: crate::protocol::doip_discovery::DoIpUdpClient::identify
 pub fn discover(
     bind_addr: std::net::SocketAddr,
     dest_addr: std::net::SocketAddr,
     timeout_ms: u64,
     broadcast: bool,
 ) -> Result<Vec<(std::net::SocketAddr, VehicleInfo)>> {
-    let sock = std::net::UdpSocket::bind(bind_addr)?;
-    sock.set_broadcast(broadcast)?;
-    sock.send_to(&vehicle_identification_request().encode(), dest_addr)?;
-
-    // Collect announcements until one absolute deadline, re-arming the per-recv
-    // timeout from the time left so a steady trickle of packets cannot keep the
-    // loop alive past `timeout_ms`.
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(1));
-    let mut found = Vec::new();
-    let mut buf = [0u8; 1024];
-    while let Some(left) = remaining_ms(deadline) {
-        sock.set_read_timeout(Some(Duration::from_millis(left)))?;
-        match sock.recv_from(&mut buf) {
-            Ok((n, from)) => {
-                if n < HEADER_LEN {
-                    continue;
-                }
-                let Ok((ptype, plen)) = DoIpMessage::parse_header(&buf[..HEADER_LEN]) else {
-                    continue;
-                };
-                if ptype == payload_type::VEHICLE_ANNOUNCEMENT && n >= HEADER_LEN + plen {
-                    if let Ok(info) = VehicleInfo::parse(&buf[HEADER_LEN..HEADER_LEN + plen]) {
-                        found.push((from, info));
-                    }
-                }
-            }
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                ) =>
-            {
-                break
-            }
-            Err(e) => return Err(Error::Io(e)),
-        }
-    }
-    Ok(found)
+    use crate::protocol::doip_discovery::{DoIpUdpClient, VehicleIdRequest};
+    let client = DoIpUdpClient::bind(bind_addr)?;
+    client.set_broadcast(broadcast)?;
+    let found = client.identify(dest_addr, &VehicleIdRequest::All, timeout_ms)?;
+    Ok(found
+        .entities
+        .into_iter()
+        .map(|e| (e.addr, e.info))
+        .collect())
 }
 
 #[cfg(test)]
