@@ -122,6 +122,14 @@ pub fn extract(image: &[u8]) -> Extracted {
         i += 1;
     }
 
+    // --- VAG transmission (DSG) part numbers: 02E300041N, 0GC927373K, ... ---
+    // Their gearbox code has a letter, so the matchers above never see them.
+    let img = crate::recognize::Img { b: image };
+    for p in crate::recognize::tcu_parts(&img) {
+        first.entry(p.part.clone()).or_insert(p.offset);
+        *vag.entry(p.part).or_default() += 1;
+    }
+
     let counts: BTreeMap<String, usize> = [&vag, &bosch, &sw, &merc, &vins]
         .iter()
         .flat_map(|m| m.iter().map(|(k, v)| (k.clone(), *v)))

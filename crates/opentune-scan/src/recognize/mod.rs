@@ -31,11 +31,13 @@
 mod bosch;
 mod continental;
 mod others;
+mod tcu;
 mod vag;
 
 use serde::Serialize;
 
 pub(crate) use bosch::descriptors;
+pub(crate) use tcu::tcu_parts;
 pub(crate) use vag::ident_blocks;
 
 /// Coarse confidence tier of a detection (ordered `Low < Medium < High`).
@@ -91,6 +93,10 @@ pub mod supplier {
     pub const DELPHI: &str = "Delphi";
     pub const MARELLI: &str = "Magneti Marelli";
     pub const DENSO: &str = "Denso";
+    /// Temic (Continental) — VAG DQ250 DSG TCUs.
+    pub const TEMIC: &str = "Temic";
+    /// VAG transmission whose TCU supplier no open source confirms.
+    pub const VAG_TCU: &str = "VAG (supplier unconfirmed)";
 }
 
 /// Family name used when only the supplier is known.
@@ -381,6 +387,7 @@ pub fn recognize(b: &[u8], structural: Vec<Detection>) -> Recognition {
             vag::detect(&img, &mut all);
             continental::detect(&img, &mut all);
             others::detect(&img, &mut all);
+            tcu::detect(&img, &mut all);
         }
         ImageKind::SmsSoftContainer => bosch::sms_soft(&Img { b }, &mut all),
         _ => {}
