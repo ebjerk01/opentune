@@ -3,7 +3,8 @@
 use crate::cli::{Command, ContainerAction};
 use crate::context::CliContext;
 use crate::{
-    bsl_cmd, candump, ctrldef_cmd, doip_cmd, haldex_cmd, obd_cmd, recipe_cmd, seedkey_cmd, ts_cmd,
+    bsl_cmd, candump, ctrldef_cmd, doip_cmd, gps_cmd, haldex_cmd, obd_cmd, recipe_cmd, seedkey_cmd,
+    ts_cmd,
 };
 use anyhow::Result;
 
@@ -204,10 +205,18 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             dynamic_did,
             max_record,
             fast_session,
+            gps,
+            gps_baud,
+            gps_speed_param,
             params,
         } => {
             let fast =
                 engines::fast_log_config(fast, &dynamic_did, max_record, fast_session.as_deref())?;
+            let gps = gps.map(|source| engines::LogGps {
+                source,
+                baud: gps_baud,
+                speed_param: gps_speed_param,
+            });
             engines::run_log(
                 reg,
                 &def,
@@ -219,6 +228,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
                 out.as_deref(),
                 &params,
                 fast,
+                gps,
             )
         }
         Command::Candump(args) => candump::run(reg, args),
@@ -229,5 +239,6 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
         Command::Doip { action } => doip_cmd::run(action),
         Command::Seedkey { action } => seedkey_cmd::run(action),
         Command::Bsl { action } => bsl_cmd::run(action),
+        Command::Gps(args) => gps_cmd::run(args),
     }
 }

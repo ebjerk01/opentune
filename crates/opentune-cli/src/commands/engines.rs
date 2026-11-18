@@ -157,9 +157,20 @@ pub fn fast_log_config(
     Ok(cfg)
 }
 
+/// `log --gps`: the GPS source and how to pair it with the log.
+pub struct LogGps {
+    /// Serial port or recorded NMEA file.
+    pub source: String,
+    /// Baud rate for a UART receiver.
+    pub baud: u32,
+    /// Explicit vehicle-speed channel id for `speed_error_kmh`.
+    pub speed_param: Option<String>,
+}
+
 /// Dispatch the `log` subcommand: parse a logger.xml and log live data to CSV,
 /// per-channel polling or (with `fast.enabled`) over UDS 0x2C dynamic DIDs.
 /// The achieved rate and the mode (with the fallback reason) go to stderr.
+/// With `gps`, each round also gets the GPS channels.
 #[allow(clippy::too_many_arguments)]
 pub fn run_log(
     reg: &Registry,
@@ -172,6 +183,7 @@ pub fn run_log(
     out: Option<&std::path::Path>,
     params: &[String],
     fast: opentune_logdef::FastLogConfig,
+    gps: Option<LogGps>,
 ) -> Result<()> {
     use opentune_core::CoreDiag;
     use opentune_logdef::{LiveSession, LogMode};
@@ -191,6 +203,26 @@ pub fn run_log(
     let mut diag = CoreDiag::new(transport, timeout_ms);
 
     let mut session = LiveSession::new(&def, &ids, fast).map_err(|e| anyhow!("{e}"))?;
+    let mut gps = match gps {
+        Some(g) => {
+            let mut feed =
+                opentune_gps::open_source(&g.source, g.baud).map_err(|e| anyhow!("{e}"))?;
+            feed.wait_ready(std::time::Duration::from_millis(2500));
+            let logger =
+                opentune_logdef::GpsLogger::new(feed, session.params(), g.speed_param.as_deref())
+                    .map_err(|e| anyhow!("--gps-speed-param: {e}"))?;
+            let speed = match logger.speed_channel() {
+                Some(i) => format!(
+                    "speed_error_kmh vs '{}'",
+                    session.params().get(i).map_or("?", |p| p.id.as_str())
+                ),
+                None => "no vehicle-speed channel, no speed_error_kmh".into(),
+            };
+            eprintln!("gps: {} ({speed})", logger.describe());
+            Some(logger)
+        }
+        None => None,
+    };
     let started = session.start(&mut diag).clone();
     match started.mode {
         LogMode::Fast2c => {
@@ -226,11 +258,11 @@ pub fn run_log(
         Some(path) => {
             let mut f = std::fs::File::create(path)
                 .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
-            session.run_csv(&mut diag, rounds, interval_ms, &mut f)
+            session.run_csv_gps(&mut diag, rounds, interval_ms, gps.as_mut(), &mut f)
         }
         None => {
             let mut stdout = std::io::stdout().lock();
-            session.run_csv(&mut diag, rounds, interval_ms, &mut stdout)
+            session.run_csv_gps(&mut diag, rounds, interval_ms, gps.as_mut(), &mut stdout)
         }
     };
     let elapsed = t0.elapsed().as_secs_f64();
@@ -258,6 +290,13 @@ pub fn run_log(
         st.setup_requests,
         st.redefines
     );
+    if let Some(g) = &gps {
+        let (good, ticks) = g.good_ticks();
+        eprintln!(
+            "gps: {good} of {ticks} sample(s) with a good fix; {}",
+            g.stats()
+        );
+    }
     if let Some(path) = out {
         println!("Logged {rounds} round(s) to {}", path.display());
     }

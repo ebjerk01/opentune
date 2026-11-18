@@ -48,6 +48,7 @@ mod commands;
 mod context;
 mod ctrldef_cmd;
 mod doip_cmd;
+mod gps_cmd;
 mod haldex_cmd;
 mod mapfind_cmd;
 mod obd_cmd;
