@@ -37,6 +37,7 @@ mod feat_candump;
 mod feat_coding;
 mod feat_dash;
 mod feat_db;
+mod feat_haldex;
 mod feat_logging;
 mod feat_logview;
 mod feat_obd;
@@ -168,6 +169,7 @@ pub fn builder_with(
             app.manage(adapter::AdapterHub::with_registry());
             app.manage(feat_candump::CandumpState::default());
             app.manage(feat_logging::LiveLogState::default());
+            app.manage(feat_haldex::HaldexState::default());
             startup::mark("setup plugin: done (state managed)");
             Ok(())
         })
@@ -235,6 +237,12 @@ macro_rules! core_command_list {
             feat_candump::candump_start,
             feat_candump::candump_status,
             feat_candump::candump_stop,
+            feat_haldex::haldex_modes,
+            feat_haldex::haldex_status,
+            feat_haldex::haldex_set_mode,
+            feat_haldex::haldex_gen4_read,
+            feat_haldex::haldex_decode_log,
+            feat_haldex::haldex_export_csv,
             drivers::list_drivers,
             state::data_paths,
             image::image_info,

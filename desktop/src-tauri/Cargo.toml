@@ -68,6 +68,8 @@ opentune-db = { path = "../../crates/opentune-db" }
 opentune-candump = { path = "../../crates/opentune-candump" }
 # Offline log viewer + map overlay (Log viewer panel).
 opentune-logview = { path = "../../crates/opentune-logview" }
+# Haldex AWD: OpenHaldex UDS client, Gen4 read, CAN-log decode (Haldex panel).
+opentune-haldex = { path = "../../crates/opentune-haldex" }
 
 [features]
 # Tauri's default behaviour for a release build.

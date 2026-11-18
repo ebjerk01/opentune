@@ -199,11 +199,30 @@
     return (sps >= 10 ? sps.toFixed(0) : sps.toFixed(1)) + " samples/s · " + rps.toFixed(2) + " req/sample";
   }
 
+  // ---- small line charts (feat_haldex.js, feat_ts.js) ---------------------------
+  // SVG path for a series in a w x h box: { d, lo, hi }. t and v are equal-length
+  // arrays (t ascending); a flat series is drawn mid-height.
+  function seriesPath(t, v, w, h) {
+    const n = Math.min((t || []).length, (v || []).length);
+    if (!n) return { d: "", lo: null, hi: null };
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i++) { if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
+    const t0 = t[0], ts = t[n - 1] - t0 || 1, vs = hi - lo;
+    const r = (x) => Math.round(x * 100) / 100;
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const x = n === 1 ? w / 2 : ((t[i] - t0) / ts) * w;
+      const y = vs ? h - ((v[i] - lo) / vs) * h : h / 2;
+      d += (i ? "L" : "M") + r(x) + "," + r(y);
+    }
+    return { d, lo, hi };
+  }
+
   const OTUtil = {
     esc, baseName, hex8, parseHexInput, fmtCell, fmtAxis, clone2d, heatColor, splitList,
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
-    logModeBadge, fmtLogRate,
+    logModeBadge, fmtLogRate, seriesPath,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;

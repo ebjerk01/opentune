@@ -169,6 +169,15 @@ test("logModeBadge describes fast and polling sessions", () => {
   assert.equal(U.logModeBadge({ mode: "polling", reason: "fast mode not requested" }).cls, "neutral");
 });
 
+test("seriesPath scales a series into its box", () => {
+  assert.deepEqual(U.seriesPath([], [], 100, 10), { d: "", lo: null, hi: null });
+  const p = U.seriesPath([0, 1, 2], [0, 50, 100], 100, 10);
+  assert.equal(p.d, "M0,10L50,5L100,0");
+  assert.deepEqual([p.lo, p.hi], [0, 100]);
+  assert.equal(U.seriesPath([5, 6], [3, 3], 10, 10).d, "M0,5L10,5", "flat series mid-height");
+  assert.equal(U.seriesPath([1], [7], 10, 10).d, "M5,5");
+});
+
 test("fmtLogRate shows samples/s and requests per sample", () => {
   assert.equal(U.fmtLogRate(null), "");
   assert.equal(U.fmtLogRate({ ticks: 0 }), "");

@@ -125,6 +125,13 @@
     "risk": "read-only",
     "guide": "25-live-log"
   },
+  "haldex": {
+    "title": "Haldex AWD",
+    "summary": "OpenHaldex controller status (lock, slip) and drive mode over its UDS DIDs on 0x70F/0x779, a read-only Haldex Gen4 read (refused on real hardware until a driver opens VW TP2.0; simulated unit available), and an offline decoder for drivetrain-CAN captures with lock, clutch and temperature charts.",
+    "needs": ["Adapter: CAN (drivetrain CAN on PQ cars)", "OpenHaldex unit, or a CAN log"],
+    "risk": "writes-ecu",
+    "guide": "36-haldex"
+  },
   "candump": {
     "title": "CAN dump",
     "summary": "Capture all CAN bus traffic to a candump log, CSV or Vector ASC file with a live per-ID table. Listen-only where the adapter supports it.",
