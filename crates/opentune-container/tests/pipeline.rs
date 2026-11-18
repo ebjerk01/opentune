@@ -10,6 +10,27 @@ use opentune_container::crypto::{aes128_cbc_encrypt, BlockCipher};
 use opentune_container::zip::write_stored;
 use opentune_container::{detect, frf, unpack, ContainerKind, InputFormat, Keys};
 
+#[test]
+fn sa2_script_extracted_from_synthetic_odx_in_zip() {
+    let odx = include_bytes!("fixtures/synthetic-sa2.odx");
+    let want = vec![
+        0x68, 0x03, 0x81, 0x4A, 0x05, 0x87, 0x5A, 0x5A, 0x5A, 0x5A, 0x49, 0x93, 0x00, 0x00, 0x01,
+        0x00, 0x4C,
+    ];
+    // Bare ODX.
+    let u = unpack(odx, &Keys::default()).unwrap();
+    assert_eq!(u.kind, ContainerKind::Odx);
+    assert_eq!(u.sa2_scripts.len(), 1);
+    assert_eq!(u.sa2_scripts[0].bytes, want);
+    assert_eq!(u.sa2_scripts[0].field, "FW-SIGNATURE");
+    assert_eq!(u.sa2_scripts[0].session.as_deref(), Some("SES_SYNTHETIC"));
+    assert_eq!(u.segments[0].data, vec![0x0B, 0xAD, 0xF0, 0x0D]);
+    // Inside a ZIP (the inner payload of an FRF).
+    let zip = write_stored(&[("synthetic.odx".to_string(), odx.to_vec())]);
+    let u = unpack(&zip, &Keys::default()).unwrap();
+    assert_eq!(u.sa2_scripts[0].bytes, want);
+}
+
 /// Hex-encode helper for building inline ODX DATA.
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02X}")).collect()

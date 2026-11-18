@@ -265,6 +265,7 @@ impl Vbf {
             segments,
             box_codes,
             members: Vec::new(),
+            sa2_scripts: Vec::new(),
         }
     }
 }

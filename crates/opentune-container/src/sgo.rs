@@ -195,6 +195,18 @@ impl SgoFile {
     }
 }
 
+/// Append `sgo`'s SA2 script to `out` (skipped when empty or already listed).
+pub(crate) fn push_sa2(out: &mut Vec<crate::odx::Sa2Script>, sgo: &SgoFile) {
+    if sgo.sa2.is_empty() || out.iter().any(|s| s.bytes == sgo.sa2) {
+        return;
+    }
+    out.push(crate::odx::Sa2Script {
+        session: None,
+        field: "SGO".to_string(),
+        bytes: sgo.sa2.clone(),
+    });
+}
+
 fn decode_block(
     index: usize,
     blk: &SgoBlock,
