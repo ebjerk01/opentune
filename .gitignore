@@ -27,6 +27,8 @@ vendor/
 *.org
 *.frf
 *.odx
+# hand-written synthetic test fixtures (no OEM data) are allowed
+!crates/*/tests/fixtures/synthetic-*.odx
 *.sgo
 *.cbf
 *.hex

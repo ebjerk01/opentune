@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC test document for OpenTune. Hand-written: no OEM data, no real
+     part number, and the SA2 script is a made-up program
+     (loop 3 { rsl; bcc +5; eor 0x5A5A5A5A } add 0x00000100; finish). -->
+<ODX MODEL-VERSION="2.0.1">
+  <FLASH ID="FL_SYNTH">
+    <SHORT-NAME>FL_SYNTHETIC</SHORT-NAME>
+    <ECU-MEMS>
+      <ECU-MEM ID="EM_SYNTH">
+        <SHORT-NAME>EM_SYNTHETIC</SHORT-NAME>
+        <MEM>
+          <SESSIONS>
+            <SESSION ID="SES_SYNTH">
+              <SHORT-NAME>SES_SYNTHETIC</SHORT-NAME>
+              <EXPECTED-IDENTS>
+                <EXPECTED-IDENT ID="EI_SYNTH">
+                  <SHORT-NAME>EI_SYNTHETIC</SHORT-NAME>
+                  <IDENT-VALUES>
+                    <IDENT-VALUE TYPE="A_ASCIISTRING">SYNTH0000</IDENT-VALUE>
+                  </IDENT-VALUES>
+                </EXPECTED-IDENT>
+              </EXPECTED-IDENTS>
+              <SECURITYS>
+                <SECURITY>
+                  <SECURITY-METHOD TYPE="A_ASCIISTRING">SA2</SECURITY-METHOD>
+                  <FW-SIGNATURE TYPE="A_BYTEFIELD">680381 4A05 875A5A5A5A 49 9300000100 4C</FW-SIGNATURE>
+                </SECURITY>
+              </SECURITYS>
+            </SESSION>
+          </SESSIONS>
+          <DATABLOCKS>
+            <DATABLOCK ID="DB_SYNTH">
+              <SHORT-NAME>DB_SYNTHETIC</SHORT-NAME>
+              <FLASHDATA-REF ID-REF="FD_SYNTH"/>
+              <SEGMENTS>
+                <SEGMENT ID="SEG_SYNTH">
+                  <SHORT-NAME>SEG_SYNTHETIC</SHORT-NAME>
+                  <SOURCE-START-ADDRESS>0x00010000</SOURCE-START-ADDRESS>
+                  <UNCOMPRESSED-SIZE>4</UNCOMPRESSED-SIZE>
+                </SEGMENT>
+              </SEGMENTS>
+            </DATABLOCK>
+          </DATABLOCKS>
+          <FLASHDATAS>
+            <FLASHDATA ID="FD_SYNTH">
+              <SHORT-NAME>FD_SYNTHETIC</SHORT-NAME>
+              <ENCRYPT-COMPRESS-METHOD>00</ENCRYPT-COMPRESS-METHOD>
+              <DATA>0BADF00D</DATA>
+            </FLASHDATA>
+          </FLASHDATAS>
+        </MEM>
+      </ECU-MEM>
+    </ECU-MEMS>
+  </FLASH>
+</ODX>
