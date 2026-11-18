@@ -119,11 +119,12 @@ fn live_vw_16tdi_identity_matches_identification_only_def() {
     assert_eq!(def.id, "siemens-pcr21-03l907425c");
     assert_eq!(def.diag_layer, opentune_core::DiagLayer::Uds);
     assert_eq!((def.tx_id, def.rx_id), (0x7E0, 0x7E8));
-    assert!(def.checksum.is_none(), "identification-only: no checksum claim");
-    assert!(def.seedkey.is_none(), "identification-only: no seed/key claim");
-    assert!(def.maps.is_empty(), "identification-only: no maps");
-    assert!(def.regions.is_empty(), "identification-only: no flash layout");
-    assert_eq!(def.flash_size, 0, "identification-only: no flash size");
+    // Identification only: no checksum, seed/key, maps, layout or size claim.
+    assert!(def.checksum.is_none(), "no checksum claim");
+    assert!(def.seedkey.is_none(), "no seed/key claim");
+    assert!(def.maps.is_empty(), "no maps");
+    assert!(def.regions.is_empty(), "no flash layout");
+    assert_eq!(def.flash_size, 0, "no flash size");
 
     // The ECU name is generic across VAG 1.6 TDI ECUs and is not a match key.
     let name_only = opentune_core::EcuId {
