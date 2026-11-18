@@ -95,7 +95,20 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             tuned,
             map,
         } => image::compare(ecudefs, def, stock, tuned, map),
-        Command::ImportXdf { file, into } => formats::import_xdf(file, into),
+        Command::ImportXdf {
+            file,
+            into,
+            out,
+            strict,
+        } => formats::import_xdf(file, into, out, strict),
+        Command::ImportFastecu {
+            file,
+            rom,
+            base_dir,
+            into,
+            out,
+            strict,
+        } => formats::import_fastecu(file, rom, base_dir, into, out, strict),
         Command::ImportEcuflash { file, into } => formats::import_ecuflash(file, into),
         Command::ImportOls {
             file,
