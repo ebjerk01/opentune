@@ -44,6 +44,14 @@ they are here only to indicate relative reach, not to rank quality.
 | [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0 | The community reference for an ECU-definition XML / TunerPro-XDF-style table model: `table` type (2D/3D), `storagetype`+`endian`, `sizex`/`sizey`, address, and per-axis sub-tables with scaling and min/max. The backbone of our `MapDef`/`AxisDef` shape. GPL-2.0-only → **learn-only**. |
 | [christoph2/pyA2L](https://github.com/christoph2/pyA2L) | ~200 | GPL-2.0 | An ASAM A2L/ASAP2 parser — the OEM calibration description format. Taught us the `CHARACTERISTIC` / `AXIS_PTS` / `COMPU_METHOD` model and the three-way axis description (`STD_AXIS`/`COM_AXIS`/`FIX_AXIS`) that our axis styles mirror. GPL-2.0-only → **learn-only**. |
 
+## Haldex AWD
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [Forbes-Automotive/OpenHaldex-C6](https://github.com/Forbes-Automotive/OpenHaldex-C6) | — | MIT | The OpenHaldex controller: its mode set, CAN broadcast/command frames, BLE contract, supplier UDS DIDs, the Gen4 TP2.0 address and measuring groups, Gen4/Gen5 status-byte meanings, and public PQ/MQB CAN captures used as test vectors. `opentune-haldex` is written fresh from these facts (see [`HALDEX.md`](HALDEX.md)). |
+| [dandwyer/OpenHaldex-S3](https://github.com/dandwyer/OpenHaldex-S3), [ABangingDonk/OpenHaldexDue](https://github.com/ABangingDonk/OpenHaldexDue) | — | MIT | Cross-checks of the same Haldex frame layouts and the project lineage. |
+| [commaai/opendbc](https://github.com/commaai/opendbc) `vw_pq.dbc` / `vw_mqb.dbc` | — | MIT | Signal layouts of `Allrad_1`, `Bremse_4`, `Bremse_3`, `Motor_1` and `ESP_19` for the passive Haldex decoder. |
+
 ## CAN tooling
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
