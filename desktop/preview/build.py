@@ -122,18 +122,55 @@ def ecudefs():
     return out
 
 
-def vcar():
-    """The virtual car's demo profile plus its definition pack, keyed by the
-    repo-relative paths the preview's file dialog hands out."""
-    files = {}
-    for p in sorted((REPO / "packs" / "vcar-demo").rglob("*.json")):
+PACK_KINDS = ["ecudefs", "coding", "adaptation", "services", "loggers", "modules"]
+
+
+def packs():
+    """Every shipped definition pack (as the app's packs_list sees it: `_` / `.`
+    folders and files skipped), plus each definition file keyed by the
+    repo-relative path the preview's fixtures read. Preview-side the only check
+    is that a file parses; the app validates each definition too."""
+    files, index = {}, []
+    root = REPO / "packs"
+    for manifest in sorted(root.glob("*/pack.json")):
+        pdir = manifest.parent
+        if pdir.name.startswith(("_", ".")):
+            continue
         try:
-            files[p.relative_to(REPO).as_posix()] = json.loads(p.read_text())
+            m = json.loads(manifest.read_text())
         except ValueError:
-            pass
+            continue
+        files[manifest.relative_to(REPO).as_posix()] = m
+        defs, notes = [], []
+        for kind in PACK_KINDS:
+            for p in sorted((pdir / kind).glob("*.json")):
+                if p.name == "TEMPLATE.json" or p.name.startswith(("_", ".")):
+                    continue
+                rel = p.relative_to(REPO).as_posix()
+                try:
+                    d = json.loads(p.read_text())
+                except ValueError as e:
+                    notes.append({"file": f"{kind}/{p.name}", "kind": kind, "message": f"parse error: {e}"})
+                    continue
+                files[rel] = d
+                defs.append({"kind": kind, "file": f"{kind}/{p.name}", "path": rel,
+                             "id": d.get("id") or p.stem, "name": d.get("name") or d.get("vehicle") or ""})
+        index.append({
+            "id": m.get("id", pdir.name), "name": m.get("name", ""), "version": m.get("version", ""),
+            "maker": m.get("maker", ""), "platform": m.get("platform", ""), "vehicles": m.get("vehicles", []),
+            "author": m.get("author", ""), "license": m.get("license", ""), "description": m.get("description", ""),
+            "dir": pdir.relative_to(REPO).as_posix(), "source": "installed",
+            "loaded": len(defs), "valid": not notes, "notes": notes, "defs": defs,
+        })
+    return files, index
+
+
+def vcar(pack_files):
+    """The virtual car's demo profile plus the definition packs' files, keyed by
+    the repo-relative paths the preview's file dialog and pack picker hand out."""
     prof = REPO / "crates" / "drivers" / "vcar" / "profiles" / "demo.json"
     profile = json.loads(prof.read_text()) if prof.is_file() else None
-    return {"profile": profile, "files": files}
+    return {"profile": profile, "files": pack_files}
 
 
 def safe_script(js: str) -> str:
@@ -155,7 +192,8 @@ def main(out_path: str) -> None:
             units.append(json.loads(p.read_text()))
         except ValueError:
             pass
-    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units, "vcar": vcar()}
+    pack_files, pack_index = packs()
+    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units, "vcar": vcar(pack_files), "packs": pack_index}
     hj = HELP_JSON or UI / "src" / "panel-help.json"
     help_data = json.loads(hj.read_text()) if hj.is_file() else None
     parts = [
@@ -174,7 +212,8 @@ def main(out_path: str) -> None:
     for name in scripts:
         parts.append(f"<script>/* {name} */\n" + safe_script((UI / "src" / name).read_text()) + "\n</script>")
     Path(out_path).write_text("\n".join(parts) + "\n")
-    print(f"wrote {out_path}: {len(scripts)} app scripts, {len(data['guides'])} guide pages, {len(data['ecudefs'])} ecudefs")
+    print(f"wrote {out_path}: {len(scripts)} app scripts, {len(data['guides'])} guide pages, "
+          f"{len(data['ecudefs'])} ecudefs, {len(data['packs'])} packs")
 
 
 GUIDES = None
