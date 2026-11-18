@@ -2,22 +2,17 @@
 //! a read-only Gen4 controller read, and OpenHaldex status / mode control.
 use anyhow::{anyhow, bail, Context, Result};
 use opentune_core::protocol::vwtp20::VwTp20;
-use opentune_core::{ConnectConfig, CoreDiag, Interface, MonitorOpts, Protocol, Registry};
+use opentune_core::{ConnectConfig, CoreDiag, Interface, MonitorOpts, Registry};
 use opentune_haldex::canlog::{parse_log, summarize, HaldexSummary, LogFrame, ParsedLog};
 use opentune_haldex::gen4::{
-    read_gen4, Gen4ReadOptions, Gen4Report, DEFAULT_GROUPS, TP20_LOGICAL_ADDRESS, TP20_TESTER_RX_ID,
+    gen4_connect_config, read_gen4, tp20_refusal, Gen4ReadOptions, Gen4Report, DEFAULT_GROUPS,
+    TP20_LOGICAL_ADDRESS, TP20_TESTER_RX_ID,
 };
 use opentune_haldex::openhaldex::{self, Mode, OpenHaldexUds};
 use opentune_haldex::sim::{SimGen4, SimGen4Link};
 use opentune_haldex::{Bus, HaldexFrame};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-
-/// Drivers that can open a VW TP2.0 channel. None of the shipped drivers do
-/// yet (the ELM327 drivers refuse TP2.0; socketcan/slcan/gs_usb build ISO-TP
-/// only and would ignore the protocol), so a real Gen4 read is refused rather
-/// than sent over the wrong transport.
-const TP20_DRIVERS: &[&str] = &[];
 
 #[derive(clap::Subcommand)]
 pub enum HaldexAction {
@@ -39,27 +34,7 @@ pub enum HaldexAction {
     },
     /// Read-only Haldex Gen4 controller read (KWP2000 over VW TP2.0, logical
     /// address 0x0A): identification, stored codes, measuring groups.
-    Gen4 {
-        /// Driver id. No shipped driver opens a TP2.0 channel yet; see
-        /// docs/HALDEX.md.
-        #[arg(long, required_unless_present = "sim")]
-        driver: Option<String>,
-        /// Run against the built-in simulated Gen4 unit (synthetic data).
-        #[arg(long, conflicts_with = "driver")]
-        sim: bool,
-        /// Measuring groups, comma separated (default 1,3,125,126).
-        #[arg(long)]
-        groups: Option<String>,
-        /// Skip reading stored trouble codes.
-        #[arg(long)]
-        no_dtcs: bool,
-        /// Per-request timeout.
-        #[arg(long, default_value_t = 2000)]
-        timeout_ms: u64,
-        /// JSON output.
-        #[arg(long)]
-        json: bool,
-    },
+    Gen4(Gen4Args),
     /// Read an OpenHaldex controller's state (read-only).
     Status(StatusArgs),
     /// OpenHaldex modes.
@@ -67,6 +42,42 @@ pub enum HaldexAction {
         #[command(subcommand)]
         action: ModeAction,
     },
+}
+
+#[derive(clap::Args)]
+pub struct Gen4Args {
+    /// Driver id: a raw-CAN adapter that opens VW TP2.0 (socketcan, slcan,
+    /// gsusb). The ELM327 drivers are refused; see docs/HALDEX.md.
+    #[arg(long, required_unless_present = "sim")]
+    driver: Option<String>,
+    /// Run against the built-in simulated Gen4 unit (synthetic data).
+    #[arg(long, conflicts_with = "driver")]
+    sim: bool,
+    /// Serial device (slcan) or CAN interface (socketcan, gsusb).
+    #[arg(long, value_name = "PORT")]
+    port: Option<String>,
+    /// Serial baud of the adapter link.
+    #[arg(long, value_name = "BAUD")]
+    baud: Option<String>,
+    /// Vehicle bus (driver option `bus`).
+    #[arg(long, value_name = "BUS")]
+    bus: Option<String>,
+    /// Extra driver option, e.g. `--opt transport=tp20 --opt tp20_keepalive_ms=500`
+    /// (repeatable). `transport=tp20` and `tp20_addr=0x0A` are implied.
+    #[arg(long = "opt", value_name = "KEY=VALUE")]
+    opts: Vec<String>,
+    /// Measuring groups, comma separated (default 1,3,125,126).
+    #[arg(long)]
+    groups: Option<String>,
+    /// Skip reading stored trouble codes.
+    #[arg(long)]
+    no_dtcs: bool,
+    /// Per-request timeout.
+    #[arg(long, default_value_t = 2000)]
+    timeout_ms: u64,
+    /// JSON output.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(clap::Args)]
@@ -135,22 +146,7 @@ pub fn run(reg: &Registry, action: HaldexAction) -> Result<()> {
             frames,
             json,
         } => decode(&log, &bus, frames, json),
-        HaldexAction::Gen4 {
-            driver,
-            sim,
-            groups,
-            no_dtcs,
-            timeout_ms,
-            json,
-        } => gen4(
-            reg,
-            driver.as_deref(),
-            sim,
-            groups.as_deref(),
-            !no_dtcs,
-            timeout_ms,
-            json,
-        ),
+        HaldexAction::Gen4(a) => gen4(reg, &a),
         HaldexAction::Status(a) => status(reg, a),
         HaldexAction::Mode { action } => match action {
             ModeAction::List => {
@@ -318,19 +314,30 @@ fn parse_groups(s: Option<&str>) -> Result<Vec<u8>> {
         .collect()
 }
 
-fn gen4(
-    reg: &Registry,
-    driver: Option<&str>,
-    sim: bool,
-    groups: Option<&str>,
-    read_dtcs: bool,
-    timeout_ms: u64,
-    json: bool,
-) -> Result<()> {
+/// The driver connection for a real Gen4 read: the adapter flags plus the
+/// implied TP2.0 options (`transport=tp20`, `tp20_addr=0x0A`).
+fn gen4_config(a: &Gen4Args, driver: &str) -> Result<ConnectConfig> {
+    let conn = crate::cli::ConnectArgs {
+        driver: driver.to_string(),
+        file: None,
+        base: "0x0".into(),
+        seedkey: None,
+        port: a.port.clone(),
+        baud: a.baud.clone(),
+        bus: a.bus.clone(),
+        tx_id: None,
+        rx_id: None,
+        opts: a.opts.clone(),
+    };
+    gen4_connect_config(conn.config()?).map_err(|e| anyhow!(e))
+}
+
+fn gen4(reg: &Registry, a: &Gen4Args) -> Result<()> {
+    let (sim, json) = (a.sim, a.json);
     let opts = Gen4ReadOptions {
-        groups: parse_groups(groups)?,
-        read_dtcs,
-        timeout_ms,
+        groups: parse_groups(a.groups.as_deref())?,
+        read_dtcs: !a.no_dtcs,
+        timeout_ms: a.timeout_ms,
     };
     let report = if sim {
         // The full stack: a real VwTp20 channel to the simulated controller.
@@ -340,26 +347,23 @@ fn gen4(
         tp.disconnect();
         r
     } else {
-        let driver = driver.ok_or_else(|| anyhow!("--driver or --sim is required"))?;
-        if !TP20_DRIVERS.contains(&driver) {
+        let driver = a
+            .driver
+            .as_deref()
+            .ok_or_else(|| anyhow!("--driver or --sim is required"))?;
+        if let Some(why) = tp20_refusal(driver) {
             bail!(
-                "driver '{driver}' cannot open a VW TP2.0 channel, which the Haldex Gen4 needs \
-                 (KWP2000 over TP2.0 at logical address 0x0A). No shipped driver does yet: the \
-                 ELM327 drivers refuse TP2.0 and the socketcan/slcan/gsusb drivers only build \
-                 ISO-TP. Use `--sim` to see the read, or capture the drivetrain CAN with \
-                 `opentune candump` and decode it with `opentune haldex decode` (docs/HALDEX.md)."
+                "{why} Use `--sim` to see the read, or `opentune candump` + \
+                 `opentune haldex decode` for the passive decode."
             );
         }
+        let cfg = gen4_config(a, driver)?;
         let mut drv = reg
             .make(driver)
             .ok_or_else(|| anyhow!("unknown driver '{driver}'"))?;
-        let cfg = ConnectConfig {
-            protocol: Protocol::Vwtp20,
-            diag_layer: opentune_core::DiagLayer::Kwp2000,
-            tx_id: TP20_LOGICAL_ADDRESS as u32,
-            rx_id: TP20_TESTER_RX_ID,
-            ..ConnectConfig::default()
-        };
+        if !drv.capabilities().vwtp20 {
+            bail!("driver '{driver}' does not report VW TP2.0 support in this build");
+        }
         drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
         let transport = drv
             .diag()
@@ -639,17 +643,60 @@ mod tests {
         assert!(parse_groups(Some("1,300")).is_err());
     }
 
+    fn args(driver: Option<&str>, sim: bool, extra: &[&str]) -> Gen4Args {
+        Gen4Args {
+            driver: driver.map(str::to_string),
+            sim,
+            port: None,
+            baud: None,
+            bus: None,
+            opts: extra.iter().map(|s| s.to_string()).collect(),
+            groups: Some("1,3".into()),
+            no_dtcs: false,
+            timeout_ms: 100,
+            json: true,
+        }
+    }
+
     #[test]
     fn real_gen4_read_is_refused_without_a_tp20_driver() {
         let reg = Registry::new();
-        let err = gen4(&reg, Some("elm327obd"), false, None, true, 100, false).unwrap_err();
-        assert!(err.to_string().contains("TP2.0"));
+        let err = gen4(&reg, &args(Some("elm327obd"), false, &[])).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("TP2.0") && msg.contains("slcan"), "{msg}");
+    }
+
+    #[test]
+    fn raw_can_drivers_are_not_refused() {
+        // An empty registry: slcan passes the TP2.0 check and only fails at
+        // "unknown driver", i.e. it is no longer refused up front.
+        let reg = Registry::new();
+        let err = gen4(&reg, &args(Some("slcan"), false, &[])).unwrap_err();
+        assert!(err.to_string().contains("unknown driver"), "{err}");
+    }
+
+    #[test]
+    fn gen4_config_implies_tp20_and_keeps_user_options() {
+        let mut a = args(Some("slcan"), false, &["tp20_keepalive_ms=500"]);
+        a.port = Some("/dev/ttyACM0".into());
+        let c = gen4_config(&a, "slcan").unwrap();
+        assert_eq!(c.protocol, opentune_core::Protocol::Vwtp20);
+        assert_eq!(c.options["transport"], "tp20");
+        assert_eq!(c.options["tp20_addr"], "0x0A");
+        assert_eq!(c.options["tp20_keepalive_ms"], "500");
+        assert_eq!(c.options["port"], "/dev/ttyACM0");
+        assert_eq!(
+            (c.tx_id, c.rx_id),
+            (TP20_LOGICAL_ADDRESS as u32, TP20_TESTER_RX_ID)
+        );
+        let a = args(Some("slcan"), false, &["transport=isotp"]);
+        assert!(gen4_config(&a, "slcan").is_err());
     }
 
     #[test]
     fn simulated_gen4_read_succeeds() {
         let reg = Registry::new();
-        gen4(&reg, None, true, Some("1,3"), true, 100, true).unwrap();
+        gen4(&reg, &args(None, true, &[])).unwrap();
     }
 
     #[test]
