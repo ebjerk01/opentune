@@ -14,4 +14,9 @@ pub struct Capabilities {
     /// with the `transport=tp20` option (see
     /// [`tp20channel`](crate::protocol::tp20channel)).
     pub vwtp20: bool,
+    /// Diagnostics over IP (ISO 13400 DoIP): UDS to a vehicle's DoIP entity
+    /// over Ethernet. Request/response diagnostics through
+    /// [`Interface::diag`](crate::Interface::diag), no CAN frames: a DoIP
+    /// driver sets this and leaves [`can`](Self::can) false.
+    pub doip: bool,
 }

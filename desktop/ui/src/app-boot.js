@@ -120,6 +120,8 @@ async function initConnBar() {
     '<div class="conn-row" title="Target module CAN request / response ids (hex). Blank = use the definition\'s req_id/resp_id; reads then default to the engine (7E0/7E8). Writes, routines and service runs are refused without a known target.">' +
     '<input id="connTx" class="inp mono" placeholder="tx 7E0" size="5">' +
     '<input id="connRx" class="inp mono" placeholder="rx 7E8" size="5"></div>' +
+    '<div class="conn-row" id="connDoipRow" hidden><button id="connDiscover" class="btn" title="Find DoIP entities: asks the address in the port field, or the whole network when it is empty">Discover</button></div>' +
+    '<div id="connDoipList" class="conn-doip-list" hidden></div>' +
     '<div class="conn-row"><button id="connDetect" class="btn">Detect adapter</button></div>';
   foot.insertBefore(bar, $("adapterBadge"));
   try {
@@ -142,7 +144,36 @@ async function initConnBar() {
   $("connTx").value = window.OT.conn.txId || "";
   $("connRx").value = window.OT.conn.rxId || "";
   ["connDriver", "connPort", "connBus", "connTx", "connRx"].forEach((id) => $(id).addEventListener("change", push));
+  $("connDriver").addEventListener("change", syncDoipRow);
+  syncDoipRow();
+  $("connDiscover").addEventListener("click", () => { push(); doipDiscover(); });
   $("connDetect").addEventListener("click", () => { push(); window.OT.probe(); });
+}
+
+// DoIP (Bench tier, alpha builds list the `doip` driver): the port field holds
+// the entity address (`IP?target=0xADDR`) and Discover lists what answers.
+function syncDoipRow() {
+  const doip = $("connDriver").value === "doip";
+  $("connDoipRow").hidden = !doip;
+  if (!doip) $("connDoipList").hidden = true;
+  $("connPort").placeholder = doip ? "IP (empty = discover)" : "/dev/ttyUSB0";
+  $("connPort").title = doip ? "DoIP entity: IP[:port][?target=0xADDR]" : "serial port";
+}
+async function doipDiscover() {
+  const box = $("connDoipList");
+  box.hidden = false;
+  box.textContent = "Searching…";
+  try {
+    const r = await invoke("doip_discover", { port: $("connPort").value || null, vin: null, eid: null, timeoutMs: 2000 });
+    window.OT.renderDoipList(box, r, (e) => {
+      $("connPort").value = e.spec;
+      window.OT.setConn({ port: e.spec });
+      if ($("dbgPort")) $("dbgPort").value = e.spec;
+      box.hidden = true;
+    });
+  } catch (e) {
+    box.textContent = "Discovery failed: " + e;
+  }
 }
 
 // Feature panels (feat_*.js) are loaded after this script and call

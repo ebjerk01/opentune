@@ -26,7 +26,40 @@
       bench_boot: "bench / boot access",
       battery_voltage: "battery voltage",
       programming_voltage: "programming voltage",
+      doip: "DoIP (diagnostics over Ethernet)",
+      diag: "a diagnostic link (CAN or DoIP)",
     },
+  };
+
+  // Derived capabilities the panels gate on: `diag` = the adapter carries
+  // request/response diagnostics (CAN, or DoIP over Ethernet). Raw-bus panels
+  // (CAN capture) keep gating on `can`.
+  OT.deriveCaps = function (caps) {
+    if (!caps) return caps;
+    return Object.assign({}, caps, { diag: !!(caps.can || caps.doip) });
+  };
+
+  // The sidebar's DoIP discovery list: one button per entity found by the
+  // `doip_discover` command; clicking one calls onPick(entity). Returns the
+  // number of entities listed.
+  OT.renderDoipList = function (box, result, onPick) {
+    box.innerHTML = "";
+    box.hidden = false;
+    const ents = (result && result.entities) || [];
+    if (!ents.length) {
+      box.textContent = `No DoIP entity answered (${(result && result.dest) || "broadcast"}).`;
+      return 0;
+    }
+    ents.forEach((e) => {
+      const b = document.createElement("button");
+      b.className = "btn conn-doip-entity";
+      b.textContent = `${e.vin || "(no VIN)"} · ${e.logical_address} · ${e.ip}`;
+      b.title = `EID ${e.eid} · ${e.further_action || ""} — click to use ${e.spec}`;
+      b.dataset.spec = e.spec;
+      b.addEventListener("click", () => onPick(e));
+      box.appendChild(b);
+    });
+    return ents.length;
   };
 
   // Connection args for an invoke call. Empty strings become null.
@@ -70,7 +103,7 @@
       // the last known state instead of flipping the badge to "no adapter".
       if (st && st.busy) return OT.adapter;
       OT.adapter = st || null;
-      OT.caps = st && st.connected ? st.capabilities || {} : null;
+      OT.caps = st && st.connected ? OT.deriveCaps(st.capabilities || {}) : null;
       if (badge) {
         badge.textContent = fmtBadge(st);
         badge.classList.toggle("connected", !!(st && st.connected));

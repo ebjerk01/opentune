@@ -24,8 +24,16 @@ open-source *esp32-isotp-ble-bridge* firmware, over its USB serial port (BLE in
 builds with the `btleplug` feature). CAN only, 500 kbit/s, the firmware's
 fixed engine / gearbox / Haldex CAN ids. Unverified.
 
-Buses OpenTune targets: **K-line** (ISO 9141 / ISO 14230 KWP2000) and **CAN**
-(ISO 15765 / VW TP2.0). There is no CAN-FD or DoIP support yet.
+Alpha builds also add `doip`: **DoIP** (ISO 13400, UDS over Ethernet) for cars
+with an Ethernet diagnostic connection. No adapter: an Ethernet port and the
+car's DoIP cable (or a DoIP-capable gateway on your network) are enough. Pick
+`doip`, press **Discover** to list the DoIP entities that answer, and click one
+to fill the connection. Tested against OpenTune's simulated DoIP entity only,
+not yet on a car.
+
+Buses OpenTune targets: **K-line** (ISO 9141 / ISO 14230 KWP2000), **CAN**
+(ISO 15765 / VW TP2.0) and, in alpha builds, **DoIP** (ISO 13400). There is no
+CAN-FD support yet.
 
 ## Cheap interfaces that work
 

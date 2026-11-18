@@ -54,7 +54,7 @@
 
   // Gate the live actions on a CAN-capable, connected adapter.
   if (window.OT && window.OT.gate) {
-    window.OT.gate(sec, ["can"], "vehicle scan", { disable: ["#scanRun", "#scanClear"] });
+    window.OT.gate(sec, ["diag"], "vehicle scan", { disable: ["#scanRun", "#scanClear"] });
   }
 
   // ---- rendering -----------------------------------------------------------

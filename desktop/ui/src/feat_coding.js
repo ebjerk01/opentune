@@ -1,7 +1,7 @@
 // OpenTune — "Coding" feature panel (self-contained, no shared-file edits).
 //
 // Read, decode and write module coding over the connected adapter. Injects its
-// own nav item + panel, gates on the "can" (CAN bus) capability, and drives the
+// own nav item + panel, gates on the "diag" capability (CAN or DoIP), and drives the
 // coding_read / coding_set_preview / coding_write Tauri commands. Load this
 // AFTER ot-caps.js and the app-*.js scripts (needs window.OT and window.showPanel), e.g.
 //   <script src="src/feat_coding.js"></script>
@@ -52,7 +52,7 @@
   document.getElementById("main").appendChild(sec);
 
   // --- Capability gate (needs CAN) ------------------------------------------
-  window.OT.gate(sec, ["can"], "module coding", {
+  window.OT.gate(sec, ["diag"], "module coding", {
     disable: ["#codRead", "#codPreview"],
   });
 
@@ -63,7 +63,7 @@
   let previewed = null;
 
   function syncWrite() {
-    const capsOk = window.OT && window.OT.has ? window.OT.has(["can"]) : true;
+    const capsOk = window.OT && window.OT.has ? window.OT.has(["diag"]) : true;
     const same = previewed && previewed.name === $("codName").value.trim() &&
       previewed.value === parseValue($("codValue").value);
     $("codConfirmRow").hidden = !same;

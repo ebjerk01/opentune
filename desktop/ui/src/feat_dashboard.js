@@ -437,10 +437,10 @@
   }).observe(panel, { attributes: true, attributeFilter: ["class"] });
   window.addEventListener("beforeunload", () => stopRecord("window closed"));
   if (window.OT && window.OT.gate) {
-    window.OT.gate(panel, ["can"], "the dashboard", { disable: ["#dashStart", "#dashRec"] });
+    window.OT.gate(panel, ["diag"], "the dashboard", { disable: ["#dashStart", "#dashRec"] });
     window.OT.onCaps((st) => {
       if (rec && st && st.connected === false) stopRecord("adapter disconnected");
-      if (!window.OT.has(["can"])) stop();
+      if (!window.OT.has(["diag"])) stop();
     });
   }
 

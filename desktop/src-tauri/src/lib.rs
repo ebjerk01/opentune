@@ -37,6 +37,7 @@ mod feat_candump;
 mod feat_coding;
 mod feat_dash;
 mod feat_db;
+mod feat_doip;
 mod feat_haldex;
 mod feat_logging;
 mod feat_logview;
@@ -206,6 +207,7 @@ macro_rules! core_command_list {
         $emit! {
             state::build_channel,
             drivers::probe_adapter,
+            feat_doip::doip_discover,
             debug::debug_raw_request,
             debug::debug_simulate,
             debug::debug_log_dump,

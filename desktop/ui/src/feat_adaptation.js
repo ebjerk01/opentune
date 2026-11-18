@@ -89,7 +89,7 @@
 
     // ---- capability gate (adaptation rides UDS over CAN) -------------------
     if (window.OT && typeof window.OT.gate === "function") {
-      window.OT.gate(sec, ["can"], "adaptation", { disable: ["#adpList", "#adpRead", "#adpRun"] });
+      window.OT.gate(sec, ["diag"], "adaptation", { disable: ["#adpList", "#adpRead", "#adpRun"] });
     }
 
     // ---- state + helpers ---------------------------------------------------

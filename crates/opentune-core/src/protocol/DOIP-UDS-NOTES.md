@@ -141,8 +141,17 @@ stays the transport's responsibility (where it re-reads without re-sending).
   `ecu_reset`, `request_seed`, `send_key` now return `Error::Protocol` if an ECU
   echoes the wrong DID / sub-function. This is stricter than before — intended —
   but if a non-conformant ECU is encountered in the field, that is where to look.
-- A driver wiring DoIP would: `DoIpUdpClient::identify` to find the entity +
-  VIN, then `connect_entity` (TCP + routing activation), then drive `UdsClient`
-  as usual. `opentune doip discover --activate` exercises exactly that path; a
-  DoIP *registry driver* (so `--driver doip` works for the engines) is not
-  added yet.
+- The `doip` registry driver (`crates/drivers/doip`, `opentune-driver-doip`)
+  wires this up: `DoIpUdpClient::identify` to find the entity (optional:
+  `discover=1` / `vin=` / `eid=`), else a direct TCP dial; `connect_entity` or
+  `DoIpTransport::activate_with` for routing activation; `Interface::diag()`
+  hands the activated transport to every engine. `--driver doip` works for
+  coding, adaptation, auto-scan, service, log and OBD inspection; options and
+  the `HOST[:PORT][?key=value]` address string are in `docs/DRIVERS.md` §3i.
+  Its loopback tests run those engines against the udssim TCP/UDP entity.
+  `Capabilities::doip` marks it (it declares no `can`).
+- Known transport-level behaviour seen from the driver: `DoIpTransport::request`
+  bounds an exchange by `TOTAL_DIAG_TIMEOUT_MS` (60 s) at least, whatever the
+  caller's per-request timeout, so an ECU behind a gateway that never answers
+  holds an engine for up to a minute. A target the entity does not know is
+  answered at once with diagnostic NACK `0x03` (an absent module in a scan).

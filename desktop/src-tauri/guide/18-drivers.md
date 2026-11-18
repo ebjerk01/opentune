@@ -32,6 +32,17 @@ open-source Switchleg1 firmware; CAN, memory read/write). It is **unverified**
 (tested against a simulated bridge only) and talks to the bridge over its USB
 serial port; BLE needs a build with the driver's `btleplug` feature.
 
+Alpha builds also list `doip` (DoIP, ISO 13400: UDS over Ethernet to the car's
+DoIP entity; DoIP, memory read). It needs no adapter. With `doip` selected the
+**Adapter** box shows a **Discover** button: it asks the address in the port
+field (or, when the field is empty, the whole network) which DoIP entities are
+there and lists each one's VIN, logical address, EID and IP.
+Click one to fill the port field (`IP?target=0xADDR`), or type an address
+yourself. Leave the field empty to let **Detect adapter** find the only entity
+on the network. Panels that talk to a module work over it; CAN capture does
+not (DoIP has no raw bus) and there is no battery reading. It is tested against
+OpenTune's simulated DoIP entity only.
+
 The Arduino K-line bridge and the OpenTune ESP32-S3 interface have drivers in
 the source tree but are not in the desktop build yet.
 

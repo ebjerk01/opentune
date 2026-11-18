@@ -537,14 +537,98 @@ simulated firmware over BLE (MTU 23 and 247) and serial — multi-frame DIDs,
 4095-byte upload/download blocks, responsePending, settings, persist frames —
 against the `opentune-udssim` server. The BLE link compiles but has never run.
 
+## 3i. `doip`: UDS over Ethernet (ISO 13400)
+
+The `doip` driver (`crates/drivers/doip`, crate `opentune-driver-doip`) needs
+no adapter: the host's Ethernet port talks to the vehicle's DoIP entity (an
+Ethernet-capable gateway or ECU). Like `isotp-ble` it does not implement
+`CanLink`; it wraps the core's `DoIpTransport` (TCP data socket + routing
+activation) and `DoIpUdpClient` (UDP vehicle identification) behind
+`Interface`, and `diag()` hands out the activated transport. Every engine —
+coding, adaptation, auto-scan, service functions, live logging, OBD
+inspection — and the UDS module flasher run over it unchanged.
+
+**Addressing the entity.** `ip` (or `port`, which the CLI's `--port` /
+`OPENTUNE_PORT` and the desktop's port field fill) is
+`HOST[:TCP_PORT][?key=value&…]`: an IPv4 / IPv6 address
+(`[fe80::10%3]:13400` for a scoped one) or host name, and any other option
+after `?`. One port string is a complete connection, which matters for the
+engine commands: `coding`, `adaptation`, `autoscan`, `service` and `log` take
+only `--driver` and read the address from `OPENTUNE_PORT`:
+
+```sh
+opentune info --driver doip --port 192.0.2.10
+OPENTUNE_PORT='192.0.2.10?target=0x0010' \
+    opentune coding decode --def packs/vcar-demo/coding/engine.json --driver doip
+OPENTUNE_PORT='discover?vin=WVWZZZ00000000000' opentune adaptation … --driver doip
+```
+
+Options given separately (`--opt key=value`) win over the port string's.
+Unknown keys in the port string are refused as typos.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `ip` / `port` | — | the entity, as above; empty or `discover` = find it by UDP |
+| `discover` | off | `1`: send a vehicle identification request first (to `ip` if given, else the IPv4 broadcast, or `ff02::1` with `ipv6=1`) |
+| `vin` / `eid` | — | identify only the entity with this VIN (17 chars) or EID (6 hex bytes); implies discovery |
+| `udp_port` / `tcp_port` | 13400 | discovery and data ports |
+| `scope_id` | — | IPv6 interface index for a link-local / multicast address |
+| `ipv6` | off | broadcast discovery on `ff02::1` instead of IPv4 |
+| `tester` | `0x0E00` | tester (source) logical address |
+| `target` | entity | ECU logical address: hex, or `tx_id` = the connection's request id (per-module maps). Default: the entity's own address (announced, or from routing activation) |
+| `activation` | default | routing activation type: `default`, `wwh-obd`, `central` or a hex byte. A discovered entity announcing further action `0x10` gets central security by default |
+| `timeout_ms` | 2000 | TCP connect and routing activation, each |
+| `discover_timeout_ms` | 2000 | how long discovery waits (`A_DoIP_Ctrl`) |
+| `session` | `extended` | session before a block read: `none`, `default`, `programming`, `extended` or a hex byte |
+| `seedkey_level` | `0x11` | SecurityAccess request-seed level for a block read |
+| `security` / `seedkey` | — | `security=required` (or any `seedkey=`) refuses a block read without a seed/key handler |
+| `read_chunk` | 256 | bytes per ReadMemoryByAddress (max 4095) |
+
+When discovery finds several entities the driver refuses and lists them
+(address, logical address, EID, VIN); narrow it with `ip=`, `eid=`, `vin=` or a
+`target` only one of them announces. `opentune doip discover` shows the same
+list without connecting.
+
+**Per-module engines.** Auto-scan and `obd inspect --all-ecus` re-open the
+driver per module with that module's request id. DoIP has no CAN ids, so a
+DoIP module map puts each ECU's logical address in `req_id` and the
+connection sets `target=tx_id`. Without it every module would go to the
+entity's own address. A logical address nobody serves is refused by the entity
+(diagnostic NACK “unknown target address”) and the module reads as absent.
+
+**Capabilities.** `doip` (new flag) and `read_memory`; not `can` — there is no
+raw bus, so `candump` and `can_monitor` are not offered. No battery voltage
+(DoIP does not carry it): the flash safety policy sees no reading, so
+measure the supply separately before programming. `read_memory` is
+ReadMemoryByAddress `0x23` with format `0x44` after the configured session and,
+when a handler is attached through `set_seed_key`, one SecurityAccess attempt
+(all-zero seed = already unlocked). `plan_read_memory` lists those requests
+without sending them. `write_memory` is refused: program a module through the
+UDS module flasher (`opentune flash --container …`), which runs on `diag()`.
+
+The desktop shows `doip` in alpha builds (Bench tier). Choosing it adds a
+**Discover** button under the sidebar port field; it lists the entities that
+answer (VIN, logical address, EID, IP) and a click fills the port field with
+`IP?target=0xADDR`.
+
+**Validation state: loopback only (Bench tier).** Tested against the
+`opentune-udssim` DoIP entity (UDP + TCP) on `127.0.0.1`: open by address and
+by unicast discovery (all / VIN / EID), explicit and `tx_id` targets, block
+reads with and without SecurityAccess, and the coding, adaptation, auto-scan,
+service and logging engines through the driver crate's
+`tests/loopback.rs` and the CLI's `tests/doip_driver.rs`. 🔒 Untested on a
+vehicle: broadcast discovery, real gateway routing to ECUs behind it, activation
+lines, central-security activation and entity inactivity timeouts (the
+desktop re-opens after an error).
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
 are listed in [`ARCHITECTURE.md`](ARCHITECTURE.md#drivers--cratesdrivers)):
 `mock`, `openport2`, `socketcan`, `elm327`, `kkl`, `kline-bridge`, `slcan`,
-`j2534`, `gsusb`, `elm327net`, `elm327obd`, `efp02c`, `vcar`, `udssim`. A
-doc-drift test fails when a new id
-`j2534`, `gsusb`, `elm327net`, `elm327obd`, `vcar`, `udssim`, `isotp-ble`. A doc-drift test fails when a new id
+`j2534`, `gsusb`, `elm327net`, `elm327obd`, `efp02c`, `vcar`, `udssim`,
+`isotp-ble`, `doip`. The desktop registers `isotp-ble` and `doip` in alpha
+builds only (Bench tier). A doc-drift test fails when a new id
 is registered without being added here.
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build
