@@ -7,6 +7,14 @@ pub trait DiagTransport {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>>;
 }
 
+/// Whether `resp` is a responsePending (`7F <sid> 78`) for *this* request:
+/// the transport should keep waiting (bounded) for the final reply. A 0x78
+/// echoing another service belongs to a different exchange and is not a
+/// reason to wait (the client reports it as mis-correlated).
+pub fn is_response_pending(req: &[u8], resp: &[u8]) -> bool {
+    resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 && req.first() == Some(&resp[1])
+}
+
 /// Validate a response against the request service id. Returns Ok for a
 /// positive response (`sid + 0x40`), else a descriptive error.
 pub fn check_response(req_sid: u8, resp: &[u8]) -> Result<()> {
@@ -187,6 +195,15 @@ mod tests {
             check_response(0x22, &[0x63, 0x01, 0x02]),
             Err(Error::Protocol(_))
         ));
+    }
+
+    #[test]
+    fn response_pending_must_echo_the_service() {
+        assert!(is_response_pending(&[0x31, 0x01], &[0x7F, 0x31, 0x78]));
+        assert!(!is_response_pending(&[0x31, 0x01], &[0x7F, 0x22, 0x78]));
+        assert!(!is_response_pending(&[0x31], &[0x7F, 0x31, 0x22]));
+        assert!(!is_response_pending(&[0x31], &[0x7F, 0x31]));
+        assert!(!is_response_pending(&[], &[0x7F, 0x31, 0x78]));
     }
 
     #[test]

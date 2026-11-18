@@ -154,3 +154,109 @@ block boundary and after the last frame, then strip and length-check the telegra
 `2,0,2,1` with `BS=2`), `multiframe_receive_acks_blocks` (mid-stream + final
 ACKs), `setup_rejection_is_error` (`0xD6`), `response_pending_is_retried`
 (`0x78` loop), `timing_byte_roundtrips`.
+
+## TP2.0 hardening: loss recovery, bounds, fuzzing
+
+A second pass over `vwtp20.rs`, `tp20channel.rs`, `tp20sim.rs` and the
+KWP2000 client, driven by a fault-injecting simulator and a seeded fuzzer.
+
+### Sources for the recovery rules
+
+The public protocol description "VW Transport Protocol 2.0 (TP 2.0) for CAN
+bus" (jazdw.net) defines the pieces used here: the data opcodes `0x0`–`0x3`
+(ACK expected / not, more / last), the ACKs `0xB` (ready) and `0x9` (not
+ready), the 4-bit sequence that "increments up to 0xF then back to 0x0", the
+block size ("number of packets to send before expecting an ACK"), `T1`
+("time to wait for ACK"), `T3` ("interval between two packets"), `A3`
+(channel test, answered like the parameter response, keeps the channel
+alive), **`A4` ("break: receiver discards all data since last ACK")** and
+`A8` (disconnect). It says nothing about *when* to retransmit; the rule
+below is ours, built from those primitives, and is what the simulator
+implements on the module side as well.
+
+### Rules implemented
+
+| Situation | Behaviour |
+|---|---|
+| Sequence numbering | Starts at 0 in both directions on every new channel and runs continuously across telegrams. The receiver never synchronises on "whatever comes first": a lost first frame would otherwise make the second one the start of the telegram (the fuzzer found exactly that). |
+| Block size | We honour the module's `A1` block size, but **at most 15 frames per ACK; 0 and values above 15 count as 15** (`vwtp20::effective_block_size`). With a 4-bit sequence a block of 16+ frames cannot be retransmitted unambiguously: its replay restarts on the very sequence number the receiver expects next and is taken as new data (the fuzzer found a whole request executed twice that way). The simulator applies the same limit to its replies. |
+| Our block not ACKed (transmit) | Wait `T1` from the module's `A1` (at least `ACK_WAIT_FLOOR_MS` = 100 ms, since USB adapters add latency; at most the request timeout). No matching `0xB_`: send `A4` and re-send the whole block from its first frame with the **same** sequence numbers, at most `max_block_retries` times (default 2, `tp20_ack_retries`), then fail with a protocol error naming the missing ACK. A `0x9_` for the block stops retransmission (the module has it) and waits up to the full timeout for the `0xB_`. An ACK with another sequence is ignored (duplicate or wrong) and counted. |
+| Reply starts while we wait for the ACK of our *last* frame | Taken as the implicit ACK (the module has the whole request); the frame is kept for the receive path. Only a frame with the expected sequence counts; anything else is stale and ignored. |
+| Receive: expected sequence | Accepted. A `0x0_`/`0x1_` frame is ACKed with the next sequence; that ACK is the rollback point. |
+| Receive: exact repeat of the previous frame, or (right after an ACK) a frame of the block we last ACKed | Discarded as a duplicate / replay (the module missed our ACK); at the replayed block's last frame the same ACK is sent again. Also handled outside a telegram (while we send or keep alive). |
+| Receive: any other sequence (a frame was lost) | Nothing is accepted and nothing ACKed until the module's `A4`, which rolls the telegram back to our last ACK; the module then re-sends. In an unacknowledged (`0x3`) tail no retransmission will come, so that is an immediate sequence error. At most 8 `A4`s per telegram. |
+| Module `A3` | Answered with our `A1` at any point (also mid-telegram). |
+| Module `A8`, or a request that fails mid-exchange | The channel is torn down (we send `A8` unless the module did) and the **next request sets up a new channel** (`VwTp20::request` opens lazily; `Tp20Stats::reopens`). A late reply can therefore never be taken for the next request's answer. The module's KWP session is gone: callers restart it. `VwTp20::last_break` keeps the reason. |
+| Keep-alive (`Tp20Channel`) | `A3` after `tp20_keepalive_ms` idle, serialised with requests; one retry; two unanswered mark the channel lost until `Tp20Channel::reopen`. The thread keeps running across request-level breaks. |
+| `T3` separation | Honoured, clamped to `MAX_SEPARATION_US` = 100 ms (the timing byte can encode 6.3 s). |
+| responsePending (0x78) | Waited through only when it echoes the requested service (`diag::is_response_pending`); each wait uses `response_pending_timeout_ms` (P2*, 5000 ms, at least the request timeout); more than `max_response_pending` (32) is a protocol error naming the count. A 0x78 for another service is handed to the client, which reports it as mis-correlated. |
+| Telegram length | Request payload 1..=4095 bytes (12-bit length), checked before the bus is touched. A received telegram must declare a non-zero length, carry at least that much, and at most one frame's padding more. |
+| Setup | A module that assigns the tester its own receive id or an id in `0x200..=0x2FF` is refused. |
+
+Every wait is a wall-clock deadline that only restarts on progress (an
+accepted frame or an `A4`), so neither a busy bus nor a stream of
+duplicates can stretch it, and every loop is bounded by a count.
+
+### Simulator (`tp20sim`)
+
+The module side is now scriptable without breaking its old API:
+
+- a **virtual clock**: `Tp20SimLink::recv_frame` with nothing queued lets
+  `Tp20Ecu::advance` run up to the wait (delayed replies, retransmissions)
+  instead of sleeping, so timing tests cost no wall-clock time;
+- **faults** (`Tp20EcuConfig::faults`): drop, duplicate, delay, reorder
+  (swap with the next frame), wrong sequence, or module disconnect, on the
+  n-th frame of a class (data, ACK, params, `A3`, `A4`, `A8`, setup) in
+  either direction;
+- module behaviour: configurable `T1`/`T3` in its `A1`, its own ACK timeout
+  (`A4` + resend, `max_retransmits`, then `A8`), responsePending chains with
+  intervals, reply delays, a channel test before each reply, and a
+  disconnect instead of the n-th reply;
+- counters for everything (`retransmissions`, `breaks_received`,
+  `duplicates`, `gaps`, `channel_test_replies`, `keep_alive_times`, …) and an
+  opt-in wire trace (`record_wire`).
+
+Without faults the module stays strict (every gap or stray ACK from the
+tester lands in `errors`), as before.
+
+Two fault shapes are outside what any TP2.0 receiver can detect, and the
+fuzzer keeps them out: a *delayed data frame* released more than 15 frames
+late (use `Reorder`), and a *rewritten data sequence* next to another
+data-frame fault (frame k+1's data labelled k forges the lost frame k). Both
+are corruptions the CAN CRC and in-order delivery rule out on a real bus.
+
+### Tests
+
+- `tests/tp20_faults.rs`: one test per rule above (lost ACK each way, lost
+  data each way, duplicates/reorders, wrong sequence then re-open, sequence
+  wrap with long telegrams in both directions and several block sizes, block
+  size clamping, `T1`/`T3` variants staying bounded, responsePending chains
+  and their bound, module disconnects, module channel tests, late replies,
+  retry exhaustion, lost setup/`A1`, payload size limits, keep-alive retry,
+  `Tp20Channel` re-open, the `tp20_ack_retries` option).
+- `tests/tp20_fuzz.rs`: a deterministic seeded fuzzer (splitmix64). Each case
+  draws a module configuration, client block size / retries and up to five
+  faults, then runs up to four uniquely tagged requests and asserts: no
+  panic; each request returns within 5 s (in practice microseconds); the
+  result is exactly that request's reply or a `Protocol`/`Timeout` error;
+  the module executed each request at most once, in order; and cases
+  without faults or module disruptions always succeed with no protocol
+  violation. It also asserts that every recovery path was reached.
+  `cargo test` runs 3000 cases (~0.5 s); `OPENTUNE_TP20_FUZZ_CASES=2000000`
+  runs a soak, `OPENTUNE_TP20_FUZZ_SEED=<seed>` replays one case with a wire
+  trace.
+
+### KWP2000 client
+
+- `kwp_nrc_name`: the ISO 14230-3 negative-response table. Shared codes keep
+  the UDS name; KWP-specific meanings win (0x40–0x43 download, 0x50–0x53
+  upload — not the UDS certificate codes —, 0x71–0x79 block transfer, 0x80,
+  `reservedByDocument` 0x81–0x8F/0xFF, `manufacturerSpecific` 0x90–0xF9,
+  `systemSupplierSpecific` 0xFA–0xFE). `Kwp2000Client` reports these names.
+- Echo checks: `startDiagnosticSession` (an echo-less `50` is tolerated),
+  `readEcuIdentification` option, `securityAccess` level on both seed and
+  key; a seed response without a seed is an error.
+- `readMemoryByAddress`: empty or overlong blocks and addresses beyond 24
+  bits are errors; a short block is still returned (the K-line drivers
+  advance by its length); `read_memory_exact` refuses it too.
+- A 0x78 that reaches the client is a `NegativeResponse`, never success.

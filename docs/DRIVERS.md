@@ -394,6 +394,7 @@ Select it with driver options (CLI `--opt KEY=VALUE`; parsed by
 | `tp20_keepalive_ms` | send a channel test (`A3`) after this long idle; `0` = off | `1000` |
 | `tp20_timeout_ms` | wait per setup / parameter / keep-alive step | `1000` |
 | `tp20_block_size` | block size requested in our `A0`, 1..=15 | `15` |
+| `tp20_ack_retries` | times a block whose ACK does not arrive is re-sent (after an `A4` break), 0..=5 | `2` |
 
 A `tp20_*` option without `transport=tp20` is refused (`Error::Config`), as is
 an unknown transport, before the adapter is touched.
@@ -412,12 +413,21 @@ What the driver does:
   with `Error::Unsupported`: they are UDS over ISO-TP.
 - While the channel is idle a background thread sends `A3` and expects the
   module's `A1`; requests and keep-alives share one lock, so an `A3` never
-  lands inside a telegram. An unanswered keep-alive marks the channel lost and
-  the next request fails with that reason (re-open the driver: the module's
-  KWP session went with the channel).
+  lands inside a telegram. A keep-alive is retried once; two unanswered in a
+  row mark the channel lost and requests fail with that reason until the
+  channel is re-opened (`Tp20Channel::reopen`, or re-open the driver: the
+  module's KWP session went with the channel).
 - Data frames honour the module's block size (we wait for its ACK at each
-  block end), ACK the module's blocks, accept the "last frame, no ACK" (`0x3`)
-  and "ACK, not ready" (`0x9`) opcodes, and answer a module-initiated `A3`.
+  block end; 0 and values above 15 count as 15), ACK the module's blocks,
+  accept the "last frame, no ACK" (`0x3`) and "ACK, not ready" (`0x9`)
+  opcodes, and answer a module-initiated `A3`.
+- Lost frames are recovered per the TP2.0 break rule: a block whose ACK does
+  not come within the module's `T1` (at least 100 ms) is broken (`A4`) and
+  re-sent, up to `tp20_ack_retries` times; a module's `A4` rolls our receive
+  back to our last ACK. When a request still fails (or the module sends
+  `A8`), the channel is torn down and the **next request sets up a new one**
+  automatically; restart the KWP session then. Details and the exact rules:
+  [PROTOCOL-NOTES.md](PROTOCOL-NOTES.md#tp20-hardening-loss-recovery-bounds-fuzzing).
 - **`close`** stops the keep-alive and sends the disconnect (`A8`).
 - `capabilities().vwtp20` is `true` for these three drivers; `info()` names
   the open channel (e.g. `slcan USB-CAN (CANable/CANtact), VW TP2.0 to 0x0A
