@@ -53,7 +53,10 @@ Two ways to get a portable build, both intentional:
 - **CI** (`.github/workflows/release.yml`) pins the Linux desktop and CLI jobs to
   the **`ubuntu-22.04`** runner (**glibc 2.35**) rather than `ubuntu-latest`, so
   published releases run on Debian 12+/Ubuntu 22.04+ and newer. That's the
-  zero-infrastructure fix for automated releases.
+  zero-infrastructure fix for automated releases. When GitHub retires the
+  `ubuntu-22.04` runner, move the desktop job into `container: debian:bookworm`
+  using this directory's `Dockerfile` as the recipe (do **not** fall back to
+  `ubuntu-latest`).
 - **This directory** is the **local, reproducible** path: a `debian:bookworm`
   (glibc 2.36) Docker build you can run on any machine with Docker, handy for a
   one-off build or when you don't want to cut a tag. Its baseline (2.36) is a
