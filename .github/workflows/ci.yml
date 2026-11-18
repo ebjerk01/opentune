@@ -48,6 +48,37 @@ jobs:
       - name: Build
         run: cargo build --workspace
 
+  # The UDS simulator against independent third-party clients: python-udsoncan
+  # (UDS) over python-doipclient (DoIP) talking to the doip_tcp_entity example on
+  # loopback. See tools/conformance/README.md. Pinned versions, no network
+  # beyond the pip install.
+  conformance:
+    name: udssim conformance · python-udsoncan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the conformance clients
+        run: pip install -r tools/conformance/requirements.txt
+
+      - name: Build the loopback DoIP entity
+        run: cargo build -p opentune-udssim --example doip_tcp_entity
+
+      - name: Run the harness
+        run: python tools/conformance/udsoncan_harness.py --entity target/debug/examples/doip_tcp_entity
+
   # Gate every PR on the ECU-definition library: parse + the format / honesty /
   # scope rules in docs/CONTRIBUTING-ECUDEFS.md. Fails the build on any
   # validation error (warnings are advisory and do not fail). See

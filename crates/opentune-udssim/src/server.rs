@@ -60,10 +60,33 @@ pub mod nrc {
     pub const INVALID_KEY: u8 = 0x35;
     /// exceededNumberOfAttempts.
     pub const EXCEEDED_ATTEMPTS: u8 = 0x36;
+    /// requiredTimeDelayNotExpired.
+    pub const REQUIRED_TIME_DELAY_NOT_EXPIRED: u8 = 0x37;
     /// uploadDownloadNotAccepted.
     pub const UPLOAD_DOWNLOAD_NOT_ACCEPTED: u8 = 0x70;
+    /// transferDataSuspended.
+    pub const TRANSFER_DATA_SUSPENDED: u8 = 0x71;
     /// wrongBlockSequenceCounter.
     pub const WRONG_BLOCK_SEQUENCE_COUNTER: u8 = 0x73;
+    /// serviceNotSupportedInActiveSession.
+    pub const SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION: u8 = 0x7F;
+}
+
+/// Services whose sub-function byte carries the suppressPosRspMsgIndicationBit
+/// (bit 7, ISO 14229-1 §7.5): a positive response to such a request is not
+/// sent. Negative responses are always sent (physical addressing).
+const SPRMIB_SERVICES: [u8; 6] = [
+    sid::SESSION_CONTROL,
+    sid::ECU_RESET,
+    sid::SECURITY_ACCESS,
+    sid::DYNAMICALLY_DEFINE_DID,
+    sid::ROUTINE_CONTROL,
+    sid::TESTER_PRESENT,
+];
+
+/// Whether `req` asks for its positive response to be suppressed.
+fn suppress_positive(req: &[u8]) -> bool {
+    req.len() >= 2 && SPRMIB_SERVICES.contains(&req[0]) && req[1] & 0x80 != 0
 }
 
 /// A stored diagnostic trouble code and its status byte.
@@ -188,6 +211,11 @@ struct TransferState {
     address: u64,
     /// The next expected `blockSequenceCounter` (starts at 0x01, wraps 0xFF→0x00).
     next_seq: u8,
+    /// `false` once RequestTransferExit (0x37) ended the transfer: further
+    /// TransferData / RequestTransferExit are requestSequenceError (0x24).
+    active: bool,
+    /// The `memorySize` announced by the request (download).
+    expected_len: usize,
     /// Bytes received so far (download).
     received: Vec<u8>,
     /// Bytes left to hand out (upload), consumed per transferData.
@@ -219,6 +247,14 @@ pub struct UdsServer {
     flash: Option<FlashEcu>,
     /// `responsePending` frames to interpose before the last reply.
     pending: usize,
+    /// Per-service session restrictions (see
+    /// [`restrict_service_to_sessions`](Self::restrict_service_to_sessions)).
+    service_sessions: BTreeMap<u8, Vec<u8>>,
+    /// SecurityAccess lockout delay after exceededNumberOfAttempts (see
+    /// [`set_security_delay`](Self::set_security_delay)).
+    security_delay: Option<std::time::Duration>,
+    /// When the active lockout ends (requestSeed answers 0x37 until then).
+    locked_out_until: Option<std::time::Instant>,
 }
 
 impl Default for UdsServer {
@@ -254,7 +290,27 @@ impl UdsServer {
             unlocked_level: None,
             flash: None,
             pending: 0,
+            service_sessions: BTreeMap::new(),
+            security_delay: None,
+            locked_out_until: None,
         }
+    }
+
+    /// Only accept service `sid` in the given sessions: in any other session
+    /// the ECU answers serviceNotSupportedInActiveSession (0x7F), checked
+    /// before the request's length/format (ISO 14229-1 §7.5 NRC order).
+    /// Unrestricted services (the default) are accepted in every session.
+    pub fn restrict_service_to_sessions(&mut self, sid: u8, sessions: &[u8]) {
+        self.service_sessions.insert(sid, sessions.to_vec());
+    }
+
+    /// Arm the SecurityAccess delay timer (ISO 14229-1 §9.4): after
+    /// exceededNumberOfAttempts (0x36), requestSeed answers
+    /// requiredTimeDelayNotExpired (0x37) for `delay`; when it has expired the
+    /// attempt counter is restored. Without a delay (the default) there is no
+    /// lockout and the counter stays exhausted.
+    pub fn set_security_delay(&mut self, delay: std::time::Duration) {
+        self.security_delay = Some(delay);
     }
 
     /// Turn this ECU into a flashable one (see [`crate::flash`]): programming
@@ -313,10 +369,23 @@ impl UdsServer {
         }
     }
 
-    /// Handle one UDS request; `None` when the ECU sends no response at all
-    /// (an injected lost response or power loss of the flash model). Without
-    /// a flash model this is always `Some(`[`handle`](Self::handle)`)`.
+    /// Handle one UDS request and return what the ECU **sends**: `None` when it
+    /// sends no response at all — a positive answer to a request with the
+    /// suppressPosRspMsgIndicationBit set (ISO 14229-1 §7.5), or an injected
+    /// lost response / power loss of the flash model. Otherwise
+    /// `Some(`[`handle`](Self::handle)`)`. [`SimTransport`](crate::SimTransport)
+    /// and [`DoIpSimStream`](crate::DoIpSimStream) answer through this.
     pub fn respond(&mut self, req: &[u8]) -> Option<Vec<u8>> {
+        let resp = self.respond_unsuppressed(req)?;
+        // suppressPosRspMsgIndicationBit: a positive answer is not sent.
+        if suppress_positive(req) && resp.first() != Some(&0x7F) {
+            self.pending = 0;
+            return None;
+        }
+        Some(resp)
+    }
+
+    fn respond_unsuppressed(&mut self, req: &[u8]) -> Option<Vec<u8>> {
         self.pending = 0;
         if let Some(flash) = self.flash.as_mut() {
             let ctx = FlashCtx {
@@ -449,11 +518,14 @@ impl UdsServer {
         self.transfer.as_ref().map(|t| t.received.as_slice())
     }
 
-    /// Handle one UDS request, returning the raw UDS response bytes. A
-    /// suppressed response (flash-model fault, see [`respond`](Self::respond))
-    /// comes back empty.
+    /// Handle one UDS request, returning the raw UDS response bytes the ECU
+    /// computes. A response the flash model drops (lost response / power
+    /// loss, see [`respond`](Self::respond)) comes back empty. The
+    /// suppressPosRspMsgIndicationBit is **not** applied here (callers that
+    /// model the wire themselves, like the virtual car, honour it); use
+    /// [`respond`](Self::respond) for what the ECU actually sends.
     pub fn handle(&mut self, req: &[u8]) -> Vec<u8> {
-        self.respond(req).unwrap_or_default()
+        self.respond_unsuppressed(req).unwrap_or_default()
     }
 
     fn dispatch(&mut self, req: &[u8]) -> Vec<u8> {
@@ -462,6 +534,11 @@ impl UdsServer {
             // against SID 0 so the frame is still a well-formed negative response.
             return neg(0x00, 0x10);
         };
+        if let Some(sessions) = self.service_sessions.get(&service) {
+            if !sessions.contains(&self.session) {
+                return neg(service, nrc::SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION);
+            }
+        }
         match service {
             sid::SESSION_CONTROL => self.session_control(req),
             sid::ECU_RESET => self.ecu_reset(req),
@@ -510,6 +587,11 @@ impl UdsServer {
             return neg(sid::ECU_RESET, nrc::INCORRECT_LENGTH);
         }
         let kind = req[1] & 0x7F;
+        // hardReset..enableRapidPowerShutDown (0x01..=0x05) and the vehicle-
+        // manufacturer / supplier ranges (0x40..=0x7E); the rest is reserved.
+        if !matches!(kind, 0x01..=0x05 | 0x40..=0x7E) {
+            return neg(sid::ECU_RESET, nrc::SUB_FUNCTION_NOT_SUPPORTED);
+        }
         // A reset returns the ECU to default session, locked.
         self.session = 0x01;
         self.security_unlocked = false;
@@ -530,37 +612,45 @@ impl UdsServer {
         if req.len() != 2 {
             return neg(sid::TESTER_PRESENT, nrc::INCORRECT_LENGTH);
         }
+        // zeroSubFunction is the only defined sub-function.
+        if req[1] & 0x7F != 0x00 {
+            return neg(sid::TESTER_PRESENT, nrc::SUB_FUNCTION_NOT_SUPPORTED);
+        }
         // 7E <subFunction>.
-        vec![0x7E, req[1] & 0x7F]
+        vec![0x7E, 0x00]
     }
 
+    /// ReadDataByIdentifier (0x22): one or more DIDs per request (ISO 14229-1
+    /// §10.2). The response carries `<DID> <record>` for every **supported**
+    /// DID, in request order; requestOutOfRange (0x31) only when none is.
     fn read_data_by_id(&mut self, req: &[u8]) -> Vec<u8> {
-        if req.len() != 3 {
+        if req.len() < 3 || (req.len() - 1) % 2 != 0 {
             return neg(sid::READ_DATA_BY_ID, nrc::INCORRECT_LENGTH);
         }
-        let did = u16::from_be_bytes([req[1], req[2]]);
-        // A dynamically defined DID is assembled at read time from the current
-        // values of its sources, in definition order.
-        if let Some(sources) = self.dynamic.get(&did) {
-            let mut out = vec![0x62, req[1], req[2]];
-            for src in sources {
-                match self.read_source(src) {
-                    Some(bytes) => out.extend_from_slice(&bytes),
-                    // A source vanished since the define (e.g. its DID was
-                    // removed): the record can no longer be built.
-                    None => return neg(sid::READ_DATA_BY_ID, nrc::CONDITIONS_NOT_CORRECT),
+        let mut out = vec![0x62];
+        for pair in req[1..].chunks_exact(2) {
+            let did = u16::from_be_bytes([pair[0], pair[1]]);
+            // A dynamically defined DID is assembled at read time from the
+            // current values of its sources, in definition order.
+            if let Some(sources) = self.dynamic.get(&did) {
+                out.extend_from_slice(pair);
+                for src in sources {
+                    match self.read_source(src) {
+                        Some(bytes) => out.extend_from_slice(&bytes),
+                        // A source vanished since the define (e.g. its DID was
+                        // removed): the record can no longer be built.
+                        None => return neg(sid::READ_DATA_BY_ID, nrc::CONDITIONS_NOT_CORRECT),
+                    }
                 }
-            }
-            return out;
-        }
-        match self.dids.get(&did) {
-            Some(value) => {
-                let mut out = vec![0x62, req[1], req[2]];
+            } else if let Some(value) = self.dids.get(&did) {
+                out.extend_from_slice(pair);
                 out.extend_from_slice(value);
-                out
             }
-            None => neg(sid::READ_DATA_BY_ID, nrc::REQUEST_OUT_OF_RANGE),
         }
+        if out.len() == 1 {
+            return neg(sid::READ_DATA_BY_ID, nrc::REQUEST_OUT_OF_RANGE);
+        }
+        out
     }
 
     /// What an upload of `size` bytes at `address` hands out: the flash
@@ -829,12 +919,21 @@ impl UdsServer {
         if req.len() < 2 {
             return neg(sid::SECURITY_ACCESS, nrc::INCORRECT_LENGTH);
         }
-        let level = req[1];
+        // Bit 7 is the suppressPosRspMsgIndicationBit, not part of the level.
+        let level = req[1] & 0x7F;
         let is_request_seed = level & 0x01 == 0x01;
         if is_request_seed {
             // requestSeed (odd level).
             if req.len() != 2 {
                 return neg(sid::SECURITY_ACCESS, nrc::INCORRECT_LENGTH);
+            }
+            // Delay timer after exceededNumberOfAttempts.
+            if let Some(until) = self.locked_out_until {
+                if std::time::Instant::now() < until {
+                    return neg(sid::SECURITY_ACCESS, nrc::REQUIRED_TIME_DELAY_NOT_EXPIRED);
+                }
+                self.locked_out_until = None;
+                self.sec_attempts_left = self.config.max_sec_attempts;
             }
             if self.security_unlocked {
                 // Already unlocked: the ISO convention is an all-zero seed.
@@ -872,6 +971,9 @@ impl UdsServer {
                 self.sec_attempts_left = self.sec_attempts_left.saturating_sub(1);
                 if self.sec_attempts_left == 0 {
                     self.current_seed = None;
+                    if let Some(delay) = self.security_delay {
+                        self.locked_out_until = Some(std::time::Instant::now() + delay);
+                    }
                     neg(sid::SECURITY_ACCESS, nrc::EXCEEDED_ATTEMPTS)
                 } else {
                     neg(sid::SECURITY_ACCESS, nrc::INVALID_KEY)
@@ -910,14 +1012,19 @@ impl UdsServer {
         if req.len() < 3 {
             return neg(service, nrc::INCORRECT_LENGTH);
         }
-        if self.config.require_security_for_transfer && !self.security_unlocked {
-            return neg(service, nrc::SECURITY_ACCESS_DENIED);
-        }
         let alfi = req[2];
         let addr_bytes = (alfi & 0x0F) as usize;
         let size_bytes = (alfi >> 4) as usize;
         if addr_bytes == 0 || size_bytes == 0 || req.len() != 3 + addr_bytes + size_bytes {
             return neg(service, nrc::INCORRECT_LENGTH);
+        }
+        // A transfer already in progress: conditionsNotCorrect (ISO 14229-1
+        // §14.2 / §14.3). One that RequestTransferExit ended may be replaced.
+        if self.transfer.as_ref().is_some_and(|t| t.active) {
+            return neg(service, nrc::CONDITIONS_NOT_CORRECT);
+        }
+        if self.config.require_security_for_transfer && !self.security_unlocked {
+            return neg(service, nrc::SECURITY_ACCESS_DENIED);
         }
         let address = be_to_u64(&req[3..3 + addr_bytes]);
         let size = be_to_usize(&req[3 + addr_bytes..3 + addr_bytes + size_bytes]);
@@ -939,6 +1046,8 @@ impl UdsServer {
             is_download,
             address,
             next_seq: 0x01,
+            active: true,
+            expected_len: size,
             received: Vec::new(),
             upload_remaining,
         });
@@ -953,13 +1062,22 @@ impl UdsServer {
             return neg(sid::TRANSFER_DATA, nrc::INCORRECT_LENGTH);
         }
         let seq = req[1];
-        let Some(state) = self.transfer.as_mut() else {
+        let Some(state) = self.transfer.as_mut().filter(|t| t.active) else {
             return neg(sid::TRANSFER_DATA, nrc::REQUEST_SEQUENCE_ERROR);
         };
         if seq != state.next_seq {
             // Re-sending the previous (already-accepted) counter is the defined
-            // retransmit; any other mismatch is wrongBlockSequenceCounter.
+            // retransmit (ISO 14229-1 §14.4): answered positively, not written
+            // again. Any other mismatch is wrongBlockSequenceCounter.
+            let accepted_any = state.next_seq != 0x01 || !state.received.is_empty();
+            if state.is_download && accepted_any && seq == state.next_seq.wrapping_sub(1) {
+                return vec![0x76, seq];
+            }
             return neg(sid::TRANSFER_DATA, nrc::WRONG_BLOCK_SEQUENCE_COUNTER);
+        }
+        if state.is_download && state.received.len() + (req.len() - 2) > state.expected_len {
+            // More data than the request announced.
+            return neg(sid::TRANSFER_DATA, nrc::TRANSFER_DATA_SUSPENDED);
         }
         if state.is_download {
             let at = state.address + state.received.len() as u64;
@@ -985,11 +1103,17 @@ impl UdsServer {
     }
 
     fn transfer_exit(&mut self, _req: &[u8]) -> Vec<u8> {
-        if self.transfer.is_none() {
+        let Some(state) = self.transfer.as_mut().filter(|t| t.active) else {
+            // No transfer, or one already ended by an earlier 0x37.
+            return neg(sid::TRANSFER_EXIT, nrc::REQUEST_SEQUENCE_ERROR);
+        };
+        if state.is_download && state.received.len() < state.expected_len {
+            // The announced download is not complete yet.
             return neg(sid::TRANSFER_EXIT, nrc::REQUEST_SEQUENCE_ERROR);
         }
-        // Keep the received buffer for inspection but end the active transfer by
-        // leaving the state in place; a fresh request(Download|Upload) replaces it.
+        // Keep the received buffer for inspection ([`downloaded`]) but end the
+        // transfer; a fresh request(Download|Upload) replaces it.
+        state.active = false;
         // 77 [transferResponseParameterRecord].
         vec![0x77]
     }
@@ -1156,6 +1280,8 @@ mod tests {
             is_download: true,
             address: 0,
             next_seq: 0xFF,
+            active: true,
+            expected_len: usize::MAX,
             received: Vec::new(),
             upload_remaining: Vec::new(),
         });
@@ -1551,5 +1677,163 @@ mod tests {
             s.handle(&[0x22, 0xF2, 0x00]),
             vec![0x7F, 0x22, nrc::CONDITIONS_NOT_CORRECT]
         );
+    }
+
+    // --- ISO 14229-1 deviations found by the python-udsoncan harness ---
+    // (tools/conformance/): each test pins the corrected behaviour.
+
+    /// A request download of 4 bytes at 0x1000 (ALFID 0x44).
+    const DL4: [u8; 11] = [0x34, 0x00, 0x44, 0, 0, 0x10, 0, 0, 0, 0, 4];
+
+    #[test]
+    fn suppress_positive_response_bit_sends_nothing() {
+        let mut s = UdsServer::new();
+        assert_eq!(s.respond(&[0x3E, 0x80]), None, "suppressed TesterPresent");
+        assert_eq!(s.respond(&[0x10, 0x83]), None, "suppressed session change");
+        assert_eq!(s.session(), 0x03, "the suppressed request still ran");
+        // A negative response is still sent.
+        assert_eq!(
+            s.respond(&[0x31, 0x81, 0x12, 0x34]),
+            Some(vec![0x7F, 0x31, nrc::REQUEST_OUT_OF_RANGE])
+        );
+        // SecurityAccess: bit 7 is not part of the level.
+        let seed = s.respond(&[0x27, 0x01]).unwrap();
+        let key: Vec<u8> = seed[2..].iter().map(|b| b ^ 0xA5).collect();
+        let mut req = vec![0x27, 0x82];
+        req.extend_from_slice(&key);
+        assert_eq!(s.respond(&req), None);
+        assert_eq!(s.unlocked_level(), Some(0x01));
+    }
+
+    #[test]
+    fn tester_present_and_reset_reject_reserved_sub_functions() {
+        let mut s = UdsServer::new();
+        assert_eq!(s.handle(&[0x3E, 0x00]), vec![0x7E, 0x00]);
+        assert_eq!(
+            s.handle(&[0x3E, 0x01]),
+            vec![0x7F, 0x3E, nrc::SUB_FUNCTION_NOT_SUPPORTED]
+        );
+        assert_eq!(s.handle(&[0x11, 0x03]), vec![0x51, 0x03]);
+        for reserved in [0x00, 0x06, 0x3F, 0x7F] {
+            assert_eq!(
+                s.handle(&[0x11, reserved]),
+                vec![0x7F, 0x11, nrc::SUB_FUNCTION_NOT_SUPPORTED],
+                "reset type {reserved:#04x}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_data_by_id_accepts_several_dids() {
+        let mut s = UdsServer::new();
+        s.set_did(0xF190, b"VIN".to_vec());
+        s.set_did(0xF18C, vec![0x01, 0x02]);
+        assert_eq!(
+            s.handle(&[0x22, 0xF1, 0x90, 0xF1, 0x8C]),
+            vec![0x62, 0xF1, 0x90, b'V', b'I', b'N', 0xF1, 0x8C, 0x01, 0x02]
+        );
+        // Unsupported DIDs are left out; none supported is requestOutOfRange.
+        assert_eq!(
+            s.handle(&[0x22, 0x12, 0x34, 0xF1, 0x8C]),
+            vec![0x62, 0xF1, 0x8C, 0x01, 0x02]
+        );
+        assert_eq!(
+            s.handle(&[0x22, 0x12, 0x34]),
+            vec![0x7F, 0x22, nrc::REQUEST_OUT_OF_RANGE]
+        );
+        assert_eq!(
+            s.handle(&[0x22, 0xF1, 0x90, 0xF1]),
+            vec![0x7F, 0x22, nrc::INCORRECT_LENGTH]
+        );
+    }
+
+    #[test]
+    fn transfer_follows_the_iso_sequence() {
+        let mut s = UdsServer::new();
+        assert_eq!(s.handle(&DL4), vec![0x74, 0x20, 0x04, 0x02]);
+        // A second request while the first is active: conditionsNotCorrect.
+        assert_eq!(
+            s.handle(&DL4),
+            vec![0x7F, 0x34, nrc::CONDITIONS_NOT_CORRECT]
+        );
+        // Exit before every announced byte arrived: requestSequenceError.
+        assert_eq!(
+            s.handle(&[0x37]),
+            vec![0x7F, 0x37, nrc::REQUEST_SEQUENCE_ERROR]
+        );
+        assert_eq!(s.handle(&[0x36, 0x01, 1, 2]), vec![0x76, 0x01]);
+        // Retransmit of the previous counter: positive, not written again.
+        assert_eq!(s.handle(&[0x36, 0x01, 1, 2]), vec![0x76, 0x01]);
+        assert_eq!(s.downloaded(), Some(&[1u8, 2][..]));
+        // More data than announced: transferDataSuspended.
+        assert_eq!(
+            s.handle(&[0x36, 0x02, 3, 4, 5]),
+            vec![0x7F, 0x36, nrc::TRANSFER_DATA_SUSPENDED]
+        );
+        assert_eq!(s.handle(&[0x36, 0x02, 3, 4]), vec![0x76, 0x02]);
+        assert_eq!(s.handle(&[0x37]), vec![0x77]);
+        // After the exit the transfer is over.
+        assert_eq!(
+            s.handle(&[0x36, 0x03, 0]),
+            vec![0x7F, 0x36, nrc::REQUEST_SEQUENCE_ERROR]
+        );
+        assert_eq!(
+            s.handle(&[0x37]),
+            vec![0x7F, 0x37, nrc::REQUEST_SEQUENCE_ERROR]
+        );
+        assert_eq!(s.downloaded(), Some(&[1u8, 2, 3, 4][..]));
+        // ...and a new one may start.
+        assert_eq!(s.handle(&DL4), vec![0x74, 0x20, 0x04, 0x02]);
+    }
+
+    #[test]
+    fn first_block_with_counter_zero_is_not_a_retransmit() {
+        let mut s = UdsServer::new();
+        s.handle(&DL4);
+        assert_eq!(
+            s.handle(&[0x36, 0x00, 1]),
+            vec![0x7F, 0x36, nrc::WRONG_BLOCK_SEQUENCE_COUNTER]
+        );
+    }
+
+    #[test]
+    fn service_session_restriction_is_0x7f() {
+        let mut s = UdsServer::new();
+        s.restrict_service_to_sessions(0x2E, &[0x03]);
+        assert_eq!(
+            s.handle(&[0x2E, 0xF1, 0x90, 0x00]),
+            vec![0x7F, 0x2E, nrc::SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION]
+        );
+        // 0x7F is checked before the length (a malformed request still 0x7F).
+        assert_eq!(
+            s.handle(&[0x2E]),
+            vec![0x7F, 0x2E, nrc::SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION]
+        );
+        s.handle(&[0x10, 0x03]);
+        assert_eq!(s.handle(&[0x2E, 0xF1, 0x90, 0x00]), vec![0x6E, 0xF1, 0x90]);
+    }
+
+    #[test]
+    fn security_delay_answers_0x37_until_it_expires() {
+        let mut s = UdsServer::with_config(ServerConfig {
+            max_sec_attempts: 1,
+            ..ServerConfig::default()
+        });
+        s.set_security_delay(std::time::Duration::from_millis(50));
+        s.handle(&[0x27, 0x01]);
+        assert_eq!(
+            s.handle(&[0x27, 0x02, 0, 0, 0, 0]),
+            vec![0x7F, 0x27, nrc::EXCEEDED_ATTEMPTS]
+        );
+        assert_eq!(
+            s.handle(&[0x27, 0x01]),
+            vec![0x7F, 0x27, nrc::REQUIRED_TIME_DELAY_NOT_EXPIRED]
+        );
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let seed = s.handle(&[0x27, 0x01]);
+        assert_eq!(seed[0], 0x67, "seed issued once the delay expired");
+        let mut req = vec![0x27, 0x02];
+        req.extend(seed[2..].iter().map(|b| b ^ 0xA5));
+        assert_eq!(s.handle(&req), vec![0x67, 0x02], "attempts restored");
     }
 }

@@ -2,7 +2,8 @@
 //! must have for the ECU to accept and run it.
 //!
 //! Each ECU family is a [`ChecksumAlgo`]. A generic CRC32-tail example is
-//! included; real ECU algorithms (EDC15, EDC16, EDC17, PCR2.1, ME7, and the
+//! included; real ECU algorithms (EDC15, EDC16, EDC17, PCR2.1, ME7, the
+//! Continental/Siemens Simos-family block CRC headers in [`simos`], and the
 //! TCU/AWD set in [`tcu`]: DQ250, DQ381, ZF 8HP, Haldex Gen5, CCITT trailer)
 //! live in their own modules and must be validated against known-good
 //! reference files. [`get`] maps an id to its algorithm.
@@ -15,6 +16,7 @@ pub mod edc17;
 pub mod generic;
 pub mod me7;
 pub mod pcr21;
+pub mod simos;
 pub mod tcu;
 
 /// Status of one checksum-protected block.
@@ -253,6 +255,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "tcu-ccitt" => Some(Box::new(tcu::CcittTrailer)),
         "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
         "haldex" | "haldex-gen5" => Some(Box::new(tcu::HaldexGen5)),
+        "simos-crc" | "conti-crc" => Some(Box::new(simos::SimosCrc)),
         _ => None,
     }
 }
@@ -415,6 +418,21 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     length field, so it self-corrects like dq381 across SW versions. \
                     Synthetic + algorithm-vector validated only; real-dump validation \
                     pending.",
+        },
+        AlgoInfo {
+            id: "simos-crc",
+            name: "Continental/Siemens Simos-family block CRC headers",
+            family: "simos",
+            needs_reference: false,
+            notes: "Alias: conti-crc. The VW_Flash-documented secured-block header \
+                    ({init, crc, count, [start,end]...}, Bosch forward CRC-32 over the \
+                    concatenated areas), found at 256-byte-aligned offsets of a full \
+                    power-of-two read. Real-image-tested on Continental Sim2K-24x \
+                    (Hyundai/Kia), K205x diesel, Ford EMS and EMS3120 stock+tuned \
+                    reads; VAG Simos 8/10/12/18 not claimed (no read available). \
+                    Standalone correct needs one header still verifying (single-header \
+                    Ford/EMS3120 reads: pass the stock read as reference) and refuses \
+                    an image whose startup-boot header fails (BMW MSD8x).",
         },
     ]
 }
@@ -603,6 +621,8 @@ mod tests {
             "zf-8hp",
             "haldex",
             "haldex-gen5",
+            "simos-crc",
+            "conti-crc",
         ];
         let infos = algorithms();
         for id in resolvable {

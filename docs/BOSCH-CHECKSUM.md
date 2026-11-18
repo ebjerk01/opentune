@@ -96,6 +96,29 @@ A **separate** ECM3 monitor continuously checksums parts of ASW + CAL using a
 ECUs, was moved into ASW to protect it). So an image can carry *both* a CRC
 directory and a wide additive monitor sum.
 
+### `simos-crc`: the header engine, validated on Continental reads
+
+`crate::simos::SimosCrc` (id `simos-crc`, alias `conti-crc`) finds these headers
+at every 256-byte-aligned offset of a full power-of-two read (`init == 0`, a
+non-zero CRC, `count` 1..=16 + three zero bytes, every area in the TriCore flash
+segments `0x80..`/`0xA0..` and inside the image — never wrapped) and checks or
+rewrites each CRC. The `+0x340` CBOOT_TEMP header (VW_Flash) is skipped: it
+describes the boot block at its temporary update address and never verifies on
+a full read.
+
+No VAG Simos 8/10/12/18 read exists in the owner's library, so those ECUs are
+**not claimed**. A read-only scan of the library (29 296 files of full-read
+sizes) found the same header in Continental/Siemens reads instead: 776 of 778
+headers verify (Sim2K-24x Hyundai/Kia, Ford EMS, Lada/Renault EMS3120, K205x
+diesel, BMW MSD8x). Stock + independently tuned pairs (fixtures `conti-crc/`)
+verify on both sides; where the tuner rewrote a CRC (Kia CAL `0x1C0400`, Ford
+CAL `0x140300`, EMS3120 `0x1C300`), correcting the tune with the stock CRC put
+back reproduces the tuner's file byte for byte. The two failures are a BMW
+MSD81's startup-boot header, so standalone correction refuses any image whose
+boot header fails. **Status: real-image-tested** (Continental only).
+
+ECM3 is **not implemented**: no read to validate it on (VAG Simos only).
+
 ## Why this matters for EDC16 (and the open case)
 
 * **Concatenation is the trap.** Because the real message is a concatenation of
@@ -175,6 +198,37 @@ does not recognise (wrong size, malformed walk, no block already verifying) and
 refuses correction when two chained blocks both fail, because the boundary between
 them is then ambiguous.
 
+## Cross-validation against ZedSuite (2026-11-18)
+
+[ZedSuite](https://github.com/LeZed97/ZedSuite) (GPL-3.0, commit `77d75fb`)
+implements both families independently in TypeScript
+(`src/lib/ecu/bosch/checksums/`). Its code was run **unmodified** (via `tsx`) on
+the same 77 fixture dumps as ours (`edc15/`, `edc16*/`, `golf-real/`), both tools
+verified and corrected every dump, and each dump was corrected again after a
+fixed 16-byte corruption inside a region both tools protect.
+
+| Family | ZedSuite | OpenTune | Result |
+|---|---|---|---|
+| EDC15 VAG v4.1v2 (Audi A4 352254 stock + tuned) | `tdi41v2`, 6/6 | 6/6 | identical verify and byte-identical corrected output |
+| EDC15 classic V4.1 (VW Golf stock) | `tdi41_2002`, 11/11 OK | refused | **gap**: OpenTune does not implement the classic / 2002 layout and refuses it (never applies the compact table) |
+| EDC15C6 Mercedes (4 stock + tuned pairs) | unsupported (no V4.1 signature) | 15–20 blocks each, all OK | ZedSuite has no EDC15C6 |
+| EDC16 (64 dumps) | 0–3 regions per dump (132 in all, on 52 dumps) | 1–8 regions per dump | **no disagreement**: every ZedSuite region is one of ours with the same verdict, and the corrected outputs are byte-identical on all 52 dumps ZedSuite recognises |
+
+Why OpenTune finds more EDC16 regions: ZedSuite only accepts a record that sits
+exactly at `region_start + 0x3C` with both bounds 256-byte aligned (it derives
+the base from that). It therefore misses the boot block (`0x0..=0x7FBF`), the
+program block (`0x10000..=0x3FEFF`), small nested sub-blocks (e.g. `0x1C11B0`
+`..=0x1C15E7` inside the calibration) and whole families — the Mercedes CR
+1 MiB / Vito 512 KiB and the BMW 320d have **no** ZedSuite region at all. Every
+extra OpenTune region sums to `0xD01FE500` on every stock **and** tuned dump (a
+chance match is 2⁻³²), so they are genuine; a tune touching one of them would
+leave it broken after a ZedSuite correction. The `golf-real` uncorrected tune is
+fixed identically by both.
+
+No OpenTune bug was found. The stored results (regions + CRC-32 of ZedSuite's
+corrected outputs) are pinned by the fixture-gated
+`crates/opentune-checksum/tests/zedsuite_xval.rs`, which runs without ZedSuite.
+
 ## Engine mapping in this crate
 
 `opentune-checksum` models all of the above as a data-driven block table:
@@ -186,6 +240,7 @@ them is then ambiguous.
 | standard CRC block             | `Crc32` (reflected IEEE)               |
 | Simos/MED/EDC17 main CRC       | `Crc32Bosch` (fwd `0x04C11DB7`, init 0)|
 | **EDC16 MPC56x dir + sum→K**   | `edc16::{parse,verify,correct}_directory` (`sum32be == 0xD01FE500`) |
+| Simos-family CRC headers       | `simos::SimosCrc` (`simos-crc`; PCR2.1's directory: `pcr21`) |
 | unidentified field             | `Unknown` (surface, refuse to write)   |
 
 A `{v, ~v}` complement pair and multi-area directories are represented by adding

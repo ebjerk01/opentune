@@ -199,6 +199,13 @@ fn generic_download_persists_for_upload_and_read_back() {
     // Upload reads the same memory.
     s.handle(&[0x35, 0x00, 0x44, 0, 0, 0x40, 0, 0, 0, 0, 4]);
     assert_eq!(s.handle(&[0x36, 0x01]), vec![0x76, 0x01, 9, 8, 7, 6]);
+    // A new request needs the previous transfer exited (ISO 14229-1 §14:
+    // conditionsNotCorrect while one is active).
+    assert_eq!(
+        s.handle(&[0x35, 0x00, 0x44, 0, 0, 0x90, 0, 0, 0, 0, 3]),
+        vec![0x7F, 0x35, 0x22]
+    );
+    assert_eq!(s.handle(&[0x37]), vec![0x77]);
     // Unmapped memory still uploads the historical ramp.
     s.handle(&[0x35, 0x00, 0x44, 0, 0, 0x90, 0, 0, 0, 0, 3]);
     assert_eq!(s.handle(&[0x36, 0x01]), vec![0x76, 0x01, 0, 1, 2]);

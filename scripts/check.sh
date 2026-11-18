@@ -84,6 +84,17 @@ node_check_ui() {
     return "$rc"
 }
 
+# UDS/DoIP conformance of the simulator against python-udsoncan/doipclient
+# (tools/conformance/). Needs both packages; OPENTUNE_CONFORMANCE_PYTHON picks
+# the interpreter (e.g. a venv), default python3.
+conformance_py() {
+    local py="${OPENTUNE_CONFORMANCE_PYTHON:-python3}"
+    cargo build -q -p opentune-udssim --example doip_tcp_entity || return 1
+    local tgt
+    tgt="$(cargo metadata --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+    "$py" "$ROOT/tools/conformance/udsoncan_harness.py" --entity "$tgt/debug/examples/doip_tcp_entity" 2>/dev/null
+}
+
 # Pass test files explicitly: Node's directory/glob handling differs by version.
 node_test_ui() {
     local files=()
@@ -110,6 +121,12 @@ if [ "$fast" = 0 ]; then
     # The Android app bundles a copy of ecudefs/; it must match the root set.
     if [ -x "$ROOT/android/sync-ecudefs.sh" ]; then
         step "android ecudefs in sync" "$ROOT/android/sync-ecudefs.sh" --check
+    fi
+    # --- simulator conformance (CI job: conformance) ------------------------
+    if "${OPENTUNE_CONFORMANCE_PYTHON:-python3}" -c 'import udsoncan, doipclient' 2>/dev/null; then
+        step "udssim conformance vs python-udsoncan" conformance_py
+    else
+        echo "check.sh: skipping the udsoncan conformance gate (CI runs it): pip install -r tools/conformance/requirements.txt, or set OPENTUNE_CONFORMANCE_PYTHON" >&2
     fi
 fi
 
