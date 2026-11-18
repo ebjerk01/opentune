@@ -14,6 +14,21 @@ test("esc escapes markup and tolerates null", () => {
   assert.equal(U.escQ("it's"), "it&#39;s");
 });
 
+test("GPS helpers: vehicle speed lookup and coordinates", () => {
+  const s = (paramId, name, value, units) => ({ paramId, name, value, units });
+  assert.equal(U.vehicleSpeedKmh([s("rpm", "Engine speed", 3000, "rpm"), s("vss", "VSS", 50, "km/h")]), 50);
+  assert.equal(U.vehicleSpeedKmh([s("P13", "Vehicle Speed", 10, "mph")]), 16.09344);
+  assert.equal(U.vehicleSpeedKmh([s("gps_speed_kmh", "GPS speed", 40, "km/h")]), null);
+  assert.equal(U.vehicleSpeedKmh([s("speed", "Speed", null, "km/h")]), null);
+  assert.equal(U.vehicleSpeedKmh([s("speed", "Speed", 5, "rpm")]), null);
+  assert.equal(U.vehicleSpeedKmh(null), null);
+  assert.equal(U.speedUnitFactor(" KM/H "), 1);
+  assert.equal(U.speedUnitFactor("m/s"), 3.6);
+  assert.equal(U.fmtLatLon(56.5, true), "56.50000° N");
+  assert.equal(U.fmtLatLon(-3.25, false), "3.25000° W");
+  assert.equal(U.fmtLatLon(null, true), "—");
+});
+
 test("baseName takes the last path segment of either separator", () => {
   assert.equal(U.baseName("/a/b/stock.bin"), "stock.bin");
   assert.equal(U.baseName("C:\\dumps\\tuned.ori"), "tuned.ori");

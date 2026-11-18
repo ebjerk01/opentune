@@ -319,7 +319,40 @@
     return null;
   }
 
+  // ---- GPS card (feat_gps.js) ------------------------------------------------
+  // km/h per unit for a speed unit string, or null when it is not a speed unit.
+  function speedUnitFactor(u) {
+    const k = String(u == null ? "" : u).replace(/\s+/g, "").toLowerCase();
+    if (["km/h", "kmh", "kph", "km/hr"].includes(k)) return 1;
+    if (["mph", "mi/h"].includes(k)) return 1.609344;
+    if (k === "m/s") return 3.6;
+    return null;
+  }
+  // The vehicle speed (km/h) among live-log samples, for the GPS speed error:
+  // an id like vss / speed / vehicle_speed or a name containing "vehicle speed",
+  // in a speed unit. Mirrors opentune_logdef::gps::vehicle_speed_index; null
+  // when there is none or it has no value.
+  const SPEED_IDS = ["vss", "speed", "vehicle_speed", "vehicle_speed_kmh", "veh_speed", "obd_speed", "obd_vss", "spd"];
+  function vehicleSpeedKmh(samples) {
+    for (const s of samples || []) {
+      const id = String((s && s.paramId) || "").toLowerCase();
+      if (!id || id.startsWith("gps_")) continue;
+      const named = SPEED_IDS.includes(id) || String(s.name || "").toLowerCase().includes("vehicle speed");
+      if (!named) continue;
+      const f = speedUnitFactor(s.units);
+      return f != null && typeof s.value === "number" && isFinite(s.value) ? s.value * f : null;
+    }
+    return null;
+  }
+  // "56.50000° N" / "3.00000° E" for signed decimal degrees ("—" for none).
+  function fmtLatLon(v, lat) {
+    if (typeof v !== "number" || !isFinite(v)) return "—";
+    const h = lat ? (v < 0 ? "S" : "N") : v < 0 ? "W" : "E";
+    return Math.abs(v).toFixed(5) + "° " + h;
+  }
+
   const OTUtil = {
+    speedUnitFactor, vehicleSpeedKmh, fmtLatLon,
     esc, baseName, hex8, parseHexInput, fmtCell, fmtAxis, clone2d, heatColor, splitList,
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,

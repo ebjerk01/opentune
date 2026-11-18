@@ -37,6 +37,7 @@ mod feat_candump;
 mod feat_coding;
 mod feat_dash;
 mod feat_db;
+mod feat_gps;
 mod feat_haldex;
 mod feat_logging;
 mod feat_logview;
@@ -235,6 +236,10 @@ macro_rules! core_command_list {
             feat_dash::obd_supported,
             feat_dash::obd_read,
             feat_dash::dash_record_write,
+            feat_gps::gps_ports,
+            feat_gps::gps_open,
+            feat_gps::gps_fix,
+            feat_gps::gps_close,
             feat_obdinfo::obd_inspect,
             feat_db::db_list,
             feat_db::db_get,
