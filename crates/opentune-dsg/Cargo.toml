@@ -1,0 +1,20 @@
+[package]
+name = "opentune-dsg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "VAG DQ250 02E (6-speed wet DSG) read-only diagnostics: KWP2000 over a VW TP2.0 channel to the gearbox (address 0x02) - identification, stored trouble codes and raw measuring groups."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+# Measuring-group meanings come from the controller definition's live[] entries.
+opentune-ctrldef = { path = "../opentune-ctrldef" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+# End-to-end read through the slcan driver's TP2.0 channel (simulated adapter).
+opentune-driver-slcan = { path = "../drivers/slcan" }
