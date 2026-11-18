@@ -333,8 +333,8 @@ using a separate script, 2026-11-18):
 - Once `ATCRA 7E9` is set, functional requests keep returning `NO DATA` for
   the engine even after `ATSH 7DF`. A bare `ATCRA` (the documented filter
   reset) is rejected with `?` and does not clear it.
-- `ATZ` with a full re-init clears it. Whether `ATAR` or `ATD` clear a stuck
-  filter is untested.
+- `ATAR` (automatic receive), `ATD` (defaults) and `ATZ` with a full re-init
+  each clear a stuck filter. `ATAR` is the cheapest reset between ECUs.
 - A functional `0100` returned both 7E8 and 7E9 on a car with an engine ECU
   and a DSG, and only 7E8 on a single-ECU car.
 
@@ -342,8 +342,8 @@ The driver is built around this. It resets with `ATZ` on every open, sets one
 physical `ATSH`/`ATCRA` pair per session and never sends a bare `ATCRA`.
 Scans re-bind per module by opening again (CLI and the desktop adapter hub).
 A unit test pins it (`every_open_resets_with_atz_and_never_sends_bare_atcra`).
-Any future in-session retargeting must re-init with `ATZ`, or toggle `ATSH`
-only without a filter.
+Any future in-session retargeting must send `ATAR` (or `ATZ`) before the new
+filter, never a bare `ATCRA`.
 
 Not yet validated against a real ECU. The first car session (read-only, see
 [`FIRST-CAR-TEST.md`](FIRST-CAR-TEST.md)) should start with
