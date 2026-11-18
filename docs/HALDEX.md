@@ -92,7 +92,7 @@ Gen4, `0AY 907 554 F` is a different unit that OpenHaldex treats as Gen5 (PQ).
   the OBD port to the drivetrain CAN on a given car is to be confirmed on the
   car (Stage H).
 - `opentune haldex decode <log>` — passive decode of candump / OpenTune CSV /
-  SavvyCAN CSV captures (works on the public OpenHaldex logs).
+  SavvyCAN CSV / Vector ASC captures (works on the public OpenHaldex logs).
 - `ecudefs/borgwarner-haldex-gen4.json` — identify keys only (`0AY907554C`,
   `0BS907554`), protocol `vwtp20` / `kwp2000`, flash size unknown, no maps.
 - Auto-scan cannot reach a Gen4: its module-list schema speaks UDS/OBD only.
@@ -194,7 +194,7 @@ this crate stays the engine for the Gen4 read and the OpenHaldex client.
 |---|---|
 | `Allrad_1` / `Bremse_4` / `Bremse_3` / `Motor_1` decode | `Allrad_1` checked on two public real Gen4 captures; others synthetic-tested |
 | `Allrad_03` / `ESP_19` (MQB) decode | synthetic-tested |
-| Log readers (candump, OpenTune CSV, SavvyCAN CSV) | synthetic-tested; SavvyCAN read on the public OpenHaldex captures |
+| Log readers (candump, OpenTune CSV, SavvyCAN CSV, Vector ASC) | synthetic-tested; SavvyCAN read on the public OpenHaldex captures; ASC against the `opentune candump --format asc` layout |
 | Gen4 identification + measuring-block decode | checked against public real capture bytes |
 | Gen4 read engine over TP2.0 | synthetic-tested (`VwTp20` + simulated unit; end to end through the slcan driver's line protocol and the desktop hub) |
 | TP2.0 channel in socketcan / slcan / gsusb | synthetic-tested (simulated module: setup, ACK windows, keep-alive, disconnect, silent module) |
