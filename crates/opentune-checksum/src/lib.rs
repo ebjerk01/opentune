@@ -8,6 +8,7 @@
 //! reference files. [`get`] maps an id to its algorithm.
 use opentune_core::{MemoryRegion, Result};
 
+pub mod dsg;
 pub mod edc15;
 pub mod edc16;
 pub mod edc17;
@@ -247,6 +248,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "edc15c6" | "edc15" => Some(Box::new(edc15::Edc15C6)),
         "me7" | "me7x" => Some(Box::new(me7::Me7)),
         "dq250" | "tcu-jamcrc" => Some(Box::new(tcu::Dq250Jamcrc)),
+        "dq250-02e" | "dq250-pq" => Some(Box::new(dsg::Dq250PqCrc16)),
         "dq381" | "tcu-crc32" => Some(Box::new(tcu::Dq381Crc32)),
         "tcu-ccitt" => Some(Box::new(tcu::CcittTrailer)),
         "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
@@ -354,7 +356,20 @@ pub fn algorithms() -> Vec<AlgoInfo> {
             notes: "Alias: tcu-jamcrc. JAMCRC (= !crc32) per-block trailer over the \
                     DQ250-MQB CAL/ASW layout; corrects only when a block's JAMCRC \
                     validates. Algorithm vectors + synthetic validated; real 0D9 \
-                    bench-dump validation pending.",
+                    bench-dump validation pending. Does not apply to PQ 02E \
+                    software (see dq250-02e).",
+        },
+        AlgoInfo {
+            id: "dq250-02e",
+            name: "VAG DQ250 PQ 02E DSG (CRC-16 sector table)",
+            family: "tcu",
+            needs_reference: false,
+            notes: "Alias: dq250-pq. 0x68000-byte PowerPC-generation 02E read: \
+                    CRC-16/MCRF4XX (0x8408 reflected, init 0xFFFF) of twelve 32 KiB \
+                    code sectors + the CAL sector 0x60000..0x67FDF, stored as 13 \
+                    big-endian words at 0x67FE2. Real-image-tested on six 02E reads \
+                    (78/78 words); also handles the extracted 0x8000-byte CAL sector. \
+                    TriCore-generation 02E reads are refused.",
         },
         AlgoInfo {
             id: "dq381",
@@ -579,6 +594,8 @@ mod tests {
             "me7x",
             "dq250",
             "tcu-jamcrc",
+            "dq250-02e",
+            "dq250-pq",
             "dq381",
             "tcu-crc32",
             "tcu-ccitt",

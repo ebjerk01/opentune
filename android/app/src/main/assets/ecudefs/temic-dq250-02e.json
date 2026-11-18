@@ -1,0 +1,533 @@
+{
+  "id": "temic-dq250-02e",
+  "name": "VAG DQ250 / 02E 6-speed DSG TCU (Temic, PowerPC generation)",
+  "maker": "Temic",
+  "family": "DQ250",
+  "notes": "VAG DQ250 six-speed wet-clutch DSG (02E gearbox, PQ35/PQ46 platforms: Golf V/VI, Jetta, Passat B6/CC, A3 8P, TT 8J, Leon, Octavia...) - mechatronic/TCU J743 inside the gearbox. This definition covers the PowerPC-generation software read as a 0x68000-byte (416 KiB) image: twelve 32 KiB code sectors 0x0-0x5FFFF (big-endian PowerPC code) and a 32 KiB calibration sector 0x60000-0x67FFF that starts with the ident record '<nn>02E300xxxX  GSG DSG ... DCT' and ends with the version tag 'v069...__getriebe_DSG_XXXX' and the CRC table footer. checksum 'dq250-02e' (CRC-16/MCRF4XX per sector, 13 big-endian words at 0x67FE2) is real-image-tested: it matches every word on six real 02E reads; it is NOT the DQ250-MQB JAMCRC. Diagnostics: the transport/layer below (ISO-TP, KWP2000 at the OBD transmission ids 0x7E1/0x7E9) is not confirmed for 02E - PQ-era workshop diagnostics commonly run KWP2000 over VW TP2.0; set it to match the car. No OBD full-read path is documented, hence bench_boot. Maps are the shift-speed schedules located from structure and sibling calibrations (raw, MEDIUM); torque limiters, clutch pressure/adaptation and launch tables are not shipped because they could not be located and justified from the available reads. TriCore-generation 02E software (e.g. 02E300013N) has a different layout: see temic-dq250-02e-tricore. Calibration only: no launch/torque-limiter defeat.",
+  "protocol": "iso_tp",
+  "diag_layer": "kwp2000",
+  "bitrate": 500000,
+  "tx_id": 2017,
+  "rx_id": 2025,
+  "flash_size": 425984,
+  "regions": [
+    {
+      "name": "full",
+      "region": {
+        "address": 0,
+        "length": 425984
+      },
+      "writable": false
+    },
+    {
+      "name": "code",
+      "region": {
+        "address": 0,
+        "length": 393216
+      },
+      "writable": false
+    },
+    {
+      "name": "calibration",
+      "region": {
+        "address": 393216,
+        "length": 32768
+      },
+      "writable": true
+    }
+  ],
+  "checksum": "dq250-02e",
+  "seedkey": null,
+  "full_read": "bench_boot",
+  "maps": [
+    {
+      "name": "shift schedule A - upshift 1-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 1 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 1-2 upshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 394718,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - upshift 2-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 2 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 2-3 upshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 394814,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - upshift 3-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 3 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 3-4 upshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 394910,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - upshift 4-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 4 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 4-5 upshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395006,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - upshift 5-6 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 5 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 5-6 upshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395102,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - downshift 2-1 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 1 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 2-1 downshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395198,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - downshift 3-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 2 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 3-2 downshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395294,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - downshift 4-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 3 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 4-3 downshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395390,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - downshift 5-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 4 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 5-4 downshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395486,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule A - downshift 6-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 5 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 6-5 downshift. Set A is the first of three such groups; which driving programme (D/S/...) each group serves is not established. Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 395582,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - upshift 1-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 1 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 1-2 upshift. Set B is the second of three groups (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407306,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - upshift 2-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 2 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 2-3 upshift. Set B is the second of three groups (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407402,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - upshift 3-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 3 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 3-4 upshift. Set B is the second of three groups (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407498,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - upshift 4-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 4 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 4-5 upshift. Set B is the second of three groups (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407594,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - upshift 5-6 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 5 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 5-6 upshift. Set B is the second of three groups (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407690,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - downshift 2-1 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 1 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 2-1 downshift. Set B is the second of three groups (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407786,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - downshift 3-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 2 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 3-2 downshift. Set B is the second of three groups (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407882,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - downshift 4-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 3 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 4-3 downshift. Set B is the second of three groups (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 407978,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - downshift 5-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 4 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 5-4 downshift. Set B is the second of three groups (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 408074,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule B - downshift 6-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 5 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 6-5 downshift. Set B is the second of three groups (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 408170,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - upshift 1-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 1 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 1-2 upshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 418570,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - upshift 2-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 2 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 2-3 upshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 418666,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - upshift 3-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 3 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 3-4 upshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 418762,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - upshift 4-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 4 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 4-5 upshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 418858,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - upshift 5-6 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian. Every row rises monotonically from a flat low plateau to a flat high plateau and the values sit in the engine-speed band of the drivetrain the calibration was built for, which is the shape of a DSG shift-speed schedule; this is block 5 of 5 consecutive 0x60-byte upshift blocks, inferred to be the 5-6 upshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes (12 columns - likely accelerator pedal - and 4 rows) are not located, so cells ship raw; edit by ratio. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 418954,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - downshift 2-1 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 1 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 2-1 downshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 419050,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - downshift 3-2 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 2 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 3-2 downshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 419146,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - downshift 4-3 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 3 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 4-3 downshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 419242,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - downshift 5-4 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 4 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 5-4 downshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 419338,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    },
+    {
+      "name": "shift schedule C - downshift 6-5 (inferred)",
+      "notes": "CONFIDENCE: MEDIUM (location/shape HIGH, role and unit inferred). Source: OpenTune's own analysis of real 02E reads (no A2L/XDF/commercial map pack): the table structure, plus the sibling-calibration diff of two datasets of the same software (an A3 2.0 TDI and a TT 2.0 TFSI calibration), which differ inside every block of this group - the TDI data peaks at 4400, the TFSI data at 6220-6500. 4 rows x 12 columns of u16 big-endian, same row shape as the upshift blocks but at lower values (block 1 starts near idle speed); block 5 of 5 consecutive 0x60-byte downshift blocks following the upshift group, inferred to be the 6-5 downshift. Set C is the third of three groups, 0x2C00 after set B (role per programme not established). Axes are not located, so cells ship raw; edit by ratio and keep every downshift below its matching upshift. Addresses are offsets into the 0x68000-byte read of the software sharing code with 02E300041N / 02E300046K / 02E300042M (version tags v0690801 / v0690807); 02E300042F/042G (v0690918 / v0690920) hold set A 0x15A6 bytes later, and other software (e.g. 02E300011BL/011C) differ again - confirm by content in your own read before any write. Writes need the dq250-02e checksum fix.",
+      "address": 419434,
+      "data_type": "u16",
+      "endian": "big",
+      "rows": 4,
+      "cols": 12,
+      "scaling": {
+        "factor": 1.0,
+        "offset": 0.0
+      },
+      "unit": "raw (engine-speed band, unit unconfirmed)",
+      "min": 0.0,
+      "max": 8000.0
+    }
+  ],
+  "identify": {
+    "part_numbers": [
+      "02E300011",
+      "02E300041",
+      "02E300042",
+      "02E300046"
+    ],
+    "sw_numbers": []
+  }
+}

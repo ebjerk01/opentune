@@ -8,6 +8,7 @@ Sections:
 - [Bosch EDC15C6](#bosch-edc15c6-mercedes-cdi) — Mercedes CDI (`ecudefs/bosch-edc15c6.json`)
 - [Simos PCR2.1](#continentalsiemens-simos-pcr21-vag-16-tdi-cr) — VAG 1.6 TDI CR (`ecudefs/siemens-pcr21.json`)
 - [Bosch EDC17CP14](#bosch-edc17cp14-vag-20-tdi-cr--no-maps-shipped) — no maps shipped (why)
+- [VAG DSG TCUs (DQ250 02E)](#vag-dsg-tcus-dq250-02e) — shift schedules (`ecudefs/temic-dq250-02e.json`, `temic-dq250-02e-tricore.json`); family overview in [`DSG.md`](DSG.md)
 - [Reproducing / validating](#reproducing--validating), [Adding maps for another ECU](#adding-maps-for-another-ecu)
 
 All facts here come from **public** material and from reference stock/tuned ECU
@@ -193,6 +194,64 @@ tune of it) — then follow the method below.
 
 ---
 
+## VAG DSG TCUs (DQ250 02E)
+
+No stock/tuned pair of any DSG software was available, so no map here is
+diff-confirmed against a tune and none is HIGH. Inputs: nine real 02E reads —
+seven PowerPC-generation 0x68000-byte reads (five software versions) and two
+TriCore-generation `02E300013N` reads (two datasets of one software). See
+[`DSG.md`](DSG.md) for layouts and the checksum.
+
+### Shift schedules
+
+Both generations store their shift-speed schedules the same way, without an
+inline header: per group, five consecutive **upshift** blocks followed by five
+**downshift** blocks, each block **4 rows × 12 columns of u16** (0x60 bytes).
+Every row rises monotonically from a flat low plateau to a flat high plateau,
+and the values sit in the engine-speed band of the drivetrain the calibration
+was built for. Evidence for the role, per definition:
+
+- **PowerPC (`temic-dq250-02e`, big-endian)**: two datasets of the same code
+  build — an A3 2.0 TDI and a TT 2.0 TFSI calibration — differ inside every
+  shipped block, and nowhere in the code sectors; the TDI data tops out at
+  4400, the TFSI data at 6220–6500, as diesel and petrol upshift speeds would.
+  The first downshift block starts near standstill (70–450).
+- **TriCore (`temic-dq250-02e-tricore`, little-endian)**: the same block shape
+  and plateau pattern (upshifts to 6600–6700, downshifts from 150), located by
+  structure only; the two available datasets do not differ inside these blocks.
+
+What is inferred and therefore labelled so: that block *k* is the *k→k+1*
+upshift (or *k+1→k* downshift), which group serves which driving programme, and
+the unit (engine speed). The axes — 12 columns, probably accelerator pedal, and
+4 rows — are not located, so the cells ship **raw** (factor 1, no axes). Edit by
+ratio and keep every downshift below its upshift.
+
+| Definition | Group | Upshift 1-2..5-6 | Downshift 2-1..6-5 | Confidence |
+|---|---|---|---|---|
+| `temic-dq250-02e` | A | `0x605DE` + 0x60·k | `0x607BE` + 0x60·k | MEDIUM |
+| `temic-dq250-02e` | B | `0x6370A` + 0x60·k | `0x638EA` + 0x60·k | MEDIUM |
+| `temic-dq250-02e` | C | `0x6630A` + 0x60·k | `0x664EA` + 0x60·k | MEDIUM |
+| `temic-dq250-02e-tricore` | 1 | `0x1D34` + 0x60·k | `0x1F14` + 0x60·k | MEDIUM |
+| `temic-dq250-02e-tricore` | 2 | `0x20F4` + 0x60·k | `0x22D4` + 0x60·k | MEDIUM |
+
+Addresses are software-specific. The `temic-dq250-02e` addresses are for the
+code build shared by `02E300041N`, `02E300046K` and `02E300042M` (tags
+`v0690801`/`v0690807`); `02E300042F`/`042G` (`v0690918`/`v0690920`) hold group A
+**0x15A6 bytes later** (`0x61B84` / `0x61D64`, checked by a fixture test), and
+the `02E300011BL` R32 software holds a group at `0x61CCC` / `0x61EAC`. Locate the
+tables by content in your own read before any write.
+
+### Not shipped
+
+Torque limits per gear, clutch pressure / torque-transfer characteristics,
+clutch adaptation and launch tables: candidate structures exist (e.g. families
+of 16-point rising curves near `0x61B70..0x62470` in the PowerPC CAL), but no
+read pair or open reference identifies them, so they are left out rather than
+named by guess. A stock/tuned pair of one 02E software would be the next step
+(`opentune findmaps stock.bin tuned.bin`).
+
+---
+
 ## Reproducing / validating
 
 ```bash
@@ -202,6 +261,8 @@ opentune ecudefs validate ecudefs/<id>.json --image stock.bin --warnings
 cargo test -p opentune-core --test ecudef_parse
 OPENTUNE_FIXTURES=/path/to/fixtures \
   cargo test -p opentune-core --test fleet_maps_fixtures -- --ignored
+OPENTUNE_FIXTURES=/path/to/fixtures \
+  cargo test -p opentune-core --test dsg_fixtures -- --ignored
 ```
 
 A map decodes "sensibly" when its stored axes are monotonic and its cells land in

@@ -29,7 +29,9 @@ const PER_KIND: usize = 6;
 
 /// VAG main groups used by control units (906 engine, 907 misc ECUs,
 /// 927 gearbox, 997/998 exchange units).
-const VAG_ECU_GROUPS: &[&str] = &["906", "907", "927", "997", "998"];
+/// VAG main groups that name a control unit; `300` is the transmission
+/// software group of DSG TCUs (`02E300041N`, `0D9300042M`).
+const VAG_ECU_GROUPS: &[&str] = &["300", "906", "907", "927", "997", "998"];
 
 fn push(out: &mut Vec<IdField>, kind: &'static str, value: String, offset: usize, count: usize) {
     if out.iter().filter(|f| f.kind == kind).count() >= PER_KIND

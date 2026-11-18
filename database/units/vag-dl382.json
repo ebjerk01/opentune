@@ -1,0 +1,60 @@
+{
+  "id": "vag-dl382",
+  "kind": "tcu",
+  "maker": "VAG (supplier not confirmed)",
+  "family": "DL382",
+  "name": "Audi DL382 / 0CK (0CL, 0CJ) 7-speed S tronic TCU",
+  "aliases": [
+    "DL382",
+    "0CK",
+    "0CL",
+    "0CJ",
+    "S tronic 7"
+  ],
+  "cpu": null,
+  "flash_kib": null,
+  "eeprom": null,
+  "bus": [
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": false,
+    "boot": false,
+    "notes": "No open source documents a read path or flash layout for DL382 software; factory containers use the same method 0x11 table cipher + compression as DQ200/DQ250 (vag-tcu-tools)."
+  },
+  "checksum": null,
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Audi",
+      "model": "A4 / A5 (B9), A6 / A7 (C7.5), Q5",
+      "engine": null,
+      "years": "2015-"
+    }
+  ],
+  "part_number_examples": [
+    "0CK927156AA",
+    "0CK927156S"
+  ],
+  "notes": "Longitudinal seven-speed wet dual-clutch S tronic (0CK; sources disagree on which of 0CK/0CL/0CJ is FWD vs quattro). Identify only: no DL382 read was available, so no definition, checksum or maps are claimed; opentune-scan recognises 0CK/0CL/0CJ part numbers in an image as DL382 (medium tier). No pinout is given: no open source with a pin-level drawing for this unit was found, so none is guessed.",
+  "connectors": [],
+  "bench": null,
+  "pinout_confidence": null,
+  "safety_note": null,
+  "sources": [
+    {
+      "title": "gearboxlist.com: Volkswagen DL382",
+      "url": "https://gearboxlist.com/volkswagen/dl382/"
+    },
+    {
+      "title": "controlunits.com: Audi DL382 S-Tronic TCU (0CK 927 156 AA)",
+      "url": "https://controlunits.com/?p=24591"
+    },
+    {
+      "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): method 0x11 for DL382",
+      "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
+    }
+  ]
+}
