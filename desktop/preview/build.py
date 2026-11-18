@@ -70,6 +70,39 @@ def guides():
     return out
 
 
+# Map metadata bundled per definition for the Maps / Compare / Log viewer demo:
+# layout only (names, sizes, axes, scaling) — the preview fills the cells with
+# synthetic values. Capped so the page stays small (some defs list 1000+ maps).
+MAP_META_CAP = 24
+
+
+def axis_meta(a):
+    if not isinstance(a, dict):
+        return None
+    vals = a.get("values") or []
+    return {"name": a.get("name", ""), "unit": a.get("unit", ""), "count": a.get("count"),
+            "values": vals if len(vals) <= 64 else []}
+
+
+def map_meta(maps):
+    # Prefer real tables (2-D maps, then curves) over single values.
+    ranked = sorted(maps, key=lambda m: 0 if m.get("rows", 1) > 1 and m.get("cols", 1) > 1
+                    else 1 if m.get("rows", 1) * m.get("cols", 1) > 1 else 2)
+    out = []
+    for m in ranked[:MAP_META_CAP]:
+        sc = m.get("scaling") or {}
+        out.append({
+            "name": m.get("name", ""), "rows": m.get("rows", 1), "cols": m.get("cols", 1),
+            "unit": m.get("unit", ""), "address": m.get("address", 0),
+            "data_type": m.get("data_type", "u16"), "endian": m.get("endian", "big"),
+            "scaling": {"factor": sc.get("factor", 1.0), "offset": sc.get("offset", 0.0)},
+            "min": m.get("min"), "max": m.get("max"),
+            "x_axis": axis_meta(m.get("x_axis")), "y_axis": axis_meta(m.get("y_axis")),
+            "notes": (m.get("notes") or "")[:240],
+        })
+    return out
+
+
 def ecudefs():
     out = []
     for p in sorted((REPO / "ecudefs").glob("*.json")):
@@ -77,13 +110,30 @@ def ecudefs():
             d = json.loads(p.read_text())
         except ValueError:
             continue
+        ident = d.get("identify") or {}
         out.append({
             "id": d.get("id", p.stem), "name": d.get("name", ""), "maker": d.get("maker", ""),
             "family": d.get("family", ""), "protocol": str(d.get("protocol", "")),
             "flash_kib": int(d.get("flash_size", 0)) // 1024, "checksum": d.get("checksum"),
             "seedkey": d.get("seedkey"), "maps": len(d.get("maps", [])), "notes": d.get("notes", ""),
+            "identify": {"part_numbers": ident.get("part_numbers") or [], "sw_numbers": ident.get("sw_numbers") or []},
+            "map_meta": map_meta(d.get("maps", [])),
         })
     return out
+
+
+def vcar():
+    """The virtual car's demo profile plus its definition pack, keyed by the
+    repo-relative paths the preview's file dialog hands out."""
+    files = {}
+    for p in sorted((REPO / "packs" / "vcar-demo").rglob("*.json")):
+        try:
+            files[p.relative_to(REPO).as_posix()] = json.loads(p.read_text())
+        except ValueError:
+            pass
+    prof = REPO / "crates" / "drivers" / "vcar" / "profiles" / "demo.json"
+    profile = json.loads(prof.read_text()) if prof.is_file() else None
+    return {"profile": profile, "files": files}
 
 
 def safe_script(js: str) -> str:
@@ -105,7 +155,7 @@ def main(out_path: str) -> None:
             units.append(json.loads(p.read_text()))
         except ValueError:
             pass
-    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units}
+    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units, "vcar": vcar()}
     hj = HELP_JSON or UI / "src" / "panel-help.json"
     help_data = json.loads(hj.read_text()) if hj.is_file() else None
     parts = [
