@@ -124,8 +124,8 @@ cargo run -p opentune-cli -- log --def logger.xml --driver elm327obd --rounds 20
 - Hardware design files (when added): **CERN-OHL-S-2.0**.
 
 Releases: [GitHub Releases](https://github.com/ebjerk01/opentune/releases) ·
-[Code signing policy](CODE_SIGNING_POLICY.md) (free code signing provided by SignPath.io,
-certificate by SignPath Foundation, once approved) · [Code of conduct](CODE_OF_CONDUCT.md).
+[Code signing policy](CODE_SIGNING_POLICY.md) (Windows builds are not Authenticode-signed yet) ·
+[Code of conduct](CODE_OF_CONDUCT.md).
 Privacy: the app sends nothing anywhere except the update check against GitHub Releases.
 
 ## Status & roadmap

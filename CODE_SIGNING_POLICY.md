@@ -1,11 +1,10 @@
 # Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
-
-*(Status: the SignPath Foundation application is pending. Until it is approved, Windows
-installers are published unsigned and Windows SmartScreen will ask you to confirm
-"Run anyway". The desktop app's own update packages are always signed, see below.)*
+*(Status: Windows installers and `opentune.exe` are currently published **without** an
+Authenticode signature, so Windows SmartScreen will ask you to confirm "Run anyway".
+Verify downloads against `SHA256SUMS.txt` on the release page. The desktop app's own
+update packages are always signed, see below. This policy describes the rules any
+future Authenticode signing of this project will follow.)*
 
 ## What gets signed
 
@@ -17,7 +16,7 @@ Only artifacts built from this repository's source code by the public
 
 No third-party or upstream binaries are signed under this project's certificate, and
 nothing built outside the release workflow is submitted for signing. Every signing
-request is approved manually by an approver (below) for each release.
+request will be approved manually by an approver (below) for each release.
 
 Separately, every desktop update package carries a
 [Tauri updater signature](desktop/UPDATER.md) (minisign, key id `C273EE936EDA2C76`); the
@@ -31,7 +30,7 @@ app refuses updates that do not verify against the public key built into it.
 | Reviewers (review changes from non-committers) | [@ebjerk01](https://github.com/ebjerk01) |
 | Approvers (approve each signing request) | [@ebjerk01](https://github.com/ebjerk01) |
 
-All team members use multi-factor authentication for GitHub and SignPath.
+All team members use multi-factor authentication for GitHub and any signing service.
 Contributions from others arrive as pull requests and are reviewed before merging.
 
 ## Privacy
