@@ -313,6 +313,85 @@ bench path or a raw-CAN interface. Like `elm327obd`, this is unit-tested
 against scripted ELM replies only. It has no dry run (`plan_read_memory` is
 `None`).
 
+## 3f. VW TP2.0 on the raw-CAN drivers (`socketcan`, `slcan`, `gsusb`)
+
+Older VAG modules (the PQ-era Haldex Gen4 at logical address `0x0A`, EDC15/16
+and ME7 engines, other pre-UDS modules) speak KWP2000 over **VW TP2.0**, not
+ISO-TP. The three raw-CAN drivers can open a TP2.0 channel instead of their
+default ISO-TP transport. Nothing changes unless you ask for it: without the
+options below they build ISO-TP exactly as before.
+
+Select it with driver options (CLI `--opt KEY=VALUE`; parsed by
+`opentune_core::protocol::tp20channel::Tp20Options`):
+
+| Option | Meaning | Default |
+|---|---|---|
+| `transport` | `isotp` or `tp20` | `isotp` (`tp20` when the config's protocol is `vwtp20`) |
+| `tp20_addr` | logical address of the module, e.g. `0x0A` Haldex, `0x01` engine, `0x02` gearbox | required (or `tx_id` when the protocol is `vwtp20`) |
+| `tp20_rx_id` | CAN id the module is asked to transmit on (11-bit, outside `0x200..=0x2FF`) | `0x300` (or `rx_id` with protocol `vwtp20`) |
+| `tp20_keepalive_ms` | send a channel test (`A3`) after this long idle; `0` = off | `1000` |
+| `tp20_timeout_ms` | wait per setup / parameter / keep-alive step | `1000` |
+| `tp20_block_size` | block size requested in our `A0`, 1..=15 | `15` |
+
+A `tp20_*` option without `transport=tp20` is refused (`Error::Config`), as is
+an unknown transport, before the adapter is touched.
+
+What the driver does:
+
+- **`open`** sets up the channel: the broadcast to `0x200`, the module's
+  answer on `0x200 + addr` with the CAN id it assigns the tester, then the
+  `A0`/`A1` parameter exchange. If the module does not answer, `open` fails
+  naming the step and the ids, e.g. *"TP2.0 channel setup (step 1 of 2):
+  logical address 0x0A did not answer on CAN id 0x20A within 1000 ms (setup
+  request sent on 0x200, asking the module to transmit on 0x300)"*.
+- **`diag()`** returns the TP2.0 channel, so `Kwp2000Client` and every engine
+  running on `RawDiag` work over it. The driver's own UDS paths
+  (`read_ecu_id`, `read_memory`, `write_memory`) refuse on a TP2.0 channel
+  with `Error::Unsupported`: they are UDS over ISO-TP.
+- While the channel is idle a background thread sends `A3` and expects the
+  module's `A1`; requests and keep-alives share one lock, so an `A3` never
+  lands inside a telegram. An unanswered keep-alive marks the channel lost and
+  the next request fails with that reason (re-open the driver: the module's
+  KWP session went with the channel).
+- Data frames honour the module's block size (we wait for its ACK at each
+  block end), ACK the module's blocks, accept the "last frame, no ACK" (`0x3`)
+  and "ACK, not ready" (`0x9`) opcodes, and answer a module-initiated `A3`.
+- **`close`** stops the keep-alive and sends the disconnect (`A8`).
+- `capabilities().vwtp20` is `true` for these three drivers; `info()` names
+  the open channel (e.g. `slcan USB-CAN (CANable/CANtact), VW TP2.0 to 0x0A
+  (tester 0x764 -> module, module 0x300 -> tester)`).
+
+Other modules: the same options reach any TP2.0 module by its logical address
+(e.g. `tp20_addr=0x01` engine, `0x02` gearbox) and the KWP2000 engines run on
+`diag()`. Which modules on a given car answer TP2.0 (for example whether a PQ
+02E DSG TCU does) is to be confirmed on the car.
+
+Per driver: `slcan` sends the frames as `t…` lines over its serial link
+(`--port /dev/ttyACM0`); `socketcan` and `gsusb` use the SocketCAN interface
+(option `iface`, or `port` when it is an interface name, default `can0`; bring
+it up at the bus bitrate first). For tests and other frame sources,
+`SlcanDriver::open_with_port` and `SocketCanDriver`/`GsUsbDriver::open_with_link`
+run the same selection over a scripted adapter or any `Send` `CanLink`.
+
+**Timing caveats.** TP2.0 is timing-sensitive in ways ISO-TP is not: the
+module expects the tester's block ACK within T1 (we request 100 ms), and an
+idle channel is dropped by the module after a time no public source pins down
+(hence the keep-alive after 1 s idle by default; tune it with
+`tp20_keepalive_ms`). All of this runs on the host, so USB latency counts: native SocketCAN
+and gs_usb adapters are the safe choice; slcan over a USB-CDC CANable is
+fine in principle; a CH340-based slcan clone at 115200 baud is slow (about
+2 ms per frame on the serial line) and may struggle with long multi-frame
+replies. We ask for no separation time (`T3 = 0`) in the `A0`. The ELM327
+drivers cannot do TP2.0 at all (no raw frames, per-block ACKs or keep-alives)
+and refuse it.
+
+**Validation state: synthetic-tested.** Covered against a simulated TP2.0
+module (`opentune_core::protocol::tp20sim`): channel setup and parameter
+negotiation, multi-frame KWP replies with ACK windows, keep-alive through a
+pause longer than the module's idle timeout, disconnect, a silent module and a
+busy bus; slcan through its real ASCII line protocol, socketcan and gsusb
+through their frame layer. Not yet bench- or vehicle-tested.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
@@ -343,7 +422,8 @@ reg.register("mock", "Mock / file driver", || Box::new(MockDriver::new()));
 
 - [ ] New crate under `crates/drivers/`, added to workspace `members`.
 - [ ] `Interface` implemented; `capabilities` honest; `bench_boot` only if true.
-- [ ] CAN driver reuses `IsoTp` + `UdsClient` rather than re-rolling transport.
+- [ ] CAN driver reuses `IsoTp` + `UdsClient` rather than re-rolling transport
+      (a raw-CAN driver gets TP2.0 for free through `CanDiag::open`, §3f).
 - [ ] `diag()` overridden if the driver owns a `DiagTransport`.
 - [ ] `can_monitor()` overridden if the adapter can capture raw frames passively.
 - [ ] Registered in the CLI registry (`crates/opentune-cli/src/registry.rs`) and,

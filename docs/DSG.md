@@ -98,7 +98,10 @@ the image in hand — it stays **synthetic-tested** until a real 0D9 read appear
 OpenTune does not flash any DSG TCU yet. The plan is the shared UDS
 module-flash path (request download / transfer data / checksum routine) once
 that path is validated on hardware; for 02E the transport and programming
-session still have to be established on a car. FRF/ODX containers for these
+session still have to be established on a car. If the 02E answers VW TP2.0,
+the raw-CAN drivers can already open a KWP2000 channel to it for reads
+(`--opt transport=tp20 --opt tp20_addr=0x02`, see
+[`DRIVERS.md` §3f](DRIVERS.md#3f-vw-tp20-on-the-raw-can-drivers-socketcan-slcan-gsusb)); not tried on a car yet. FRF/ODX containers for these
 families (method `0x11`: table cipher + compression, per vag-tcu-tools) are not
 decoded for DSG yet.
 

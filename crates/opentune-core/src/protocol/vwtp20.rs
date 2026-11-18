@@ -268,8 +268,7 @@ impl<L: CanLink + ?Sized> VwTp20<L> {
     }
 
     /// Send a channel-test / keep-alive (`A3`) and wait for the ECU's `A1`
-    /// reply. Call while the channel is idle to keep it alive (VAG testers
-    /// send it about once a second).
+    /// reply. Call while the channel is idle to keep it alive.
     pub fn keep_alive(&mut self, timeout_ms: u64) -> Result<()> {
         self.link.send_frame(self.tx_id, &[param::TEST])?;
         let deadline = Deadline::new(timeout_ms);
