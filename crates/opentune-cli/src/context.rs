@@ -51,18 +51,30 @@ impl CliContext {
     }
 
     /// Resolve a seed-key handler id through the embedder's resolvers, in
-    /// order, then the `udssim` simulator's test-only handler
-    /// (`udssim-test`, `seed XOR 0xA5` — it unlocks only the simulator). The
-    /// public build ships no other.
+    /// order, then `sa2:<hex>` / `sa2:@<file>` (the SA2 VM running a script
+    /// the user supplies in the id), then the `udssim` simulator's test-only
+    /// handler (`udssim-test`, `seed XOR 0xA5` — it unlocks only the
+    /// simulator). The public build ships no algorithm or script.
     pub fn seed_key(&self, id: &str) -> Option<Box<dyn SeedKey>> {
         self.seedkeys
             .iter()
             .find_map(|r| r(id))
+            .or_else(|| match crate::seedkey_cmd::sa2_from_id(id) {
+                Some(Ok(sk)) => Some(Box::new(sk) as Box<dyn SeedKey>),
+                _ => None,
+            })
             .or_else(|| opentune_udssim::driver::test_seed_key(id))
     }
 
-    /// [`seed_key`](Self::seed_key), erroring on an unknown id.
+    /// [`seed_key`](Self::seed_key), erroring on an unknown id (or on an
+    /// `sa2:` id whose script cannot be read).
     pub fn require_seed_key(&self, id: &str) -> Result<Box<dyn SeedKey>> {
+        if let Some(sk) = self.seedkeys.iter().find_map(|r| r(id)) {
+            return Ok(sk);
+        }
+        if let Some(sa2) = crate::seedkey_cmd::sa2_from_id(id) {
+            return Ok(Box::new(sa2?));
+        }
         self.seed_key(id).ok_or_else(|| {
             anyhow!(
                 "unknown seed-key id '{id}': no seed-key resolver in this build provides it \

@@ -1,217 +1,211 @@
-//! The SA2 instruction set: opcode byte constants and the typed [`Op`] form.
+//! The VAG SA2 instruction set: opcode bytes, operand widths and the typed
+//! [`Op`] form.
 //!
-//! The operation *classes* here (load/store, add/sub, bitwise, rotate/shift,
-//! byte/nibble swaps, subroutine/loop, output-key) follow the publicly
-//! documented SA2 computational model as described by the `jglim/UnlockECU`
-//! project (MIT). This is a clean-room reimplementation of that **model**: the
-//! opcode byte assignments below are OpenTune's own, self-consistent encoding,
-//! chosen to be readable and auditable. No OEM opcode table, bytecode, key, or
-//! fixed algorithm is reproduced — a per-ECU SA2 program is always supplied by
-//! the caller (from the vehicle's own A2L/ODX description or by the user).
+//! An SA2 script is a flat byte string of variable-length instructions: one
+//! opcode byte followed by zero, one or four operand bytes. There are ten
+//! opcodes. Four-byte operands are big-endian. Branch operands are an unsigned
+//! *forward* skip: a taken branch at offset `o` continues at `o + 2 + d`.
 //!
-//! # Encoding
+//! | byte | mnemonic | operands | effect |
+//! |------|----------|----------|--------|
+//! | `0x81` | `rsl` | — | rotate the register left by one bit; carry := the bit rotated out (old bit 31) |
+//! | `0x82` | `rsr` | — | rotate the register right by one bit; carry := the bit rotated out (old bit 0) |
+//! | `0x93` | `add` | imm32 | register += imm (mod 2³²); carry := unsigned overflow |
+//! | `0x84` | `sub` | imm32 | register −= imm (mod 2³²); carry := borrow (imm > register) |
+//! | `0x87` | `eor` | imm32 | register ^= imm; carry unchanged |
+//! | `0x68` | `loop` | n (u8) | open a loop: the bytes after this instruction up to the matching `next` run `n` times (`n` ≥ 1) |
+//! | `0x49` | `next` | — | close the innermost loop: jump back to its body while iterations remain, else drop it and fall through |
+//! | `0x4A` | `bcc` | d (u8) | branch forward `d` bytes past the end of this instruction if carry is **clear** |
+//! | `0x6B` | `bra` | d (u8) | branch forward `d` bytes past the end of this instruction, unconditionally |
+//! | `0x4C` | `finish` | — | end of script: the register is the key |
 //!
-//! Every instruction is one opcode byte, optionally followed by operand bytes:
-//!
-//! * `imm32` — a big-endian 4-byte immediate.
-//! * `reg`   — a single register-index byte (`0..`[`REG_COUNT`]).
-//! * `n`     — a single count byte (shift/rotate amount, or key-byte count).
-//! * `addr`  — a big-endian 2-byte **byte offset** into the program, used as a
-//!   branch target. A target must land exactly on an instruction boundary.
+//! The encoding and semantics are taken from public descriptions of the SA2
+//! VM (see the crate documentation for sources and licences); this module is
+//! written independently from those descriptions.
 
-/// Number of general-purpose 32-bit registers the VM exposes.
-pub const REG_COUNT: u8 = 8;
+use crate::error::{Sa2Error, Sa2Result};
+use core::fmt;
 
-// --- Opcode byte constants -------------------------------------------------
+/// `rsl`: rotate left one bit through the carry output.
+pub const OP_RSL: u8 = 0x81;
+/// `rsr`: rotate right one bit through the carry output.
+pub const OP_RSR: u8 = 0x82;
+/// `add imm32`.
+pub const OP_ADD: u8 = 0x93;
+/// `sub imm32`.
+pub const OP_SUB: u8 = 0x84;
+/// `eor imm32` (exclusive or).
+pub const OP_EOR: u8 = 0x87;
+/// `loop n`: start of a counted loop.
+pub const OP_LOOP: u8 = 0x68;
+/// `next`: end of the innermost loop.
+pub const OP_NEXT: u8 = 0x49;
+/// `bcc d`: forward branch when carry is clear.
+pub const OP_BCC: u8 = 0x4A;
+/// `bra d`: unconditional forward branch.
+pub const OP_BRA: u8 = 0x6B;
+/// `finish`: end of script.
+pub const OP_FINISH: u8 = 0x4C;
 
-/// Do nothing.
-pub const OP_NOP: u8 = 0x00;
+/// Every opcode byte, in table order.
+pub const OPCODES: [u8; 10] = [
+    OP_RSL, OP_RSR, OP_ADD, OP_SUB, OP_EOR, OP_LOOP, OP_NEXT, OP_BCC, OP_BRA, OP_FINISH,
+];
 
-/// `acc = imm32`.
-pub const OP_LOAD_IMM: u8 = 0x10;
-/// `acc = regs[reg]`.
-pub const OP_LOAD_REG: u8 = 0x11;
-/// `regs[reg] = acc`.
-pub const OP_STORE_REG: u8 = 0x12;
-/// `acc = seed_word[n]` (0 if that word index is past the seed).
-pub const OP_LOAD_SEED: u8 = 0x13;
+/// Number of operand bytes that follow `opcode`, or `None` if it is not an
+/// SA2 opcode.
+pub const fn operand_len(opcode: u8) -> Option<usize> {
+    match opcode {
+        OP_RSL | OP_RSR | OP_NEXT | OP_FINISH => Some(0),
+        OP_LOOP | OP_BCC | OP_BRA => Some(1),
+        OP_ADD | OP_SUB | OP_EOR => Some(4),
+        _ => None,
+    }
+}
 
-/// `acc = acc.wrapping_add(imm32)`.
-pub const OP_ADD_IMM: u8 = 0x20;
-/// `acc = acc.wrapping_add(regs[reg])`.
-pub const OP_ADD_REG: u8 = 0x21;
-/// `acc = acc.wrapping_sub(imm32)`.
-pub const OP_SUB_IMM: u8 = 0x22;
-/// `acc = acc.wrapping_sub(regs[reg])`.
-pub const OP_SUB_REG: u8 = 0x23;
-
-/// `acc &= imm32`.
-pub const OP_AND_IMM: u8 = 0x30;
-/// `acc &= regs[reg]`.
-pub const OP_AND_REG: u8 = 0x31;
-/// `acc |= imm32`.
-pub const OP_OR_IMM: u8 = 0x32;
-/// `acc |= regs[reg]`.
-pub const OP_OR_REG: u8 = 0x33;
-/// `acc ^= imm32`.
-pub const OP_XOR_IMM: u8 = 0x34;
-/// `acc ^= regs[reg]`.
-pub const OP_XOR_REG: u8 = 0x35;
-
-/// `acc = acc.rotate_left(n & 31)`.
-pub const OP_ROL_IMM: u8 = 0x40;
-/// `acc = acc.rotate_right(n & 31)`.
-pub const OP_ROR_IMM: u8 = 0x41;
-/// `acc = acc.rotate_left(regs[reg] & 31)`.
-pub const OP_ROL_REG: u8 = 0x42;
-/// `acc = acc.rotate_right(regs[reg] & 31)`.
-pub const OP_ROR_REG: u8 = 0x43;
-/// `acc <<= (n & 31)` (logical, zero-fill).
-pub const OP_SHL_IMM: u8 = 0x44;
-/// `acc >>= (n & 31)` (logical, zero-fill).
-pub const OP_SHR_IMM: u8 = 0x45;
-
-/// Swap the two 16-bit halves of `acc`.
-pub const OP_SWAP_WORDS: u8 = 0x50;
-/// Reverse the four bytes of `acc` (endianness flip).
-pub const OP_SWAP_BYTES: u8 = 0x51;
-/// Swap the high and low nibble of every byte of `acc`.
-pub const OP_SWAP_NIBBLES: u8 = 0x52;
-
-/// Push the next instruction's index and jump to `addr`.
-pub const OP_CALL: u8 = 0x60;
-/// Pop a return index and jump to it.
-pub const OP_RET: u8 = 0x61;
-/// `regs[reg] -= 1`; if it is still non-zero, jump to `addr` (count-down loop).
-pub const OP_LOOP: u8 = 0x62;
-/// Unconditional jump to `addr`.
-pub const OP_JMP: u8 = 0x63;
-
-/// Append the low `n` bytes of `acc` (big-endian order) to the key output.
-pub const OP_OUTKEY: u8 = 0x70;
-/// Stop execution.
-pub const OP_HALT: u8 = 0xFF;
-
-/// A decoded SA2 instruction.
-///
-/// `imm32` operands are kept as `u32`; `reg`/`n` as `u8`; branch targets as the
-/// raw program **byte offset** (resolved to an instruction index at run time).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(missing_docs)] // variant names mirror the opcode constants documented above
+/// One decoded SA2 instruction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Op {
-    Nop,
-
-    LoadImm(u32),
-    LoadReg(u8),
-    StoreReg(u8),
-    LoadSeed(u8),
-
-    AddImm(u32),
-    AddReg(u8),
-    SubImm(u32),
-    SubReg(u8),
-
-    AndImm(u32),
-    AndReg(u8),
-    OrImm(u32),
-    OrReg(u8),
-    XorImm(u32),
-    XorReg(u8),
-
-    RolImm(u8),
-    RorImm(u8),
-    RolReg(u8),
-    RorReg(u8),
-    ShlImm(u8),
-    ShrImm(u8),
-
-    SwapWords,
-    SwapBytes,
-    SwapNibbles,
-
-    /// Call the subroutine at the given program byte offset.
-    Call(u16),
-    Ret,
-    /// Decrement `regs[reg]`; branch to the byte offset while it stays non-zero.
-    Loop {
-        reg: u8,
-        target: u16,
-    },
-    /// Jump to the given program byte offset.
-    Jmp(u16),
-
-    /// Emit the low `n` bytes of `acc` as key output.
-    OutKey(u8),
-    Halt,
+    /// Rotate left by one; carry := old bit 31.
+    Rsl,
+    /// Rotate right by one; carry := old bit 0.
+    Rsr,
+    /// Wrapping add; carry := overflow.
+    Add(u32),
+    /// Wrapping subtract; carry := borrow.
+    Sub(u32),
+    /// Exclusive or; carry unchanged.
+    Eor(u32),
+    /// Open a loop whose body runs this many times.
+    Loop(u8),
+    /// Close the innermost loop.
+    Next,
+    /// Branch forward this many bytes (past the instruction) if carry is clear.
+    Bcc(u8),
+    /// Branch forward this many bytes (past the instruction).
+    Bra(u8),
+    /// End of script.
+    Finish,
 }
 
 impl Op {
-    /// Append this instruction's opcode and operand bytes to `out`.
+    /// The opcode byte.
+    pub const fn opcode(&self) -> u8 {
+        match self {
+            Op::Rsl => OP_RSL,
+            Op::Rsr => OP_RSR,
+            Op::Add(_) => OP_ADD,
+            Op::Sub(_) => OP_SUB,
+            Op::Eor(_) => OP_EOR,
+            Op::Loop(_) => OP_LOOP,
+            Op::Next => OP_NEXT,
+            Op::Bcc(_) => OP_BCC,
+            Op::Bra(_) => OP_BRA,
+            Op::Finish => OP_FINISH,
+        }
+    }
+
+    /// The lower-case mnemonic used by the assembler and disassembler.
+    pub const fn mnemonic(&self) -> &'static str {
+        match self {
+            Op::Rsl => "rsl",
+            Op::Rsr => "rsr",
+            Op::Add(_) => "add",
+            Op::Sub(_) => "sub",
+            Op::Eor(_) => "eor",
+            Op::Loop(_) => "loop",
+            Op::Next => "next",
+            Op::Bcc(_) => "bcc",
+            Op::Bra(_) => "bra",
+            Op::Finish => "finish",
+        }
+    }
+
+    /// Encoded length in bytes (opcode plus operands).
+    pub const fn len(&self) -> usize {
+        match operand_len(self.opcode()) {
+            Some(n) => 1 + n,
+            None => 1, // unreachable: every Op has a defined opcode
+        }
+    }
+
+    /// Always false: every instruction is at least one byte. Present so the
+    /// `len` method has its conventional companion.
+    pub const fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// For a branch, the absolute script offset a taken branch continues at,
+    /// given the offset this instruction starts at.
+    pub const fn branch_target(&self, at: usize) -> Option<usize> {
+        match self {
+            Op::Bcc(d) | Op::Bra(d) => Some(at + 2 + *d as usize),
+            _ => None,
+        }
+    }
+
+    /// Decode the instruction that starts at `offset` in `script`.
     ///
-    /// The inverse of parsing: `Program::parse(&assemble(ops))` yields `ops`
-    /// back (when branch targets are valid instruction boundaries).
+    /// Fails with [`Sa2Error::UnknownOpcode`] or [`Sa2Error::Truncated`]; an
+    /// `offset` at or past the end is reported as truncated opcode `0x00`.
+    pub fn decode(script: &[u8], offset: usize) -> Sa2Result<Op> {
+        let Some(&opcode) = script.get(offset) else {
+            return Err(Sa2Error::Truncated {
+                offset,
+                opcode: 0,
+                needed: 1,
+            });
+        };
+        let needed = operand_len(opcode).ok_or(Sa2Error::UnknownOpcode { offset, opcode })?;
+        let operands = script
+            .get(offset + 1..offset + 1 + needed)
+            .ok_or(Sa2Error::Truncated {
+                offset,
+                opcode,
+                needed,
+            })?;
+        let imm = || u32::from_be_bytes([operands[0], operands[1], operands[2], operands[3]]);
+        Ok(match opcode {
+            OP_RSL => Op::Rsl,
+            OP_RSR => Op::Rsr,
+            OP_ADD => Op::Add(imm()),
+            OP_SUB => Op::Sub(imm()),
+            OP_EOR => Op::Eor(imm()),
+            OP_LOOP => Op::Loop(operands[0]),
+            OP_NEXT => Op::Next,
+            OP_BCC => Op::Bcc(operands[0]),
+            OP_BRA => Op::Bra(operands[0]),
+            _ => Op::Finish, // OP_FINISH: operand_len() admitted only the ten opcodes
+        })
+    }
+
+    /// Append this instruction's bytes to `out`.
     pub fn encode(&self, out: &mut Vec<u8>) {
+        out.push(self.opcode());
         match *self {
-            Op::Nop => out.push(OP_NOP),
-
-            Op::LoadImm(v) => push_u32(out, OP_LOAD_IMM, v),
-            Op::LoadReg(r) => out.extend_from_slice(&[OP_LOAD_REG, r]),
-            Op::StoreReg(r) => out.extend_from_slice(&[OP_STORE_REG, r]),
-            Op::LoadSeed(n) => out.extend_from_slice(&[OP_LOAD_SEED, n]),
-
-            Op::AddImm(v) => push_u32(out, OP_ADD_IMM, v),
-            Op::AddReg(r) => out.extend_from_slice(&[OP_ADD_REG, r]),
-            Op::SubImm(v) => push_u32(out, OP_SUB_IMM, v),
-            Op::SubReg(r) => out.extend_from_slice(&[OP_SUB_REG, r]),
-
-            Op::AndImm(v) => push_u32(out, OP_AND_IMM, v),
-            Op::AndReg(r) => out.extend_from_slice(&[OP_AND_REG, r]),
-            Op::OrImm(v) => push_u32(out, OP_OR_IMM, v),
-            Op::OrReg(r) => out.extend_from_slice(&[OP_OR_REG, r]),
-            Op::XorImm(v) => push_u32(out, OP_XOR_IMM, v),
-            Op::XorReg(r) => out.extend_from_slice(&[OP_XOR_REG, r]),
-
-            Op::RolImm(n) => out.extend_from_slice(&[OP_ROL_IMM, n]),
-            Op::RorImm(n) => out.extend_from_slice(&[OP_ROR_IMM, n]),
-            Op::RolReg(r) => out.extend_from_slice(&[OP_ROL_REG, r]),
-            Op::RorReg(r) => out.extend_from_slice(&[OP_ROR_REG, r]),
-            Op::ShlImm(n) => out.extend_from_slice(&[OP_SHL_IMM, n]),
-            Op::ShrImm(n) => out.extend_from_slice(&[OP_SHR_IMM, n]),
-
-            Op::SwapWords => out.push(OP_SWAP_WORDS),
-            Op::SwapBytes => out.push(OP_SWAP_BYTES),
-            Op::SwapNibbles => out.push(OP_SWAP_NIBBLES),
-
-            Op::Call(t) => push_u16(out, OP_CALL, t),
-            Op::Ret => out.push(OP_RET),
-            Op::Loop { reg, target } => {
-                out.push(OP_LOOP);
-                out.push(reg);
-                out.extend_from_slice(&target.to_be_bytes());
-            }
-            Op::Jmp(t) => push_u16(out, OP_JMP, t),
-
-            Op::OutKey(n) => out.extend_from_slice(&[OP_OUTKEY, n]),
-            Op::Halt => out.push(OP_HALT),
+            Op::Add(v) | Op::Sub(v) | Op::Eor(v) => out.extend_from_slice(&v.to_be_bytes()),
+            Op::Loop(n) | Op::Bcc(n) | Op::Bra(n) => out.push(n),
+            Op::Rsl | Op::Rsr | Op::Next | Op::Finish => {}
         }
     }
 }
 
-/// Assemble a slice of [`Op`]s into a raw SA2 byte program.
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Op::Add(v) | Op::Sub(v) | Op::Eor(v) => write!(f, "{} 0x{v:08X}", self.mnemonic()),
+            Op::Loop(n) => write!(f, "loop {n}"),
+            Op::Bcc(d) | Op::Bra(d) => write!(f, "{} +{d}", self.mnemonic()),
+            _ => f.write_str(self.mnemonic()),
+        }
+    }
+}
+
+/// Encode a sequence of instructions into a script.
 pub fn assemble(ops: &[Op]) -> Vec<u8> {
     let mut out = Vec::new();
     for op in ops {
         op.encode(&mut out);
     }
     out
-}
-
-fn push_u16(out: &mut Vec<u8>, opcode: u8, v: u16) {
-    out.push(opcode);
-    out.extend_from_slice(&v.to_be_bytes());
-}
-
-fn push_u32(out: &mut Vec<u8>, opcode: u8, v: u32) {
-    out.push(opcode);
-    out.extend_from_slice(&v.to_be_bytes());
 }

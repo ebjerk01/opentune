@@ -27,8 +27,9 @@ the next **even** level sends the key.
    algorithm for any of them): a fixed XOR/add/rotate scheme, a lookup against a
    secret constant, a small bytecode program shipped in the car's ODX (VAG
    "SA2"), or an AES/HMAC-based challenge. For the SA2 form, `opentune-sa2`
-   provides a generic bytecode VM that runs a **caller-supplied** program —
-   the per-ECU bytecode itself is never bundled.
+   runs the real SA2 instruction set over a **caller-supplied** script — the
+   per-ECU bytecode itself is never bundled (see
+   [VAG SA2 scripts](#vag-sa2-scripts)).
 3. **Send key** — tester sends `0x27 <level+1> <key…>` (even). The ECU replies:
    - `0x67 <level+1>` — **unlocked**; protected services are now available.
    - `0x7F 0x27 0x35` — **invalidKey** (`Error::SecurityDenied`).
@@ -73,7 +74,7 @@ pub trait SeedKey {
   the key bytes. The trait carries **no** data and OpenTune provides **no**
   OEM implementation of it. The one generic implementation, `opentune-sa2`'s
   `Sa2SeedKey` (id `"sa2"`), is an interpreter: it computes nothing until the
-  caller supplies the SA2 program for their ECU.
+  caller supplies the SA2 script for their ECU.
 
 Because it is a trait object (`Box<dyn SeedKey>`), the algorithm can live in a
 closed plugin, be loaded from the user's own file, or be compiled into a private
@@ -142,6 +143,72 @@ Behaviour matrix:
 
 This keeps the existing read/write paths intact: an unprotected or
 pre-unlocked ECU with no handler configured behaves exactly as before.
+
+---
+
+## VAG SA2 scripts
+
+VW-Group control units answer programming security access (UDS `0x27`,
+level `0x11`; KWP on older units) with a seed whose key is computed by a small
+bytecode program — the **SA2 script** — shipped inside the module's own flash
+container. `opentune-sa2` is a virtual machine for that bytecode; OpenTune
+ships no script.
+
+### Where the script is
+
+- **ODX / ODX-F** (bare, in a ZIP, or inside an FRF): the `SECURITY` block
+  (`SESSION/SECURITYS/SECURITY`) whose `SECURITY-METHOD` is `SA2`. The bytes
+  are read from that block's byte field — `FW-SIGNATURE` first, then
+  `FW-CHECKSUM` / `VALIDITY-FOR` — and every candidate is listed, so the one
+  that decodes as an SA2 program can be picked with `--index`. The element
+  names are the ODX-F schema's; that the bytecode sits in `FW-SIGNATURE` is
+  inferred from public descriptions and **not yet confirmed on a real file**.
+- **SGO**: the SA2 field the header points to (index at header offset
+  `0x29`: a 32-bit length, then the bytes).
+
+`opentune container unpack --in <file>` prints `SA2 script: #i …` for each one
+found (`Unpacked::sa2_scripts` in the library).
+
+### The instruction set
+
+One 32-bit **register** (loaded with the 4-byte seed, big-endian; it is the key
+when the script ends) and one **carry** flag (clear at start).
+
+| byte | mnemonic | operand | effect |
+|---|---|---|---|
+| `81` | `rsl` | — | rotate left 1; carry := old bit 31 |
+| `82` | `rsr` | — | rotate right 1; carry := old bit 0 |
+| `93` | `add` | 4 bytes BE | add mod 2³²; carry := overflow |
+| `84` | `sub` | 4 bytes BE | subtract mod 2³²; carry := borrow |
+| `87` | `eor` | 4 bytes BE | exclusive or; carry unchanged |
+| `68` | `loop` | count | run the following bytes up to the matching `next` *count* times (loops nest) |
+| `49` | `next` | — | end of the innermost loop |
+| `4A` | `bcc` | skip | if carry is clear, skip *skip* bytes past this instruction |
+| `6B` | `bra` | skip | skip *skip* bytes past this instruction |
+| `4C` | `finish` | — | end of script |
+
+Branches only go forward; a branch to or past the end ends the script.
+OpenTune stops at `finish` and refuses `loop 0` (public implementations
+disagree on it); a step budget and a loop-depth limit stop runaway scripts
+with a typed error. Sources: `bri3d/sa2_seed_key` (MIT) and its ports — see
+[PRIOR-ART.md](PRIOR-ART.md). The VM is checked against that reference
+implementation on synthetic programs ([tools/sa2](../tools/sa2/README.md)).
+
+### Using it
+
+```sh
+# Compute a key from your own container's script and the ECU's seed:
+opentune seedkey sa2 --container my-update.frf --frf-key frf.key --seed 1A2B3C4D
+# ...or from a script you have as hex / a file (raw, hex text or assembler):
+opentune seedkey sa2 --script "68 05 81 … 4C" --seed 1A2B3C4D
+opentune seedkey sa2 --script-file my.sa2 --disasm          # listing + lints
+opentune seedkey sa2 --script-file my.sa2 --seed 1A2B3C4D --trace
+```
+
+For the commands that unlock a live ECU (`flash --uds-module`, `service`,
+`read`, …), `--seedkey sa2:<hex>` or `--seedkey sa2:@<file>` builds the `sa2`
+handler from your script. In Rust: `Sa2SeedKey::new(script)` /
+`Sa2SeedKey::from_hex(..)`, or `opentune_sa2::execute(seed, script)`.
 
 ---
 

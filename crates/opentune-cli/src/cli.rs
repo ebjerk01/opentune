@@ -1,5 +1,5 @@
 //! The clap definitions of the public command tree.
-use crate::{candump, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, ts_cmd};
+use crate::{candump, doip_cmd, haldex_cmd, mapfind_cmd, obd_cmd, recipe_cmd, seedkey_cmd, ts_cmd};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -399,7 +399,8 @@ pub enum Command {
         #[arg(long, default_value_t = 1000)]
         timeout_ms: u64,
         /// Seed/key handler id for the script's SecurityAccess steps. Resolved
-        /// by the embedding build; the public OpenTune ships none.
+        /// by the embedding build, or `sa2:<hex>` / `sa2:@<file>` to run your
+        /// own VAG SA2 script; the public OpenTune ships no algorithm.
         #[arg(long, value_name = "ID")]
         seedkey: Option<String>,
         #[command(subcommand)]
@@ -497,6 +498,13 @@ pub enum Command {
     Doip {
         #[command(subcommand)]
         action: doip_cmd::DoipAction,
+    },
+    /// Run a user-supplied seed/key script offline: `sa2` runs a VAG SA2
+    /// script (hex, file, or from your own flash container) over a seed, or
+    /// disassembles it. OpenTune ships no script.
+    Seedkey {
+        #[command(subcommand)]
+        action: seedkey_cmd::SeedkeyAction,
     },
 }
 
@@ -769,7 +777,8 @@ pub struct ConnectArgs {
     #[arg(long, default_value = "0x0")]
     pub base: String,
     /// Seed/key handler id for the driver's security-access unlock. Resolved
-    /// by the embedding build; the public OpenTune ships none.
+    /// by the embedding build, or `sa2:<hex>` / `sa2:@<file>` to run your own
+    /// VAG SA2 script; the public OpenTune ships no algorithm.
     #[arg(long, value_name = "ID")]
     pub seedkey: Option<String>,
     /// Adapter port: serial device (e.g. /dev/ttyUSB0), CAN interface or

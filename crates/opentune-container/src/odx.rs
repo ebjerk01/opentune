@@ -23,6 +23,91 @@ pub struct OdxContents {
     pub segments: Vec<Segment>,
     /// Expected box codes / idents the file is valid for (may be empty).
     pub box_codes: Vec<String>,
+    /// SA2 seed/key scripts declared in `SECURITY` blocks (see [`sa2_scripts`]).
+    pub sa2_scripts: Vec<Sa2Script>,
+}
+
+/// An SA2 seed/key script found in a container.
+///
+/// The bytes are the user's own container content; OpenTune bundles none.
+/// Run them with the `opentune-sa2` crate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sa2Script {
+    /// The enclosing ODX `SESSION`'s `SHORT-NAME` (or `ID`), when there is one.
+    pub session: Option<String>,
+    /// Where the bytes came from: the ODX element name (e.g. `FW-SIGNATURE`)
+    /// or `SGO` for an SGO header's SA2 field.
+    pub field: String,
+    /// The script bytes.
+    pub bytes: Vec<u8>,
+}
+
+/// Elements of an ODX-F `SECURITY` block that can carry a byte field, in the
+/// order they are tried. The ODX-F schema gives `SECURITY` the children
+/// `SECURITY-METHOD`, `FW-SIGNATURE`, `FW-CHECKSUM` and `VALIDITY-FOR`.
+const SA2_VALUE_FIELDS: [&str; 3] = ["FW-SIGNATURE", "FW-CHECKSUM", "VALIDITY-FOR"];
+
+/// Collect the SA2 scripts an ODX/ODX-F document declares.
+///
+/// VAG testers read the script from the `SECURITY` block whose
+/// `SECURITY-METHOD` is `SA2` (`SESSION/SECURITYS/SECURITY` in ODX-F). The
+/// bytes are taken from that block's first byte-field child that holds
+/// non-empty hex — `FW-SIGNATURE` first, then `FW-CHECKSUM`, `VALIDITY-FOR`
+/// — and every such child is reported, so a caller can pick the one that
+/// decodes as a valid SA2 program. Identical scripts (same field and bytes)
+/// declared in several sessions are reported once.
+pub fn sa2_scripts(xml: &str) -> Result<Vec<Sa2Script>> {
+    let doc = roxmltree::Document::parse(xml).map_err(|e| Error::Xml(e.to_string()))?;
+    Ok(sa2_scripts_in(&doc))
+}
+
+fn sa2_scripts_in(doc: &roxmltree::Document) -> Vec<Sa2Script> {
+    let mut out: Vec<Sa2Script> = Vec::new();
+    for sec in doc.descendants().filter(|n| n.has_tag_name("SECURITY")) {
+        let method = sec
+            .children()
+            .find(|n| n.has_tag_name("SECURITY-METHOD"))
+            .and_then(|n| n.text())
+            .map(str::trim)
+            .unwrap_or("");
+        if !method.eq_ignore_ascii_case("SA2") {
+            continue;
+        }
+        let session = sec
+            .ancestors()
+            .find(|n| n.has_tag_name("SESSION"))
+            .and_then(|s| {
+                s.children()
+                    .find(|n| n.has_tag_name("SHORT-NAME"))
+                    .and_then(|n| n.text())
+                    .map(|t| t.trim().to_string())
+                    .or_else(|| s.attribute("ID").map(str::to_string))
+            });
+        for field in SA2_VALUE_FIELDS {
+            let Some(text) = sec
+                .children()
+                .find(|n| n.has_tag_name(field))
+                .and_then(|n| n.text())
+            else {
+                continue;
+            };
+            let Ok(bytes) = unhex(text.trim()) else {
+                continue;
+            };
+            if bytes.is_empty() {
+                continue;
+            }
+            if out.iter().any(|s| s.field == field && s.bytes == bytes) {
+                continue;
+            }
+            out.push(Sa2Script {
+                session: session.clone(),
+                field: field.to_string(),
+                bytes,
+            });
+        }
+    }
+    out
 }
 
 /// Parse an inline ODX document (`FLASHDATA/DATA` hex), decoding each block with
@@ -97,6 +182,7 @@ pub fn parse(
     Ok(OdxContents {
         segments,
         box_codes,
+        sa2_scripts: sa2_scripts_in(&doc),
     })
 }
 
@@ -229,6 +315,40 @@ mod tests {
         assert_eq!(s.address, Some(0x8000));
         assert!(s.decoded);
         assert_eq!(s.data, vec![0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn sa2_script_from_security_block() {
+        // Synthetic script (loop 2 { rsl; eor 0x11223344 } finish) — not an OEM script.
+        let xml = r#"<ODX><FLASH><ECU-MEMS><ECU-MEM><MEM><SESSIONS>
+          <SESSION ID="s1"><SHORT-NAME>Session_A</SHORT-NAME>
+            <SECURITYS>
+              <SECURITY>
+                <SECURITY-METHOD TYPE="A_ASCIISTRING">CRC32</SECURITY-METHOD>
+                <FW-CHECKSUM TYPE="A_BYTEFIELD">DEADBEEF</FW-CHECKSUM>
+              </SECURITY>
+              <SECURITY>
+                <SECURITY-METHOD TYPE="A_ASCIISTRING"> SA2 </SECURITY-METHOD>
+                <FW-SIGNATURE TYPE="A_BYTEFIELD">680281871122334449 4C</FW-SIGNATURE>
+              </SECURITY>
+            </SECURITYS>
+          </SESSION>
+          <SESSION ID="s2"><SECURITYS><SECURITY>
+            <SECURITY-METHOD>sa2</SECURITY-METHOD>
+            <FW-SIGNATURE>680281871122334449 4C</FW-SIGNATURE>
+          </SECURITY></SECURITYS></SESSION>
+        </SESSIONS></MEM></ECU-MEM></ECU-MEMS></FLASH></ODX>"#;
+        let scripts = sa2_scripts(xml).unwrap();
+        assert_eq!(scripts.len(), 1, "duplicate across sessions reported once");
+        assert_eq!(scripts[0].session.as_deref(), Some("Session_A"));
+        assert_eq!(scripts[0].field, "FW-SIGNATURE");
+        assert_eq!(
+            scripts[0].bytes,
+            vec![0x68, 0x02, 0x81, 0x87, 0x11, 0x22, 0x33, 0x44, 0x49, 0x4C]
+        );
+        let parsed = parse(xml, &BlockCipher::None, &HashMap::new()).unwrap();
+        assert_eq!(parsed.sa2_scripts, scripts);
+        assert!(sa2_scripts("<ODX/>").unwrap().is_empty());
     }
 
     #[test]

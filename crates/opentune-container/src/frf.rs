@@ -38,6 +38,10 @@ pub struct Unpacked {
     pub box_codes: Vec<String>,
     /// ZIP member names seen inside the FRF (for diagnostics).
     pub members: Vec<String>,
+    /// SA2 seed/key scripts the container declares (ODX `SECURITY` blocks
+    /// with method `SA2`, or the SA2 field of each SGO header). The user's
+    /// own bytes; run them with `opentune-sa2`.
+    pub sa2_scripts: Vec<odx::Sa2Script>,
 }
 
 /// Decrypt an FRF to its inner ZIP bytes using caller-supplied key material.
@@ -103,13 +107,16 @@ pub fn unpack_zip(
             segments: contents.segments,
             box_codes: contents.box_codes,
             members,
+            sa2_scripts: contents.sa2_scripts,
         });
     }
 
     if !sgo_members.is_empty() {
         let mut segments = Vec::new();
+        let mut sa2_scripts = Vec::new();
         for m in &sgo_members {
             let parsed = sgo::parse(m)?;
+            sgo::push_sa2(&mut sa2_scripts, &parsed);
             segments.extend(parsed.decode(sgo_table, sgo_cipher));
         }
         return Ok(Unpacked {
@@ -117,6 +124,7 @@ pub fn unpack_zip(
             segments,
             box_codes: Vec::new(),
             members,
+            sa2_scripts,
         });
     }
 

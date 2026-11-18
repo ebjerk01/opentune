@@ -66,6 +66,7 @@ pub use compress::Compression;
 pub use crypto::BlockCipher;
 pub use error::{Error, Result};
 pub use frf::{ContainerKind, Unpacked};
+pub use odx::Sa2Script;
 pub use sgo::SgoCipher;
 pub use vbf::{Vbf, VbfBlock, VbfHeader};
 
@@ -197,16 +198,20 @@ pub fn unpack(bytes: &[u8], keys: &Keys) -> Result<Unpacked> {
                 segments: contents.segments,
                 box_codes: contents.box_codes,
                 members: Vec::new(),
+                sa2_scripts: contents.sa2_scripts,
             })
         }
         InputFormat::Sgo => {
             let parsed = sgo::parse(bytes)?;
+            let mut sa2_scripts = Vec::new();
+            sgo::push_sa2(&mut sa2_scripts, &parsed);
             let segments = parsed.decode(keys.sgo_table.as_ref(), keys.sgo_cipher);
             Ok(Unpacked {
                 kind: ContainerKind::Sgo,
                 segments,
                 box_codes: Vec::new(),
                 members: Vec::new(),
+                sa2_scripts,
             })
         }
         // VBF is plaintext (Ford/Volvo/Mazda); no key material is consulted.

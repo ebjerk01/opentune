@@ -1,0 +1,3 @@
+# The public SA2 reference implementation used as the differential-test oracle.
+# bri3d/sa2_seed_key, MIT. Test-only, never shipped with OpenTune.
+sa2-seed-key==0.0.1

@@ -34,6 +34,18 @@ pub fn container_unpack(args: ContainerUnpackArgs) -> Result<()> {
     } else {
         println!("Box-codes : {}", unpacked.box_codes.join(", "));
     }
+    for (i, s) in unpacked.sa2_scripts.iter().enumerate() {
+        println!(
+            "SA2 script: #{i} {} bytes from {}{} (run it: `opentune seedkey sa2 --container {} --index {i} --seed ...`)",
+            s.bytes.len(),
+            s.field,
+            s.session
+                .as_deref()
+                .map(|n| format!(" in session {n}"))
+                .unwrap_or_default(),
+            args.input.display(),
+        );
+    }
     println!("Segments  : {}", unpacked.segments.len());
 
     if let Some(dir) = &args.outdir {
