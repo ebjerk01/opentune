@@ -144,6 +144,15 @@ fn compute_seedkey(
             };
             let level = level.unwrap_or(0x01);
             let key = seedkeys::compute(handler.as_ref(), &s, level)?;
+            if seedkeys.is_builtin_sa2(other) {
+                return Ok(json!({
+                    "key": hexs(&key),
+                    "algo": other,
+                    "level": level,
+                    "source": "sa2",
+                    "note": "Computed by OpenTune's SA2 interpreter running YOUR script (armed in the SA2 script panel, or given inline). OpenTune ships no SA2 script.",
+                }));
+            }
             return Ok(json!({
                 "key": hexs(&key),
                 "algo": other,
@@ -230,6 +239,18 @@ mod tests {
         // An id no plugin knows stays an honest error.
         let e = compute_seedkey("00", "oem-x", None, None, None, &keys).unwrap_err();
         assert!(e.contains("'oem-x'"), "{e}");
+    }
+
+    #[test]
+    fn seedkey_calculator_labels_the_builtin_sa2_interpreter() {
+        // Synthetic script: eor 0xFFFFFFFF; finish.
+        let keys = SeedKeys::default();
+        let r = compute_seedkey("00000001", "sa2:87FFFFFFFF4C", None, None, None, &keys).unwrap();
+        assert_eq!(
+            (r["key"].as_str(), r["source"].as_str()),
+            (Some("FF FF FF FE"), Some("sa2"))
+        );
+        assert!(compute_seedkey("00000001", "sa2", None, None, None, &keys).is_err());
     }
 
     #[test]
