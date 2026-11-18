@@ -120,10 +120,24 @@
   },
   "logging": {
     "title": "Live log",
-    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven.",
+    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven. Fast (0x2C) mode packs the channels into dynamically defined DIDs (one request per sample) and falls back to polling with the reason.",
     "needs": ["Adapter: CAN", "logger.xml", "Ignition on"],
     "risk": "read-only",
     "guide": "25-live-log"
+  },
+  "haldex": {
+    "title": "Haldex AWD",
+    "summary": "OpenHaldex controller status (lock, slip) and drive mode over its UDS DIDs on 0x70F/0x779, a read-only Haldex Gen4 read (refused on real hardware until a driver opens VW TP2.0; simulated unit available), and an offline decoder for drivetrain-CAN captures with lock, clutch and temperature charts.",
+    "needs": ["Adapter: CAN (drivetrain CAN on PQ cars)", "OpenHaldex unit, or a CAN log"],
+    "risk": "writes-ecu",
+    "guide": "36-haldex"
+  },
+  "ts": {
+    "title": "Aftermarket ECU",
+    "summary": "Speeduino, rusEFI and MegaSquirt through their TunerStudio INI: load and edit tunes (.msq) offline with the INI's limits, then connect over serial (or the simulated ECU), check the signature, read, plan a write, and write with a backup first, read-back verify and an optional burn. Live channel tiles.",
+    "needs": ["TunerStudio INI for the firmware", "USB serial to the ECU (or sim)", "Engine off, ignition on, stable supply for writes"],
+    "risk": "writes-ecu",
+    "guide": "37-aftermarket-ECU"
   },
   "candump": {
     "title": "CAN dump",

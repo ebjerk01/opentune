@@ -28,7 +28,9 @@ map viewer/editor) · `Compare` · `Flash` · `Vault` · `Drivers` · `Project` 
 Diagnostics (live, capability-gated): `Coding` · `Auto-scan` (modules + DTCs) ·
 `Adaptation` · `Service fn` · `Live log` · `OBD live` (dashboard) ·
 `Auto-debug` (a guided adapter self-test; its raw-request steps need an alpha
-build).
+build) · `Haldex AWD` (OpenHaldex status + mode, Gen4 read, CAN-log decode) ·
+`Aftermarket ECU` (TunerStudio-compatible Speeduino / rusEFI / MegaSquirt: INI +
+.msq editing, serial read / verified write / burn, live channels).
 
 **Alpha builds** (`--features alpha`) add only the `Debug` panel: raw UDS/OBD
 requests to the adapter, the offline UDS simulator, and a session log. Every
@@ -49,7 +51,11 @@ for the full set); each calls straight into the OpenTune crates.
 - **Diagnostics engines** (`feat_*.rs`) — `coding_read` / `_set_preview` /
   `_write`, `autoscan_run` / `_clear`, `adaptation_list` / `_read` /
   `_actuator` / `_routine`, `service_plan` / `_run`, `log_params` /
-  `log_poll_once`, `obd_live`.
+  `log_poll_once`, `log_start` / `_tick` / `_stop` (fast 0x2C live session),
+  `obd_live`, `haldex_modes` / `_status` / `_set_mode` / `_gen4_read` /
+  `_decode_log` / `_export_csv`, `ts_load_ini` / `_load_msq` / `_save_msq` /
+  `_diff_msq` / `_values` / `_get` / `_set` / `_table` / `_curve` / `_status` /
+  `_connect` / `_disconnect` / `_read` / `_plan_write` / `_write` / `_poll`.
 - **Utilities** — `vin_decode`, `part_decode`, `dtc_lookup`, `seedkey_algos`,
   `seedkey_compute`, `data_paths`, `guide_list`, `guide_read`.
 - **Debug** — `debug_raw_request` and `debug_simulate` (refuse to run unless

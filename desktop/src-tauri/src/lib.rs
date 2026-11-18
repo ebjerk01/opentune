@@ -37,12 +37,14 @@ mod feat_candump;
 mod feat_coding;
 mod feat_dash;
 mod feat_db;
+mod feat_haldex;
 mod feat_logging;
 mod feat_logview;
 mod feat_obd;
 mod feat_obdinfo;
 mod feat_scan;
 mod feat_service;
+mod feat_ts;
 // Plugin-supplied seed/key algorithms (OpenTune ships none).
 pub mod seedkeys;
 // Startup trace (`OPENTUNE_TRACE_STARTUP=1`), WebKitGTK env defaults and the
@@ -167,6 +169,9 @@ pub fn builder_with(
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());
             app.manage(feat_candump::CandumpState::default());
+            app.manage(feat_logging::LiveLogState::default());
+            app.manage(feat_haldex::HaldexState::default());
+            app.manage(std::sync::Arc::new(feat_ts::TsState::default()));
             startup::mark("setup plugin: done (state managed)");
             Ok(())
         })
@@ -216,6 +221,9 @@ macro_rules! core_command_list {
             feat_service::service_run,
             feat_logging::log_params,
             feat_logging::log_poll_once,
+            feat_logging::log_start,
+            feat_logging::log_tick,
+            feat_logging::log_stop,
             feat_logview::log_open,
             feat_logview::log_series,
             feat_logview::log_sample_at,
@@ -231,6 +239,28 @@ macro_rules! core_command_list {
             feat_candump::candump_start,
             feat_candump::candump_status,
             feat_candump::candump_stop,
+            feat_haldex::haldex_modes,
+            feat_haldex::haldex_status,
+            feat_haldex::haldex_set_mode,
+            feat_haldex::haldex_gen4_read,
+            feat_haldex::haldex_decode_log,
+            feat_haldex::haldex_export_csv,
+            feat_ts::ts_load_ini,
+            feat_ts::ts_load_msq,
+            feat_ts::ts_save_msq,
+            feat_ts::ts_diff_msq,
+            feat_ts::ts_values,
+            feat_ts::ts_get,
+            feat_ts::ts_set,
+            feat_ts::ts_table,
+            feat_ts::ts_curve,
+            feat_ts::ts_status,
+            feat_ts::ts_connect,
+            feat_ts::ts_disconnect,
+            feat_ts::ts_read,
+            feat_ts::ts_plan_write,
+            feat_ts::ts_write,
+            feat_ts::ts_poll,
             drivers::list_drivers,
             state::data_paths,
             image::image_info,

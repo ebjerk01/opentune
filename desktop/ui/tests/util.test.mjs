@@ -152,3 +152,49 @@ test("panel help strip markup", () => {
   assert.ok(!bare.includes("ph-guide") && !bare.includes("ph-steps"));
   assert.match(U.helpStripHtml({ risk: "unknown-risk" }), /Offline/);
 });
+
+test("logModeBadge describes fast and polling sessions", () => {
+  assert.equal(U.logModeBadge(null), null);
+  const fast = U.logModeBadge({
+    mode: "fast-2c", reason: null, polled: ["obd_rpm"], redefines: 1,
+    dynamic_dids: [{ did: 0xf200, record_len: 13, channels: ["a", "b"] }],
+  });
+  assert.equal(fast.text, "fast-2c");
+  assert.equal(fast.cls, "ok");
+  assert.match(fast.title, /0xF200 \(13 B, 2 ch\)/);
+  assert.match(fast.title, /1 channel\(s\) polled/);
+  assert.match(fast.title, /re-defined 1×/);
+  const fb = U.logModeBadge({ mode: "polling", reason: "0x2C refused: NRC 0x11" });
+  assert.deepEqual([fb.text, fb.cls, fb.title], ["polling", "accent", "0x2C refused: NRC 0x11"]);
+  assert.equal(U.logModeBadge({ mode: "polling", reason: "fast mode not requested" }).cls, "neutral");
+});
+
+test("seriesPath scales a series into its box", () => {
+  assert.deepEqual(U.seriesPath([], [], 100, 10), { d: "", lo: null, hi: null });
+  const p = U.seriesPath([0, 1, 2], [0, 50, 100], 100, 10);
+  assert.equal(p.d, "M0,10L50,5L100,0");
+  assert.deepEqual([p.lo, p.hi], [0, 100]);
+  assert.equal(U.seriesPath([5, 6], [3, 3], 10, 10).d, "M0,5L10,5", "flat series mid-height");
+  assert.equal(U.seriesPath([1], [7], 10, 10).d, "M5,5");
+});
+
+test("tsFmt and tsCheckValue follow the INI's digits and limits", () => {
+  assert.equal(U.tsFmt(12.345, 1), "12.3");
+  assert.equal(U.tsFmt(7, 0), "7");
+  assert.equal(U.tsFmt(0.1 + 0.2, null), "0.3");
+  assert.equal(U.tsFmt(null, 2), "—");
+  const m = { name: "reqFuel", min: 0, max: 25.5, units: "ms" };
+  assert.equal(U.tsCheckValue(m, 12), null);
+  assert.equal(U.tsCheckValue(m, 25.5), null);
+  assert.equal(U.tsCheckValue(m, 30), "reqFuel = 30 is outside 0..25.5 ms");
+  assert.match(U.tsCheckValue(m, NaN), /not a number/);
+  // Expression limits ({ expr }) are left to the backend.
+  assert.equal(U.tsCheckValue({ name: "x", min: { expr: "a" }, max: null }, -5), null);
+});
+
+test("fmtLogRate shows samples/s and requests per sample", () => {
+  assert.equal(U.fmtLogRate(null), "");
+  assert.equal(U.fmtLogRate({ ticks: 0 }), "");
+  assert.equal(U.fmtLogRate({ ticks: 10, samples_per_s: 4.26, requests_per_sample: 1 }), "4.3 samples/s · 1.00 req/sample");
+  assert.equal(U.fmtLogRate({ ticks: 99, samples_per_s: 51.04, requests_per_sample: 3 }), "51 samples/s · 3.00 req/sample");
+});

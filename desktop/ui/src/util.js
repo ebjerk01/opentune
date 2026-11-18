@@ -174,10 +174,73 @@
       ${list ? `<ol class="ph-steps">${list}</ol>` : ""}`;
   }
 
+  // ---- live log (feat_logging.js) ---------------------------------------------
+  // Mode badge for a LiveStatus: { cls, text, title }, or null before a session.
+  function logModeBadge(st) {
+    if (!st || !st.mode) return null;
+    if (st.mode === "fast-2c") {
+      const dids = (st.dynamic_dids || [])
+        .map((d) => "0x" + Number(d.did).toString(16).toUpperCase().padStart(4, "0") + " (" + d.record_len + " B, " + (d.channels || []).length + " ch)");
+      const polled = (st.polled || []).length;
+      return {
+        cls: "ok",
+        text: "fast-2c",
+        title: "Dynamic DIDs: " + (dids.join(", ") || "none") + (polled ? "; " + polled + " channel(s) polled alongside" : "") +
+          (st.redefines ? "; re-defined " + st.redefines + "×" : ""),
+      };
+    }
+    return { cls: st.reason === "fast mode not requested" ? "neutral" : "accent", text: "polling", title: st.reason || "polling" };
+  }
+  // "12.3 samples/s · 1.00 req/sample" from a log_tick rate object.
+  function fmtLogRate(r) {
+    if (!r || !r.ticks) return "";
+    const sps = Number(r.samples_per_s) || 0;
+    const rps = Number(r.requests_per_sample) || 0;
+    return (sps >= 10 ? sps.toFixed(0) : sps.toFixed(1)) + " samples/s · " + rps.toFixed(2) + " req/sample";
+  }
+
+  // ---- small line charts (feat_haldex.js, feat_ts.js) ---------------------------
+  // SVG path for a series in a w x h box: { d, lo, hi }. t and v are equal-length
+  // arrays (t ascending); a flat series is drawn mid-height.
+  function seriesPath(t, v, w, h) {
+    const n = Math.min((t || []).length, (v || []).length);
+    if (!n) return { d: "", lo: null, hi: null };
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i++) { if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
+    const t0 = t[0], ts = t[n - 1] - t0 || 1, vs = hi - lo;
+    const r = (x) => Math.round(x * 100) / 100;
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const x = n === 1 ? w / 2 : ((t[i] - t0) / ts) * w;
+      const y = vs ? h - ((v[i] - lo) / vs) * h : h / 2;
+      d += (i ? "L" : "M") + r(x) + "," + r(y);
+    }
+    return { d, lo, hi };
+  }
+
+  // ---- aftermarket ECU editor (feat_ts.js) --------------------------------------
+  // A number in a constant's digits (null/undefined -> "—").
+  function tsFmt(v, digits) {
+    if (v == null || !isFinite(v)) return "—";
+    return digits != null ? Number(v).toFixed(Math.min(9, digits)) : String(+Number(v).toPrecision(10));
+  }
+  // Client-side pre-check of a typed value against a constant's INI limits
+  // (the backend checks again and is authoritative): an error text or null.
+  function tsCheckValue(meta, x) {
+    if (typeof x !== "number" || !isFinite(x)) return (meta && meta.name ? meta.name + ": " : "") + "not a number";
+    const lo = meta && typeof meta.min === "number" ? meta.min : null;
+    const hi = meta && typeof meta.max === "number" ? meta.max : null;
+    if ((lo != null && x < lo) || (hi != null && x > hi)) {
+      return `${meta.name} = ${x} is outside ${lo == null ? "-∞" : lo}..${hi == null ? "∞" : hi}${meta.units ? " " + meta.units : ""}`;
+    }
+    return null;
+  }
+
   const OTUtil = {
     esc, baseName, hex8, parseHexInput, fmtCell, fmtAxis, clone2d, heatColor, splitList,
     confPill, listOrDash, imgBadge, editKey, cellsChanged,
     mdHref, mdInline, renderMarkdown, escQ, HELP_RISK, helpStripHtml,
+    logModeBadge, fmtLogRate, seriesPath, tsFmt, tsCheckValue,
   };
   root.OTUtil = OTUtil;
   if (typeof module !== "undefined" && module.exports) module.exports = OTUtil;

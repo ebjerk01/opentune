@@ -12,7 +12,7 @@ INIs the firmware projects publish work here.
 | `.msq` read/write | `opentune-tsini::msq` | **real-image-tested** (lossless round trip of public tunes) |
 | Serial protocol, verified write, burn | `opentune-tsproto` | **synthetic-tested** (simulated ECU only; no bench test yet) |
 | CLI `opentune ts …` | `opentune-cli` | **synthetic-tested** |
-| Desktop panel | — | not started; backend API proposed [below](#backend-api-for-a-desktop-panel) |
+| Desktop panel *Aftermarket ECU* | `desktop/src-tauri/src/feat_ts.rs` | **synthetic-tested** (simulated ECU), tier `bench`; API [below](#backend-api-for-a-desktop-panel) |
 
 The validation words are defined in [DEVELOPMENT.md](DEVELOPMENT.md#7-validation-state-vocabulary).
 Nothing here has talked to a real ECU yet: treat the online commands as
@@ -192,9 +192,12 @@ envelope one and a MegaSquirt-like plain one) for trying everything offline.
 
 ## Backend API for a desktop panel
 
-The desktop panel comes after the desktop module split. It should be a thin
-shell over the two crates; the CLI (`crates/opentune-cli/src/ts_cmd.rs`) is
-the reference use. Proposed Tauri commands (all serial I/O as `async fn`,
+The desktop *Aftermarket ECU* panel (`feat_ts.rs`) implements this API, plus
+`ts_diff_msq`, `ts_values`, `ts_curve`, `ts_status` and `ts_disconnect`; a
+`ts_write` also refuses without a backup path and when the ECU changed since
+the plan was made; reads and writes report no progress events yet. It is a
+thin shell over the two crates; the CLI (`crates/opentune-cli/src/ts_cmd.rs`) is
+the reference use. The Tauri commands (all serial I/O as `async fn`,
 see CLAUDE.md; tier **`bench`** until vehicle-tested, the offline INI/`.msq`
 viewer may be `public`):
 
