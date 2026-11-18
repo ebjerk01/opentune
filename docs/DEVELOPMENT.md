@@ -21,14 +21,19 @@ It stops at the first failure and names the failing gate. Order:
 3. `cargo test --workspace` (includes the doc-drift tests, §5)
 4. `opentune ecudefs validate ecudefs`
 5. `opentune db validate`
+   (then the `opentune-udssim` conformance harness against python-udsoncan /
+   python-doipclient, [`tools/conformance/`](../tools/conformance/README.md) —
+   run when `OPENTUNE_CONFORMANCE_PYTHON` or `python3` can import both
+   packages, skipped with a notice otherwise)
 6. `desktop/src-tauri`: `cargo fmt -- --check`
 7. desktop clippy, default features and `--features alpha`, `-D warnings`
 8. desktop `cargo test --features alpha`
 9. `node --check` on every `desktop/ui/src/*.js` and `desktop/preview/*.js`
 10. `node --test` on `desktop/ui/tests/` when that directory exists
 
-CI runs the same gates as four jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
-`check` (1–3), `ecudefs` (4–5), `desktop` (6–8, on ubuntu-22.04) and `ui` (9–10).
+CI runs the same gates as five jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+`check` (1–3), `ecudefs` (4–5), `conformance` (the udsoncan harness),
+`desktop` (6–8, on ubuntu-22.04) and `ui` (9–10).
 If you add a gate, add it to both places.
 
 Enable the tracked pre-commit hook once per clone — it catches the cheap things

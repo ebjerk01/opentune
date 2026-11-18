@@ -1,0 +1,4 @@
+# Third-party *clients* the conformance harness drives the simulator with.
+# Both MIT-licensed; test-only, never shipped with OpenTune.
+udsoncan==1.25.1
+doipclient==1.1.7

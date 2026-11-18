@@ -48,6 +48,9 @@
 //! - [`doip::DoIpSimStream`] — a loopback ISO 13400 DoIP entity, so the real
 //!   [`DoIpTransport`] client (routing activation, acks, the 0x78 drain loop)
 //!   runs against the same server end to end.
+//!   The `doip_tcp_entity` example puts it on a loopback TCP port, and
+//!   `tools/conformance/` drives that with python-udsoncan / python-doipclient
+//!   as independent third-party clients.
 //! - [`fault::FaultPlan`] — programmable fault injection: response-pending
 //!   storms, injected NRCs, wrong correlation echoes, truncated responses and
 //!   mis-correlated replies, each firing deterministically at one point in a
