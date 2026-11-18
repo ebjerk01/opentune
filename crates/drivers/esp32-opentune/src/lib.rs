@@ -37,6 +37,12 @@ use std::time::Duration;
 
 type Serial = Box<dyn serialport::SerialPort>;
 
+/// Registry id of this driver (`opentune drivers`).
+pub const DRIVER_ID: &str = "esp32-opentune";
+/// Display name. The ESP32-S3 firmware is compile-only so far (never flashed),
+/// so the driver is unverified against a real device.
+pub const DRIVER_NAME: &str = "OpenTune ESP32-S3 interface (unverified)";
+
 /// Which transport the current session uses.
 #[derive(Clone, Copy)]
 enum Mode {
@@ -247,8 +253,8 @@ impl Interface for Esp32Driver {
 
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
-            id: "esp32-opentune".into(),
-            display_name: "OpenTune ESP32-S3 interface".into(),
+            id: DRIVER_ID.into(),
+            display_name: DRIVER_NAME.into(),
             firmware: self.firmware.clone(),
             serial: self.serial.clone(),
         }
@@ -401,27 +407,7 @@ impl Interface for Esp32Driver {
             Some(Mode::IsoTp) => {
                 let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
                 let mut t = IsoTpDiag { dev };
-                let mut uds = UdsClient::new(&mut t);
-                let max = uds.request_upload(0x00, region.address, region.length)?;
-                let block = max.clamp(1, 4095);
-                let mut out = Vec::with_capacity(region.length as usize);
-                let mut seq = 1u8;
-                while (out.len() as u32) < region.length {
-                    let data = uds.transfer_data(seq, &[])?;
-                    if data.len() <= 1 {
-                        break;
-                    }
-                    out.extend_from_slice(&data[1..]);
-                    seq = seq.wrapping_add(1);
-                    progress(Progress {
-                        phase: Phase::Read,
-                        done: out.len() as u64,
-                        total: region.length as u64,
-                    });
-                    let _ = block;
-                }
-                uds.transfer_exit().ok();
-                out.truncate(region.length as usize);
+                let out = uds_upload(&mut t, region, progress)?;
                 self.mode = Some(Mode::IsoTp);
                 Ok(out)
             }
@@ -471,12 +457,14 @@ impl Interface for Esp32Driver {
                 let max = uds.request_download(0x00, region.address, data.len() as u32)?;
                 let block = max.clamp(2, 4095) - 1;
                 let mut seq = 1u8;
+                let mut done = 0usize;
                 for chunk in data.chunks(block) {
                     uds.transfer_data(seq, chunk)?;
                     seq = seq.wrapping_add(1);
+                    done += chunk.len();
                     progress(Progress {
                         phase: Phase::Write,
-                        done: 0,
+                        done: done as u64,
                         total: data.len() as u64,
                     });
                 }
@@ -510,6 +498,41 @@ impl Interface for Esp32Driver {
             None => Err(Error::NotConnected),
         }
     }
+}
+
+/// RequestUpload + TransferData loop for `region` over a UDS transport. Fails
+/// (rather than returning a short image) when the ECU stops sending data
+/// before `region.length` bytes have arrived.
+fn uds_upload(
+    t: &mut dyn DiagTransport,
+    region: MemoryRegion,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Vec<u8>> {
+    let mut uds = UdsClient::new(t);
+    uds.request_upload(0x00, region.address, region.length)?;
+    let mut out = Vec::with_capacity(region.length as usize);
+    let mut seq = 1u8;
+    while (out.len() as u32) < region.length {
+        let data = uds.transfer_data(seq, &[])?;
+        if data.len() <= 1 {
+            uds.transfer_exit().ok();
+            return Err(Error::Protocol(format!(
+                "upload ended after {} of {} bytes (empty TransferData block {seq})",
+                out.len(),
+                region.length
+            )));
+        }
+        out.extend_from_slice(&data[1..]);
+        seq = seq.wrapping_add(1);
+        progress(Progress {
+            phase: Phase::Read,
+            done: (out.len() as u64).min(region.length as u64),
+            total: region.length as u64,
+        });
+    }
+    uds.transfer_exit().ok();
+    out.truncate(region.length as usize);
+    Ok(out)
 }
 
 fn hex(b: &[u8]) -> String {
@@ -714,6 +737,50 @@ mod seedkey_hook_tests {
         uds_security_access(&mut t, None, 0x11, false).unwrap();
         kwp_security_access(&mut t, None, 0x01, false).unwrap();
         assert!(t.requests.is_empty());
+    }
+
+    fn upload_script(blocks: &[&[u8]]) -> ScriptedTransport {
+        let mut replies = vec![vec![0x75, 0x20, 0x01, 0x02]];
+        for (i, b) in blocks.iter().enumerate() {
+            let mut r = vec![0x76, (i + 1) as u8];
+            r.extend_from_slice(b);
+            replies.push(r);
+        }
+        replies.push(vec![0x77]);
+        ScriptedTransport {
+            replies: VecDeque::from(replies),
+            requests: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn upload_reads_the_whole_region() {
+        let mut t = upload_script(&[&[1, 2, 3], &[4, 5, 6]]);
+        let mut last = 0;
+        let out = uds_upload(&mut t, MemoryRegion::new(0x1000, 5), &mut |p| last = p.done).unwrap();
+        assert_eq!(out, vec![1, 2, 3, 4, 5]);
+        assert_eq!(last, 5, "progress stops at the region length");
+        assert_eq!(t.requests[0][0], 0x35);
+        assert_eq!(t.requests.last().unwrap(), &vec![0x37]);
+    }
+
+    #[test]
+    fn upload_refuses_a_short_image() {
+        // The second TransferData carries no data: the old loop returned the 3
+        // bytes it had as if they were the whole region.
+        let mut t = upload_script(&[&[1, 2, 3], &[]]);
+        let e = uds_upload(&mut t, MemoryRegion::new(0x1000, 6), &mut |_| {}).unwrap_err();
+        assert!(e.to_string().contains("3 of 6"), "{e}");
+    }
+
+    #[test]
+    fn registry_identity_is_unverified() {
+        let d = Esp32Driver::new();
+        assert_eq!(d.info().id, DRIVER_ID);
+        assert!(DRIVER_NAME.contains("unverified"));
+        let c = d.capabilities();
+        assert!(c.can && c.kline && c.read_memory && c.write_memory);
+        assert!(!c.bench_boot && !c.can_fd && !c.doip && !c.vwtp20);
     }
 
     #[test]

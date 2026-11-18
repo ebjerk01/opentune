@@ -212,12 +212,12 @@ Each implements `Interface`. CAN drivers typically implement the lighter
 | `opentune-driver-efp02c` | `efp02c` | EFI Technology EFP02C USB-CAN, via `nusb` (unverified: 1 Mbit/s, 11-bit, no writes) |
 | `opentune-driver-vcar` | `vcar` | none — a simulated six-module vehicle ([`VIRTUAL-CAR.md`](VIRTUAL-CAR.md)) |
 | `opentune-driver-isotp-ble` | `isotp-ble` | ESP32 running the open-source esp32-isotp-ble-bridge firmware, over USB serial or BLE (optional `btleplug` feature); unverified ([`ISOTP-BLE-BRIDGE.md`](ISOTP-BLE-BRIDGE.md)) |
+| `opentune-driver-esp32` | `esp32-opentune` | OpenTune's own ESP32-S3 interface (`hardware/firmware/esp32-s3`): CAN/ISO-TP + K-line over a framed USB-CDC protocol (exposes `diag()`); unverified — the firmware is compile-only, never flashed ([`hardware.md`](hardware.md#host-driver)) |
 | `opentune-driver-doip` | `doip` | none — an Ethernet port to the vehicle's DoIP (ISO 13400) entity: UDS over TCP after routing activation, optional UDP discovery (exposes `diag()`; loopback-tested only, [`DRIVERS.md`](DRIVERS.md#3i-doip-uds-over-ethernet-iso-13400)) |
 
-These fifteen are registered in the CLI's `Registry` (`opentune drivers`); the
-desktop lists `isotp-ble` and `doip` in alpha builds only (Bench tier). The
-`opentune-driver-esp32` crate (ESP32-S3 open interface) is in the workspace but
-not yet in the CLI registry.
+These sixteen are registered in the CLI's `Registry` (`opentune drivers`); the
+desktop lists `isotp-ble`, `doip` and `esp32-opentune` in alpha builds only
+(Bench tier).
 
 Writing a new one is covered in [`DRIVERS.md`](DRIVERS.md).
 

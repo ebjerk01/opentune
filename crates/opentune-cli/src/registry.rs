@@ -67,5 +67,11 @@ pub fn public_registry() -> Registry {
         opentune_driver_doip::DRIVER_NAME,
         || Box::new(opentune_driver_doip::DoipDriver::new()),
     );
+    // Unverified: the ESP32-S3 firmware is compile-only, never flashed.
+    r.register(
+        opentune_driver_esp32::DRIVER_ID,
+        opentune_driver_esp32::DRIVER_NAME,
+        || Box::new(opentune_driver_esp32::Esp32Driver::new()),
+    );
     r
 }

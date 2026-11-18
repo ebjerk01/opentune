@@ -2661,6 +2661,7 @@ dependencies = [
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",
+ "opentune-driver-esp32",
  "opentune-driver-gsusb",
  "opentune-driver-isotp-ble",
  "opentune-driver-j2534",
@@ -2727,6 +2728,14 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-elm327net"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-driver-esp32"
 version = "0.1.0"
 dependencies = [
  "opentune-core",

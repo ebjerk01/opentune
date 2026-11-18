@@ -1166,6 +1166,7 @@ dependencies = [
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",
+ "opentune-driver-esp32",
  "opentune-driver-gsusb",
  "opentune-driver-isotp-ble",
  "opentune-driver-j2534",
