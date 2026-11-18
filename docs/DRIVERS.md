@@ -166,6 +166,36 @@ driver is a good reference for the patterns above:
 Use it to test an engine or a panel end to end without hardware. See
 [`VIRTUAL-CAR.md`](VIRTUAL-CAR.md).
 
+### The UDS simulator (`udssim`) — one flashable ECU, in process
+
+`opentune_udssim::UdssimDriver` (registry id `udssim`, "UDS simulator
+(offline)") puts a single simulated ECU behind the `Interface` trait, with no
+CAN framing in between. Where `vcar` is a whole vehicle for the diagnostic
+engines, `udssim` is the peer for **memory read / write and flashing**:
+
+- `diag()` returns the simulator transport directly, so the UDS module flasher
+  (`opentune flash --uds-module --driver udssim`) and every engine run on it.
+- `read_memory` is `23` ReadMemoryByAddress in 0x80-byte chunks; `plan_read_memory`
+  lists those requests (`read --plan`).
+- `write_memory` programs over UDS: extended → programming session,
+  SecurityAccess 0x11/0x12, eraseMemory, `34`/`36`/`37`, checksum routine,
+  ECUReset. It needs a seed-key handler: the simulator's **test-only**
+  `udssim-test` (`key = seed XOR 0xA5`, `opentune_udssim::TestSeedKey`) — the
+  public CLI resolves that id (`--seedkey udssim-test`), and it unlocks only
+  the simulator.
+- The ECU has one 64 KiB flash region at `0x00000000` (initial contents: byte
+  `i` = `i & 0xFF`), identity DIDs, and the flash model's persistent memory, so
+  write → read-back round trips work.
+- Like `vcar`, the ECU lives in a process-wide table keyed by name, so it keeps
+  its state across re-opens. Options: `ecu` (or `port`) = instance name,
+  `reset=1` rebuilds it, `readable=0` refuses flash reads (to exercise the
+  no-backup paths).
+
+```sh
+opentune read  --driver udssim --addr 0x0 --len 0x400 --out stock.bin
+opentune flash --driver udssim --seedkey udssim-test --addr 0x0 --data new.bin
+```
+
 ## 3d. `elm327obd`: block read over a USB ELM327
 
 `crates/drivers/elm327` (crate `opentune-driver-elm327-obd`) drives a USB

@@ -44,5 +44,10 @@ pub fn public_registry() -> Registry {
         "Virtual car (offline multi-module simulator)",
         || Box::new(opentune_driver_vcar::VcarDriver::new()),
     );
+    r.register(
+        opentune_udssim::driver::DRIVER_ID,
+        opentune_udssim::driver::DRIVER_NAME,
+        || Box::new(opentune_udssim::UdssimDriver::new()),
+    );
     r
 }

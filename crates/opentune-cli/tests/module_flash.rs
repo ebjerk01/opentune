@@ -242,6 +242,119 @@ fn module_flash_end_to_end_and_refusals() {
     assert!(archived);
 }
 
+fn run(args: &[&str]) -> anyhow::Result<()> {
+    try_run_from(CliConfig::default(), args.iter().copied())
+}
+
+#[test]
+fn public_cli_reads_and_flashes_the_udssim_driver() {
+    let dir = workdir("udssim");
+    let p = |n: &str| dir.join(n).display().to_string();
+    let ecu = "ecu=cli-udssim";
+    // Fresh instance, read the stock ramp.
+    run(&[
+        "opentune",
+        "read",
+        "--driver",
+        "udssim",
+        "--opt",
+        ecu,
+        "--opt",
+        "reset=1",
+        "--addr",
+        "0x100",
+        "--len",
+        "0x40",
+        "--out",
+        &p("stock.bin"),
+    ])
+    .unwrap();
+    let stock = std::fs::read(dir.join("stock.bin")).unwrap();
+    assert_eq!(
+        stock,
+        (0x100..0x140).map(|i| (i & 0xFF) as u8).collect::<Vec<_>>()
+    );
+
+    // Default flash path (driver write_memory) with the simulator test key.
+    let new: Vec<u8> = (0..0x40).map(|i| 0xC0 ^ i as u8).collect();
+    std::fs::write(dir.join("new.bin"), &new).unwrap();
+    run(&[
+        "opentune",
+        "flash",
+        "--driver",
+        "udssim",
+        "--opt",
+        ecu,
+        "--seedkey",
+        "udssim-test",
+        "--addr",
+        "0x100",
+        "--data",
+        &p("new.bin"),
+        "--vault",
+        &p("vault"),
+    ])
+    .unwrap();
+    run(&[
+        "opentune",
+        "read",
+        "--driver",
+        "udssim",
+        "--opt",
+        ecu,
+        "--addr",
+        "0x100",
+        "--len",
+        "0x40",
+        "--out",
+        &p("back.bin"),
+    ])
+    .unwrap();
+    assert_eq!(std::fs::read(dir.join("back.bin")).unwrap(), new);
+
+    // UDS module path from a plain bin + layout.
+    let img: Vec<u8> = (0..0x400).map(|i| (i * 5 % 256) as u8).collect();
+    std::fs::write(dir.join("app.bin"), &img).unwrap();
+    run(&[
+        "opentune",
+        "flash",
+        "--uds-module",
+        "--driver",
+        "udssim",
+        "--opt",
+        ecu,
+        "--seedkey",
+        "udssim-test",
+        "--data",
+        &p("app.bin"),
+        "--addr",
+        "0x1000",
+        "--layout",
+        "0x1000:0x400",
+        "--expect-part",
+        "OTSIM",
+        "--vault",
+        &p("vault2"),
+    ])
+    .unwrap();
+    run(&[
+        "opentune",
+        "read",
+        "--driver",
+        "udssim",
+        "--opt",
+        ecu,
+        "--addr",
+        "0x1000",
+        "--len",
+        "0x400",
+        "--out",
+        &p("app-back.bin"),
+    ])
+    .unwrap();
+    assert_eq!(std::fs::read(dir.join("app-back.bin")).unwrap(), img);
+}
+
 #[test]
 fn default_flash_path_still_needs_addr_and_data() {
     let _g = SERIAL.lock().unwrap();
