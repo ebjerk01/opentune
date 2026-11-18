@@ -197,19 +197,11 @@ pub struct MeasuredValue {
     pub label: Option<&'static str>,
 }
 
-/// Scale a measuring-block cell. Only formulas with a public, Gen4-checked
-/// source (OpenHaldex-C6) are decoded; anything else is `None` (raw).
+/// Scale a measuring-block cell: the shared VAG formula table in
+/// [`opentune_core::protocol::vagmeas`] (only formulas with a public,
+/// Gen4-checked source, OpenHaldex-C6); anything else is `None` (raw).
 pub fn scale(formula: u8, a: u8, b: u8) -> Option<(f64, &'static str)> {
-    let (a, b) = (a as f64, b as f64);
-    Some(match formula {
-        0x06 => (0.001 * a * b, "V"),
-        0x0E => (0.01 * a * (b - 100.0), "bar"),
-        0x18 => (0.001 * a * b, "A"),
-        0x1A => (b - a, "°C"),
-        0x21 => (0.01 * a * b, "%"),
-        0x5E => (0.1 * a * (b - 128.0), "Nm"),
-        _ => return None,
-    })
+    opentune_core::protocol::vagmeas::scale(formula, a, b)
 }
 
 /// Gen4 meaning of cell `idx` in `group` (OpenHaldex-C6, community).
