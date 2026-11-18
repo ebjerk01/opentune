@@ -16,6 +16,7 @@
 //!
 //! [`UdsClient`]: opentune_core::protocol::UdsClient
 
+use crate::flash::{Ctx as FlashCtx, FlashConfig, FlashEcu, Outcome as FlashOutcome};
 use crate::security::{SecurityChecker, XorSecurity};
 use std::collections::BTreeMap;
 
@@ -210,6 +211,12 @@ pub struct UdsServer {
     memory: BTreeMap<u64, Vec<u8>>,
     /// Dynamically defined DIDs (0x2C): DID → ordered source elements.
     dynamic: BTreeMap<u16, Vec<DddidSource>>,
+    /// The request-seed (odd) level of the current unlock, if any.
+    unlocked_level: Option<u8>,
+    /// The optional flashable-ECU model (see [`crate::flash`]).
+    flash: Option<FlashEcu>,
+    /// `responsePending` frames to interpose before the last reply.
+    pending: usize,
 }
 
 impl Default for UdsServer {
@@ -242,7 +249,97 @@ impl UdsServer {
             transfer: None,
             memory: BTreeMap::new(),
             dynamic: BTreeMap::new(),
+            unlocked_level: None,
+            flash: None,
+            pending: 0,
         }
+    }
+
+    /// Turn this ECU into a flashable one (see [`crate::flash`]): programming
+    /// session, erase / check routines, download into a persistent flash
+    /// memory. Replaces any previous flash model.
+    pub fn enable_flash(&mut self, config: FlashConfig) {
+        if !self
+            .config
+            .supported_sessions
+            .contains(&config.programming_session)
+        {
+            self.config
+                .supported_sessions
+                .push(config.programming_session);
+        }
+        self.flash = Some(FlashEcu::new(config));
+    }
+
+    /// The flash model, if enabled (memory, stats, validity).
+    pub fn flash(&self) -> Option<&FlashEcu> {
+        self.flash.as_ref()
+    }
+
+    /// The flash model, mutably (e.g. to arm a fault mid-test).
+    pub fn flash_mut(&mut self) -> Option<&mut FlashEcu> {
+        self.flash.as_mut()
+    }
+
+    /// The request-seed (odd) level SecurityAccess is unlocked at, if any.
+    pub fn unlocked_level(&self) -> Option<u8> {
+        if self.security_unlocked {
+            self.unlocked_level
+        } else {
+            None
+        }
+    }
+
+    /// How many `responsePending` (0x78) frames the ECU sends before the reply
+    /// to the last request (a slow erase). Reading clears it. A transport
+    /// interposes them before the reply; see [`crate::SimTransport`].
+    pub fn take_pending(&mut self) -> usize {
+        std::mem::take(&mut self.pending)
+    }
+
+    /// Reboot (power cycle): default session, locked, transfers aborted.
+    /// Flash memory persists.
+    pub fn power_cycle(&mut self) {
+        self.session = 0x01;
+        self.security_unlocked = false;
+        self.unlocked_level = None;
+        self.current_seed = None;
+        self.transfer = None;
+        self.dynamic.clear();
+        if let Some(f) = self.flash.as_mut() {
+            f.on_reboot();
+        }
+    }
+
+    /// Handle one UDS request; `None` when the ECU sends no response at all
+    /// (an injected lost response or power loss of the flash model). Without
+    /// a flash model this is always `Some(`[`handle`](Self::handle)`)`.
+    pub fn respond(&mut self, req: &[u8]) -> Option<Vec<u8>> {
+        self.pending = 0;
+        if let Some(flash) = self.flash.as_mut() {
+            let ctx = FlashCtx {
+                session: self.session,
+                unlocked_level: if self.security_unlocked {
+                    self.unlocked_level
+                } else {
+                    None
+                },
+                generic_transfer_active: self.transfer.is_some(),
+            };
+            match flash.handle(req, ctx) {
+                FlashOutcome::Pass => {}
+                FlashOutcome::Reply(r) => {
+                    self.pending = flash.take_pending();
+                    return Some(r);
+                }
+                FlashOutcome::Silent => return None,
+                FlashOutcome::PowerLoss => {
+                    self.power_cycle();
+                    return None;
+                }
+            }
+        }
+        Some(self.dispatch(req))
     }
 
     /// Install the seed→key relationship the ECU enforces for 0x27. The checker
@@ -350,8 +447,14 @@ impl UdsServer {
         self.transfer.as_ref().map(|t| t.received.as_slice())
     }
 
-    /// Handle one UDS request, returning the raw UDS response bytes.
+    /// Handle one UDS request, returning the raw UDS response bytes. A
+    /// suppressed response (flash-model fault, see [`respond`](Self::respond))
+    /// comes back empty.
     pub fn handle(&mut self, req: &[u8]) -> Vec<u8> {
+        self.respond(req).unwrap_or_default()
+    }
+
+    fn dispatch(&mut self, req: &[u8]) -> Vec<u8> {
         let Some(&service) = req.first() else {
             // An empty request cannot carry a service id; answer generalReject
             // against SID 0 so the frame is still a well-formed negative response.
@@ -389,6 +492,7 @@ impl UdsServer {
         self.session = session;
         // Changing session relocks security (ISO 14229-1 §9.4.1).
         self.security_unlocked = false;
+        self.unlocked_level = None;
         self.current_seed = None;
         // Dynamically defined DIDs do not survive a session transition. ISO
         // 14229-1 requires at least the return to the default session to clear
@@ -407,6 +511,7 @@ impl UdsServer {
         // A reset returns the ECU to default session, locked.
         self.session = 0x01;
         self.security_unlocked = false;
+        self.unlocked_level = None;
         self.current_seed = None;
         self.transfer = None;
         self.dynamic.clear();
@@ -742,6 +847,7 @@ impl UdsServer {
             let expected = self.checker.expected_key(&seed, request_level);
             if key == expected.as_slice() {
                 self.security_unlocked = true;
+                self.unlocked_level = Some(request_level);
                 self.current_seed = None;
                 self.sec_attempts_left = self.config.max_sec_attempts;
                 // 67 <level>.
