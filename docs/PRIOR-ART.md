@@ -77,6 +77,15 @@ reads the INI and `.msq` formats as the open projects above document them.
 | [collin80/SavvyCAN](https://github.com/collin80/SavvyCAN) | ~1.1k | MIT | A CAN reverse-engineering/capture tool; a reference for frame capture workflows and signal discovery that sit upstream of writing a definition. MIT → reusable. |
 | [CaringCaribou/caringcaribou](https://github.com/CaringCaribou/caringcaribou) | ~800 | GPL-3.0 | A CAN/automotive security toolkit (UDS/ISO-TP discovery, DCM/XCM fuzzing); informed how we think about safely probing an unknown ECU before trusting a definition. GPL-3.0 → compatible. |
 
+## Interface protocols from own-hardware captures
+
+| Interface | Source | What OpenTune did |
+|---|---|---|
+| EFI Technology EFP02C USB-CAN (`efp02c` driver) | Captures of the project owner's own unit | The USB record layout was first identified during interoperability analysis of the vendor's Windows software, then implemented from captures of the owner's own EFP02C driven from Linux without the vendor software. No vendor code or data is included. Marked unverified until re-confirmed from a black-box capture of the vendor software; see [DRIVERS.md §3g](DRIVERS.md#3g-efp02c-efi-technology-efp02c-usb-can-unverified). |
+
+The driver's USB access uses [kevinmehall/nusb](https://github.com/kevinmehall/nusb)
+(Apache-2.0 OR MIT) as a library dependency.
+
 ## Licence compatibility
 
 OpenTune is **GPL-3.0-or-later**. The rules we follow when drawing on the work

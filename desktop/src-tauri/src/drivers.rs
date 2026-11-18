@@ -43,6 +43,11 @@ pub(crate) fn registry() -> Registry {
     r.register("j2534", "J2534 PassThru (generic)", || {
         Box::new(opentune_driver_j2534::J2534Driver::new())
     });
+    r.register(
+        opentune_driver_efp02c::DRIVER_ID,
+        opentune_driver_efp02c::DRIVER_NAME,
+        || Box::new(opentune_driver_efp02c::Efp02cDriver::new()),
+    );
     r.register("vcar", "Virtual car (offline simulator)", || {
         Box::new(opentune_driver_vcar::VcarDriver::new())
     });

@@ -144,7 +144,8 @@ A CAN adapter that can see every frame on the bus can offer a full CAN dump
 Implemented today: `mock` (synthetic traffic), `socketcan` and `gsusb` (kernel
 `listen-only on` = Hardware, else Passive), `slcan` (`L` listen-only open),
 `elm327obd` (`ATMA` with `ATCSM1` silent monitoring; clones that refuse it are
-NotGuaranteed). The log writers and stats live in `opentune-candump`.
+NotGuaranteed), `efp02c` (no silent mode known: Passive, 1 Mbit/s only). The
+log writers and stats live in `opentune-candump`.
 
 ## 3c. The virtual car (`vcar`) — a test peer for everything above
 
@@ -422,12 +423,68 @@ pause longer than the module's idle timeout, disconnect, a silent module and a
 busy bus; slcan through its real ASCII line protocol, socketcan and gsusb
 through their frame layer. Not yet bench- or vehicle-tested.
 
+## 3g. `efp02c`: EFI Technology EFP02C USB-CAN (unverified)
+
+`crates/drivers/efp02c` (crate `opentune-driver-efp02c`, id `efp02c`) drives
+the EFP02C, a small USB 1.1 CAN box sold with EFI Technology's tuning
+software, as a **generic CAN adapter**: the opentune-core ISO-TP + UDS stack
+runs on its `CanLink`, `diag()` exposes the transport and `can_monitor()`
+captures the bus. It talks USB directly through the pure-Rust
+[`nusb`](https://crates.io/crates/nusb) crate (Apache-2.0 OR MIT; no libusb,
+no vendor DLL), behind a small `Efp02cTransport` trait so the tests replay
+captured transfers. No EFI ECU protocol is implemented, and the box's vendor
+licensing exchange is never sent.
+
+**Validation state: unverified (Bench tier).** Only what the provenance note
+below supports is enabled:
+
+| Item | State |
+|---|---|
+| 1 Mbit/s, accept-all config | confirmed on the owner's bench; **every other bitrate is refused** |
+| 11-bit data frames, TX and RX | confirmed; **29-bit ids are refused** (driver and CLI) |
+| Termination on (`04 09 01`), read-back (`04 0A`) | confirmed; the "off" value is not, so `termination=off` just skips the command |
+| Poll `0B`: seq (byte 7) echoed in the trailer | confirmed; wait (bytes 2..3, LE) and max records (byte 4) inferred from two captured values |
+| RX bytes 3..4 ("timestamp"), byte 15 | uninterpreted: the values cycle rather than count, so capture timestamps are host time |
+| Identification block (`09` → four `0A` chunks, sum checksum) | confirmed; diagnostic text only (`identify=on`), serial numbers are not decoded |
+| ECU writes | **disabled** (`write_memory` refuses, capability not declared) until verified |
+| Listen-only mode | none known: the monitor reports `Passive` (the controller ACKs) |
+
+Options: `bitrate` (must be `1000000`; the `ConnectConfig` default of 500000
+is refused, so on the CLI pass `--opt bitrate=1000000`), `termination`
+(`on`/`off`, default `on` — mind an already-terminated bus), `identify`
+(`on`/`off`, default `off`), `usb_index` (which attached EFP02C, default 0).
+The monitor (`opentune candump --driver efp02c`) uses 1 Mbit/s when no
+bitrate or `--bus` is given and refuses anything else.
+
+**Host setup.** Windows: bind the WinUSB driver to the device (USB
+`2323:0001`) once, e.g. with [Zadig](https://zadig.akeo.ie/); the vendor's own
+driver must not hold it. Linux: grant your user access with a udev rule, for
+example `/etc/udev/rules.d/70-efp02c.rules`:
+
+```
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2323", ATTRS{idProduct}=="0001", MODE="0660", TAG+="uaccess"
+```
+
+then `sudo udevadm control --reload && sudo udevadm trigger` and replug.
+macOS needs nothing extra.
+
+**Provenance.** The USB record layout was first identified during
+interoperability analysis of the vendor's Windows software, then implemented
+in this driver from captures of the project owner's own EFP02C on a 1 Mbit/s
+bench bus, driven from Linux (pyusb) without the vendor software. No vendor
+code or data is included; the test fixtures are those own-hardware USB
+transfers (bench CAN traffic, no serial numbers) and synthetic records. The
+layout is to be re-confirmed from a black-box (USB) capture of the vendor
+software before the driver leaves the Bench tier; items marked *inferred* in
+`src/proto.rs` are the ones to check first.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
 are listed in [`ARCHITECTURE.md`](ARCHITECTURE.md#drivers--cratesdrivers)):
 `mock`, `openport2`, `socketcan`, `elm327`, `kkl`, `kline-bridge`, `slcan`,
-`j2534`, `gsusb`, `elm327net`, `elm327obd`. A doc-drift test fails when a new id
+`j2534`, `gsusb`, `elm327net`, `elm327obd`, `efp02c`, `vcar`, `udssim`. A
+doc-drift test fails when a new id
 is registered without being added here.
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build

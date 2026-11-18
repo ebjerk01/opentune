@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 /// Arguments of `opentune candump`.
 #[derive(clap::Args)]
 pub struct CandumpArgs {
-    /// Driver id (see `drivers`): mock, socketcan, gsusb, slcan, elm327obd.
+    /// Driver id (see `drivers`): mock, socketcan, gsusb, slcan, elm327obd, efp02c.
     #[arg(long)]
     driver: String,
     /// Serial device (slcan, elm327obd) or CAN interface (socketcan, gsusb).
@@ -85,7 +85,7 @@ pub fn run(reg: &Registry, a: CandumpArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("unknown driver '{}' (see `opentune drivers`)", a.driver))?;
     let mon = drv.can_monitor().ok_or_else(|| {
         anyhow!(
-            "driver '{}' cannot capture raw CAN traffic (supported: mock, socketcan, gsusb, slcan, elm327obd)",
+            "driver '{}' cannot capture raw CAN traffic (supported: mock, socketcan, gsusb, slcan, elm327obd, efp02c)",
             a.driver
         )
     })?;

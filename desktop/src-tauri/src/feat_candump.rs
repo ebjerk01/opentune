@@ -252,7 +252,7 @@ fn capture_job(
     let Some(mon) = drv.can_monitor() else {
         drop(file);
         return fail(format!(
-            "driver '{}' cannot capture raw CAN traffic (use socketcan, gsusb, slcan, elm327obd or mock)",
+            "driver '{}' cannot capture raw CAN traffic (use socketcan, gsusb, slcan, elm327obd, efp02c or mock)",
             req.driver
         ));
     };

@@ -24,6 +24,7 @@ panels it can drive:
 | `socketcan` | Linux SocketCAN | CAN, memory read/write |
 | `slcan` | slcan USB-CAN (CANable / CANtact) | CAN, memory read/write |
 | `gsusb` | gs_usb / candleLight USB-CAN | CAN, memory read/write |
+| `efp02c` | EFI Technology EFP02C USB-CAN (unverified: 1 Mbit/s only) | CAN, memory read |
 | `kkl` | KKL 409.1 K-line cable | K-line, memory read/write |
 
 The Arduino K-line bridge and the OpenTune ESP32-S3 interface have drivers in

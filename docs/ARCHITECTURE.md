@@ -197,9 +197,10 @@ Each implements `Interface`. CAN drivers typically implement the lighter
 | `opentune-driver-gsusb` | `gsusb` | gs_usb / candleLight USB-CAN |
 | `opentune-driver-elm327net` | `elm327net` | ELM327 over WiFi / Bluetooth |
 | `opentune-driver-elm327-obd` | `elm327obd` | ELM327 serial, OBD/UDS diagnostics (exposes `diag()`) |
+| `opentune-driver-efp02c` | `efp02c` | EFI Technology EFP02C USB-CAN, via `nusb` (unverified: 1 Mbit/s, 11-bit, no writes) |
 | `opentune-driver-vcar` | `vcar` | none — a simulated six-module vehicle ([`VIRTUAL-CAR.md`](VIRTUAL-CAR.md)) |
 
-These twelve are registered in the CLI's `Registry` (`opentune drivers`). The
+These thirteen are registered in the CLI's `Registry` (`opentune drivers`). The
 `opentune-driver-esp32` crate (ESP32-S3 open interface) is in the workspace but
 not yet in the CLI registry.
 

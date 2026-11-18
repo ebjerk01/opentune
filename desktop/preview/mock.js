@@ -59,7 +59,7 @@
       ["mock", "Mock / file driver (offline)"], ["openport2", "OpenPort 2.0 (J2534/CDC-ACM)"], ["socketcan", "SocketCAN"],
       ["slcan", "SLCAN (serial CAN)"], ["elm327", "K-line (ELM327)"], ["kkl", "K-line (KKL 409.1 raw)"],
       ["elm327obd", "ELM327 serial (OBD diagnostics + CAN memory read)"], ["elm327net", "ELM327 over WiFi / Bluetooth"],
-      ["gsusb", "gs_usb / candleLight USB-CAN"], ["j2534", "J2534 PassThru (generic)"], ["vcar", "Virtual car (offline simulator)"], ["udssim", "UDS simulator (offline)"],
+      ["gsusb", "gs_usb / candleLight USB-CAN"], ["j2534", "J2534 PassThru (generic)"], ["efp02c", "EFI EFP02C USB-CAN (unverified)"], ["vcar", "Virtual car (offline simulator)"], ["udssim", "UDS simulator (offline)"],
     ].map(([id, name]) => ({ id, name })),
     data_paths: () => ({ ecudefs: "ecudefs/", catalog: "catalog/", guide: "guide/", packs: "packs/" }),
     list_ecudefs: () => P.ecudefs || [],
