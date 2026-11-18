@@ -1,6 +1,6 @@
 {
   "name": "opentune-desktop",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "OpenTune desktop app (Tauri shell over the shared Rust core).",
   "license": "GPL-3.0-or-later",
   "private": true,

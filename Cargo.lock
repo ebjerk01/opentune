@@ -691,7 +691,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opentune-a2l"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
 ]
@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-attest"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-checksum",
  "opentune-core",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-candump"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-driver-mock",
@@ -746,14 +746,14 @@ dependencies = [
 
 [[package]]
 name = "opentune-checksum"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
 ]
 
 [[package]]
 name = "opentune-cli"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-core"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-dtc",
  "serde",
@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-db"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-checksum",
  "serde",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-elm327"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serialport",
@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-elm327-obd"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-dtc",
@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-kkl"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serialport",
@@ -900,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-kline-bridge"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serialport",
@@ -908,7 +908,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-mock"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serde_json",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-openport2"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serialport",
@@ -924,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-slcan"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serialport",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-socketcan"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "socketcan",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-driver-vcar"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-adaptation",
  "opentune-autoscan",
@@ -960,7 +960,7 @@ version = "0.1.0"
 
 [[package]]
 name = "opentune-ecuflash"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-xdf",
@@ -982,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-flash"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-driver-mock",
@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-haldex"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-driver-slcan",
@@ -1006,7 +1006,7 @@ version = "0.1.0"
 
 [[package]]
 name = "opentune-logdef"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "opentune-udssim",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-logview"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-mapfind"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "serde",
@@ -1036,14 +1036,14 @@ dependencies = [
 
 [[package]]
 name = "opentune-ols"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
 ]
 
 [[package]]
 name = "opentune-packs"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-adaptation",
  "opentune-autoscan",
@@ -1058,7 +1058,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-recipe"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-attest",
  "opentune-checksum",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-sa2"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "thiserror 1.0.69",
@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-tsini"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "roxmltree",
  "serde",
@@ -1113,7 +1113,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-tsproto"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-tsini",
  "serialport",
@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "opentune-udssim"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
 ]
@@ -1133,7 +1133,7 @@ version = "0.1.0"
 
 [[package]]
 name = "opentune-xdf"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "opentune-core",
  "roxmltree",
