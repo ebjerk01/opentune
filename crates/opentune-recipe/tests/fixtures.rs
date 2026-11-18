@@ -54,7 +54,8 @@ fn golf_edc16_recipe_reproduces_the_tuned_file() {
 #[test]
 fn pair_corpus_round_trip_summary() {
     let Some(root) = fixtures() else { return };
-    let mut rows = Vec::new();
+    // (label, stock path, tuned path) in directory + name order.
+    let mut pairs: Vec<(String, PathBuf, PathBuf)> = Vec::new();
     for d in [
         "edc16-pairs",
         "edc16-pd",
@@ -77,19 +78,44 @@ fn pair_corpus_round_trip_summary() {
             } else {
                 continue;
             };
-            let (Ok(a), Ok(b)) = (std::fs::read(&p), std::fs::read(&t)) else {
-                continue;
-            };
-            if a.len() != b.len() {
-                continue;
-            }
-            let res = round_trip(&a, &b, None);
-            rows.push((
-                format!("{d}/{}", p.file_name().unwrap().to_string_lossy()),
-                res,
-            ));
+            let label = format!("{d}/{}", p.file_name().unwrap().to_string_lossy());
+            pairs.push((label, p, PathBuf::from(t)));
         }
     }
+    // Each round trip is independent: spread the pairs over the available
+    // cores (one pair per worker at a time) instead of walking them one by one.
+    // A pair that can't be read or differs in size yields no row, as before.
+    type Row = Option<(String, Result<bool, String>)>;
+    let run = |(label, a, b): &(String, PathBuf, PathBuf)| -> Row {
+        let (Ok(a), Ok(b)) = (std::fs::read(a), std::fs::read(b)) else {
+            return None;
+        };
+        if a.len() != b.len() {
+            return None;
+        }
+        Some((label.clone(), round_trip(&a, &b, None)))
+    };
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(pairs.len().max(1));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let slots: Vec<std::sync::Mutex<Row>> =
+        pairs.iter().map(|_| std::sync::Mutex::new(None)).collect();
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some(pair) = pairs.get(i) else { break };
+                *slots[i].lock().unwrap() = run(pair);
+            });
+        }
+    });
+    // Results come back in pair order, so the report reads exactly as before.
+    let rows: Vec<(String, Result<bool, String>)> = slots
+        .into_iter()
+        .filter_map(|m| m.into_inner().unwrap())
+        .collect();
     let identical = rows.iter().filter(|r| r.1 == Ok(true)).count();
     let differ = rows.iter().filter(|r| r.1 == Ok(false)).count();
     for (name, res) in &rows {
