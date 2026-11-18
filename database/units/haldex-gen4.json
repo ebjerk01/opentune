@@ -6,6 +6,9 @@
   "name": "Haldex Generation 4 AWD coupling controller",
   "aliases": [
     "Haldex Gen4",
+    "J492",
+    "AWD",
+    "0AY",
     "0BR",
     "0BS",
     "0BY"
@@ -17,16 +20,55 @@
     "can",
     "kline"
   ],
-  "protocols": [],
+  "protocols": [
+    "kwp2000",
+    "tp20"
+  ],
   "read_methods": {
     "obd": "unknown",
     "bench": false,
     "boot": false,
-    "notes": "No public read/flash procedure found. The controller plug carries terminal 15, ground, K-line and a dedicated Haldex CAN pair (OpenHaldex)."
+    "notes": "Diagnostics (identification, trouble codes, measuring groups) are KWP2000 over VW TP2.0 at logical address 0x0A on the drivetrain CAN (public OpenHaldex-C6 capture of an 0AY 907 554 C). No public flash read or write procedure, flash layout or MCU is known, so 'obd' stays unknown and no full read is offered. The lock request (Bremse_4 0x2A0) and the unit's status (Allrad_1 0x2C0) are readable passively on the drivetrain CAN (opendbc vw_pq.dbc)."
   },
   "checksum": null,
-  "ecudef": null,
+  "ecudef": "borgwarner-haldex-gen4",
   "vehicles": [
+    {
+      "make": "Volkswagen",
+      "model": "Passat CC 4Motion",
+      "engine": null,
+      "years": "2009-"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Passat (B6 facelift / B7) 4Motion",
+      "engine": null,
+      "years": "2009-"
+    },
+    {
+      "make": "Volkswagen",
+      "model": "Sharan 4Motion",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "SEAT",
+      "model": "Alhambra 4Drive",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Skoda",
+      "model": "Yeti 4x4 / Superb 4x4",
+      "engine": null,
+      "years": "2009-"
+    },
+    {
+      "make": "Audi",
+      "model": "Q3 quattro (8U)",
+      "engine": null,
+      "years": null
+    },
     {
       "make": "Volkswagen",
       "model": "Golf Mk6 4Motion / Golf R",
@@ -50,16 +92,13 @@
       "model": "Tiguan (5N)",
       "engine": null,
       "years": null
-    },
-    {
-      "make": "Volkswagen",
-      "model": "Passat (B6) 4Motion",
-      "engine": null,
-      "years": null
     }
   ],
-  "part_number_examples": [],
-  "notes": "Fourth-generation Haldex (coupling codes 0BR / 0BS / 0BY). OpenTune's haldex checksum covers Gen5 only, so checksum is null here. These are the pins of the in-line harness plug that mates with the Haldex controller, as documented by the OpenHaldex project (single source). No terminal-30 pin is documented on the Gen1-4 plug.",
+  "part_number_examples": [
+    "0AY 907 554 C",
+    "0BS 907 554"
+  ],
+  "notes": "Fourth-generation Haldex coupling controller (J492; coupling codes 0AY / 0BR / 0BY per Dark Side Developments, controller 0BS 907 554 in public part listings for the Passat CC). 0AY 907 554 C identifies as 'Haldex 4Motion' in the public OpenHaldex-C6 capture; 0AY 907 554 F is a different unit OpenHaldex treats as Gen5 (PQ), so identify on the full part number including suffix. Checksum: null - no Gen4 dump was available (none found in the project's dump library) and no public source describes one, so no scheme is claimed; the Gen5 word-sum is not assumed to apply. Pinout: the in-line harness plug as documented by OpenHaldex (single source; its README also mentions a 6-pin 1J0 973 713 plug for other generations) - TO BE CHECKED ON THE CAR before wiring anything. No terminal-30 pin is documented on the Gen1-4 plug.",
   "connectors": [
     {
       "name": "1J0973814",
@@ -161,6 +200,22 @@
     {
       "title": "Dark Side Developments: Haldex performance controller Gen4 (applications)",
       "url": "https://www.darksidedevelopments.co.uk/products/haldex-performance-controller-generation-4-gen4.html"
+    },
+    {
+      "title": "OpenHaldex-C6 README: Live Diagnostics (Gen4 0AY: KWP2000 over VW TP2.0) and Fault Codes (MIT)",
+      "url": "https://github.com/Forbes-Automotive/OpenHaldex-C6"
+    },
+    {
+      "title": "OpenHaldex-C6 public PQ capture of an 0AY 907 554 C (TP2.0 to logical address 0x0A, KWP 0x1A 0x9B / 0x18 / 0x21)",
+      "url": "https://github.com/Forbes-Automotive/OpenHaldex-C6/tree/main/documents/vehicle-logs/vw-pq"
+    },
+    {
+      "title": "commaai/opendbc vw_pq.dbc: Allrad_1 0x2C0, Bremse_4 0x2A0 (MIT)",
+      "url": "https://github.com/commaai/opendbc/blob/master/opendbc/dbc/vw_pq.dbc"
+    },
+    {
+      "title": "oemwolf: 0BS 598 554 B Haldex control unit repair set (Passat / Passat CC 4Motion 2009-2015)",
+      "url": "https://oemwolf.com/oem-parts/0bs598554b.html"
     }
   ]
 }
