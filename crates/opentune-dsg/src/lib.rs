@@ -394,9 +394,26 @@ pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
 /// [`READ_SERVICES`].
 pub struct Dq250Reader<'a> {
     kwp: Kwp2000Client<'a>,
+    session: Option<u8>,
     /// `None` = session started (or not requested); `Some(err)` = it failed.
     /// The reads still run: some units answer them in the default session.
     pub session_error: Option<String>,
+    /// Reads that failed like a lost session ([`is_session_loss`]) and were
+    /// tried once more after restarting the session. A TP2.0 channel that
+    /// broke is set up again on the next request, without the unit's KWP
+    /// session, so the reader restarts it rather than reading on without.
+    pub reestablished: u32,
+}
+
+/// Whether a failed read looks like the session (or the channel under it) was
+/// lost: anything but a negative response, or the NRCs a module sends for a
+/// service outside its active session (`0x80`, and the UDS-style `0x7E` /
+/// `0x7F`). A plain refusal (`0x31`, `0x22`, a leaked `0x78`, ...) is not.
+pub fn is_session_loss(e: &opentune_core::Error) -> bool {
+    match e {
+        opentune_core::Error::NegativeResponse { code, .. } => matches!(code, 0x7E..=0x80),
+        _ => true,
+    }
 }
 
 impl<'a> Dq250Reader<'a> {
@@ -411,7 +428,31 @@ impl<'a> Dq250Reader<'a> {
         let mut kwp = Kwp2000Client::new(transport);
         kwp.timeout_ms = timeout_ms;
         let session_error = session.and_then(|s| kwp.start_session(s).err().map(|e| e.to_string()));
-        Self { kwp, session_error }
+        Self {
+            kwp,
+            session,
+            session_error,
+            reestablished: 0,
+        }
+    }
+
+    /// Run one read; after a session-loss symptom restart the session (when
+    /// one was requested) and run it once more. Reads only, so the retry is
+    /// safe. Returns the first failure when a retry happened.
+    fn read<T>(
+        &mut self,
+        f: impl Fn(&mut Kwp2000Client<'a>) -> opentune_core::Result<T>,
+    ) -> (opentune_core::Result<T>, Option<String>) {
+        match f(&mut self.kwp) {
+            Err(e) if is_session_loss(&e) => {
+                self.reestablished += 1;
+                if let Some(s) = self.session {
+                    self.session_error = self.kwp.start_session(s).err().map(|e| e.to_string());
+                }
+                (f(&mut self.kwp), Some(e.to_string()))
+            }
+            r => (r, None),
+        }
     }
 
     /// Read identification `options` (each in `0x80..=0x9F`, the ISO
@@ -429,7 +470,7 @@ impl<'a> Dq250Reader<'a> {
                 });
                 continue;
             }
-            let rec = match self.kwp.read_ecu_id(opt) {
+            let rec = match self.read(|k| k.read_ecu_id(opt)).0 {
                 // The client strips the SID; the record follows the echoed option.
                 Ok(resp) if resp.first() == Some(&opt) => resp[1..].to_vec(),
                 Ok(resp) => {
@@ -473,8 +514,8 @@ impl<'a> Dq250Reader<'a> {
 
     /// Stored trouble codes (`18 02 FF 00`: all stored codes, all groups).
     pub fn dtcs(&mut self) -> Result<Vec<Dtc>, String> {
-        self.kwp
-            .read_dtcs_by_status(0x02, 0xFF00)
+        self.read(|k| k.read_dtcs_by_status(0x02, 0xFF00))
+            .0
             .map(|list| {
                 list.into_iter()
                     .map(|d| Dtc {
@@ -490,7 +531,8 @@ impl<'a> Dq250Reader<'a> {
 
     /// One measuring group; a refusal is recorded in [`Group::error`].
     pub fn group(&mut self, group: u8, labels: &GroupLabels) -> Group {
-        match self.kwp.read_local_id(group) {
+        let (r, first) = self.read(|k| k.read_local_id(group));
+        let mut g = match r {
             Ok(rec) => decode_group(group, &rec, labels),
             Err(e) => Group {
                 group,
@@ -499,7 +541,13 @@ impl<'a> Dq250Reader<'a> {
                 error: Some(e.to_string()),
                 notes: Vec::new(),
             },
+        };
+        if let Some(first) = first {
+            g.notes.push(format!(
+                "read again after restarting the session (first attempt: {first})"
+            ));
         }
+        g
     }
 }
 
