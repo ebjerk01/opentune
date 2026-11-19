@@ -228,6 +228,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- ECU identification: the four reference Mercedes EDC15C6 calibrations
+  (SW 1037351686 / 351637 / 351736 / 351737) now match the `bosch-edc15c6`
+  definition instead of `bosch-edc16u34`, whose broad `1037` software key
+  matches any Bosch number. Scanning every owner fixture before and after
+  shows no other match changed.
 - EDC15C6: `checksum verify` reports a real EDC15C6 (or VAG TDI v4.1v2) image
   as a recognised family instead of "mathematical match only"; the
   `bosch-edc15c6` definition now names the `edc15c6` checksum (map write-back
