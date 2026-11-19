@@ -452,7 +452,7 @@ impl<'a> SsmClient<'a> {
             let n = per.min(count - out.len());
             let at = address
                 .checked_add(out.len() as u32)
-                .filter(|a| a + n as u32 - 1 <= MAX_ADDRESS)
+                .filter(|&a| u64::from(a) + n as u64 - 1 <= u64::from(MAX_ADDRESS))
                 .ok_or_else(|| Error::Protocol("A0 block runs past 0xFFFFFF".into()))?;
             let resp = self.exchange(&read_block_payload(at, n)?)?;
             if resp.len() != 1 + n {
