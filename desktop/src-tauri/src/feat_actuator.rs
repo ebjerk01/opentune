@@ -861,12 +861,15 @@ mod tests {
         };
 
         // 1. Runs to the end; meanwhile the adapter is busy for everyone else.
+        // The hold is long enough that the busy checks below run while the
+        // test is still going, even on a heavily loaded build machine (400 ms
+        // flaked under a parallel gate run).
         let a = ask(
             "adaptation/engine.json",
             "Radiator fan",
             "adjust",
             Some(30.0),
-            400,
+            3000,
         );
         let t = begin(
             &hub,

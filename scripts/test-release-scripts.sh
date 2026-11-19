@@ -117,4 +117,29 @@ if "$PY" -I "$GEN" --conf "$T/conf2.json" --tag v0.0.0 --repo o/r --assets "$T/o
     fail "signature from a foreign key accepted"
 fi
 ok "rejects a signature from a key the app does not trust"
+
+# --- changelog-section.py ----------------------------------------------------
+CL="$REPO_ROOT/scripts/changelog-section.py"
+cat > "$T/CHANGELOG.md" <<'MD'
+# Changelog
+
+## [Unreleased]
+
+## [1.2.0] - 2026-01-02
+### Added
+- thing two
+
+## [1.1.0] - 2026-01-01
+- thing one
+
+[1.2.0]: https://example.invalid/compare/v1.1.0...v1.2.0
+MD
+sec=$("$PY" -I "$CL" v1.2.0 "$T/CHANGELOG.md") || fail "changelog section not found"
+[ "$sec" = "$(printf '### Added\n- thing two')" ] || fail "wrong changelog section: $sec"
+[ "$("$PY" -I "$CL" 1.1.0 "$T/CHANGELOG.md")" = "- thing one" ] || fail "last section keeps link defs"
+if "$PY" -I "$CL" 9.9.9 "$T/CHANGELOG.md" >/dev/null 2>&1; then fail "missing version accepted"; fi
+ok "changelog-section extracts one version and refuses a missing one"
+repo_ver=$("$REPO_ROOT/scripts/bump-version.sh" --print)
+"$PY" -I "$CL" "$repo_ver" "$REPO_ROOT/CHANGELOG.md" >/dev/null || fail "CHANGELOG.md has no section for $repo_ver"
+ok "CHANGELOG.md has a section for $repo_ver"
 echo "release scripts: all tests passed"

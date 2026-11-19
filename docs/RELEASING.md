@@ -26,7 +26,11 @@ versioned separately. Build metadata (`+...`) is rejected because GitHub rewrite
 
 ## Cutting a release
 
-1. `scripts/bump-version.sh X.Y.Z`, commit, merge to `main`.
+1. `scripts/bump-version.sh X.Y.Z`, move the `[Unreleased]` entries in
+   [`CHANGELOG.md`](../CHANGELOG.md) into a `## [X.Y.Z] - YYYY-MM-DD` section
+   (the release-scripts test fails if the current version has no section),
+   commit, merge to `main`. The release notes include that section
+   ([`scripts/changelog-section.py`](../scripts/changelog-section.py)).
 2. `git tag -a vX.Y.Z -m "OpenTune X.Y.Z" && git push origin vX.Y.Z`.
 3. The *Release* workflow runs:
    - **prepare** — tag = every version field; `tauri.conf.json`'s updater endpoint
