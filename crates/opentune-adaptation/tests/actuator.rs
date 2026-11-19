@@ -63,7 +63,10 @@ impl Ecu {
             sent: Vec::new(),
         }
     }
-    fn with_fault(mut self, f: impl FnMut(&[u8]) -> Option<Result<Vec<u8>, String>> + 'static) -> Self {
+    fn with_fault(
+        mut self,
+        f: impl FnMut(&[u8]) -> Option<Result<Vec<u8>, String>> + 'static,
+    ) -> Self {
         self.fault = Box::new(f);
         self
     }
@@ -139,7 +142,11 @@ fn adjustment_is_held_with_tester_present_then_returned() {
     assert_eq!(ecu.sent.last().unwrap(), &vec![0x10, 0x01]);
     assert!(!ecu.server.io_overridden(FAN));
     assert_eq!(ecu.server.io_state(FAN), Some(&[0x00][..]));
-    assert_eq!(clock.live, rep.exchanges.len(), "every exchange is fed live");
+    assert_eq!(
+        clock.live,
+        rep.exchanges.len(),
+        "every exchange is fed live"
+    );
     assert!(rep.exchanges.iter().all(|e| e.error.is_none()));
 }
 
@@ -186,7 +193,11 @@ fn refused_control_request_still_returns_control() {
     assert!(!rep.applied && rep.safe, "a clean refusal applied nothing");
     assert_eq!(rep.held_ms, 0);
     assert_eq!(ecu.count(&[0x3E]), 0, "no hold after a refusal");
-    assert_eq!(ecu.count(&[0x2F, 0x09, 0x99, 0x00]), 2, "return still sent (and retried)");
+    assert_eq!(
+        ecu.count(&[0x2F, 0x09, 0x99, 0x00]),
+        2,
+        "return still sent (and retried)"
+    );
 }
 
 #[test]
@@ -194,9 +205,19 @@ fn a_refused_session_drives_nothing() {
     // The session is refused: nothing is driven, nothing needs returning.
     let d = def(false);
     let p = plan(&d, "Fan", IoControl::ShortTermAdjustment, Some(1), 1000);
-    let mut ecu = Ecu::new().with_fault(|r| (r == [0x10, 0x03]).then(|| Ok(vec![0x7F, 0x10, 0x22])));
+    let mut ecu =
+        Ecu::new().with_fault(|r| (r == [0x10, 0x03]).then(|| Ok(vec![0x7F, 0x10, 0x22])));
     let rep = run_test(&mut ecu, &p, &go(), &mut Clock::default()).unwrap();
-    assert!(matches!(rep.outcome, TestOutcome::Aborted { phase: Phase::Session, .. }), "{rep:?}");
+    assert!(
+        matches!(
+            rep.outcome,
+            TestOutcome::Aborted {
+                phase: Phase::Session,
+                ..
+            }
+        ),
+        "{rep:?}"
+    );
     assert!(rep.safe && !rep.applied);
     assert_eq!(ecu.count(&[0x2F]), 0);
 }
@@ -233,11 +254,17 @@ fn a_lost_link_reports_control_not_returned_loudly() {
         None
     });
     let rep = run_test(&mut ecu, &p, &go(), &mut Clock::default()).unwrap();
-    assert!(matches!(rep.outcome, TestOutcome::ControlReturnFailed { .. }), "{rep:?}");
+    assert!(
+        matches!(rep.outcome, TestOutcome::ControlReturnFailed { .. }),
+        "{rep:?}"
+    );
     assert!(rep.applied && !rep.control_returned && !rep.safe);
     assert_eq!(rep.return_attempts, 2);
     assert!(!rep.default_session);
-    assert!(ecu.server.io_overridden(FAN), "the module really is still forced");
+    assert!(
+        ecu.server.io_overridden(FAN),
+        "the module really is still forced"
+    );
 }
 
 #[test]
@@ -295,7 +322,16 @@ fn a_wrong_key_aborts_before_driving_anything() {
         &mut Clock::default(),
     )
     .unwrap();
-    assert!(matches!(rep.outcome, TestOutcome::Aborted { phase: Phase::Security, .. }), "{rep:?}");
+    assert!(
+        matches!(
+            rep.outcome,
+            TestOutcome::Aborted {
+                phase: Phase::Security,
+                ..
+            }
+        ),
+        "{rep:?}"
+    );
     assert_eq!(ecu.count(&[0x2F]), 0);
 }
 

@@ -36,8 +36,7 @@ use crate::seedkeys::SeedKeys;
 use crate::state::{BuildChannel, DebugLog};
 use opentune_adaptation::actuator::{
     self, freeform_def, freeform_name, plan_test, run_test, Exchange, PlanOptions, RealClock,
-    TestClock, TestLogin, TestOutcome, TestPlan, TestRequest, TestValue,
-    FREEFORM_MAX_DURATION_MS,
+    TestClock, TestLogin, TestOutcome, TestPlan, TestRequest, TestValue, FREEFORM_MAX_DURATION_MS,
 };
 use opentune_adaptation::{AdaptationDef, IoControl};
 use serde_json::{json, Value};
@@ -117,7 +116,10 @@ impl ActiveTest {
     /// The `actuator_status` JSON.
     pub fn status(&self) -> Value {
         let l = self.live();
-        let elapsed = l.started.map(|t| t.elapsed().as_millis() as u64).unwrap_or(0);
+        let elapsed = l
+            .started
+            .map(|t| t.elapsed().as_millis() as u64)
+            .unwrap_or(0);
         json!({
             "running": l.running,
             "channel": self.plan.channel,
@@ -213,7 +215,10 @@ fn hexs(b: &[u8]) -> String {
 
 fn parse_did(s: &str) -> Result<u16, String> {
     let t = s.trim();
-    let h = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    let h = t
+        .strip_prefix("0x")
+        .or_else(|| t.strip_prefix("0X"))
+        .unwrap_or(t);
     u16::from_str_radix(h, 16).map_err(|_| format!("free-form DID '{s}': expected 4 hex digits"))
 }
 
@@ -224,7 +229,9 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, String> {
     }
     (0..clean.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'")))
+        .map(|i| {
+            u8::from_str_radix(&clean[i..i + 2], 16).map_err(|_| format!("invalid hex in '{s}'"))
+        })
         .collect()
 }
 
@@ -257,7 +264,12 @@ pub fn plan_ask(ask: &Ask, build: &BuildChannel) -> Result<Planned, String> {
                     .to_string()
             })?;
             let did = parse_did(did)?;
-            let state = match ask.state.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            let state = match ask
+                .state
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
                 Some(s) => Some(parse_hex(s)?),
                 None => None,
             };
@@ -661,7 +673,13 @@ mod tests {
         }
     }
 
-    fn prep(a: &Ask, build: &BuildChannel, ack: bool, ff_ack: bool, sk: Option<&str>) -> Result<Start, String> {
+    fn prep(
+        a: &Ask,
+        build: &BuildChannel,
+        ack: bool,
+        ff_ack: bool,
+        sk: Option<&str>,
+    ) -> Result<Start, String> {
         prepare(
             a,
             build,
@@ -691,30 +709,66 @@ mod tests {
 
     #[test]
     fn gates_stable_ack_range_target_security_and_freeform() {
-        let fan = ask("adaptation/engine.json", "Radiator fan", "adjust", Some(40.0), 3000);
+        let fan = ask(
+            "adaptation/engine.json",
+            "Radiator fan",
+            "adjust",
+            Some(40.0),
+            3000,
+        );
         // Stable channel: refused, but planning still works.
         let stable = BuildChannel::new(BuildChannel::STABLE);
         let e = prep(&fan, &stable, true, false, None).err().unwrap();
         assert!(e.contains("Bench-tier"), "{e}");
         assert!(plan_ask(&fan, &stable).is_ok());
         // No per-run confirmation.
-        assert!(prep(&fan, &bench(), false, false, None).err().unwrap().contains("ack required"));
+        assert!(prep(&fan, &bench(), false, false, None)
+            .err()
+            .unwrap()
+            .contains("ack required"));
         // Out of the declared range / above the duration cap / undeclared option.
         let mut a = fan.clone();
         a.value = Some(150.0);
-        assert!(prep(&a, &bench(), true, false, None).err().unwrap().contains("declared range"));
+        assert!(prep(&a, &bench(), true, false, None)
+            .err()
+            .unwrap()
+            .contains("declared range"));
         a = fan.clone();
         a.duration_ms = 10_001;
-        assert!(prep(&a, &bench(), true, false, None).err().unwrap().contains("limit"));
-        let lamp = ask("adaptation/airbag.json", "Airbag warning lamp", "freeze", None, 1000);
-        assert!(prep(&lamp, &bench(), true, false, Some("vcar-test")).err().unwrap().contains("not declared"));
+        assert!(prep(&a, &bench(), true, false, None)
+            .err()
+            .unwrap()
+            .contains("limit"));
+        let lamp = ask(
+            "adaptation/airbag.json",
+            "Airbag warning lamp",
+            "freeze",
+            None,
+            1000,
+        );
+        assert!(prep(&lamp, &bench(), true, false, Some("vcar-test"))
+            .err()
+            .unwrap()
+            .contains("not declared"));
         // A raw state on a declared channel is refused.
         a = fan.clone();
         a.state = Some("FF".into());
-        assert!(prep(&a, &bench(), true, false, None).err().unwrap().contains("free-form"));
+        assert!(prep(&a, &bench(), true, false, None)
+            .err()
+            .unwrap()
+            .contains("free-form"));
         // The airbag module needs SecurityAccess: no id / unknown id refused.
-        let lamp = ask("adaptation/airbag.json", "Airbag warning lamp", "adjust", None, 1000);
-        assert!(prep(&lamp, &bench(), true, false, None).err().unwrap().contains("SecurityAccess"));
+        let lamp = ask(
+            "adaptation/airbag.json",
+            "Airbag warning lamp",
+            "adjust",
+            None,
+            1000,
+        );
+        assert!(prep(&lamp, &bench(), true, false, None)
+            .err()
+            .unwrap()
+            .contains("SecurityAccess"));
         assert!(prep(&lamp, &bench(), true, false, Some("oem-x")).is_err());
         assert!(prep(&lamp, &bench(), true, false, Some("vcar-test")).is_ok());
         // Free-form: alpha Debug gate, second confirmation, explicit target.
@@ -725,10 +779,19 @@ mod tests {
             state: Some("01".into()),
             ..Ask::default()
         };
-        assert!(prep(&ff, &stable, true, true, None).err().unwrap().contains("Bench-tier"));
+        assert!(prep(&ff, &stable, true, true, None)
+            .err()
+            .unwrap()
+            .contains("Bench-tier"));
         assert!(plan_ask(&ff, &stable).err().unwrap().contains("Debug gate"));
-        assert!(prep(&ff, &bench(), true, false, None).err().unwrap().contains("second"));
-        assert!(prep(&ff, &bench(), true, true, None).err().unwrap().contains("CAN address is unknown"));
+        assert!(prep(&ff, &bench(), true, false, None)
+            .err()
+            .unwrap()
+            .contains("second"));
+        assert!(prep(&ff, &bench(), true, true, None)
+            .err()
+            .unwrap()
+            .contains("CAN address is unknown"));
         let mut long = ff.clone();
         long.duration_ms = FREEFORM_MAX_DURATION_MS + 1;
         assert!(plan_ask(&long, &bench()).is_err());
@@ -745,7 +808,13 @@ mod tests {
         eng.set_io(0x0500, vec![0x00]);
         bus.add(0x7E0, 0x7E8, eng);
         let mut s = bus.session();
-        let a = ask("adaptation/engine.json", "Radiator fan", "adjust", Some(55.0), 300);
+        let a = ask(
+            "adaptation/engine.json",
+            "Radiator fan",
+            "adjust",
+            Some(55.0),
+            300,
+        );
         let st = prep(&a, &bench(), true, false, None).unwrap();
         let test = Arc::new(ActiveTest {
             plan: st.planned.plan,
@@ -766,7 +835,11 @@ mod tests {
         assert_eq!(sent[1], vec![0x2F, 0x05, 0x00, 0x03, 55]);
         assert!(sent.contains(&vec![0x2F, 0x05, 0x00, 0x00]));
         assert!(!bus.ecus.borrow()[&(0x7E0, 0x7E8)].io_overridden(0x0500));
-        assert_eq!(test.live().exchanges.len(), sent.len(), "live log saw every exchange");
+        assert_eq!(
+            test.live().exchanges.len(),
+            sent.len(),
+            "live log saw every exchange"
+        );
     }
 
     /// The real hub with the `vcar` driver from the registry: a timed test to
@@ -788,12 +861,31 @@ mod tests {
         };
 
         // 1. Runs to the end; meanwhile the adapter is busy for everyone else.
-        let a = ask("adaptation/engine.json", "Radiator fan", "adjust", Some(30.0), 400);
-        let t = begin(&hub, &state, &keys, &log, prep(&a, &bench(), true, false, None).unwrap()).unwrap();
+        let a = ask(
+            "adaptation/engine.json",
+            "Radiator fan",
+            "adjust",
+            Some(30.0),
+            400,
+        );
+        let t = begin(
+            &hub,
+            &state,
+            &keys,
+            &log,
+            prep(&a, &bench(), true, false, None).unwrap(),
+        )
+        .unwrap();
         let again = prep(&a, &bench(), true, false, None).unwrap();
-        assert!(begin(&hub, &state, &keys, &log, again).err().unwrap().contains("already running"));
+        assert!(begin(&hub, &state, &keys, &log, again)
+            .err()
+            .unwrap()
+            .contains("already running"));
         let busy = hub.run("obd live", |_s| Ok(())).unwrap_err();
-        assert!(busy.contains("adapter busy") && busy.contains(TEST_OP), "{busy}");
+        assert!(
+            busy.contains("adapter busy") && busy.contains(TEST_OP),
+            "{busy}"
+        );
         assert!(t.wait_done(Duration::from_secs(20)));
         let v = t.status();
         assert_eq!(v["report"]["outcome"], "completed", "{v}");
@@ -806,9 +898,22 @@ mod tests {
         assert!(hub.run("after", |_s| Ok(1)).is_ok(), "slot freed");
 
         // 2. STOP ends a long test early and still returns control.
-        let a = ask("adaptation/engine.json", "Radiator fan", "adjust", Some(80.0), 10_000);
+        let a = ask(
+            "adaptation/engine.json",
+            "Radiator fan",
+            "adjust",
+            Some(80.0),
+            10_000,
+        );
         let t0 = Instant::now();
-        begin(&hub, &state, &keys, &log, prep(&a, &bench(), true, false, None).unwrap()).unwrap();
+        begin(
+            &hub,
+            &state,
+            &keys,
+            &log,
+            prep(&a, &bench(), true, false, None).unwrap(),
+        )
+        .unwrap();
         std::thread::sleep(Duration::from_millis(300));
         let v = stop(&state, "STOP pressed").unwrap();
         assert!(t0.elapsed() < Duration::from_secs(5));
@@ -818,14 +923,32 @@ mod tests {
         assert_eq!(v["running"], false);
 
         // 3. A secured module: SecurityAccess first, with the test-only key.
-        let a = ask("adaptation/airbag.json", "Airbag warning lamp", "adjust", None, 200);
-        let t = begin(&hub, &state, &keys, &log, prep(&a, &bench(), true, false, Some("vcar-test")).unwrap()).unwrap();
+        let a = ask(
+            "adaptation/airbag.json",
+            "Airbag warning lamp",
+            "adjust",
+            None,
+            200,
+        );
+        let t = begin(
+            &hub,
+            &state,
+            &keys,
+            &log,
+            prep(&a, &bench(), true, false, Some("vcar-test")).unwrap(),
+        )
+        .unwrap();
         assert!(t.wait_done(Duration::from_secs(20)));
         let v = t.status();
         assert_eq!(v["report"]["outcome"], "completed", "{v}");
         assert_eq!(v["report"]["security_unlocked"], true);
         assert_eq!(reqs(&v)[1], "27 01");
-        assert!(log.0.lock().unwrap().iter().any(|l| l.contains("[actuator 715]")));
+        assert!(log
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|l| l.contains("[actuator 715]")));
     }
 
     #[test]

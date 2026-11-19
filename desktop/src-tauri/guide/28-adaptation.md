@@ -17,7 +17,7 @@ tests on a module, all from a data-defined channel set (an AdaptationDef JSON).
 2. Choose a **Channel**. Its kind is shown: **value**, **routine** or **actuator**.
 3. **Value channel** — press **Read**. You get the raw value and the scaled value with its unit.
 4. **Routine channel** — choose **start**, **stop** or **request results**, optionally enter **extra** data (hex), tick the confirmation and press **Run test**. Start and stop ask once more before sending.
-5. **Actuator channel** — optionally enter a **state** (hex) to override the default, tick the confirmation and press **Run test**.
+5. **Actuator channel** — optionally enter a **state** (hex) to override the default, tick the confirmation and press **Run test**. For a **timed** test with a value, a STOP button and a live log, use the **Actuator tests** panel.
 
 The confirmation box clears after each run. Tick it again for the next one.
 

@@ -53,7 +53,8 @@ for the full set); each calls straight into the OpenTune crates.
 - **Adapter** — `list_drivers`, `probe_adapter`, `build_channel`.
 - **Diagnostics engines** (`feat_*.rs`) — `coding_read` / `_set_preview` /
   `_write`, `autoscan_run` / `_clear`, `adaptation_list` / `_read` /
-  `_actuator` / `_routine`, `service_plan` / `_run`, `log_params` /
+  `_actuator` / `_routine`, `actuator_list` / `_plan` / `_start` / `_status` /
+  `_stop` (timed IO-control tests), `service_plan` / `_run`, `log_params` /
   `log_poll_once`, `log_start` / `_tick` / `_stop` (fast 0x2C live session),
   `obd_live`, `haldex_modes` / `_status` / `_set_mode` / `_gen4_read` /
   `_decode_log` / `_export_csv`, `ts_load_ini` / `_load_msq` / `_save_msq` /

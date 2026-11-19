@@ -342,6 +342,9 @@ pub fn run_adaptation(
                 r.channel, r.raw, r.engineering, r.unit
             );
         }
+        AdaptAction::Actuator { action } => {
+            super::actuator::run(ctx, &def, &text, driver, store, timeout_ms, action)?
+        }
         kwp => super::kwp_adapt::run(ctx, &def, driver, timeout_ms, kwp)?,
     }
     Ok(())

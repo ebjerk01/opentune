@@ -610,6 +610,13 @@ pub enum AdaptAction {
         #[command(flatten)]
         kwp: KwpConn,
     },
+    /// Timed actuator / output tests (UDS 0x2F) on the actuator channels the
+    /// definition declares: `actuator list`, `actuator run` (plan by default,
+    /// `--ack` executes; control is always returned to the ECU).
+    Actuator {
+        #[command(subcommand)]
+        action: ActuatorAction,
+    },
     /// KWP2000 adaptation save: test, store with the workshop code, read back.
     /// Needs `--ack`, `--seedkey` and `--wsc` (or `--dry-run`).
     KwpSave {
@@ -626,6 +633,82 @@ pub enum AdaptAction {
         #[command(flatten)]
         kwp: KwpConn,
     },
+}
+
+/// `opentune adaptation actuator ...`: timed IO-control tests on declared
+/// channels only (no free-form DIDs on the command line).
+#[derive(Subcommand)]
+pub enum ActuatorAction {
+    /// List the declared actuator channels: DID, options, value range and
+    /// time limit. Sends nothing.
+    List {
+        /// JSON output.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Plan a timed test on one declared channel and print every request;
+    /// with `--ack`, run it: extended session, SecurityAccess when the
+    /// definition requires it, the control request, tester present while the
+    /// output is held, then returnControlToECU (also on Ctrl-C and on any
+    /// error) and the default session. Exits non-zero unless it completed or
+    /// was stopped with control returned.
+    Run {
+        /// Channel name (as in the definition).
+        channel: String,
+        /// Control option: `adjust` (shortTermAdjustment), `reset`
+        /// (resetToDefault), `freeze` (freezeCurrentState) or `return`
+        /// (returnControlToECU). Must be declared by the channel.
+        #[arg(long, default_value = "adjust")]
+        op: String,
+        /// Value for `adjust`, in the channel's engineering unit.
+        #[arg(long, allow_negative_numbers = true, conflicts_with = "raw")]
+        value: Option<f64>,
+        /// Raw value for `adjust` (decimal or 0x hex).
+        #[arg(long)]
+        raw: Option<String>,
+        /// How long to hold the output (capped by the channel).
+        #[arg(long, default_value_t = 3000)]
+        duration_ms: u64,
+        /// Execute the test. Without it the plan is printed and nothing is sent.
+        #[arg(long)]
+        ack: bool,
+        /// Seed/key handler id for SecurityAccess (definitions with
+        /// `requires_security`), resolved by the embedding build or
+        /// `sa2:<hex>` / `sa2:@<file>`; OpenTune ships no algorithm.
+        #[arg(long, value_name = "ID")]
+        seedkey: Option<String>,
+        #[command(flatten)]
+        conn: ActuatorConn,
+        /// JSON output.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+/// The adapter of `adaptation actuator run` (the driver is the parent
+/// `--driver`). The module address is `--tx-id`/`--rx-id`, else the
+/// definition's `req_id`/`resp_id`; a test never defaults to the engine ECU.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct ActuatorConn {
+    /// Adapter port (serial device, CAN interface, host:port; `vcar`: a
+    /// profile spec such as `demo`).
+    #[arg(long, value_name = "PORT")]
+    pub port: Option<String>,
+    /// Serial baud of the adapter link.
+    #[arg(long, value_name = "BAUD")]
+    pub baud: Option<String>,
+    /// Vehicle bus (driver option `bus`, e.g. `hs` / `ms`).
+    #[arg(long, value_name = "BUS")]
+    pub bus: Option<String>,
+    /// Module request CAN id, hex. Give --rx-id too.
+    #[arg(long, value_name = "HEX")]
+    pub tx_id: Option<String>,
+    /// Module response CAN id, hex. Give --tx-id too.
+    #[arg(long, value_name = "HEX")]
+    pub rx_id: Option<String>,
+    /// Extra driver option (repeatable).
+    #[arg(long = "opt", value_name = "KEY=VALUE")]
+    pub opts: Vec<String>,
 }
 
 /// The connection of the `adaptation kwp-*` actions: `--sim`, or the parent

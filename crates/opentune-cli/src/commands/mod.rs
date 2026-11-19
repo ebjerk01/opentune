@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 
+pub mod actuator;
 pub mod checksum;
 pub mod container;
 pub mod contrib;

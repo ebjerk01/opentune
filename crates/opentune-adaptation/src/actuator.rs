@@ -543,8 +543,7 @@ pub fn plan_test(def: &AdaptationDef, req: &TestRequest, opts: PlanOptions) -> R
             "a raw control state is accepted only for a free-form test (alpha Debug)".into(),
         ));
     }
-    if (req.value.is_some() || req.state.is_some())
-        && req.option != IoControl::ShortTermAdjustment
+    if (req.value.is_some() || req.state.is_some()) && req.option != IoControl::ShortTermAdjustment
     {
         return Err(bad(format!(
             "a value applies only to shortTermAdjustment, not {}",
@@ -858,7 +857,14 @@ impl Runner<'_> {
         }
     }
 
-    fn io(&mut self, diag: &mut dyn RawDiag, phase: Phase, did: u16, opt: u8, rec: &[u8]) -> Result<Vec<u8>> {
+    fn io(
+        &mut self,
+        diag: &mut dyn RawDiag,
+        phase: Phase,
+        did: u16,
+        opt: u8,
+        rec: &[u8],
+    ) -> Result<Vec<u8>> {
         let mut req = vec![0x2F, (did >> 8) as u8, did as u8, opt];
         req.extend_from_slice(rec);
         let resp = self.send(diag, phase, req)?;
@@ -1085,7 +1091,9 @@ fn login_steps(
     }
     let sec = |e: AdaptationError| (Phase::Security, e);
     let level = plan.security_level;
-    let resp = r.send(diag, Phase::Security, vec![0x27, level]).map_err(sec)?;
+    let resp = r
+        .send(diag, Phase::Security, vec![0x27, level])
+        .map_err(sec)?;
     if resp.get(1) != Some(&level) {
         return Err(sec(AdaptationError::Protocol(format!(
             "requestSeed reply {} did not echo level 0x{level:02X}",
@@ -1184,7 +1192,10 @@ mod tests {
         // Legacy channel: shortTermAdjustment with the default state only.
         assert_eq!(
             a[1].options,
-            vec![IoControl::ReturnControlToEcu, IoControl::ShortTermAdjustment]
+            vec![
+                IoControl::ReturnControlToEcu,
+                IoControl::ShortTermAdjustment
+            ]
         );
         assert_eq!(a[1].max_duration_ms, DEFAULT_MAX_DURATION_MS);
     }
@@ -1207,7 +1218,13 @@ mod tests {
         let reqs: Vec<String> = p.steps.iter().map(|s| hex(&s.request)).collect();
         assert_eq!(
             reqs,
-            ["10 03", "2F 30 10 03 00 4B", "3E 00", "2F 30 10 00", "10 01"]
+            [
+                "10 03",
+                "2F 30 10 03 00 4B",
+                "3E 00",
+                "2F 30 10 00",
+                "10 01"
+            ]
         );
     }
 
@@ -1216,15 +1233,45 @@ mod tests {
         let d = def();
         let e = |r: TestRequest| plan_test(&d, &r, PlanOptions::default()).unwrap_err();
         // out of range (engineering and raw)
-        let m = e(req("Fan", IoControl::ShortTermAdjustment, Some(TestValue::Engineering(101.0)), 1000));
+        let m = e(req(
+            "Fan",
+            IoControl::ShortTermAdjustment,
+            Some(TestValue::Engineering(101.0)),
+            1000,
+        ));
         assert!(m.to_string().contains("declared range"), "{m}");
-        e(req("Fan", IoControl::ShortTermAdjustment, Some(TestValue::Raw(201)), 1000));
-        e(req("Fan", IoControl::ShortTermAdjustment, Some(TestValue::Engineering(-3.0)), 1000));
-        e(req("Fan", IoControl::ShortTermAdjustment, Some(TestValue::Engineering(f64::NAN)), 1000));
+        e(req(
+            "Fan",
+            IoControl::ShortTermAdjustment,
+            Some(TestValue::Raw(201)),
+            1000,
+        ));
+        e(req(
+            "Fan",
+            IoControl::ShortTermAdjustment,
+            Some(TestValue::Engineering(-3.0)),
+            1000,
+        ));
+        e(req(
+            "Fan",
+            IoControl::ShortTermAdjustment,
+            Some(TestValue::Engineering(f64::NAN)),
+            1000,
+        ));
         // value missing / value on a channel without one / value with reset
         e(req("Fan", IoControl::ShortTermAdjustment, None, 1000));
-        e(req("Lamp", IoControl::ShortTermAdjustment, Some(TestValue::Raw(1)), 1000));
-        e(req("Fan", IoControl::ResetToDefault, Some(TestValue::Raw(1)), 1000));
+        e(req(
+            "Lamp",
+            IoControl::ShortTermAdjustment,
+            Some(TestValue::Raw(1)),
+            1000,
+        ));
+        e(req(
+            "Fan",
+            IoControl::ResetToDefault,
+            Some(TestValue::Raw(1)),
+            1000,
+        ));
         // undeclared option
         let m = e(req("Lamp", IoControl::FreezeCurrentState, None, 1000));
         assert!(m.to_string().contains("not declared"), "{m}");
@@ -1246,7 +1293,14 @@ mod tests {
         let mut r = req("Lamp", IoControl::ShortTermAdjustment, None, 1000);
         r.state = Some(vec![9]);
         e(r.clone());
-        let p = plan_test(&d, &r, PlanOptions { allow_raw_state: true }).unwrap();
+        let p = plan_test(
+            &d,
+            &r,
+            PlanOptions {
+                allow_raw_state: true,
+            },
+        )
+        .unwrap();
         assert_eq!(p.record, vec![9]);
     }
 
@@ -1266,13 +1320,39 @@ mod tests {
     #[test]
     fn freeform_def_is_capped_and_needs_a_raw_state() {
         let d = freeform_def(0x0999, false, None);
-        let mut r = req(&freeform_name(0x0999), IoControl::ShortTermAdjustment, None, 5000);
-        assert!(plan_test(&d, &r, PlanOptions { allow_raw_state: true }).is_err());
+        let mut r = req(
+            &freeform_name(0x0999),
+            IoControl::ShortTermAdjustment,
+            None,
+            5000,
+        );
+        assert!(plan_test(
+            &d,
+            &r,
+            PlanOptions {
+                allow_raw_state: true
+            }
+        )
+        .is_err());
         r.state = Some(vec![1, 2]);
         assert!(plan_test(&d, &r, PlanOptions::default()).is_err());
-        assert!(plan_test(&d, &r, PlanOptions { allow_raw_state: true }).is_ok());
+        assert!(plan_test(
+            &d,
+            &r,
+            PlanOptions {
+                allow_raw_state: true
+            }
+        )
+        .is_ok());
         r.duration_ms = FREEFORM_MAX_DURATION_MS + 1;
-        assert!(plan_test(&d, &r, PlanOptions { allow_raw_state: true }).is_err());
+        assert!(plan_test(
+            &d,
+            &r,
+            PlanOptions {
+                allow_raw_state: true
+            }
+        )
+        .is_err());
     }
 
     #[test]
@@ -1296,6 +1376,9 @@ mod tests {
             assert!(d.validate().is_err(), "{ch}");
         }
         let js = r#"{"id":"x","name":"x","security_level":2,"channels":[{"name":"A","kind":"actuator","did":1}]}"#;
-        assert!(AdaptationDef::from_json(js).unwrap().validate().is_err(), "even level");
+        assert!(
+            AdaptationDef::from_json(js).unwrap().validate().is_err(),
+            "even level"
+        );
     }
 }

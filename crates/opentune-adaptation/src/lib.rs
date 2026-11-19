@@ -506,7 +506,14 @@ impl AdaptationDef {
                     if let Some(s) = status {
                         check_width(&ch.name, s.width)?;
                     }
-                    check_actuator(&ch.name, state, value.as_ref(), *min, *max, *max_duration_ms)?;
+                    check_actuator(
+                        &ch.name,
+                        state,
+                        value.as_ref(),
+                        *min,
+                        *max,
+                        *max_duration_ms,
+                    )?;
                 }
                 ChannelKind::KwpGroup { .. } => {}
                 ChannelKind::KwpBasicSettings { kwp, .. } => kwp.validate(&ch.name)?,
