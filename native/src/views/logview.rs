@@ -622,7 +622,8 @@ impl LogView {
         ui.scope_builder(UiBuilder::new().max_rect(right), |ui| self.plot_pane(ui, t));
     }
 
-    fn open(&mut self, ctx: &egui::Context, path: PathBuf) {
+    /// Start loading `path` in the background (also used for dropped files).
+    pub(crate) fn open(&mut self, ctx: &egui::Context, path: PathBuf) {
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         let p = path.clone();

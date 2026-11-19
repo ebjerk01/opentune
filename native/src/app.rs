@@ -184,6 +184,14 @@ impl App {
     }
 }
 
+/// Dropped / opened files with these extensions go to the Log viewer;
+/// everything else is opened as a flash dump.
+fn is_log_file(p: &std::path::Path) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "csv" | "tsv" | "log"))
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -213,13 +221,19 @@ impl eframe::App for App {
                 .then(|| {
                     rfd::FileDialog::new()
                         .add_filter("flash image", &["bin", "ori", "mod", "hex", "BIN"])
+                        .add_filter("datalog", &["csv", "tsv", "log"])
                         .pick_file()
                 })
                 .flatten()
         });
         if let Some(p) = pick {
-            self.flash.open(&self.defs, p, &mut self.settings);
-            self.view = View::Flash;
+            if is_log_file(&p) {
+                self.logview.open(&ctx, p);
+                self.view = View::Log;
+            } else {
+                self.flash.open(&self.defs, p, &mut self.settings);
+                self.view = View::Flash;
+            }
         }
         let hovering_file = ctx.input(|i| !i.raw.hovered_files.is_empty());
 
