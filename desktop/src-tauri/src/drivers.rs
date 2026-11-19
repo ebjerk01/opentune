@@ -116,6 +116,20 @@ pub async fn probe_adapter(
         bus.as_deref(),
         adapter::Addr::ENGINE,
     );
+    let (result, line) = probe_json(&hub, key, &driver);
+    if let Some(line) = line {
+        log.push(line);
+    }
+    Ok(result)
+}
+
+/// The probe behind [`probe_adapter`]: its JSON answer plus the session-log
+/// line to record (none when the hub was busy).
+pub(crate) fn probe_json(
+    hub: &adapter::AdapterHub,
+    key: adapter::ConnKey,
+    driver: &str,
+) -> (Value, Option<String>) {
     let res = hub.run("detect adapter", move |s| {
         // A probe is an explicit "is it there?" — always a fresh handshake.
         s.invalidate();
@@ -133,12 +147,12 @@ pub async fn probe_adapter(
     });
     match res {
         Ok(Ok((info, caps, battery_mv))) => {
-            log.push(format!(
+            let line = format!(
                 "probe {driver}: FOUND {} {}",
                 info.display_name,
                 info.firmware.clone().unwrap_or_default()
-            ));
-            Ok(json!({
+            );
+            let v = json!({
                 "connected": true,
                 "driver": info.id,
                 "name": info.display_name,
@@ -156,14 +170,18 @@ pub async fn probe_adapter(
                     "programming_voltage": caps.programming_voltage,
                     "doip": caps.doip,
                 },
-            }))
+            });
+            (v, Some(line))
         }
         Ok(Err(e)) => {
-            log.push(format!("probe {driver}: {e}"));
-            Ok(json!({ "connected": false, "error": e }))
+            let line = format!("probe {driver}: {e}");
+            (json!({ "connected": false, "error": e }), Some(line))
         }
         // The hub refused (another operation holds the adapter) — not "absent".
-        Err(e) => Ok(json!({ "connected": false, "busy": true, "error": e })),
+        Err(e) => (
+            json!({ "connected": false, "busy": true, "error": e }),
+            None,
+        ),
     }
 }
 
