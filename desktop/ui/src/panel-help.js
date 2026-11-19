@@ -25,6 +25,7 @@
     scan: ["Detect the adapter (HS/MS switch on the module bus)", "Choose the vehicle's module list and Scan", "Clear codes per module only after fixing the cause"],
     dashboard: ["Detect the adapter, engine running", "Pick a preset or your own values", "Start: only values the ECU reports are shown"],
     obd: ["Detect the adapter", "Start with the ignition on", "Values read — when the ECU does not report them"],
+    wizard: ["Plug in the adapter, ignition on, then Check the adapter", "Run each step in turn: skip or retry any of them", "Save or print the report at the end"],
     inspection: ["Detect the adapter, ignition on", "Read all (tick All OBD modules for every ECU)", "Check MIL, monitors not ready, codes and CVNs"],
     logging: ["Load a logger definition", "Pick parameters and Start", "Save the log as CSV"],
     driveview: ["Replay: Open log… (or ▶ Drive view in the Log viewer), then play at 1×–8×", "Live (Bench): Start, or keep the Dashboard / a Live log session running", "F fullscreen, R reset min/max, Space pause"],

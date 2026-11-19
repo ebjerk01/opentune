@@ -65,13 +65,13 @@ fn now_ms() -> u64 {
 
 /// Connection args as the UI sends them (`window.OT.connArgs()`).
 #[derive(Debug, Clone, Default)]
-struct Conn {
-    driver: String,
-    port: Option<String>,
-    baud: Option<String>,
-    bus: Option<String>,
-    tx_id: Option<String>,
-    rx_id: Option<String>,
+pub(crate) struct Conn {
+    pub(crate) driver: String,
+    pub(crate) port: Option<String>,
+    pub(crate) baud: Option<String>,
+    pub(crate) bus: Option<String>,
+    pub(crate) tx_id: Option<String>,
+    pub(crate) rx_id: Option<String>,
 }
 
 impl Conn {
@@ -174,7 +174,7 @@ fn read_json(ro: Readout, battery_mv: Option<u32>, link: PollLink) -> Value {
     })
 }
 
-fn supported_impl(hub: &AdapterHub, conn: Conn) -> Result<Value, String> {
+pub(crate) fn supported_impl(hub: &AdapterHub, conn: Conn) -> Result<Value, String> {
     let cache = conn.cache_key()?;
     if conn.is_sim() {
         let mut ecu = SimEcu::demo(now_ms() / 100);
@@ -190,7 +190,7 @@ fn supported_impl(hub: &AdapterHub, conn: Conn) -> Result<Value, String> {
     Ok(supported_json(pids, vin))
 }
 
-fn read_impl(hub: &AdapterHub, conn: Conn, pids: Vec<u8>) -> Result<Value, String> {
+pub(crate) fn read_impl(hub: &AdapterHub, conn: Conn, pids: Vec<u8>) -> Result<Value, String> {
     let cache = conn.cache_key()?;
     let sess = load_session(&cache);
     if conn.is_sim() {
@@ -220,7 +220,7 @@ pub fn obd_pid_table() -> Vec<Value> {
     pid_table_rows()
 }
 
-fn pid_table_rows() -> Vec<Value> {
+pub(crate) fn pid_table_rows() -> Vec<Value> {
     obd::channels()
         .iter()
         .map(|c| {

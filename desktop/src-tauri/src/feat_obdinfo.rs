@@ -41,21 +41,21 @@ fn now_ms() -> u64 {
 
 /// Connection args as the UI sends them (`window.OT.connArgs()`).
 #[derive(Debug, Clone, Default)]
-struct Conn {
-    driver: String,
-    port: Option<String>,
-    baud: Option<String>,
-    bus: Option<String>,
-    tx_id: Option<String>,
-    rx_id: Option<String>,
+pub(crate) struct Conn {
+    pub(crate) driver: String,
+    pub(crate) port: Option<String>,
+    pub(crate) baud: Option<String>,
+    pub(crate) bus: Option<String>,
+    pub(crate) tx_id: Option<String>,
+    pub(crate) rx_id: Option<String>,
 }
 
 /// What one [`obd_inspect`] call reads.
 #[derive(Debug, Clone, Copy)]
-struct Request {
-    sections: Sections,
-    all_ecus: bool,
-    frame: u8,
+pub(crate) struct Request {
+    pub(crate) sections: Sections,
+    pub(crate) all_ecus: bool,
+    pub(crate) frame: u8,
 }
 
 impl Conn {
@@ -162,7 +162,7 @@ fn inspect_sim(targets: &[(Addr, bool)], req: Request) -> Vec<(Addr, bool, Inspe
         .collect()
 }
 
-fn inspect_impl(hub: &AdapterHub, conn: Conn, req: Request) -> Result<Value, String> {
+pub(crate) fn inspect_impl(hub: &AdapterHub, conn: Conn, req: Request) -> Result<Value, String> {
     let targets = conn.targets(req.all_ecus)?;
     let all = targets.len() > 1;
     if conn.is_sim() {
