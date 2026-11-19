@@ -472,11 +472,15 @@ pub struct KwpCell {
     pub unit: &'static str,
 }
 
-/// Split a record into cells (a partial tail cell is dropped; callers keep the
-/// raw record).
+/// Most cells [`cells`] decodes: [`KwpCell::index`] is a `u8`.
+pub const MAX_CELLS: usize = 256;
+
+/// Split a record into cells (a partial tail cell is dropped, and cells past
+/// [`MAX_CELLS`] are left undecoded; callers keep the raw record).
 pub fn cells(rec: &[u8]) -> Vec<KwpCell> {
     vagmeas::cells(rec)
         .into_iter()
+        .take(MAX_CELLS)
         .enumerate()
         .map(|(i, c)| KwpCell {
             index: i as u8,
@@ -1256,6 +1260,16 @@ mod tests {
             ..KwpAddressing::default()
         };
         assert!(empty.validate("x").is_err());
+    }
+
+    #[test]
+    fn cell_indices_never_wrap() {
+        // Regression: the index was `i as u8`, so an oversized record had two
+        // cells numbered 0 (and two of every other number after 255).
+        let rec: Vec<u8> = (0..300 * 3).map(|i| i as u8).collect();
+        let c = cells(&rec);
+        assert_eq!(c.len(), MAX_CELLS);
+        assert!(c.iter().enumerate().all(|(i, x)| x.index as usize == i));
     }
 
     #[test]
