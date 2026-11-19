@@ -58,14 +58,15 @@ they are here only to indicate relative reach, not to rank quality.
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
 |---|---|---|---|
-| [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0 | The SSM2 logging protocol as its logger uses it (the `80 <dst> <src> <len>` packet with an 8-bit sum checksum, tester `F0` / ECU `10` / TCU `18`, 4800 baud, `BF` init, `A8` address reads, the K-line echo) and the `logger.xml` selection rules `opentune-logdef` follows: `ecubyteindex`/`ecubit` index the init reply's data from the SSM ID, so the capability bitmap starts at index 8; `<ecuparam>` addresses are chosen by ROM ID; `target` 1/2/3 = ECU/TCU/both. GPL-2.0-only → **learn-only**: the protocol and format facts only, own implementation, no code read across. |
+| [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0-or-later | The SSM2 logging protocol as its logger uses it (the `80 <dst> <src> <len>` packet with an 8-bit sum checksum, tester `F0` / ECU `10` / TCU `18`, 4800 baud, `BF` init, `A8` address reads, the K-line echo) and the `logger.xml` selection rules `opentune-logdef` follows: `ecubyteindex`/`ecubit` index the init reply's data from the SSM ID, so the capability bitmap starts at index 8; `<ecuparam>` addresses are chosen by ROM ID; `target` 1/2/3 = ECU/TCU/both. Its published `logger.dtd` (`definitions/logger.dtd`) is the structure `import-romraider-logger` reads: `<depends>`/`<ref>`, `<conversion>` with `<replace>`, `<switch byte bit>`, `<ecuparam>` with `group`/`subgroup` (DS2), `<transports>`/`<module>`. Licence checked 2026-11-19: `license.txt` is the GPL v2 text and the source headers grant "version 2 of the License, or (at your option) any later version", so GPL-2.0-or-later (compatible). Even so, protocol and format facts only, own implementation, no code read across. |
+| RomRaider logger definition files ([RomRaider/SubaruDefs](https://github.com/RomRaider/SubaruDefs), forks such as TD-D/SubaruDefs) | — | none stated | The community `logger.xml` files (`RomRaider/logger/standard|metric/logger.xml`, `logger_STD_EN.xml`, …). Checked 2026-11-19: no licence file (GitHub reports none) and only a use-at-your-own-risk disclaimer, so **not redistributable**: none are committed. Used at development time only, downloaded outside the repo, to validate the importer (the expression forms `[P9:mph]`, bare-id calculated parameters `(P12*60)/P8`, units such as `km/h` and `µs` inside references, the `<!DOCTYPE>` header); the optional `OPENTUNE_ROMRAIDER_LOGGER` test re-runs that check. See [LIVE-LOGGING.md](LIVE-LOGGING.md#romraider-logger-definitions). |
 | [Comer352L/FreeSSM](https://github.com/Comer352L/FreeSSM) | — | GPL-3.0 | An independent SSM2 implementation (K-line and CAN): a second description of the packet layout, the `BF`/`A8`/`A0`/`B8` commands and their `+0x40` replies, and SSM payloads carried over ISO 15765 on `7E0`/`7E8`. Facts only, no code copied. GPL-3.0 → compatible. |
 
 ## Tuning suites & map/definition formats
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
 |---|---|---|---|
-| [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0 | The community reference for an ECU-definition XML / TunerPro-XDF-style table model: `table` type (2D/3D), `storagetype`+`endian`, `sizex`/`sizey`, address, and per-axis sub-tables with scaling and min/max. The backbone of our `MapDef`/`AxisDef` shape. GPL-2.0-only → **learn-only**. |
+| [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0-or-later | The community reference for an ECU-definition XML / TunerPro-XDF-style table model: `table` type (2D/3D), `storagetype`+`endian`, `sizex`/`sizey`, address, and per-axis sub-tables with scaling and min/max. The backbone of our `MapDef`/`AxisDef` shape. Format facts only, no code copied (licence: see the SSM2 row). |
 | [miikasyvanen/FastECU](https://github.com/miikasyvanen/FastECU) | — | GPL-3.0 | Subaru flashing/tuning suite that reads EcuFlash and RomRaider definitions directly. Studied for how it interprets them — hex `startpos`/`interval` cell addressing, switch/selection tables, big-endian floats, the `wrx02` 0x8000 address fold, `<include>`/`base=` resolution — and its WinOLS MapPack-CSV column layout. `opentune_ecuflash::fastecu` is a fresh implementation of that behaviour; no source copied. GPL-3.0 → compatible. |
 | [christoph2/pyA2L](https://github.com/christoph2/pyA2L) | ~200 | GPL-2.0 | An ASAM A2L/ASAP2 parser — the OEM calibration description format. Taught us the `CHARACTERISTIC` / `AXIS_PTS` / `COMPU_METHOD` model and the three-way axis description (`STD_AXIS`/`COM_AXIS`/`FIX_AXIS`) that our axis styles mirror. GPL-2.0-only → **learn-only**. |
 
@@ -148,10 +149,13 @@ above:
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
-  NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later) and uclcli.
+  NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later), uclcli and RomRaider
+  (2-or-later per its source headers; we still use its format facts only).
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
-  RomRaider, pyA2L, Speeduino and LibreTune.
+  pyA2L, Speeduino and LibreTune.
+- **No licence stated** — not redistributable: nothing is committed; used only
+  as test input outside the repo. Covers the RomRaider logger definition files.
 
 In every case the design was informed by reading these projects; where a file in
 OpenTune is a close adaptation of permissively-licensed or GPL-compatible code,
