@@ -35,6 +35,8 @@ pub enum Error {
     Zip(String),
     /// Hex field contained a non-hex byte or odd length.
     BadHex(String),
+    /// Malformed compressed or container data (e.g. a broken NRV2B stream).
+    Corrupt(String),
 }
 
 impl fmt::Display for Error {
@@ -61,6 +63,7 @@ impl fmt::Display for Error {
             }
             Error::Zip(s) => write!(f, "zip error: {s}"),
             Error::BadHex(s) => write!(f, "bad hex data: {s}"),
+            Error::Corrupt(s) => write!(f, "corrupt data: {s}"),
         }
     }
 }

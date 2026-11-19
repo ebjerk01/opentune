@@ -25,6 +25,8 @@ pub enum ContainerKind {
     Sgo,
     /// A Ford / Volvo / Mazda VBF flash container (plaintext).
     Vbf,
+    /// A BMW PSdZData SWE flash container (`.xml` descriptor + `.bin`).
+    BmwSwe,
 }
 
 /// Result of decoding a container.

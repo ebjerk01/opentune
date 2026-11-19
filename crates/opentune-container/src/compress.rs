@@ -33,6 +33,11 @@ pub enum Compression {
     Lzz,
     /// Legacy Simos signifier-byte compression (early Simos8-era blocks).
     LegacySimos,
+    /// UCL NRV2B, 8-bit variant (BMW PSdZData SWE `COMPRESSED` segments).
+    /// See [`crate::nrv2b`].
+    Nrv2b,
+    /// gzip (BMW SWE segments whose `COMPRESSION-METHOD` is `gz`).
+    Gzip,
 }
 
 impl Compression {
@@ -62,6 +67,8 @@ impl Compression {
             Compression::LzssDq => decompress_lzss_dq(data, out_size),
             Compression::Lzz => decompress_lzz(data, out_size),
             Compression::LegacySimos => decompress_legacy_simos(data)?,
+            Compression::Nrv2b => crate::nrv2b::decompress_nrv2b_8(data, cap(out_size))?,
+            Compression::Gzip => decompress_gzip(data, cap(out_size))?,
         };
         if out_size != 0 && self != Compression::None && out.len() != out_size {
             return Err(Error::SizeMismatch {
@@ -71,6 +78,31 @@ impl Compression {
         }
         Ok(out)
     }
+}
+
+/// Output cap for the self-terminating codecs: the declared size, else the global limit.
+fn cap(out_size: usize) -> usize {
+    if out_size == 0 {
+        MAX_DECOMPRESSED
+    } else {
+        out_size.min(MAX_DECOMPRESSED)
+    }
+}
+
+/// gunzip `data`, refusing output larger than `cap` bytes.
+pub fn decompress_gzip(data: &[u8], cap: usize) -> Result<Vec<u8>> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    flate2::read::GzDecoder::new(data)
+        .take(cap as u64 + 1)
+        .read_to_end(&mut out)
+        .map_err(|e| Error::Corrupt(format!("gzip: {e}")))?;
+    if out.len() > cap {
+        return Err(Error::Corrupt(format!(
+            "gzip output exceeds the {cap:#x}-byte limit"
+        )));
+    }
+    Ok(out)
 }
 
 /// Simos "LZSS10" decompressor (port of `VW_Flash` `decompress_raw_lzss10`).
