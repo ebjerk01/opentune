@@ -202,5 +202,46 @@
       "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): FRF method 0x11 for DQ200/DQ250/DL382",
       "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": "KWP2000 over VW TP2.0 to logical address 0x02 on the powertrain CAN (what OpenTune's read-only opentune dsg uses; not yet confirmed on a car)",
+      "notes": "Neither a complete read nor programming over OBD is documented in the cited sources. Factory software for 02E comes as VAG FRF/ODX containers (method 0x11, vag-tcu-tools); the programming session and its security access are not documented.",
+      "confidence": "unverified",
+      "sources": [
+        2,
+        3
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "CAN on the 20-pin T20e plug: +12 V to 11 and 13, ground 19, CAN-H 10, CAN-L 15 (both sources agree); 120 ohm across CAN-H/CAN-L if the interface does not terminate. It speaks the same diagnostic protocol as in the car; what can be read that way is not documented.",
+      "confidence": "community",
+      "sources": [
+        1,
+        0
+      ]
+    },
+    "boot": {
+      "possible": false,
+      "entry": "unknown",
+      "points": [],
+      "reachable": "unknown",
+      "notes": "No cited public source documents a boot or bootstrap mode for the 02E unit (PowerPC or TriCore software). The open DQ250-MQB bench path (SBOOT) belongs to the 0D9 unit, not to this one.",
+      "confidence": "unverified",
+      "sources": [
+        2
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "Not documented in the cited sources; opentune dsg sends no security-access service. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        2
+      ]
+    }
+  }
 }
