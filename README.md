@@ -2,7 +2,7 @@
 
 **An open-source car diagnostics, coding and tuning suite — read fault codes, live data, code and adapt modules, flash ECUs and edit calibrations, over cheap and open hardware you already own.**
 
-> ⚠️ **Early alpha — not ready for use on a real car.** The offline tooling (working on a `.bin` or a definition file) is solid and tested; the on-car paths — live diagnostics, coding, adaptation and flashing — are **implemented but almost entirely unproven on a vehicle** (only a first read-only identity read has been done on a car), the desktop app is a **public alpha** ([v0.5.0](https://github.com/ebjerk01/opentune/releases)) and the Android app is unreleased. Reading, coding, or reflashing a control unit can permanently damage it. **Do not use this on a real vehicle yet.** Expect breaking changes. Use entirely at your own risk — see [Safety](#safety).
+> ⚠️ **Early alpha — not ready for use on a real car.** The offline tooling (working on a `.bin` or a definition file) is solid and tested; the on-car paths — live diagnostics, coding, adaptation and flashing — are **implemented but almost entirely unproven on a vehicle** (only a first read-only identity read has been done on a car), the desktop app is a **public alpha** ([v0.7.0](https://github.com/ebjerk01/opentune/releases)) and the Android app is unreleased. Reading, coding, or reflashing a control unit can permanently damage it. **Do not use this on a real vehicle yet.** Expect breaking changes. Use entirely at your own risk — see [Safety](#safety).
 
 ---
 
@@ -68,7 +68,6 @@ Most pillars are now built and tested offline; what remains is mainly proving th
 
 - **On-car validation** — a first read-only identity read is done; next the live diagnostic, DSG/Haldex, coding, adaptation, service-function, auto-scan and logging paths on real vehicles.
 - **Full-vehicle diagnostics** — validate OBD inspection (readiness, freeze frame, CALID/CVN) on real cars.
-- **Datalogging triggers** — start/stop/mark on conditions.
 - **Module & ECU flashing** — finish the UDS flash path (`0x34`/`0x36`/`0x37` + security + erase/checksum) end-to-end, container-driven, behind the flash-safety policy.
 - **Broader coverage** — real dumps to validate the DQ250 / ZF 8HP / Haldex checksums, real captures to name the DSG measuring groups, and a growing community definition & map library (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 - **Interfaces to the max** — CAN-FD, DoIP and J2534 flashing, validated on hardware.
@@ -156,14 +155,15 @@ short version:
 - ✅ **Drivetrain** — DQ250 02E checksum + shift maps, Haldex Gen4 read-only + OpenHaldex, DSG/TCU recognition, controller definitions incl. Mercedes 722.6, read-only DQ250 diagnostics, a desktop Controllers panel
 - ✅ **Aftermarket ECUs** — Speeduino / rusEFI / MegaSquirt (TunerStudio INI + `.msq`, serial read/write/burn, live data)
 - ✅ **Plugin API** — desktop + CLI host APIs, seed/key and checksum resolvers
-- ✅ **Signed releases** with desktop auto-update (v0.5.0)
+- ✅ **Signed releases** with desktop auto-update (v0.7.0; [CHANGELOG](CHANGELOG.md))
+- ✅ **Datalogging triggers** — start/stop/mark on conditions, log splitting, a `triggers/` pack kind
+- ✅ **Guided "Check my car" wizard** (desktop, read-only)
 - ✅ **Contribution workflow** — provenance + privacy checks on every definition and pack, issue/PR templates
 
 **Next**
-- 🔲 Live **datalogging** triggers
 - 🔲 On-car validation of the live diagnostic, adaptation and logging paths
 - 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
-- 🔲 Desktop & Android UX — guided wizards over the engines
+- 🔲 Desktop & Android UX — more guided wizards over the engines, and the wizard on Android
 - 🔲 A growing community definition & pack library, and broader drivetrain/AWD coverage (DQ250 launch/torque maps and named measuring groups, DQ200/DL382 maps)
 - 🔲 Windows/macOS code signing (the update packages are already signed)
 - 🔲 CAN-FD, DoIP and J2534 flashing validated on hardware

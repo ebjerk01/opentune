@@ -1,7 +1,7 @@
 # OpenTune Roadmap
 
 > ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the desktop app is a
-> public alpha (v0.5.0, signed auto-update) and the Android app is unreleased. Only a first
+> public alpha (v0.7.0, signed auto-update) and the Android app is unreleased. Only a first
 > read-only identity read has been done on a real car — don't flash a real vehicle yet.
 > Expect breaking changes.
 

@@ -11,6 +11,8 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-19
+
 ### Added
 - **"Check my car" guided wizard** (desktop, Bench): a read-only walk through
   identify → scan → fault codes → live data, tested end to end on the virtual
@@ -129,6 +131,7 @@ First signed public release: desktop app (Linux AppImage/.deb, Windows installer
 with signed auto-update, and the `opentune` CLI for Linux, Windows and macOS. See
 the [README](README.md) for the feature set at that point.
 
-[Unreleased]: https://github.com/ebjerk01/opentune/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ebjerk01/opentune/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/ebjerk01/opentune/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ebjerk01/opentune/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ebjerk01/opentune/releases/tag/v0.5.0

@@ -16,29 +16,29 @@ emissions defeat, odometer fraud, or theft.
   "fix only the BAD blocks" *(done: `checksum verify` + `fix --only-bad` + `checksum algos`, plus `checksum attest`)*.
 
 ## Maps & calibration
-- `[L]` **Map editor** (not just the viewer) — edit cells in the heat grid, interpolate,
+- `[L]` *(done: desktop map editor with write-back + checksum fix)* **Map editor** (not just the viewer) — edit cells in the heat grid, interpolate,
   copy/paste regions, undo, and write back with automatic checksum correction *(done: desktop
   map editor — cell edit, interpolate, undo/redo, write-back with optional checksum fix)*.
-- `[L]` **A2L / DAMOS import** — parse the OEM ASAM calibration description to auto-populate
+- `[L]` *(done: A2L import + export, A2L→XDF)* **A2L / DAMOS import** — parse the OEM ASAM calibration description to auto-populate
   precise map definitions (addresses, axes, scaling) for any ECU that has one *(done:
   `opentune-a2l` crate + `import-a2l` CLI, zero-dep parser; RAT_FUNC affine recovery, COM_AXIS
   resolution, non-linear flagged; validated on real EDC15/PPD/MSV80 A2Ls. `--base` rebases
   logical CPU addresses to bin offsets. STD_AXIS embedded address computed when the record
   layout is modelled; >2-D cuboids sliced into per-X×Y 2-D maps; `a2l2xdf` converter)*.
-- `[M]` **XDF / TunerPro import + export** — reuse the huge community library of definitions
+- `[M]` *(done: import + export, round-trip validated)* **XDF / TunerPro import + export** — reuse the huge community library of definitions
   *(done: `opentune-xdf` crate, `import-xdf` modern XML + legacy text, `export-xdf` modern XML,
   round-trip validated)*.
 - `[M]` **Real map library** for the common ECUs (EDC16U34 first) *(in progress)*.
-- `[M]` **Auto map-finder** — cluster a stock/tuned diff, classify regions against known map
+- `[M]` *(done: `findmaps`)* **Auto map-finder** — cluster a stock/tuned diff, classify regions against known map
   shapes, and emit candidate `MapDef`s to seed a definition *(done: `findmaps` CLI)*.
-- `[M]` **Tune compare** — diff two calibrations map-by-map (not just bytes), overlaying the
+- `[M]` *(done: map-aware `compare`)* **Tune compare** — diff two calibrations map-by-map (not just bytes), overlaying the
   grids so you can see exactly what a tune changed and by how much *(done: `compare` CLI —
   per-map changed-cell count, Δmax/Δavg in physical units, and a before→after grid)*.
 - `[S]` **Units & axis decoding** everywhere (mg/stroke, mbar, bar, °CA, Nm).
 
 ## Identification & data
 - `[S]` **Richer ECU definitions** — part/SW number ranges, memory maps, seed/key ids.
-- `[M]` **DTC database + decoder** — map DTC codes to descriptions (generic OBD + manufacturer),
+- `[M]` *(done: 11,140 codes, `opentune dtc`)* **DTC database + decoder** — map DTC codes to descriptions (generic OBD + manufacturer),
   used by diagnostics and the standalone fault review *(done: `opentune-dtc`, 11,140 codes)*.
 - `[S]` **Live DTC read/clear** — pull stored/pending fault codes over OBD-II (mode 0x03/0x07) or
   UDS (0x19 readDTCInformation), decode them with the built-in database, and show/clear them in
@@ -54,7 +54,7 @@ emissions defeat, odometer fraud, or theft.
 ## Interfaces & hardware
 - `[M]` **slcan / gs_usb** polish + **generic J2534** (Windows) and **ELM327 BT/WiFi** transports
   *(done: `slcan`, `gsusb`, `j2534`, `elm327net` drivers; hardware validation pending)*.
-- `[M]` **CAN FD + DoIP** — for newer ECUs (ESP32-S3 CAN-FD, BMW/VAG Ethernet diagnostics)
+- `[M]` *(done offline: CAN-FD + DoIP transports, DoIP discovery + `--driver doip`; hardware validation open)* **CAN FD + DoIP** — for newer ECUs (ESP32-S3 CAN-FD, BMW/VAG Ethernet diagnostics)
   *(done in `opentune-core`: CAN-FD + ISO-TP-FD and DoIP, mock/loopback-tested; not yet on
   hardware)*.
 - `[L]` **Open hardware interface** — finish the ESP32-S3 + CAN + K-line board (KiCad,
@@ -63,7 +63,7 @@ emissions defeat, odometer fraud, or theft.
   stays on the adapter.
 
 ## Flashing & safety
-- `[M]` **Resumable / recoverable flash** — checkpoint block progress; resume after a drop
+- `[M]` *(done: chunked, SHA-256-checkpointed resume)* **Resumable / recoverable flash** — checkpoint block progress; resume after a drop
   *(done: `flash --resume`)*.
 - `[M]` **Flash wizard** — guided session with the safety checklist, battery-voltage watch,
   and an automatic pre-flash backup to the vault.
@@ -78,9 +78,9 @@ emissions defeat, odometer fraud, or theft.
 - `[M]` **Desktop app** (Tauri) — the calibration, diagnostics and tuning GUI over the shared core.
 - `[S]` **Structured logging** across core/flash/drivers with a session transcript *(partly
   done: flash session transcript `.log` + `.jsonl`; desktop Debug session log)*.
-- `[M]` **Signed, reproducible releases** for Linux/Windows/macOS + desktop auto-update *(in progress)*.
-- `[M]` **In-app guide / wiki** *(in progress)*.
-- `[S]` **Live-data gauges / dashboard** (once a read-capable interface is on the bench).
+- `[M]` **Signed, reproducible releases** for Linux/Windows/macOS + desktop auto-update *(done: signed update packages + auto-update since v0.5.0; OS code signing open)*.
+- `[M]` **In-app guide / wiki** *(done: a guide page + help strip per panel)*.
+- `[S]` **Live-data gauges / dashboard** *(done: Dashboard + Drive view with replay; vehicle validation open)*.
 
 ## Project
 - `[S]` Test fixtures + CI coverage for the protocol layer (ISO-TP / TP2.0 / KWP edge cases)
