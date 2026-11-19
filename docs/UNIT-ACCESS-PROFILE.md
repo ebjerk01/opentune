@@ -125,9 +125,12 @@ the unit's `sources` and referenced by index:
   numbers of the chip).
 - **Public pinout sites** and service literature that is publicly hosted.
 - **Public forums and blog posts**: facts only ("pin 24 of the flash to
-  ground at power-up"), no copied images or long text. A tool vendor's or
-  retailer's **public** page may corroborate *that* an access path exists, at
-  `community` at most; its procedures and tool data are not used.
+  ground at power-up"), no copied images or long text.
+- **Tool vendors' or retailers' public pages** (support lists, product pages)
+  only as a **fallback**, when no datasheet or open project covers the fact:
+  they may corroborate *that* an access path or chip exists, at `community` at
+  most; their procedures and tool data are never used. When an open project
+  covers the fact, cite the open project instead and drop the vendor page.
 - **Open projects** with their licence noted (emulators, open replacement
   controllers, open flashing tools).
 - OpenTune's own docs, for facts OpenTune itself established.
