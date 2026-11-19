@@ -12,6 +12,10 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **Desktop: "What's new" after an update.** The first start after an update
+  shows that version's highlights once, from the changelog built into the app
+  (nothing is fetched); a fresh install shows nothing. Updates from 0.7.x are
+  recognised by the app's own saved UI state.
 - **Diagnostics log** (desktop, local only, on by default): crashes (Rust
   panics, with location; backtrace with `RUST_BACKTRACE`), uncaught errors in
   the app window, every command that fails (name + error text, never its

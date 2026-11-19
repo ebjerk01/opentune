@@ -20,9 +20,11 @@ function loadAll() {
   return { ...env, scripts };
 }
 
-test("index.html lists util.js first and every referenced script exists", () => {
+test("index.html lists util.js first (after whatsnew.js) and every referenced script exists", () => {
   const scripts = indexScripts();
-  assert.equal(scripts[0], "util.js");
+  // whatsnew.js snapshots localStorage before anything else can write it.
+  assert.equal(scripts[0], "whatsnew.js");
+  assert.equal(scripts[1], "util.js");
   assert.equal(scripts[scripts.length - 1], "extensions.js", "extensions load last");
   for (const s of scripts) assert.ok(fs.existsSync(path.join(UI, "src", s)), `missing src/${s}`);
   const app = scripts.filter((s) => s.startsWith("app-"));

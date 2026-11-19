@@ -81,6 +81,7 @@ mod project; // .otproj tuning projects
 mod state; // managed state: data dirs, channel, guards, debug log
 mod update; // self-update
 mod utilities; // VIN / part / DTC / seed-key calculator
+mod whatsnew; // one-time "What's new" after an update
 
 // The public plugin API (see docs/PLUGINS.md): these paths are stable.
 pub use checksum::{ChecksumResolver, Checksums};
@@ -376,6 +377,8 @@ macro_rules! core_command_list {
             diagupload::diag_upload_send,
             diagupload::diag_upload_payload,
             diagupload::diag_upload_panel,
+            whatsnew::whatsnew_check,
+            whatsnew::whatsnew_seen,
         }
     };
 }

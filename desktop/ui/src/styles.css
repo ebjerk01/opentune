@@ -727,6 +727,17 @@ button.ot-lb {
   padding: 18px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 .dgu-modal h2 { margin-top: 0; }
+/* "What's new" after an update (whatsnew.js), on the dialog above. */
+.wn-modal { width: min(560px, 100%); }
+.wn-modal h2 { margin-bottom: 2px; }
+.wn-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  margin: 14px 0 4px; font-weight: 700;
+}
+.wn-list { margin: 0; padding-left: 18px; line-height: 1.45; }
+.wn-list li + li { margin-top: 3px; }
+.wn-list code { font-family: var(--mono); font-size: 12px; }
+.wn-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dgu-modal .row { margin-top: 12px; }
 .dgu-note, .dgu-allow { display: block; margin-top: 10px; }
 .dgu-note textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; font-family: inherit; }

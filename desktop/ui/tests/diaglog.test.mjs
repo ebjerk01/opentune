@@ -107,7 +107,8 @@ function app(invokeMap) {
 
 test("loaded first, the wrapper covers every panel's invoke and uncaught errors", async () => {
   const scripts = indexScripts();
-  assert.equal(scripts[1], "diaglog.js", "right after util.js");
+  assert.equal(scripts[scripts.indexOf("util.js") + 1], "diaglog.js", "right after util.js");
+  assert.ok(scripts.indexOf("diaglog.js") <= 2, "only whatsnew.js and util.js before it");
   assert.ok(scripts.indexOf("diaglog-card.js") > scripts.indexOf("render-check.js"));
   const a = app({ image_info: () => { throw "cannot open image"; }, diag_log: () => null });
   assert.ok(a.window.__TAURI__.core.__otDiag, "core.invoke is wrapped");
