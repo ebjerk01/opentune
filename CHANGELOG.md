@@ -121,6 +121,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Desktop repaint costs: Drive view tiles and the map heat grids use
+  `contain: content` (a tile's update repaints only that tile); paused Drive
+  view tiles are dimmed with opacity and muted colours instead of a
+  `grayscale` filter; the Dashboard gauge arc no longer animates its path on
+  every sample.
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
   part number stays a match key); anything referencing the old id (scripts, packs,
