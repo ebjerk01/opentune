@@ -248,6 +248,34 @@ pub struct LogParam {
     /// Whether the parameter is marked enabled (`enabled` attribute), if given.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub enabled: Option<bool>,
+    /// Subaru SSM selection metadata (`ecubyteindex`/`ecubit`/`target`), for
+    /// [`ProtocolKind::SubaruSsm`] parameters that declare any.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ssm: Option<SsmParamInfo>,
+}
+
+/// How a RomRaider `logger.xml` SSM parameter is selected for a connected
+/// module. The SSM init reply carries a capability bitmap; a standard
+/// parameter is logged only when its bit is set.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SsmParamInfo {
+    /// `ecubyteindex`: the init-reply data byte holding the capability bit
+    /// (index 0 = first SSM ID byte, 8 = first capability byte).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ecu_byte_index: Option<u16>,
+    /// `ecubit`: the capability bit (0 = least significant) in that byte.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ecu_bit: Option<u8>,
+    /// `target`: which module answers it, 1 = engine ECU, 2 = TCU, 3 = both.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub target: Option<u8>,
+}
+
+impl SsmParamInfo {
+    /// The `(byte index, bit)` capability flag, when both are declared.
+    pub fn capability(&self) -> Option<(usize, u8)> {
+        Some((usize::from(self.ecu_byte_index?), self.ecu_bit?))
+    }
 }
 
 /// A group of parameters belonging to one ECU (or to the protocol's standard

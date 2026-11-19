@@ -73,6 +73,9 @@ pub enum LogMode {
     /// [`FastLogConfig::enabled`]).
     #[serde(rename = "polling")]
     Polling,
+    /// Subaru SSM2: batched `A8` address reads ([`FastLogConfig::ssm`]).
+    #[serde(rename = "ssm-a8")]
+    Ssm,
 }
 
 /// Fast-logging policy.
@@ -95,6 +98,12 @@ pub struct FastLogConfig {
     /// `0x03` for an ECU that only accepts `0x2C` in the extended session.
     /// `None` leaves the session alone.
     pub session: Option<u8>,
+    /// Read over Subaru SSM2 instead of UDS: every channel's byte addresses
+    /// in batched `A8` requests ([`LogMode::Ssm`]). The transport must carry
+    /// SSM payloads; the UDS settings above are then unused. Select the
+    /// channels with [`crate::ssm::select`] first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssm: Option<crate::ssm::SsmPollConfig>,
 }
 
 impl Default for FastLogConfig {
@@ -106,6 +115,7 @@ impl Default for FastLogConfig {
             max_record_len: 32,
             max_elements_per_request: 8,
             session: None,
+            ssm: None,
         }
     }
 }
@@ -122,6 +132,12 @@ impl FastLogConfig {
     /// Check the policy: every dynamic DID it may use lies inside
     /// [`DYNAMIC_DID_RANGE`], and the limits are non-zero.
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(ssm) = &self.ssm {
+            if self.enabled {
+                return Err("UDS 0x2C fast mode and SSM are exclusive".into());
+            }
+            ssm.validate()?;
+        }
         if !DYNAMIC_DID_RANGE.contains(&self.first_did) {
             return Err(format!(
                 "dynamic DID 0x{:04X} is outside the ISO 14229-1 range 0xF200..=0xF3FF",
@@ -259,6 +275,8 @@ pub struct LiveSession {
     /// Whether dynamic DIDs are currently defined on the ECU (by us).
     defined: bool,
     status: LiveStatus,
+    /// The SSM address layout, in [`LogMode::Ssm`].
+    ssm: Option<crate::ssm::SsmPlan>,
 }
 
 impl LiveSession {
@@ -285,6 +303,7 @@ impl LiveSession {
                 setup_requests: 0,
                 tick_requests: 0,
             },
+            ssm: None,
         })
     }
 
@@ -303,7 +322,16 @@ impl LiveSession {
     pub fn start(&mut self, diag: &mut dyn RawDiag) -> &LiveStatus {
         let mut c = Counted { inner: diag, n: 0 };
         self.status.notes.clear();
-        if !self.cfg.enabled {
+        if let Some(ssm) = &self.cfg.ssm {
+            // SSM: no setup on the module, just the address layout.
+            let plan = crate::ssm::plan(&self.params, ssm);
+            self.status.notes.extend(plan.notes.iter().cloned());
+            self.ssm = Some(plan);
+            self.plan.clear();
+            self.polled.clear();
+            self.status.mode = LogMode::Ssm;
+            self.status.reason = None;
+        } else if !self.cfg.enabled {
             self.fall_back("fast mode not requested".into());
         } else {
             self.plan(&mut c);
@@ -333,6 +361,12 @@ impl LiveSession {
     /// [`params`](Self::params) order.
     pub fn tick(&mut self, diag: &mut dyn RawDiag) -> Vec<Sample> {
         let mut c = Counted { inner: diag, n: 0 };
+        if let Some(plan) = &self.ssm {
+            let out = crate::ssm::tick(&mut c, plan, &self.params);
+            self.status.ticks += 1;
+            self.status.tick_requests += c.n;
+            return out;
+        }
         let mut out: Vec<Option<Sample>> = vec![None; self.params.len()];
 
         if self.status.mode == LogMode::Fast2c {
@@ -794,6 +828,26 @@ mod tests {
             ..FastLogConfig::fast()
         };
         assert!(last_ok.validate().is_ok());
+    }
+
+    #[test]
+    fn ssm_config_is_exclusive_with_uds_fast_mode() {
+        let ssm = FastLogConfig {
+            ssm: Some(crate::ssm::SsmPollConfig::default()),
+            ..FastLogConfig::default()
+        };
+        assert!(ssm.validate().is_ok());
+        let both = FastLogConfig {
+            enabled: true,
+            ..ssm.clone()
+        };
+        assert!(both.validate().unwrap_err().contains("exclusive"));
+        let tiny = FastLogConfig {
+            ssm: Some(crate::ssm::SsmPollConfig { max_packet_len: 8 }),
+            ..FastLogConfig::default()
+        };
+        assert!(tiny.validate().is_err());
+        assert_eq!(serde_json::to_string(&LogMode::Ssm).unwrap(), "\"ssm-a8\"");
     }
 
     #[test]
