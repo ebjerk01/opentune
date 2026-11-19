@@ -16,10 +16,10 @@
   ],
   "protocols": [],
   "read_methods": {
-    "obd": "unknown",
-    "bench": false,
-    "boot": false,
-    "notes": "No public read/flash procedure found. The controller plug carries terminals 15 and 30, ground and a dedicated Haldex CAN pair (OpenHaldex)."
+    "obd": "write-only",
+    "bench": true,
+    "boot": true,
+    "notes": "VW_Flash supports diagnostic programming. OpenHaldex documents the connector for CAN diagnostics. A board-level debug read is reported for 0CQ 907 554 D."
   },
   "checksum": "haldex",
   "ecudef": null,
@@ -137,6 +137,83 @@
     {
       "title": "VAG Parts: Gen 5 Haldex pump 0CQ598549 (MQB applications)",
       "url": "https://www.vagparts.com.au/products/0cq598549-haldex-pump"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause): Gen 5 Haldex4Motion diagnostic programming",
+      "url": "https://github.com/bri3d/VW_Flash"
+    },
+    {
+      "title": "OpenHaldex (MIT): Gen5 live diagnostics",
+      "url": "https://openhaldex.com/docs/"
+    },
+    {
+      "title": "NefMoto forum: a contributor reports an XC2000 debug-probe (MiniWiggler) connection and flash read on 0CQ 907 554 D",
+      "url": "https://nefariousmotorsports.com/forum/index.php?topic=1001.375"
+    },
+    {
+      "title": "NefMoto: Gen5 Haldex OBD programming and discussion of full reads",
+      "url": "https://nefariousmotorsports.com/forum/index.php?topic=1001.390"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause): Haldex programming uses the common UDS writer",
+      "url": "https://raw.githubusercontent.com/bri3d/VW_Flash/master/lib/haldex_flash_utils.py"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause): security access in the UDS programming session",
+      "url": "https://raw.githubusercontent.com/bri3d/VW_Flash/master/lib/flash_uds.py"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": "UDS over ISO-TP on CAN",
+      "notes": "VW_Flash supports programming the Gen5 controller, and a separate forum report confirms flashing over OBD. OpenHaldex reads live measurements. The cited sources do not demonstrate a complete original flash read through the vehicle socket.",
+      "confidence": "community",
+      "sources": [
+        2,
+        3,
+        5
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "On the Haldex-side 1J0973713 connector, pin 3 is permanent +12 V, pin 1 is ignition +12 V, pin 2 is ground, pin 6 is CAN-H and pin 5 is CAN-L. OpenHaldex lists no K-line on this plug and documents live measurements over CAN. A complete connector-only bench read is undocumented.",
+      "confidence": "community",
+      "sources": [
+        0,
+        3
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "bdm-jtag",
+      "mcu_mode": "XC2000-family on-chip debug access (reported on 0CQ 907 554 D).",
+      "points": [
+        {
+          "name": "Board debug interface",
+          "location": "pcb:XC2000 debug connections",
+          "action": "connect",
+          "note": "The contributor reports connecting a MiniWiggler. The successful pin assignment is unconfirmed.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": null,
+      "reachable": "open-case",
+      "notes": "One contributor reports detecting the processor with a debug probe and reading the flash of 0CQ 907 554 D. The report does not establish reset timing or applicability to other 0CQ revisions.",
+      "confidence": "community",
+      "sources": [
+        4
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "required",
+      "notes": "The Haldex writer calls the shared UDS programming routine, which requests security access before writing. The sources do not establish the requirement for a complete diagnostic read. OpenTune ships no OEM key.",
+      "confidence": "community",
+      "sources": [
+        6,
+        7
+      ]
+    }
+  }
 }
