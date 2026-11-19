@@ -22,6 +22,9 @@ pub struct App {
     maps: views::maps::MapsView,
     ecudb: views::ecudb::EcuDbView,
     env: String,
+    /// Scripted runs (bench / screenshot) never save settings.
+    scripted: bool,
+    shot: Option<crate::screenshot::Shot>,
     last_frame: Option<Instant>,
     frame_ms: f64,
 }
@@ -48,7 +51,13 @@ impl App {
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
-        theme::setup(&cc.egui_ctx, settings.theme);
+        let forced = match args.theme.as_deref() {
+            Some("light") => Some(theme::ThemeMode::Light),
+            Some("dark") => Some(theme::ThemeMode::Dark),
+            _ => None,
+        };
+        theme::setup(&cc.egui_ctx, forced.unwrap_or(settings.theme));
+        let scripted = args.bench.is_some() || args.screenshot.is_some();
 
         let adapter = cc
             .wgpu_render_state
@@ -109,13 +118,19 @@ impl App {
         Self {
             settings,
             top: TopBar::default(),
-            view: View::Flash,
+            view: args
+                .view
+                .as_deref()
+                .and_then(View::parse)
+                .unwrap_or(View::Flash),
             defs,
             defs_note,
             flash,
             maps: Default::default(),
             ecudb: Default::default(),
             env,
+            scripted,
+            shot: args.screenshot.clone().map(crate::screenshot::Shot::new),
             last_frame: None,
             frame_ms: 0.0,
         }
@@ -227,6 +242,9 @@ impl eframe::App for App {
                 other => views::placeholder::ui(ui, &t, other),
             });
 
+        if let Some(s) = &mut self.shot {
+            s.step(&ctx);
+        }
         if let Some(b) = &mut self.flash.bench {
             if !b.done {
                 let cpu = start.elapsed().as_secs_f64() * 1000.0;
@@ -247,6 +265,8 @@ impl eframe::App for App {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, STORAGE_KEY, &self.settings);
+        if !self.scripted {
+            eframe::set_value(storage, STORAGE_KEY, &self.settings);
+        }
     }
 }

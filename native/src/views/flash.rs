@@ -86,7 +86,13 @@ impl FlashView {
         self.def_idx = idx;
         self.map_idx = 0;
         if let Some(c) = idx.and_then(|i| defs[i].checksum.clone()) {
-            self.algo = c;
+            if c != self.algo {
+                self.algo = c;
+                // Results always belong to the algorithm shown.
+                if self.image.is_some() {
+                    self.verify();
+                }
+            }
         }
     }
 
@@ -125,15 +131,21 @@ impl FlashView {
                     }),
                     took_ms: t.elapsed().as_secs_f64() * 1000.0,
                 });
-                if let Some(hit) = rec.ecudef_match {
-                    let idx = defs.iter().position(|d| d.id == hit.id);
-                    self.select_def(defs, idx);
+                if let Some(idx) = pick_def(
+                    defs,
+                    rec.ecu_family,
+                    rec.ecu_variant.as_deref(),
+                    rec.ecudef_match.as_ref().map(|h| h.id.as_str()),
+                ) {
+                    self.select_def(defs, Some(idx));
                 }
                 settings.last_file = Some(img.path.display().to_string());
                 self.checksum = None;
                 self.error = None;
                 self.note = None;
                 self.image = Some(img);
+                // Start the hex view at the selected map, not the boot area.
+                self.pending_jump_to_map = self.def_idx.is_some();
                 if !self.algo.is_empty() {
                     self.verify();
                 }
@@ -756,6 +768,30 @@ fn checksum_body(ui: &mut Ui, t: &Tokens, r: &ChecksumResult) {
         });
 }
 
+/// The definition for a scanned image. The scanner's structural variant
+/// (e.g. `EDC15C6`, from the checksum layout) wins over its identify-key
+/// match, whose keys can be as broad as a Bosch `1037` software prefix; an
+/// identify match is only taken when its family agrees with the structure.
+fn pick_def(
+    defs: &[EcuDef],
+    family: &str,
+    variant: Option<&str>,
+    matched: Option<&str>,
+) -> Option<usize> {
+    let norm = |s: &str| s.to_ascii_lowercase().replace([' ', '-', '_'], "");
+    if let Some(v) = variant.map(norm).filter(|v| !v.is_empty()) {
+        if let Some(i) = defs
+            .iter()
+            .position(|d| norm(&d.name).contains(&v) || norm(&d.id).contains(&v))
+        {
+            return Some(i);
+        }
+    }
+    let i = defs.iter().position(|d| Some(d.id.as_str()) == matched)?;
+    let fam = norm(family);
+    (fam.is_empty() || fam == "unknown" || norm(&defs[i].family) == fam).then_some(i)
+}
+
 fn meta(ui: &mut Ui, t: &Tokens, k: &str, v: &str) {
     ui.label(
         RichText::new(format!("{k} "))
@@ -828,6 +864,40 @@ pub fn size_label(n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn def(id: &str, name: &str, family: &str) -> EcuDef {
+        let mut d = EcuDef::from_json(&format!(
+            r#"{{"id":"{id}","name":"{name}","maker":"Bosch","family":"{family}","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"tx_id":1,"rx_id":0,"flash_size":1048576,"regions":[],"full_read":"obd"}}"#
+        ))
+        .expect("minimal def");
+        d.maps.clear();
+        d
+    }
+
+    #[test]
+    fn structural_variant_beats_a_broad_identify_match() {
+        let defs = [
+            def("bosch-edc16u34", "Bosch EDC16U34", "EDC16"),
+            def("bosch-edc15c6", "Bosch EDC15C6", "EDC15"),
+        ];
+        // The real case: an EDC15C6 dump whose SW 1037… hit EDC16U34's key.
+        assert_eq!(
+            pick_def(&defs, "EDC15", Some("EDC15C6"), Some("bosch-edc16u34")),
+            Some(1)
+        );
+        // No variant: an identify match from another family is not taken.
+        assert_eq!(pick_def(&defs, "EDC15", None, Some("bosch-edc16u34")), None);
+        // Same family: taken.
+        assert_eq!(
+            pick_def(&defs, "EDC16", None, Some("bosch-edc16u34")),
+            Some(0)
+        );
+        // Unknown structure: the identify match stands.
+        assert_eq!(
+            pick_def(&defs, "Unknown", None, Some("bosch-edc16u34")),
+            Some(0)
+        );
+    }
 
     #[test]
     fn sizes_and_wrap() {

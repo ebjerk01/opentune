@@ -35,6 +35,23 @@ impl View {
     ];
     pub const REFERENCE: [View; 4] = [View::EcuDb, View::Drivers, View::Controllers, View::Sa2];
 
+    /// `--view` names.
+    pub fn parse(s: &str) -> Option<View> {
+        Some(match s {
+            "flash" => View::Flash,
+            "maps" => View::Maps,
+            "project" => View::Project,
+            "vault" => View::Vault,
+            "drive" => View::Drive,
+            "log" => View::Log,
+            "ecudb" => View::EcuDb,
+            "drivers" => View::Drivers,
+            "controllers" => View::Controllers,
+            "sa2" => View::Sa2,
+            _ => return None,
+        })
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             View::Flash => "Flash dump",

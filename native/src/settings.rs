@@ -51,7 +51,7 @@ impl Default for Panes {
     fn default() -> Self {
         Self {
             hex: 0.54,
-            map: 0.62,
+            map: 0.58,
         }
     }
 }

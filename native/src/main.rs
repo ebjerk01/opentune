@@ -7,6 +7,7 @@ mod hex;
 mod icons;
 mod image;
 mod mapview;
+mod screenshot;
 mod settings;
 mod shell;
 mod theme;
@@ -21,10 +22,17 @@ pub struct Args {
     pub def: Option<String>,
     pub bench: Option<BenchCfg>,
     pub vsync: bool,
+    /// Capture the window to this PNG after a few frames, then exit.
+    pub screenshot: Option<PathBuf>,
+    /// Force a theme for this run ("light" / "dark"), not saved.
+    pub theme: Option<String>,
+    /// Open this view first (flash, maps, ecudb, drivers, ...).
+    pub view: Option<String>,
 }
 
 const USAGE: &str = "usage: opentune-native [FILE] [--defs DIR] [--def ID]
-                       [--bench hex|maps [--frames N] [--px N] [--csv FILE]] [--no-vsync]";
+                       [--bench hex|maps [--frames N] [--px N] [--csv FILE]] [--no-vsync]
+                       [--screenshot OUT.png] [--theme light|dark] [--view flash|maps|ecudb|drivers]";
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {
@@ -33,6 +41,9 @@ fn parse_args() -> Result<Args, String> {
         def: None,
         bench: None,
         vsync: true,
+        screenshot: None,
+        theme: None,
+        view: None,
     };
     let (mut scene, mut frames, mut px, mut csv) = (None, 600usize, 24.0f32, None);
     let mut it = std::env::args().skip(1);
@@ -56,6 +67,9 @@ fn parse_args() -> Result<Args, String> {
             "--px" => px = val("--px")?.parse().map_err(|e| format!("--px: {e}"))?,
             "--csv" => csv = Some(PathBuf::from(val("--csv")?)),
             "--no-vsync" => a.vsync = false,
+            "--screenshot" => a.screenshot = Some(PathBuf::from(val("--screenshot")?)),
+            "--theme" => a.theme = Some(val("--theme")?),
+            "--view" => a.view = Some(val("--view")?),
             "-h" | "--help" => return Err(USAGE.into()),
             f if !f.starts_with("--") && a.file.is_none() => a.file = Some(PathBuf::from(f)),
             other => return Err(format!("unknown argument '{other}'\n{USAGE}")),

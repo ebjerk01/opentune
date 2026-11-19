@@ -357,17 +357,29 @@ pub fn panel<R>(
             egui::Frame::new()
                 .inner_margin(Margin::symmetric(14, 9))
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(title)
-                                .font(font(DISPLAY_MEDIUM, 13.5))
-                                .color(t.fg),
-                        );
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            header_right,
-                        );
-                    });
+                    // Extras first (from the right), then the title in the
+                    // remaining width, truncated with an ellipsis.
+                    let row = Vec2::new(ui.available_width(), 26.0);
+                    ui.allocate_ui_with_layout(
+                        row,
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            header_right(ui);
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(title)
+                                                .font(font(DISPLAY_MEDIUM, 13.5))
+                                                .color(t.fg),
+                                        )
+                                        .truncate(),
+                                    );
+                                },
+                            );
+                        },
+                    );
                 });
             hline(ui, t.border_soft);
             body(ui)
@@ -489,20 +501,26 @@ pub fn stat(
         .fill(t.surface2)
         .stroke(Stroke::new(1.0, t.border))
         .corner_radius(CornerRadius::same(RADIUS_SM))
-        .inner_margin(Margin::symmetric(11, 6))
+        .inner_margin(Margin::symmetric(11, 4))
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.x = 7.0;
-            ui.label(RichText::new(icon).size(15.0).color(t.fg_faint));
-            ui.label(
-                RichText::new(key.to_uppercase())
-                    .font(font(UI_STRONG, 10.0))
-                    .color(t.fg_faint),
+            // One label (a mixed-font job) so a right-to-left parent cannot
+            // reverse the parts.
+            use egui::text::{LayoutJob, TextFormat};
+            let mut job = LayoutJob::default();
+            let f = |font_id: FontId, color| TextFormat {
+                font_id,
+                color,
+                valign: egui::Align::Center,
+                ..Default::default()
+            };
+            job.append(icon, 0.0, f(FontId::proportional(15.0), t.fg_faint));
+            job.append(
+                &key.to_uppercase(),
+                7.0,
+                f(font(UI_STRONG, 10.0), t.fg_faint),
             );
-            ui.label(
-                RichText::new(value)
-                    .font(font(MONO_STRONG, 12.5))
-                    .color(value_color),
-            );
+            job.append(value, 7.0, f(font(MONO_STRONG, 12.5), value_color));
+            ui.label(job);
         })
         .response
 }

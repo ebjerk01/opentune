@@ -11,6 +11,9 @@ pub const BYTES_PER_ROW: usize = 16;
 pub struct HexView {
     /// Pending scroll target (points), applied on the next frame.
     pub scroll_to: Option<f32>,
+    /// Pending jump target (byte address), converted with the measured row
+    /// height inside `show`.
+    jump_addr: Option<usize>,
     pub jump_text: String,
     pub row_height: f32,
 }
@@ -19,6 +22,7 @@ impl Default for HexView {
     fn default() -> Self {
         Self {
             scroll_to: None,
+            jump_addr: None,
             jump_text: String::new(),
             row_height: 19.0,
         }
@@ -149,6 +153,9 @@ impl HexView {
         let font = FontId::monospace(12.5);
         let text_h = ui.fonts_mut(|f| f.row_height(&font)) + 3.0;
         self.row_height = text_h + ui.spacing().item_spacing.y;
+        if let Some(a) = self.jump_addr.take() {
+            self.scroll_to = Some((a / BYTES_PER_ROW) as f32 * self.row_height);
+        }
         let mut area = egui::ScrollArea::vertical()
             .id_salt("hex")
             .auto_shrink([false, false]);
@@ -166,7 +173,7 @@ impl HexView {
 
     /// Scroll so that `addr` is the top row.
     pub fn jump(&mut self, addr: usize) {
-        self.scroll_to = Some((addr / BYTES_PER_ROW) as f32 * self.row_height);
+        self.jump_addr = Some(addr);
     }
 }
 
