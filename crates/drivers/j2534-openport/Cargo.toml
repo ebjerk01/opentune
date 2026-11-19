@@ -7,3 +7,7 @@ license.workspace = true
 [dependencies]
 opentune-core = { path = "../../opentune-core" }
 serialport.workspace = true
+
+[dev-dependencies]
+# The independent UDS server answering behind the offline fake OpenPort.
+opentune-udssim = { path = "../../opentune-udssim" }

@@ -2,27 +2,44 @@
 //!
 //! The OpenPort 2.0 (OP2) enumerates as a USB CDC-ACM serial device
 //! (`/dev/ttyACM*`, USB id `0403:cc4d`), so it needs no kernel driver on Linux.
-//! It speaks a line-oriented ASCII protocol documented in
-//! the OpenPort 2.0 protocol notes (recovered by the roffe/bisak
-//! clean-room projects): commands are `at<letter> ... <seq>` with a wrapping
-//! sequence number, acknowledged by `aro <seq>` (ok) / `are <seq> <code>`
-//! (error), and received CAN frames arrive as a binary record
-//! `'a' 'r' <proto-digit> <len> <status> <ts32 BE> <id32 BE> <data>`.
+//! It speaks a line-oriented ASCII command protocol with binary payloads and
+//! binary receive records, documented publicly by bisak/openport-j2534
+//! (GPL-3.0), Mackanized/op2j2534 and roffe/libj2534_openport2 (Apache-2.0);
+//! the codec is in [`proto`] with the source of each fact.
 //!
-//! This driver opens the OP2 in **raw CAN** mode (J2534 protocol id 5) and
-//! implements [`CanLink`]. The ISO-TP segmentation, UDS services and the
-//! read/write flows are provided by `opentune-core` ([`IsoTp`] + [`UdsClient`]),
-//! so this crate only owns the transport.
+//! This driver opens the OP2's **raw CAN** channel (J2534 protocol 5) and
+//! implements [`CanLink`]; ISO-TP segmentation, UDS and the read/write flows
+//! come from `opentune-core` ([`IsoTp`] + [`UdsClient`]). The cable's own
+//! ISO 15765 channel (6) and its K-line channels (3, 4) are not used.
+//!
+//! Session, per the public notes:
+//! 1. `\r\n\r\n` (ends any half line a previous session left), `ati`
+//!    (identify, unnumbered), `atz`, `ata`;
+//! 2. `ato5 <flags> <baud> 0` (29-bit ids set `CAN_29BIT_ID`);
+//! 3. `atf5 1 <txflags> 4` + mask + pattern: a PASS filter on the response id
+//!    (the cable delivers nothing without a filter);
+//! 4. per frame `att5 <4+n> <txflags> <budget_us>` + id + data, answered
+//!    `aro <seq>` and followed by a `0x10` transmit indication (dropped);
+//! 5. `atc5`, `ata` on close.
+//!
+//! Every command carries a sequence number; replies are matched on it and
+//! stale ones dropped. Frames that arrive while a command waits for its reply
+//! are queued, not lost.
 //!
 //! Config ([`ConnectConfig::options`]):
 //! - `port`: serial device path (default `/dev/ttyACM0`).
+//! - `bitrate`: CAN bit rate, overriding [`ConnectConfig::bitrate`]; one of
+//!   50k, 83.333k, 100k, 125k, 250k, 500k or 1M (the cable does not check the
+//!   rate, and a wrong rate on a live bus can hang it, so it is checked here).
+//! - `tx_timeout_ms`: per-frame transmit budget handed to the cable (default
+//!   100, 1..=5000).
 //!
-//! Hardware note: the exact field widths below (single-byte `len`, `len`
-//! counting payload bytes *after* the 4-byte id) follow the literal field list
-//! in FINDINGS.md. A hardware owner should confirm them against the OP2
-//! firmware with `TX_IOCTL_SET_DLL_DEBUG_FLAGS`/`ALL_DEV_COMMS` traces; the byte
-//! layout is isolated in [`Op2Serial::recv_frame`]/[`Op2Serial::transmit`] so it
-//! is a one-line change if a trace disagrees.
+//! **Hardware validation pending**: tested only against the offline fake in
+//! [`fake`]. See `docs/DRIVERS.md` §3l for the audit and the checklist.
+
+pub mod fake;
+pub mod port;
+pub mod proto;
 
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
@@ -32,274 +49,361 @@ use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
     Progress, Protocol, Result,
 };
+use port::{Op2Port, SerialOp2Port};
+use proto::{Msg, RawFrame, Reply, CAN_29BIT_ID, PIN_VBAT, PROTO_CAN};
 use std::cell::RefCell;
-use std::io::{Read, Write};
+use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-/// J2534 protocol id for raw CAN frames (see `j2534_tactrix.h`).
-const PROTO_CAN: u8 = 5;
-/// J2534 connect flag: use 29-bit (extended) CAN identifiers.
-const FLAG_CAN_29BIT: u32 = 0x0000_0100;
-/// Analog input index for battery voltage (`atr 16`, FINDINGS.md).
-const ANALOG_VBAT: u8 = 16;
-/// Per-byte read timeout while framing one reply, in milliseconds.
-const BYTE_TIMEOUT_MS: u64 = 50;
+/// CAN bit rates the driver will open (see the module docs).
+pub const BITRATES: &[u32] = &[
+    50_000, 83_333, 100_000, 125_000, 250_000, 500_000, 1_000_000,
+];
+/// Default per-frame transmit budget (ms). The vendor DLL uses 50 ms on raw
+/// CAN when the caller passes 0; Mackanized recommends a ~100 ms floor.
+const DEFAULT_TX_TIMEOUT_MS: u32 = 100;
+/// Reply wait for ordinary commands. The vendor DLL waits 500 ms (5 s for
+/// `atr`/`atg`); the margin covers USB scheduling on a busy host.
+const CMD_TIMEOUT_MS: u64 = 1000;
+/// Reply wait for `ato` and `atz`.
+const SETUP_TIMEOUT_MS: u64 = 3000;
+/// Reply wait for `atr`.
+const PIN_TIMEOUT_MS: u64 = 5000;
+/// Extra wait past the transmit budget: with nothing on the bus a 1 s budget
+/// was measured to answer `are 9` after ~1.3 s.
+const TX_REPLY_GRACE_MS: u64 = 1500;
 
-/// Low-level OP2 serial transport: owns the CDC-ACM port, the sequence counter
-/// and the opened channel handle. All ASCII-command framing and binary RX-frame
-/// parsing lives here.
-struct Op2Serial {
-    port: Box<dyn serialport::SerialPort>,
-    seq: u8,
-    channel: u32,
-    extended_id: bool,
+/// Counters of what the session dropped, for diagnostics and tests.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SessionStats {
+    /// Replies whose sequence number matched no waiting command.
+    pub stale_replies: u64,
+    /// Transmit indications, loopback echoes and START indications dropped.
+    pub indications: u64,
+    /// Records for another channel, too short, or over 8 data bytes.
+    pub foreign_frames: u64,
+    /// Bytes skipped while resynchronising on the `ar` preamble.
+    pub garbage_bytes: u64,
 }
 
-/// A decoded message read back from the OP2.
-enum Op2Msg {
-    /// Positive ack `aro <seq> [values...]`.
-    AckOk { values: Vec<String> },
-    /// Negative ack `are <seq> [code...]`.
-    AckErr { values: Vec<String> },
-    /// A command-specific ASCII reply line such as `ari <version>`.
-    Reply { text: String },
-    /// A received CAN frame.
-    Frame { id: u32, data: Vec<u8> },
+/// Per-connection settings resolved from the [`ConnectConfig`].
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    bitrate: u32,
+    tx_timeout_ms: u32,
+    extended: bool,
 }
 
-impl Op2Serial {
-    fn open_port(path: &str) -> Result<Self> {
-        // The USB CDC-ACM baud rate is cosmetic, but serialport requires one.
-        let port = serialport::new(path, 115_200)
-            .timeout(Duration::from_millis(BYTE_TIMEOUT_MS))
-            .open()
-            .map_err(|e| Error::Config(format!("cannot open OP2 port {path}: {e}")))?;
+impl Settings {
+    fn from_cfg(cfg: &ConnectConfig) -> Result<Self> {
+        if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
+            return Err(Error::Unsupported(
+                "OpenPort 2.0 driver supports CAN/ISO-TP protocols only".into(),
+            ));
+        }
+        let bitrate = match cfg.options.get("bitrate") {
+            Some(s) => s
+                .trim()
+                .parse::<u32>()
+                .map_err(|_| Error::Config(format!("openport2: bitrate '{s}' is not a number")))?,
+            None => cfg.bitrate,
+        };
+        if !BITRATES.contains(&bitrate) {
+            return Err(Error::Config(format!(
+                "openport2: CAN bit rate {bitrate} not supported (use one of {}); the cable \
+                 does not check the rate and a wrong one on a live bus can hang it",
+                BITRATES
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+        let tx_timeout_ms = match cfg.options.get("tx_timeout_ms") {
+            Some(s) => s
+                .trim()
+                .parse::<u32>()
+                .ok()
+                .filter(|v| (1..=5000).contains(v))
+                .ok_or_else(|| {
+                    Error::Config(format!(
+                        "openport2: tx_timeout_ms '{s}' must be 1..=5000 (a zero budget never \
+                         transmits)"
+                    ))
+                })?,
+            None => DEFAULT_TX_TIMEOUT_MS,
+        };
+        if cfg.tx_id > 0x1FFF_FFFF || cfg.rx_id > 0x1FFF_FFFF {
+            return Err(Error::Config(
+                "openport2: CAN ids must fit in 29 bits".into(),
+            ));
+        }
         Ok(Self {
-            port,
-            seq: 0,
-            channel: 0,
-            extended_id: false,
+            bitrate,
+            tx_timeout_ms,
+            extended: cfg.tx_id > 0x7FF || cfg.rx_id > 0x7FF,
         })
     }
+}
 
-    /// Next sequence number, wrapping and skipping 0 (FINDINGS: "wrapping
-    /// sequence number").
-    fn next_seq(&mut self) -> u8 {
-        self.seq = self.seq.wrapping_add(1);
-        if self.seq == 0 {
-            self.seq = 1;
+/// One OP2 session: owns the byte port, the reply parser, the sequence
+/// counter and the queue of received CAN frames.
+struct Session {
+    port: Box<dyn Op2Port>,
+    parser: proto::Parser,
+    seq: u16,
+    settings: Settings,
+    rx: VecDeque<(u32, Vec<u8>)>,
+    stats: SessionStats,
+}
+
+impl Session {
+    fn new(port: Box<dyn Op2Port>, settings: Settings) -> Self {
+        Self {
+            port,
+            parser: proto::Parser::new(),
+            seq: 0,
+            settings,
+            rx: VecDeque::new(),
+            stats: SessionStats::default(),
         }
+    }
+
+    /// Next sequence number, wrapping 0xFFFF → 1 (never 0).
+    fn next_seq(&mut self) -> u16 {
+        self.seq = if self.seq == u16::MAX {
+            1
+        } else {
+            self.seq + 1
+        };
         self.seq
     }
 
-    fn read_byte(&mut self, deadline: Instant) -> Result<u8> {
-        let mut b = [0u8; 1];
+    fn id_flags(&self) -> u32 {
+        if self.settings.extended {
+            CAN_29BIT_ID
+        } else {
+            0
+        }
+    }
+
+    /// The next decoded message, or `None` once `deadline` passes.
+    fn read_msg(&mut self, deadline: Instant) -> Result<Option<Msg>> {
+        let mut buf = [0u8; 512];
         loop {
-            match self.port.read(&mut b) {
-                Ok(1) => return Ok(b[0]),
-                Ok(_) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
-                Err(e) => return Err(Error::Io(e)),
+            if let Some(m) = self.parser.next() {
+                self.stats.garbage_bytes = self.parser.garbage;
+                return Ok(Some(m));
             }
-            if Instant::now() >= deadline {
-                return Err(Error::Timeout(BYTE_TIMEOUT_MS));
+            let now = Instant::now();
+            if now >= deadline {
+                self.stats.garbage_bytes = self.parser.garbage;
+                return Ok(None);
             }
+            let n = self.port.read_some(&mut buf, deadline - now)?;
+            self.parser.push(&buf[..n]);
         }
     }
 
-    fn read_exact(&mut self, n: usize, deadline: Instant) -> Result<Vec<u8>> {
-        let mut out = Vec::with_capacity(n);
-        while out.len() < n {
-            out.push(self.read_byte(deadline)?);
+    /// File a binary record: CAN data for our channel goes to the rx queue,
+    /// everything else is counted and dropped.
+    fn accept_frame(&mut self, f: RawFrame) {
+        if f.proto != PROTO_CAN {
+            self.stats.foreign_frames += 1;
+            return;
         }
-        Ok(out)
-    }
-
-    fn read_line(&mut self, deadline: Instant) -> Result<String> {
-        let mut s = Vec::new();
-        loop {
-            let b = self.read_byte(deadline)?;
-            if b == b'\r' || b == b'\n' {
-                if s.is_empty() {
-                    continue; // swallow leading CR/LF
-                }
-                break;
-            }
-            s.push(b);
+        // Transmit indications (0x10), loopback echoes (0x20) and START
+        // indications without END (0x80) are not received data. Raw CAN
+        // records normally carry status 0x00 (bisak §7.8).
+        let st = f.status;
+        if st & (proto::status::TX_INDICATION | proto::status::LOOPBACK) != 0
+            || (st & proto::status::START != 0 && st & proto::status::END == 0)
+        {
+            self.stats.indications += 1;
+            return;
         }
-        Ok(String::from_utf8_lossy(&s).trim().to_string())
-    }
-
-    /// Read and decode exactly one message from the device.
-    ///
-    /// All messages start with `a` `r`; the third byte selects the kind:
-    /// `o`/`e` are generic acks, a protocol digit is a binary RX frame, and any
-    /// other letter is a command-specific ASCII reply line.
-    fn read_message(&mut self, timeout_ms: u64) -> Result<Op2Msg> {
-        let deadline = Instant::now() + Duration::from_millis(timeout_ms.max(BYTE_TIMEOUT_MS));
-        // Resynchronise on the 'a' 'r' preamble.
-        loop {
-            if self.read_byte(deadline)? != b'a' {
-                continue;
-            }
-            if self.read_byte(deadline)? == b'r' {
-                break;
-            }
-        }
-        let kind = self.read_byte(deadline)?;
-        match kind {
-            b'o' | b'e' => {
-                let line = self.read_line(deadline)?;
-                let values: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
-                // values[0] is the echoed sequence number.
-                if kind == b'o' {
-                    Ok(Op2Msg::AckOk { values })
-                } else {
-                    Ok(Op2Msg::AckErr { values })
-                }
-            }
-            d @ b'0'..=b'9' => {
-                let proto = d - b'0';
-                let _ = proto; // raw-CAN only; kept for clarity.
-                let len = self.read_byte(deadline)? as usize;
-                let _status = self.read_byte(deadline)?;
-                let ts = self.read_exact(4, deadline)?;
-                let _timestamp = u32::from_be_bytes([ts[0], ts[1], ts[2], ts[3]]);
-                let idb = self.read_exact(4, deadline)?;
-                let id = u32::from_be_bytes([idb[0], idb[1], idb[2], idb[3]]);
-                // `len` counts the payload bytes that follow the 4-byte id.
-                let data = self.read_exact(len, deadline)?;
-                Ok(Op2Msg::Frame { id, data })
-            }
-            _ => {
-                let rest = self.read_line(deadline)?;
-                let text = format!("{}{}", kind as char, rest);
-                Ok(Op2Msg::Reply { text })
-            }
+        match f.can() {
+            // The id is the full 4-byte field (an 11-bit id has the upper
+            // bits clear); the 0x02 status bit is not relied on.
+            Some(c) if c.data.len() <= 8 => self.rx.push_back((c.id & 0x1FFF_FFFF, c.data)),
+            _ => self.stats.foreign_frames += 1,
         }
     }
 
-    fn write_all(&mut self, bytes: &[u8]) -> Result<()> {
-        self.port.write_all(bytes).map_err(Error::Io)?;
-        self.port.flush().map_err(Error::Io)?;
-        Ok(())
-    }
-
-    /// Send an ASCII command (seq appended automatically) and wait for its
-    /// `aro`/`are` ack, returning the ok-ack values.
-    fn command(&mut self, cmd: &str, timeout_ms: u64) -> Result<Vec<String>> {
+    /// Send `body <seq>\r\n` + `payload` in one write and wait for the reply
+    /// carrying that sequence number. `are` becomes an error; frames that
+    /// arrive meanwhile are queued; replies for other numbers are dropped.
+    fn command(&mut self, body: &str, payload: &[u8], timeout_ms: u64) -> Result<Reply> {
         let seq = self.next_seq();
-        let line = format!("{cmd} {seq}\r");
-        self.write_all(line.as_bytes())?;
-        self.await_ack(timeout_ms)
-    }
-
-    /// Wait for the next ack, skipping any RX frames that arrive first.
-    fn await_ack(&mut self, timeout_ms: u64) -> Result<Vec<String>> {
+        self.port.write_all(&proto::numbered(body, seq, payload))?;
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         loop {
-            match self.read_message(timeout_ms)? {
-                Op2Msg::AckOk { values } => return Ok(values),
-                Op2Msg::AckErr { values } => {
+            match self.read_msg(deadline)? {
+                None => {
                     return Err(Error::Protocol(format!(
-                        "OP2 error ack: {}",
-                        values.join(" ")
+                        "OpenPort 2.0 did not answer `{}` within {timeout_ms} ms",
+                        cmd_name(body)
                     )))
                 }
-                Op2Msg::Reply { text } => return Ok(vec![text]),
-                Op2Msg::Frame { .. } => continue,
+                Some(Msg::Frame(f)) => self.accept_frame(f),
+                Some(Msg::Reply(r)) if r.verb != b'i' && r.seq() == Some(seq) => {
+                    if r.verb == b'e' {
+                        return Err(device_error(body, &r));
+                    }
+                    return Ok(r);
+                }
+                Some(Msg::Reply(_)) => self.stats.stale_replies += 1,
             }
         }
     }
 
-    fn version(&mut self) -> Result<String> {
-        let seq = self.next_seq();
-        self.write_all(format!("ati {seq}\r").as_bytes())?;
-        match self.read_message(1000)? {
-            Op2Msg::Reply { text } => Ok(text),
-            Op2Msg::AckOk { values } => Ok(values.join(" ")),
-            _ => Ok(String::new()),
+    /// `ati` (unnumbered, as the vendor DLL sends it) → the version text.
+    fn identify(&mut self, timeout_ms: u64) -> Result<String> {
+        self.port.write_all(b"ati\r\n")?;
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        loop {
+            match self.read_msg(deadline)? {
+                None => {
+                    return Err(Error::Protocol(format!(
+                        "no answer to `ati` within {timeout_ms} ms: is this an OpenPort 2.0 \
+                         (and is the microSD card removed)?"
+                    )))
+                }
+                Some(Msg::Reply(r)) if r.verb == b'i' => {
+                    // `ari main code version : 1.17.4877` → `1.17.4877`.
+                    let v = match r.text.rsplit_once(':') {
+                        Some((_, v)) if !v.trim().is_empty() => v.trim().to_string(),
+                        _ => r.text.clone(),
+                    };
+                    return Ok(v);
+                }
+                Some(Msg::Frame(f)) => self.accept_frame(f),
+                Some(Msg::Reply(_)) => self.stats.stale_replies += 1,
+            }
         }
     }
 
-    /// Open a raw-CAN channel. Per FINDINGS.md the `ato` argument order is
-    /// protocol, flags, baud ("flags before baud").
-    fn open_channel(&mut self, baud: u32, extended_id: bool) -> Result<()> {
-        self.extended_id = extended_id;
-        let flags = if extended_id { FLAG_CAN_29BIT } else { 0 };
-        let values = self.command(&format!("ato {PROTO_CAN} {flags} {baud}"), 2000)?;
-        // The ok-ack carries the echoed seq then the assigned channel handle.
-        self.channel = values.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-        Ok(())
+    fn open_can(&mut self) -> Result<()> {
+        let body = proto::open_channel(PROTO_CAN, self.id_flags(), self.settings.bitrate);
+        self.command(&body, &[], SETUP_TIMEOUT_MS).map(|_| ())
     }
 
-    /// Install a pass filter so the diagnostic rx id reaches us.
+    /// PASS filter on the response id. Required: the cable forwards nothing
+    /// until a filter matches.
     fn set_pass_filter(&mut self, rx_id: u32) -> Result<()> {
-        let mask = if self.extended_id { 0x1FFF_FFFF } else { 0x7FF };
-        self.command(
-            &format!("atf {} 1 0 {:08X} {:08X}", self.channel, mask, rx_id),
-            1000,
+        let mask: u32 = if self.settings.extended {
+            0x1FFF_FFFF
+        } else {
+            0x7FF
+        };
+        let (body, payload) = proto::filter(
+            PROTO_CAN,
+            proto::filter::PASS,
+            self.id_flags(),
+            &mask.to_be_bytes(),
+            &rx_id.to_be_bytes(),
+            None,
         )
-        .map(|_| ())
+        .ok_or_else(|| Error::Protocol("invalid filter".into()))?;
+        self.command(&body, &payload, CMD_TIMEOUT_MS).map(|_| ())
     }
 
-    fn close_channel(&mut self) -> Result<()> {
-        let ch = self.channel;
-        self.command(&format!("atc {ch}"), 1000).map(|_| ())
+    fn transmit(&mut self, id: u32, data: &[u8]) -> Result<()> {
+        if data.len() > 8 {
+            return Err(Error::Protocol(format!(
+                "classic CAN frame of {} bytes (max 8)",
+                data.len()
+            )));
+        }
+        let budget_ms = self.settings.tx_timeout_ms;
+        let txflags = if self.settings.extended || id > 0x7FF {
+            CAN_29BIT_ID
+        } else {
+            0
+        };
+        let (body, payload) = proto::transmit(PROTO_CAN, id, data, txflags, budget_ms * 1000);
+        self.command(&body, &payload, budget_ms as u64 + TX_REPLY_GRACE_MS)
+            .map(|_| ())
     }
 
-    /// Transmit one CAN frame. The payload is framed as
-    /// `att <channel> <txflags> <timeout_us> ` then binary
-    /// `<len><id BE><payload>` then ` <seq>\r`, where `len` is the payload
-    /// length (matching the RX-frame convention above).
-    fn transmit(&mut self, id: u32, payload: &[u8], timeout_us: u32) -> Result<()> {
-        let seq = self.next_seq();
-        let mut buf = format!("att {} 0 {} ", self.channel, timeout_us.max(1)).into_bytes();
-        buf.push(payload.len() as u8);
-        buf.extend_from_slice(&id.to_be_bytes());
-        buf.extend_from_slice(payload);
-        buf.extend_from_slice(format!(" {seq}\r").as_bytes());
-        self.write_all(&buf)?;
-        self.await_ack(1000).map(|_| ())
+    fn recv(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        loop {
+            if let Some(f) = self.rx.pop_front() {
+                return Ok(f);
+            }
+            match self.read_msg(deadline)? {
+                None => return Err(Error::Timeout(timeout_ms)),
+                Some(Msg::Frame(f)) => self.accept_frame(f),
+                Some(Msg::Reply(_)) => self.stats.stale_replies += 1,
+            }
+        }
     }
 
-    /// Read battery voltage in millivolts via `atr 16`.
+    /// Battery voltage: `atr 16` → `arr 16 <mV> <seq>`.
     fn battery_mv(&mut self) -> Result<u32> {
-        let values = self.command(&format!("atr {ANALOG_VBAT}"), 1000)?;
-        // ok-ack: <seq> <millivolts>.
-        values
-            .get(1)
-            .and_then(|s| s.parse::<u32>().ok())
-            .ok_or_else(|| Error::Protocol("no voltage in atr reply".into()))
+        let r = self.command(&proto::read_pin(PIN_VBAT), &[], PIN_TIMEOUT_MS)?;
+        match (r.verb, r.fields.as_slice()) {
+            (b'r', [pin, mv, _seq]) if pin == "16" => mv
+                .parse()
+                .map_err(|_| Error::Protocol(format!("bad millivolts in `arr {}`", r.text))),
+            _ => Err(Error::Protocol(format!(
+                "unexpected reply to `atr 16`: ar{} {}",
+                r.verb as char, r.text
+            ))),
+        }
+    }
+
+    fn close(&mut self) {
+        let _ = self.command(&proto::close_channel(PROTO_CAN), &[], CMD_TIMEOUT_MS);
+        // Close everything and switch outputs off, as the reference drivers do.
+        let _ = self.command("ata", &[], CMD_TIMEOUT_MS);
     }
 }
 
-/// [`CanLink`] over an [`Op2Serial`] shared with the owning driver.
+fn cmd_name(body: &str) -> &str {
+    body.split_whitespace().next().unwrap_or(body)
+}
+
+fn device_error(body: &str, r: &Reply) -> Error {
+    let cmd = cmd_name(body);
+    let Some(code) = r.error_code() else {
+        return Error::Protocol(format!("OpenPort 2.0 rejected `{cmd}`: are {}", r.text));
+    };
+    let name = proto::j2534_error_name(code);
+    let hint = match (code, cmd.as_bytes().get(2)) {
+        (9, Some(b't')) => {
+            ": the frame was not acknowledged on the bus (ignition on? wiring, bit rate, \
+             another node present?)"
+        }
+        (20, _) => ": channel already open (another program using the cable?)",
+        (3, Some(b'o')) => ": protocol not supported by this cable/firmware",
+        _ => "",
+    };
+    Error::Protocol(format!(
+        "OpenPort 2.0 rejected `{cmd}`: {name} (are {code}){hint}"
+    ))
+}
+
+/// [`CanLink`] over a [`Session`] shared with the owning driver.
 struct Op2Link {
-    serial: Rc<RefCell<Op2Serial>>,
+    session: Rc<RefCell<Session>>,
 }
 
 impl CanLink for Op2Link {
     fn send_frame(&mut self, id: u32, data: &[u8]) -> Result<()> {
-        // 50 ms tx timeout, in microseconds (FINDINGS: timeout must be nonzero).
-        self.serial.borrow_mut().transmit(id, data, 50_000)
+        self.session.borrow_mut().transmit(id, data)
     }
 
     fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
-        let mut serial = self.serial.borrow_mut();
-        loop {
-            match serial.read_message(timeout_ms)? {
-                Op2Msg::Frame { id, data } => return Ok((id, data)),
-                // Skip acks/replies that are not CAN data.
-                _ => continue,
-            }
-        }
+        self.session.borrow_mut().recv(timeout_ms)
     }
 }
 
 #[derive(Default)]
 pub struct OpenPort2Driver {
-    serial: Option<Rc<RefCell<Op2Serial>>>,
+    session: Option<Rc<RefCell<Session>>>,
     transport: Option<IsoTp>,
     firmware: Option<String>,
     cfg: Option<ConnectConfig>,
@@ -318,6 +422,49 @@ impl OpenPort2Driver {
     /// with a clear error. OpenTune ships no OEM algorithms.
     pub fn set_seed_key(&mut self, seed_key: Box<dyn SeedKey>) {
         self.seed_key = Some(seed_key);
+    }
+
+    /// Open over an already-connected byte port (the offline fake in tests,
+    /// or any transport that carries the OP2 protocol) instead of the serial
+    /// device named by the `port` option.
+    pub fn open_with_port(&mut self, port: Box<dyn Op2Port>, cfg: &ConnectConfig) -> Result<()> {
+        let settings = Settings::from_cfg(cfg)?;
+        if self.session.is_some() {
+            self.close()?;
+        }
+        let mut s = Session::new(port, settings);
+        // End any half line a previous session left (bisak §9.1).
+        s.port.write_all(b"\r\n\r\n")?;
+        let firmware = s.identify(1500)?;
+        let setup = (|| -> Result<()> {
+            s.command("atz", &[], SETUP_TIMEOUT_MS)?;
+            s.command("ata", &[], CMD_TIMEOUT_MS)?;
+            s.open_can()?;
+            s.set_pass_filter(cfg.rx_id)
+        })();
+        if let Err(e) = setup {
+            let _ = s.command("ata", &[], CMD_TIMEOUT_MS);
+            return Err(e);
+        }
+        // Anything received before the filter existed is stale.
+        s.rx.clear();
+
+        let shared = Rc::new(RefCell::new(s));
+        let link = Op2Link {
+            session: Rc::clone(&shared),
+        };
+        let isotp = IsoTp::new(Box::new(link), cfg.tx_id, cfg.rx_id);
+
+        self.firmware = Some(firmware);
+        self.session = Some(shared);
+        self.transport = Some(isotp);
+        self.cfg = Some(cfg.clone());
+        Ok(())
+    }
+
+    /// What the session dropped so far (stale replies, indications, …).
+    pub fn stats(&self) -> Option<SessionStats> {
+        self.session.as_ref().map(|s| s.borrow().stats)
     }
 
     fn transport(&mut self) -> Result<&mut IsoTp> {
@@ -367,7 +514,9 @@ impl Interface for OpenPort2Driver {
             read_memory: true,
             write_memory: true,
             battery_voltage: true,
-            programming_voltage: true,
+            // The cable can drive a pin (`atv`), but the Interface has no
+            // programming-voltage call and this driver sends no `atv`.
+            programming_voltage: false,
             ..Default::default()
         }
     }
@@ -380,45 +529,22 @@ impl Interface for OpenPort2Driver {
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
-        if !matches!(cfg.protocol, Protocol::IsoTp | Protocol::RawCan) {
-            return Err(Error::Unsupported(
-                "OpenPort 2.0 driver supports CAN/ISO-TP protocols only".into(),
-            ));
-        }
-        let port = cfg
+        Settings::from_cfg(cfg)?;
+        let path = cfg
             .options
             .get("port")
             .map(String::as_str)
             .unwrap_or("/dev/ttyACM0");
-
-        let mut serial = Op2Serial::open_port(port)?;
-        // Reset to a known state and read the firmware banner.
-        let _ = serial.command("atz", 2000);
-        self.firmware = serial.version().ok().filter(|s| !s.is_empty());
-
-        let extended = cfg.tx_id > 0x7FF || cfg.rx_id > 0x7FF;
-        serial.open_channel(cfg.bitrate, extended)?;
-        serial.set_pass_filter(cfg.rx_id)?;
-
-        let shared = Rc::new(RefCell::new(serial));
-        let link = Op2Link {
-            serial: Rc::clone(&shared),
-        };
-        let isotp = IsoTp::new(Box::new(link), cfg.tx_id, cfg.rx_id);
-
-        self.serial = Some(shared);
-        self.transport = Some(isotp);
-        self.cfg = Some(cfg.clone());
-        Ok(())
+        let port = SerialOp2Port::open(path)?;
+        self.open_with_port(Box::new(port), cfg)
     }
 
     fn close(&mut self) -> Result<()> {
-        // Drop the ISO-TP (and its link) before touching the shared serial.
+        // Drop the ISO-TP (and its link) before touching the shared session.
         self.transport = None;
-        if let Some(serial) = self.serial.take() {
-            if let Ok(mut s) = Rc::try_unwrap(serial).map(RefCell::into_inner) {
-                let _ = s.close_channel();
-                let _ = s.command("ata", 500); // close-all, belt and braces.
+        if let Some(session) = self.session.take() {
+            if let Ok(mut s) = Rc::try_unwrap(session).map(RefCell::into_inner) {
+                s.close();
             }
         }
         self.cfg = None;
@@ -426,8 +552,8 @@ impl Interface for OpenPort2Driver {
     }
 
     fn battery_millivolts(&mut self) -> Result<Option<u32>> {
-        let serial = self.serial.as_ref().ok_or(Error::NotConnected)?;
-        let mv = serial.borrow_mut().battery_mv()?;
+        let session = self.session.as_ref().ok_or(Error::NotConnected)?;
+        let mv = session.borrow_mut().battery_mv()?;
         Ok(Some(mv))
     }
 

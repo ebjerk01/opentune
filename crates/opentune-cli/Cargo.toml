@@ -72,3 +72,5 @@ opentune-xdf = { path = "../opentune-xdf" }
 opentune-core = { path = "../opentune-core" }
 # The `ts log` smoke test opens its CSV with the log viewer's parser.
 opentune-logview = { path = "../opentune-logview" }
+# A pty pair carries the offline fake OpenPort 2.0 in the openport2 CLI test.
+serialport.workspace = true
