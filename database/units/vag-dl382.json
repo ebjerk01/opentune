@@ -19,10 +19,10 @@
   ],
   "protocols": [],
   "read_methods": {
-    "obd": "unknown",
-    "bench": false,
+    "obd": "write-only",
+    "bench": true,
     "boot": false,
-    "notes": "No open source documents a read path or flash layout for DL382 software; factory containers use the same method 0x11 table cipher + compression as DQ200/DQ250 (vag-tcu-tools)."
+    "notes": "A tool vendor lists OBD writing with a calibration-only OBD readout, so OBD is write-only here; a public bench pinout gives CAN bench access at the external plug. No boot route is documented. Factory containers use the same method 0x11 table cipher + compression as DQ200/DQ250 (vag-tcu-tools)."
   },
   "checksum": null,
   "ecudef": null,
@@ -55,6 +55,67 @@
     {
       "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): method 0x11 for DL382",
       "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
+    },
+    {
+      "title": "ecupinouts.com: Temic DL382 (S tronic 7) bench pinout",
+      "url": "https://ecupinouts.com/en/temic-dl382/"
+    },
+    {
+      "title": "AutoTuner public ECU page: Temic DL382 (TC1784) supported methods (tool vendor page)",
+      "url": "https://www.autotuner.com/pages/ecu/temic-dl382-tc1784"
+    },
+    {
+      "title": "AutoTuner public news page: VAG DLxxx/DQxxx TCU support (DL382 listed), OBD mode and calibration readout (tool vendor page)",
+      "url": "https://www.autotuner.com/blogs/news/vag-dlxxx-dqxxx"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause), README: supported control units (DL382 not listed)",
+      "url": "https://github.com/bri3d/VW_Flash"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": null,
+      "notes": "A tool vendor's public pages list writing the DL382 through the OBD socket, and for its VAG DL/DQ TCU support give the OBD mode as \"OBD VR\" with a calibration-only readout. A complete original read through the vehicle socket is not documented in any cited source, so OBD is write-only here. No open project documents the DL382 programming protocol (VW_Flash does not list DL382), so the protocol is left unknown.",
+      "confidence": "community",
+      "sources": [
+        4,
+        5,
+        6
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "The published DL382 bench pinout puts +12 V on pins 1 and 20 (the unit needs both; tie them together), ground on pin 2, CAN-H on pin 19 and CAN-L on pin 18 of the TCU connector, with 120 ohm across CAN-H/CAN-L if the interface does not terminate; it lists no K-line or separate ignition pin. A tool vendor's page lists bench access at the unit's external plug without opening the case. Single pin source, and these pins are not yet in this unit's connector list: confirm every pin with a multimeter on your unit. What a bench session can read is not documented.",
+      "confidence": "community",
+      "sources": [
+        3,
+        4
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "No cited public source documents a processor boot or bootstrap entry for the DL382 (no pad, strap or reset timing). The bench pinout gives no boot pin, and the vendor page that names the processor as an Infineon TC1784 does not list a boot method for this unit.",
+      "confidence": "unverified",
+      "sources": [
+        3,
+        4
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "Not documented in the cited sources: no public source states whether a diagnostic read or programming of the DL382 requests security access, and the open VAG UDS flasher (VW_Flash) does not cover this unit. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        6
+      ]
+    }
+  }
 }
