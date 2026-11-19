@@ -22,8 +22,8 @@
   "read_methods": {
     "obd": "write-only",
     "bench": true,
-    "boot": true,
-    "notes": "Per OpenTune's bosch-dq381 definition: a complete original needs a bench/boot read (the 0x188000-byte full read the checksum was validated on); calibration flashing may be possible over OBD (UDS on CAN)."
+    "boot": false,
+    "notes": "UDS programming over CAN is documented for the MQB DQ381. For the 401 bootloader revision, AutoTuner lists a virtual calibration read over OBD and backup on the bench. A processor boot entry point is undocumented."
   },
   "checksum": "dq381",
   "ecudef": "bosch-dq381",
@@ -130,6 +130,66 @@
     {
       "title": "Wikipedia: Direct-shift gearbox (DQ381 / 0GC)",
       "url": "https://en.wikipedia.org/wiki/Direct-shift_gearbox"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause), supported MQB control units and UDS transport",
+      "url": "https://github.com/bri3d/VW_Flash"
+    },
+    {
+      "title": "AutoTuner DQ38x 401 bootloader support announcement, OBD virtual read and bench backup",
+      "url": "https://us.autotuner.com/blogs/news/dq381-gen-2-401-bootloader-now-unlocked-by-autotuner"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause), DQ381 programming support",
+      "url": "https://github.com/bri3d/VW_Flash/blob/master/lib/dq381_flash_utils.py"
+    },
+    {
+      "title": "VW_Flash (BSD-2-Clause), security access in the UDS programming session",
+      "url": "https://github.com/bri3d/VW_Flash/blob/master/lib/flash_uds.py"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": "UDS over ISO-TP on CAN",
+      "notes": "VW_Flash supports programming the MQB DQ381. For the 401 bootloader revision, AutoTuner lists virtual calibration reads over OBD and reserves full backups for bench access. A complete original read through OBD is undocumented in these sources.",
+      "confidence": "community",
+      "sources": [
+        2,
+        3
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "The published CAN bench pinout lists +12 V on TCU-9 and TCU-15, ground on TCU-16, CAN-H on TCU-6 and CAN-L on TCU-7. It lists no K-line and calls the connector 10-pin despite numbering pins up to 16. Confirm the numbering on the unit before applying power.",
+      "confidence": "unverified",
+      "sources": [
+        0
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "The connector pinout and the bench backup listing do not identify a DQ381 processor boot entry point or reset timing.",
+      "confidence": "unverified",
+      "sources": [
+        0,
+        3
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "required",
+      "notes": "The VW_Flash DQ381 writer uses a UDS programming session that requests security access. The cited sources do not establish the requirement for a complete diagnostic read. OpenTune ships no OEM key.",
+      "confidence": "community",
+      "sources": [
+        4,
+        5
+      ]
+    }
+  }
 }
