@@ -9,7 +9,7 @@
 //! The C `PASSTHRU_MSG` layout and the `extern "system"` (stdcall on win32)
 //! function signatures follow SAE J2534-1.
 
-use crate::codec::{PassThruMsg, STATUS_NOERROR};
+use crate::codec::{PassThruMsg, ERR_BUFFER_EMPTY, ERR_TIMEOUT, STATUS_NOERROR};
 use crate::PassThru;
 use libloading::{Library, Symbol};
 use opentune_core::{Error, Result};
@@ -185,10 +185,17 @@ impl PassThru for PassThruDll {
             let read: Symbol<FnReadMsgs> = self.sym(b"PassThruReadMsgs\0")?;
             read(self.channel_id, &mut c, &mut num, timeout_ms as u32)
         };
-        if num == 0 {
+        // No message is ERR_BUFFER_EMPTY / ERR_TIMEOUT (or NOERROR with
+        // NumMsgs 0); any other code (e.g. ERR_DEVICE_NOT_CONNECTED) is a real
+        // failure and must not be reported as a timeout.
+        let code = rc as u32;
+        if num == 0 && (code == STATUS_NOERROR || code == ERR_TIMEOUT || code == ERR_BUFFER_EMPTY) {
             return Err(Error::Timeout(timeout_ms));
         }
         check(rc, "PassThruReadMsgs")?;
+        if num == 0 {
+            return Err(Error::Timeout(timeout_ms));
+        }
         Ok(c.to_msg())
     }
 

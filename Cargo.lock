@@ -1199,6 +1199,7 @@ dependencies = [
  "opentune-vin",
  "opentune-xdf",
  "serde_json",
+ "serialport",
 ]
 
 [[package]]
@@ -1364,6 +1365,7 @@ name = "opentune-driver-openport2"
 version = "0.7.0"
 dependencies = [
  "opentune-core",
+ "opentune-udssim",
  "serialport",
 ]
 

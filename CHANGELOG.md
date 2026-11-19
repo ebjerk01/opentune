@@ -100,6 +100,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   OpenTune ships **no** provider and **no** definition
   ([SEEDKEY-LOADER.md](docs/SEEDKEY-LOADER.md)); synthetic-tested only (a
   synthetic provider program and the UDS simulator's SecurityAccess).
+- **Offline fake OpenPort 2.0** (`opentune_driver_openport2::fake`): a scripted
+  cable speaking the documented `at…` protocol with a simulated CAN bus and an
+  ISO-TP ECU behind it (the `opentune-udssim` server in the tests), with fault
+  injection (`are` replies, silence, stale replies, frames ahead of the ack, no
+  bus ACK, background traffic, garbage, loopback echoes) and split/merged read
+  chunking. `opentune info` / `identify` / `read --driver openport2` now run end
+  to end against it over a pty. Offline only.
 
 ### Changed
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
@@ -124,6 +131,27 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- **`openport2` (Tactrix OpenPort 2.0) driver audited against the public
+  protocol notes and rewritten at the wire level** (bisak/openport-j2534,
+  Mackanized/op2j2534, roffe/libj2534_openport2; facts only). The old code could
+  not have worked on a cable: lines ended in a bare CR (ignored by the device),
+  `ato`/`atc`/`att`/`atf` were malformed (spaced protocol digit, missing `ato`
+  field, a non-existent channel handle, inline ASCII transmit/filter payloads),
+  received-frame lengths were misread by 9 bytes, transmit indications were
+  delivered as ECU data, frames arriving before an ack were dropped, replies
+  were not matched by sequence number and `atr` was parsed wrongly. Now: CRLF,
+  documented command shapes with binary payloads in one write, sequence-matched
+  replies with stale-reply dropping, queued interleaved frames, indications
+  dropped, J2534 error names, a resync preamble, a CAN bit-rate allow-list and
+  a configurable transmit budget (`tx_timeout_ms`). `programming_voltage` is no
+  longer advertised (nothing implements it). Every deviation and its source is
+  listed in [DRIVERS.md §3l](docs/DRIVERS.md#3l-openport2-tactrix-openport-20-hardware-validation-pending),
+  with a hardware-validation checklist. **Hardware validation pending**: tested
+  against the offline fake only.
+- `j2534` driver: the ISO 15765 flow-control filter now sets
+  `ISO15765_FRAME_PAD`, so the interface pads its flow-control frames; the
+  Windows FFI no longer reports a real `PassThruReadMsgs` error (e.g. device
+  unplugged) as a timeout. Hardware-unproven.
 - The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
   EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
   Example definitions are now skipped by identification.

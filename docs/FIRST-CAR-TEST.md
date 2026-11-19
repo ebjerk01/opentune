@@ -21,7 +21,7 @@ once every read step has passed.
 |---|---|---|
 | Bosch EDC16 / EDC17, Simos PCR2.1, VAG DSG (UDS), Haldex Gen5 (MQB) | CAN (OBD pins 6/14) | ELM327, slcan/CANable, OpenPort 2.0, J2534 |
 | Haldex Gen4 (PQ, e.g. Passat CC 4Motion) | CAN, KWP2000 over VW TP2.0 | a raw-CAN adapter: CANable (slcan), candleLight (gs_usb) or SocketCAN, see Stage H; **not** the ELM327 |
-| Bosch EDC15 (incl. EDC15C6), older K-line ECUs | K-line (pin 7) | KKL 409.1 cable, OpenPort 2.0 — **not** a CAN-only ELM327 |
+| Bosch EDC15 (incl. EDC15C6), older K-line ECUs | K-line (pin 7) | KKL 409.1 cable — **not** a CAN-only ELM327, and not OpenTune's `openport2` driver (CAN only so far) |
 | Body/comfort modules on MS-CAN (Ford, some others) | MS-CAN | ELM327 with MS-CAN switch, OpenPort |
 
 ## Stage 0 — at the desk, no car

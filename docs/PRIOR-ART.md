@@ -110,6 +110,23 @@ reads the INI and `.msq` formats as the open projects above document them.
 The driver's USB access uses [kevinmehall/nusb](https://github.com/kevinmehall/nusb)
 (Apache-2.0 OR MIT) as a library dependency.
 
+## OpenPort 2.0 and J2534 interface protocol
+
+The `openport2` driver's wire protocol comes from these public notes, audited
+2026-11-19 ([DRIVERS.md §3l](DRIVERS.md#3l-openport2-tactrix-openport-20-hardware-validation-pending)).
+Facts only: no code was copied, and the Tactrix DLL, EcuFlash and the vendor
+firmware were never opened or unpacked by OpenTune. Licences checked 2026-11-19
+(`LICENSE` files).
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [bisak/openport-j2534](https://github.com/bisak/openport-j2534) | — | GPL-3.0 | The most complete public description (`docs/PROTOCOL.md`): framing, glued protocol digits, sequence-number echo, `ato`'s ignored 4th field, `att` budget semantics, `atf` as `<type> <txflags> <len>`, the binary record layout and status bits (transmit indication `0x10`, loopback `0x20`, 29-bit `0x02`), J2534 error codes, the resync preamble and the wrong-bit-rate hang. Measured on a cable and against the vendor DLL run as a black box. GPL-3.0 → compatible. |
+| [Mackanized/op2j2534](https://github.com/Mackanized/op2j2534) | — | Apache-2.0 | `PROTOCOL.md`: CDC-ACM transport, CRLF (a bare CR is ignored), reply forms (`aro`/`are`/`ari`/`arr`/`arg`/`arf`), the non-zero transmit timeout, mandatory filters, error codes provoked on hardware. Its `ato` table order and `atf` field reading conflict with its own code / the bisak traces (see DRIVERS.md §3l). Apache-2.0 → compatible with GPL-3.0. |
+| [roffe/libj2534_openport2](https://github.com/roffe/libj2534_openport2) | — | Apache-2.0 | `RE_NOTES.md`: command set, `ato` flags-before-baud, transmit timeout × 1000 µs, `len` = 9 + data length, sequence numbers wrapping 1..0xFFFF. Its notes say they were derived from the vendor DLL; OpenTune used only the published notes. Apache-2.0 → compatible with GPL-3.0. |
+| [prj/openport-winusb](https://github.com/prj/openport-winusb) | — | MIT | Context only: the vendor kernel driver fails on Windows 11 and the vendor J2534 DLL is 32-bit (`SysWOW64`), so a 64-bit OpenTune `j2534` build cannot load it. Nothing else used. |
+| [james-portman/j2534](https://github.com/james-portman/j2534) | — | none stated | Not used (no licence). |
+| SAE J2534-1 (04.04) | — | standard | Protocol ids, connect/Tx flags, filter types, `RxStatus` bits and return-code numbers used by both the `openport2` and `j2534` drivers. |
+
 ## C166 / C167 bootstrap loader (EDC15 bootstrap-mode read)
 
 | Project / document | Stars (approx) | Licence | What OpenTune learned |
@@ -160,12 +177,14 @@ above:
   moto-ecu-checksum, OpenVehicleDiag, python-udsoncan, python-can-isotp,
   cantools, SavvyCAN, esp32-isotp-ble-bridge, kw1281test, vag-diag-sim,
   mib2-toolbox (its MIT notice ships with the `vag-mib2-coding` pack),
-  AsBuilt-Browser.
+  AsBuilt-Browser, openport-winusb.
+- **Apache-2.0** — compatible with GPL-3.0 (not with GPL-2.0-only). Covers
+  op2j2534 and libj2534_openport2 (protocol facts only).
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
   NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later), uclcli,
-  apim-asbuilt-decode and ccf_parser.
+  apim-asbuilt-decode, ccf_parser and openport-j2534 (protocol facts only).
   NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later), uclcli and RomRaider
   (2-or-later per its source headers; we still use its format facts only).
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.

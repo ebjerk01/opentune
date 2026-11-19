@@ -73,9 +73,15 @@ impl PassThruMsg {
 
     /// Build the mask/pattern/flow-control triplet for the ISO15765 flow-control
     /// filter that routes an ECU reply (`rx_id`) back to a request (`tx_id`).
+    ///
+    /// The messages carry `ISO15765_FRAME_PAD`: the TxFlags of the
+    /// flow-control message decide how the interface sends the flow-control
+    /// frames, and ISO 15765-4 receivers may ignore a diagnostic CAN frame
+    /// shorter than 8 bytes. (A trace of the Tactrix DLL in the public
+    /// bisak/openport-j2534 notes shows the same: `atf6 3 64 4`, TxFlags 0x40.)
     pub fn iso15765_flow_filter(tx_id: u32, rx_id: u32) -> (Self, Self, Self) {
         let extended = tx_id > 0x7FF || rx_id > 0x7FF;
-        let tx_flags = if extended { CAN_29BIT_ID_TX } else { 0 };
+        let tx_flags = ISO15765_FRAME_PAD | if extended { CAN_29BIT_ID_TX } else { 0 };
         let mask = Self {
             protocol_id: ISO15765,
             rx_status: 0,
@@ -178,5 +184,9 @@ mod tests {
         assert_eq!(mask.data, 0xFFFF_FFFFu32.to_be_bytes());
         assert_eq!(pattern.data, 0x7E8u32.to_be_bytes());
         assert_eq!(flow.data, 0x7E0u32.to_be_bytes());
+        // Flow-control frames are padded; 29-bit ids add CAN_29BIT_ID.
+        assert_eq!(flow.tx_flags, ISO15765_FRAME_PAD);
+        let (_, _, flow) = PassThruMsg::iso15765_flow_filter(0x18DA_10F1, 0x18DA_F110);
+        assert_eq!(flow.tx_flags, ISO15765_FRAME_PAD | CAN_29BIT_ID_TX);
     }
 }
