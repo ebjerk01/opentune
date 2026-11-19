@@ -122,7 +122,7 @@ def ecudefs():
     return out
 
 
-PACK_KINDS = ["ecudefs", "coding", "adaptation", "services", "loggers", "modules"]
+PACK_KINDS = ["ecudefs", "coding", "adaptation", "services", "loggers", "modules", "controllers"]
 
 
 def packs():
@@ -165,6 +165,20 @@ def packs():
     return files, index
 
 
+def ctrldefs():
+    """The built-in drivetrain controller definitions, keyed by their
+    repo-relative path (what the preview's Controllers panel lists)."""
+    out = []
+    for p in sorted((REPO / "ctrldefs").glob("*.json")):
+        if p.name == "TEMPLATE.json" or p.name.startswith(("_", ".")):
+            continue
+        try:
+            out.append({"path": p.relative_to(REPO).as_posix(), "def": json.loads(p.read_text())})
+        except ValueError:
+            continue
+    return out
+
+
 def vcar(pack_files):
     """The virtual car's demo profile plus the definition packs' files, keyed by
     the repo-relative paths the preview's file dialog and pack picker hand out."""
@@ -193,7 +207,8 @@ def main(out_path: str) -> None:
         except ValueError:
             pass
     pack_files, pack_index = packs()
-    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units, "vcar": vcar(pack_files), "packs": pack_index}
+    data = {"guides": guides(), "ecudefs": ecudefs(), "units": units, "vcar": vcar(pack_files), "packs": pack_index,
+            "ctrldefs": ctrldefs()}
     hj = HELP_JSON or UI / "src" / "panel-help.json"
     help_data = json.loads(hj.read_text()) if hj.is_file() else None
     parts = [

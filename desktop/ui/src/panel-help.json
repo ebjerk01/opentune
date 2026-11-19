@@ -90,6 +90,13 @@
     "risk": "none",
     "guide": "21-ECU-database"
   },
+  "controllers": {
+    "title": "Controllers",
+    "summary": "Drivetrain controller definitions (gearbox TCUs, AWD couplings) from the built-in set and from definition packs: identity, diagnostics, CAN frame sets and signals, live channels, tables, gear ratios, safety notes, sources and validation state. Decodes a CAN log offline with a definition's frame sets.",
+    "needs": ["A CAN log (candump, CSV or Vector ASC) to decode"],
+    "risk": "none",
+    "guide": "39-controllers"
+  },
   "scan": {
     "title": "Auto-scan",
     "summary": "Probe every module in a vehicle's module list for presence, identity and stored fault codes. Scanning is read-only; Clear all DTCs writes.",

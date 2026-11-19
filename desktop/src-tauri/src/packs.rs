@@ -192,6 +192,29 @@ mod tests {
     }
 
     #[test]
+    fn controller_definitions_are_listed_with_their_kind() {
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let d = std::env::temp_dir().join(format!("ot-packs-ctrl-{}-{n}", std::process::id()));
+        std::fs::create_dir_all(d.join("controllers")).unwrap();
+        std::fs::write(d.join("pack.json"), r#"{"id":"c","name":"C"}"#).unwrap();
+        std::fs::copy(
+            repo_packs().join("../ctrldefs/openhaldex-c6.json"),
+            d.join("controllers/openhaldex-c6.json"),
+        )
+        .unwrap();
+        let v = open_impl(&d.join("controllers/openhaldex-c6.json")).unwrap();
+        assert_eq!(v["valid"], true, "{:?}", v["notes"]);
+        let defs = v["defs"].as_array().unwrap();
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0]["kind"], "controllers");
+        assert_eq!(defs[0]["id"], "openhaldex-c6");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
     fn no_packs_dir_is_an_empty_list() {
         let v = list_impl(None);
         assert!(v["root"].is_null());

@@ -34,6 +34,7 @@
       "../../catalog": "catalog",
       "../../database": "database",
       "../../packs": "packs",
+      "../../ctrldefs": "ctrldefs",
       "guide": "guide"
     },
     "icon": [

@@ -35,6 +35,7 @@ pub mod adapter;
 mod feat_adaptation;
 mod feat_candump;
 mod feat_coding;
+mod feat_ctrl;
 mod feat_dash;
 mod feat_db;
 mod feat_doip;
@@ -255,6 +256,9 @@ macro_rules! core_command_list {
             feat_haldex::haldex_gen4_read,
             feat_haldex::haldex_decode_log,
             feat_haldex::haldex_export_csv,
+            feat_ctrl::ctrl_list,
+            feat_ctrl::ctrl_get,
+            feat_ctrl::ctrl_decode_log,
             feat_ts::ts_load_ini,
             feat_ts::ts_load_msq,
             feat_ts::ts_save_msq,

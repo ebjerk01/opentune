@@ -16,8 +16,8 @@ use std::time::{Duration, Instant};
 
 #[derive(clap::Subcommand)]
 pub enum HaldexAction {
-    /// Decode Haldex-related frames in a CAN log (candump, OpenTune CSV or
-    /// SavvyCAN CSV): lock request/actual, status flags, temperature, wheel
+    /// Decode Haldex-related frames in a CAN log (candump, OpenTune CSV,
+    /// SavvyCAN CSV or Vector ASC): lock request/actual, status flags, temperature, wheel
     /// speeds, OpenHaldex frames. Offline.
     Decode {
         /// The log file.

@@ -2634,6 +2634,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-ctrldef"
+version = "0.5.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-db"
 version = "0.5.0"
 dependencies = [
@@ -2655,6 +2664,7 @@ dependencies = [
  "opentune-coding",
  "opentune-container",
  "opentune-core",
+ "opentune-ctrldef",
  "opentune-db",
  "opentune-driver-doip",
  "opentune-driver-efp02c",
@@ -2864,6 +2874,7 @@ dependencies = [
  "opentune-autoscan",
  "opentune-coding",
  "opentune-core",
+ "opentune-ctrldef",
  "opentune-logdef",
  "opentune-servicefn",
  "serde",

@@ -59,7 +59,7 @@ pub enum ControllerAction {
         #[arg(long, default_value = "ctrldefs")]
         dir: PathBuf,
     },
-    /// Decode a CAN log (candump, OpenTune CSV or SavvyCAN CSV) with a
+    /// Decode a CAN log (candump, OpenTune CSV, SavvyCAN CSV or Vector ASC) with a
     /// definition's frame sets: per-frame signal ranges, live channels,
     /// optionally every frame. Offline; nothing is transmitted.
     Decode {
