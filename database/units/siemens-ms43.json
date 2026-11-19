@@ -22,7 +22,7 @@
     "obd": "read+write",
     "bench": true,
     "boot": true,
-    "notes": "ms4x.net: read/write over the OBD K-line (in the car or on the bench); boot mode (C167 bootstrap) gives full 1:1 access including the bootloader."
+    "notes": "OBD supports programming. The stock 512 KiB DS2 read omits part of the flash; a complete read over OBD needs a temporary RAM agent on recognised boot variants, otherwise open-case boot mode."
   },
   "checksum": null,
   "ecudef": "bmw-ms4x-ms43",
@@ -286,6 +286,70 @@
     {
       "title": "ecupinouts.com: Siemens MS43 bench pinout",
       "url": "https://ecupinouts.com/en/ms43/"
+    },
+    {
+      "title": "MS4X Wiki: MS4x Flasher read and write coverage",
+      "url": "https://www.ms4x.net/index.php?title=MS4x_Flasher"
+    },
+    {
+      "title": "Infineon C167CR/C167SR data sheet V3.3, 144-pin package and bootstrap input",
+      "url": "https://www.infineon.com/assets/row/public/documents/non-assigned/49/infineon-c167cr-ds-en.pdf"
+    },
+    {
+      "title": "BimmerStein ECU Tool (GPL-3.0-only): MS42/MS43 read and write support by boot variant",
+      "url": "https://github.com/CAATZ/BimmerStein-ECU-Tool/blob/main/docs/MS42_MS43.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "BMW DS2 over K-line",
+      "notes": "Programming works over OBD. The stock 512 KiB DS2 read omits a protected region, so it is not a complete original backup. BimmerStein documents a complete 512 KiB read through a temporary RAM agent on recognised MS43 boot variants; other units need open-case boot mode for a complete read.",
+      "confidence": "community",
+      "sources": [
+        2,
+        4,
+        6
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "For closed-case K-line access, MS4X supplies +12 V to X60001-1, -7 and -8, grounds X60001-4, -5 and -6, and uses X60001-3 for diagnostics. Vehicle CAN is on X60004-36 (high) and X60004-37 (low). The K-line bench connection does not use CAN.",
+      "confidence": "community",
+      "sources": [
+        2
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "C167CR on-chip bootstrap loader",
+      "points": [
+        {
+          "name": "C167CR bootstrap input P0L.4",
+          "location": "pcb:C167CR pin 104 (P0L.4/AD4, 144-pin package)",
+          "action": "pull-to-gnd",
+          "confidence": "verified"
+        }
+      ],
+      "reset_timing": "Hold the input low at power-up. MS4X specifies releasing it after about 10 seconds, before reading or writing.",
+      "reachable": "open-case",
+      "notes": "MS4X identifies the processor pin on the MS43 board for a complete flash backup. Infineon confirms the pin assignment and active-low bootstrap selection.",
+      "confidence": "verified",
+      "sources": [
+        2,
+        5
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "MS4X documents limits on diagnostic reads and support for programming. It does not establish the security-access requirement for either operation. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        4,
+        6
+      ]
+    }
+  }
 }
