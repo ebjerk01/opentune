@@ -32,7 +32,7 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 ### Implemented, awaiting on-car validation
 
 - **Live diagnostics over ELM327** — a serial ELM327 OBD driver (HS-CAN / MS-CAN): identify, **read/clear DTCs** (UDS `0x19` + OBD mode 03), and **live data** (OBD PIDs). Its **first real-car read** (battery, ECU name, part number, VIN over UDS) passed on 2026-11-18; DTCs, live data and block reads are not yet car-tested.
-- **Engines over the diagnostic transport** — adaptation / basic settings / actuator tests (UDS, plus a **VAG KWP2000** path over TP2.0 and K-line), service-function scripts, full-vehicle auto-scan (presence, identity, stored DTCs), live datalogging (UDS `0x22` DIDs, OBD-II PIDs, `0x23` memory reads, optional **GPS**) and read-only **DQ250 DSG** diagnostics — tested against simulators (`opentune simulate`, a TP2.0 module simulator with fault injection), not yet on a vehicle.
+- **Engines over the diagnostic transport** — adaptation / basic settings / actuator tests (UDS, plus a **VAG KWP2000** path over TP2.0 and K-line), service-function scripts, full-vehicle auto-scan (presence, identity, stored DTCs), live datalogging (UDS `0x22` DIDs, OBD-II PIDs, `0x23` memory reads, **Subaru SSM2**, optional **GPS**; long runs survive a dropped adapter and reconnect), a glanceable **Drive view** with offline log replay and read-only **DQ250 DSG** diagnostics — tested against simulators (`opentune simulate`, a TP2.0 module simulator with fault injection), not yet on a vehicle.
 - **Interface drivers** — OpenPort 2.0 (J2534/CDC-ACM), generic J2534 PassThru, SocketCAN, slcan, gs_usb/candleLight, ELM327 (serial OBD, K-line, and WiFi/Bluetooth), KKL 409.1 (raw K-line), an Arduino K-line bridge and an ESP32-S3 open interface (both with OpenTune firmware), the EFI EFP02C USB-CAN box, the open ESP32 ISO-TP BLE bridge, and **DoIP** over Ethernet (with vehicle discovery).
 - **Protocol layer** — ISO-TP (hardened), UDS, KWP2000, VW TP2.0 (hardened: ACK-loss retransmit, recovery, re-open after a break; fuzz-tested), CAN-FD (+ ISO-TP-FD) and **DoIP** (ISO 13400, incl. UDP discovery), with security access (`0x27`) wired into every write path — *you supply the seed/key algorithm; OpenTune ships none*.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, resumable/recoverable, with a backup vault and a full session transcript.
@@ -68,7 +68,7 @@ Most pillars are now built and tested offline; what remains is mainly proving th
 
 - **On-car validation** — a first read-only identity read is done; next the live diagnostic, DSG/Haldex, coding, adaptation, service-function, auto-scan and logging paths on real vehicles.
 - **Full-vehicle diagnostics** — validate OBD inspection (readiness, freeze frame, CALID/CVN) on real cars.
-- **Datalogging** — Subaru SSM transport, plus dashboards and triggers.
+- **Datalogging triggers** — start/stop/mark on conditions.
 - **Module & ECU flashing** — finish the UDS flash path (`0x34`/`0x36`/`0x37` + security + erase/checksum) end-to-end, container-driven, behind the flash-safety policy.
 - **Broader coverage** — real dumps to validate the DQ250 / ZF 8HP / Haldex checksums, real captures to name the DSG measuring groups, and a growing community definition & map library (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 - **Interfaces to the max** — CAN-FD, DoIP and J2534 flashing, validated on hardware.
@@ -148,7 +148,7 @@ short version:
 - ✅ **OBD inspection** — readiness monitors, freeze frame, VIN/CALID/CVN, stored/pending/permanent DTCs
 - ✅ **Virtual car** — a simulated six-module vehicle so every live panel works offline
 - ✅ **Fast logging** — UDS `0x2C` dynamic data identifiers bundle many channels into one request, with automatic fallback to polling
-- ✅ **Datalogging** — logger.xml definitions + a live polling loop to CSV over UDS DIDs, OBD-II PIDs and `0x23` memory reads, with an optional **GPS** source (position, true ground speed, speedometer error) *(Subaru SSM still pending)*
+- ✅ **Datalogging** — logger.xml definitions + a live polling loop to CSV over UDS DIDs, OBD-II PIDs `0x23` memory reads and **Subaru SSM2**, with an optional **GPS** source (position, true ground speed, speedometer error); reconnects after a dropped adapter; **Drive view** + log replay
 - ✅ Protocol stack — ISO-TP, UDS, KWP2000, VW TP2.0 (fuzz-hardened), OBD-II, CAN-FD, DoIP (+ discovery)
 - ✅ Diagnostics driver — ELM327 / OBD (first real-car identity read passed), plus a DoIP driver, with a UDS conformance simulator for offline tests
 - ✅ SecurityAccess SA2 — runs real VAG SA2 scripts from your own flash containers (none bundled)
@@ -160,7 +160,7 @@ short version:
 - ✅ **Contribution workflow** — provenance + privacy checks on every definition and pack, issue/PR templates
 
 **Next**
-- 🔲 Extend live **datalogging** to the Subaru SSM transport, plus dashboards and triggers
+- 🔲 Live **datalogging** triggers
 - 🔲 On-car validation of the live diagnostic, adaptation and logging paths
 - 🔲 End-to-end UDS **flashing** (`0x34`/`0x36`/`0x37` + erase/checksum), behind the flash-safety policy
 - 🔲 Desktop & Android UX — guided wizards over the engines
