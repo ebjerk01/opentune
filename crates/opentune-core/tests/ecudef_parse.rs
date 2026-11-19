@@ -104,6 +104,74 @@ fn all_ecudefs_pass_validation() {
     assert!(checked > 0, "no ecudefs validated in {}", dir.display());
 }
 
+/// The three BMW Siemens MS4x definitions imported from the ms4x-net XDFs
+/// (GPL-3.0-only, see docs/BMW-MS4X-IMPORT.md): each parses, passes the
+/// validator with zero errors, and keeps its imported identity, image size,
+/// map count and provenance. The expected values pin the files as imported;
+/// a re-import that changes them must update this test on purpose.
+#[test]
+fn bmw_ms4x_imports_load_and_validate() {
+    // (file, id, family, flash_size, map count)
+    let cases = [
+        (
+            "bmw-ms4x-ms41.json",
+            "bmw-ms4x-ms41",
+            "Siemens MS41",
+            256 * 1024,
+            437,
+        ),
+        (
+            "bmw-ms4x-ms42.json",
+            "bmw-ms4x-ms42",
+            "Siemens MS42",
+            512 * 1024,
+            1002,
+        ),
+        (
+            "bmw-ms4x-ms43.json",
+            "bmw-ms4x-ms43",
+            "Siemens MS43",
+            512 * 1024,
+            1469,
+        ),
+    ];
+    for (file, id, family, size, maps) in cases {
+        let text = std::fs::read_to_string(ecudefs_dir().join(file))
+            .unwrap_or_else(|e| panic!("{file}: {e}"));
+        let def = ecudef::EcuDef::from_json(&text).unwrap_or_else(|e| panic!("{file}: {e}"));
+        assert_eq!(def.id, id, "{file}");
+        assert_eq!(def.maker, "BMW", "{file}");
+        assert_eq!(def.family, family, "{file}");
+        assert_eq!(def.flash_size, size, "{file}");
+        assert_eq!(def.maps.len(), maps, "{file}");
+        assert_eq!(def.full_read, FullRead::BenchBoot, "{file}");
+        assert_eq!(def.diag_layer, opentune_core::DiagLayer::Kwp2000, "{file}");
+        assert!(def.checksum.is_none(), "{file}: checksum is out of scope");
+        assert!(def.seedkey.is_none(), "{file}: no seed/key");
+
+        let p = def
+            .provenance
+            .as_ref()
+            .unwrap_or_else(|| panic!("{file}: no provenance"));
+        assert_eq!(p.license, "GPL-3.0-only", "{file}");
+        assert_eq!(p.evidence, "implemented", "{file}");
+        assert!(
+            p.sources.iter().any(|s| s.starts_with("ms4x-net/")),
+            "{file}: source must cite ms4x-net: {:?}",
+            p.sources
+        );
+
+        let mut issues = def.validate();
+        issues.extend(def.validate_filename(file));
+        opentune_core::provenance::require(&mut issues);
+        let errs: Vec<_> = issues
+            .iter()
+            .filter(|i| i.severity == validate::Severity::Error)
+            .collect();
+        assert!(errs.is_empty(), "{file} has validation errors: {errs:#?}");
+    }
+}
+
 /// The identity a VW 1.6 TDI CR (EA189) engine ECU reported live over UDS via
 /// `elm327obd` (2026-11-18): ECU name (0xF197) and hardware/part number
 /// (0xF191). `identify` must resolve it to the identification-only definition,

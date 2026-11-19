@@ -49,15 +49,30 @@
 //!   after a session-loss symptom (the module dropped the mode with the
 //!   session); after a plain negative response a best-effort exit is sent.
 //!
+//! ## Basic settings without login
+//!
+//! Many VAG modules run basic settings (and answer measuring blocks) without
+//! a login; the public kw1281test tool, for one, offers `BasicSetting GROUP`
+//! and `GroupRead GROUP` with no login argument, while its adaptation
+//! commands take an optional one (see `docs/PRIOR-ART.md`). So
+//! [`run_basic_settings`] first starts basic settings **without**
+//! SecurityAccess, even when a seed/key handler is given. Only when the module
+//! refuses the start with NRC [`LOGIN_NEEDED_NRC`] (0x33
+//! `securityAccessDenied`, see [`needs_login`]) does it log in with the
+//! handler and start again ([`BasicSettingsReport::login_required`]); with no
+//! handler that refusal is [`AdaptationError::LoginRequired`] ("this module
+//! needs a login for basic settings"). **Untested on a real car.**
+//!
 //! ## Safety gates
 //!
 //! Adaptation test / save and basic-settings start are writes. They are
 //! refused **before any I/O** ([`AdaptationError::NotConfirmed`]) unless
-//! [`KwpWriteOptions::confirmed`] is set, a session is given, and a seed/key
-//! handler is given for SecurityAccess. [`KwpWriteOptions::dry_run`] returns the
-//! request plan and sends nothing. Values are range-checked against the
-//! channel's `min`/`max`, a save needs the 6-byte workshop code, and a save or
-//! test is read back.
+//! [`KwpWriteOptions::confirmed`] is set and a session is given; adaptation
+//! test / save also need a seed/key handler for SecurityAccess up front
+//! (basic settings only when the module asks for a login, above).
+//! [`KwpWriteOptions::dry_run`] returns the request plan and sends nothing.
+//! Values are range-checked against the channel's `min`/`max`, a save needs
+//! the 6-byte workshop code, and a save or test is read back.
 use crate::{AdaptationDef, AdaptationError, ChannelKind, RawDiag, Result, Scaling};
 use opentune_core::protocol::kwp2000::kwp_nrc_name;
 use opentune_core::protocol::seedkey::SeedKey;
@@ -329,6 +344,31 @@ pub fn establish(diag: &mut dyn RawDiag, login: &KwpLogin<'_>) -> Result<LoginRe
         }
     }
     Ok(rep)
+}
+
+/// The negative-response code that means "log in first": ISO 14230-3
+/// `securityAccessDenied` (also named `securityAccessRequested`), sent when
+/// the module's security condition is not met for the requested service.
+pub const LOGIN_NEEDED_NRC: u8 = 0x33;
+
+/// Whether a refused request asks for a login (SecurityAccess) first.
+///
+/// Only NRC 0x33 qualifies; it is the one ISO 14230-3 code whose meaning is
+/// "SecurityAccess not satisfied". NRC 0x22 (`conditionsNotCorrect` /
+/// `requestSequenceError`) is deliberately **not** one: it covers engine
+/// state, speed, temperature and a wrong request order, so logging in would
+/// not help and would spend one of the module's limited key attempts. NRC
+/// 0x35 / 0x36 / 0x37 answer SecurityAccess itself (a wrong key, attempts
+/// exceeded, delay not expired), and 0x80 / 0x7E / 0x7F mean a lost or wrong
+/// session ([`is_session_loss`]), not a missing login.
+pub fn needs_login(e: &AdaptationError) -> bool {
+    matches!(
+        e,
+        AdaptationError::NegativeResponse {
+            code: LOGIN_NEEDED_NRC,
+            ..
+        }
+    )
 }
 
 /// Map a refused unlock to [`AdaptationError::SecurityDenied`].
@@ -777,8 +817,13 @@ pub struct KwpWriteOptions {
 }
 
 /// Refuse a write before any I/O unless it is confirmed and has an explicit
-/// session and SecurityAccess.
-fn gate(opts: &KwpWriteOptions, login: &KwpLogin<'_>, what: &str) -> Result<()> {
+/// session and, when `needs_security`, SecurityAccess.
+fn gate(
+    opts: &KwpWriteOptions,
+    login: &KwpLogin<'_>,
+    what: &str,
+    needs_security: bool,
+) -> Result<()> {
     if opts.dry_run {
         return Ok(());
     }
@@ -792,7 +837,7 @@ fn gate(opts: &KwpWriteOptions, login: &KwpLogin<'_>, what: &str) -> Result<()> 
             "{what} needs an explicit diagnostic session (e.g. 0x{VAG_SESSION:02X})"
         )));
     }
-    if login.seed_key.is_none() {
+    if needs_security && login.seed_key.is_none() {
         return Err(AdaptationError::NotConfirmed(format!(
             "{what} needs SecurityAccess with a seed/key handler; OpenTune ships no VAG KWP \
              login algorithm, an embedding build (e.g. Bench) supplies one"
@@ -806,6 +851,12 @@ fn login_plan(login: &KwpLogin<'_>) -> Vec<String> {
     if let Some(s) = login.session {
         p.push(format!("10 {s:02X}  startDiagnosticSession"));
     }
+    p.extend(security_plan(login));
+    p
+}
+
+fn security_plan(login: &KwpLogin<'_>) -> Vec<String> {
+    let mut p = Vec::new();
     let l = login.security_level;
     p.push(format!("27 {l:02X}  securityAccess requestSeed"));
     p.push(format!(
@@ -977,7 +1028,7 @@ pub fn write_adaptation(
         AdaptMode::Test => "an adaptation test",
         AdaptMode::Save => "an adaptation save",
     };
-    gate(opts, login, what)?;
+    gate(opts, login, what, true)?;
 
     let k = ch.kwp;
     let start = sid::START_ROUTINE_BY_LOCAL_ID;
@@ -1121,10 +1172,16 @@ pub struct BasicSettingsReport {
     pub channel: String,
     /// Group number.
     pub group: u8,
-    /// The requests of the run (the plan for a dry run).
+    /// The requests of the run (the plan for a dry run). Lines starting
+    /// with `[on 0x33]` are sent only when the module refuses the start
+    /// without a login.
     pub plan: Vec<String>,
-    /// What the login did.
+    /// What the login did: the session, plus SecurityAccess when the module
+    /// asked for it ([`Self::login_required`]).
     pub login: Option<LoginReport>,
+    /// The module refused basic settings without a login (NRC 0x33,
+    /// [`needs_login`]); the start was repeated after SecurityAccess.
+    pub login_required: bool,
     /// The start was acknowledged.
     pub started: bool,
     /// The stop was acknowledged.
@@ -1135,17 +1192,39 @@ pub struct BasicSettingsReport {
     pub outcome: BasicSettingsOutcome,
 }
 
-/// Run basic settings on a `kwp_basic_settings` channel: session and
-/// SecurityAccess, (enumerate,) start `<enter> <bs> <group>`, poll the
+/// The enumerate before a basic-settings start (when configured). Some
+/// modules refuse it; only a lost session is an error.
+fn basic_enumerate(diag: &mut dyn RawDiag, k: &KwpAddressing) -> Result<()> {
+    if k.enumerate {
+        if let Err(e) = routine(diag, sid::START_ROUTINE_BY_LOCAL_ID, k.enter, &[0x00, 0x00]) {
+            if is_session_loss(&e) {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run basic settings on a `kwp_basic_settings` channel: session,
+/// (enumerate,) start `<enter> <bs> <group>` **without a login**, poll the
 /// measuring block `polls` times (`<read> <bs> <group>`, `interval_ms`
 /// apart), then **always** stop (`32 <enter> <bs> <group>`) unless the session
 /// was lost.
 ///
-/// `Err` only when nothing was started (pre-flight, the gate, the login, the
-/// enumerate failed, or the module refused the start with a negative
-/// response). A start whose answer was lost or malformed may have started the
-/// module: that is `Ok` with [`BasicSettingsOutcome::Aborted`] at step
-/// `start` (and [`BasicSettingsReport::started`] false).
+/// When the module refuses the login-less start with NRC 0x33
+/// ([`needs_login`]), `login`'s seed/key handler is used for SecurityAccess
+/// and the start is sent again ([`BasicSettingsReport::login_required`]);
+/// without a handler that is [`AdaptationError::LoginRequired`]. A handler is
+/// never used when the module does not ask for it. The confirmation gate
+/// ([`KwpWriteOptions::confirmed`] and a session) applies either way.
+/// **Untested on a real car.**
+///
+/// `Err` only when nothing was started (pre-flight, the gate, the session or
+/// login, the enumerate failed, the module needs a login and none was given,
+/// or the module refused the start with a negative response). A start whose
+/// answer was lost or malformed may have started the module: that is `Ok`
+/// with [`BasicSettingsOutcome::Aborted`] at step `start` (and
+/// [`BasicSettingsReport::started`] false).
 pub fn run_basic_settings(
     diag: &mut dyn RawDiag,
     def: &AdaptationDef,
@@ -1159,14 +1238,41 @@ pub fn run_basic_settings(
         ChannelKind::KwpBasicSettings { group, kwp } => (*group, kwp),
         _ => return Err(mismatch(channel, "kwp_basic_settings")),
     };
-    gate(opts, login, "basic settings")?;
+    gate(opts, login, "basic settings", false)?;
     let start = sid::START_ROUTINE_BY_LOCAL_ID;
     let sel = k.basic_selector(group);
-    let mut plan = login_plan(login);
-    if k.enumerate {
-        plan.push(line(start, k.enter, &[0, 0], "enumerate"));
+    // First attempt: the session only, no SecurityAccess.
+    let session_only = KwpLogin {
+        seed_key: None,
+        ..*login
+    };
+    let mut plan = Vec::new();
+    if let Some(s) = login.session {
+        plan.push(format!("10 {s:02X}  startDiagnosticSession"));
     }
-    plan.push(line(start, k.enter, &sel, "start basic settings"));
+    let mut starting = Vec::new();
+    if k.enumerate {
+        starting.push(line(start, k.enter, &[0, 0], "enumerate"));
+    }
+    plan.extend(starting.iter().cloned());
+    plan.push(line(
+        start,
+        k.enter,
+        &sel,
+        "start basic settings (without login)",
+    ));
+    let on = format!("[on 0x{LOGIN_NEEDED_NRC:02X}]");
+    if login.seed_key.is_some() {
+        starting.push(line(start, k.enter, &sel, "start basic settings again"));
+        for l in security_plan(login).into_iter().chain(starting) {
+            plan.push(format!("{on} {l}"));
+        }
+    } else {
+        plan.push(format!(
+            "{on} stop: this module needs a login for basic settings (no seed/key handler \
+             given)"
+        ));
+    }
     plan.push(line(
         start,
         k.read,
@@ -1184,6 +1290,7 @@ pub fn run_basic_settings(
         group,
         plan,
         login: None,
+        login_required: false,
         started: false,
         stopped: false,
         samples: Vec::new(),
@@ -1193,16 +1300,37 @@ pub fn run_basic_settings(
         return Ok(rep);
     }
 
-    rep.login = Some(establish(diag, login)?);
-    if k.enumerate {
-        // Some modules refuse the enumerate; only a lost session stops us.
-        if let Err(e) = routine(diag, start, k.enter, &[0x00, 0x00]) {
-            if is_session_loss(&e) {
-                return Err(e);
-            }
+    rep.login = Some(establish(diag, &session_only)?);
+    basic_enumerate(diag, k)?;
+    let mut started = routine(diag, start, k.enter, &sel);
+    if matches!(&started, Err(e) if needs_login(e)) {
+        // The module wants SecurityAccess for basic settings. The session
+        // is still open (the start was only refused): log in, start again.
+        rep.login_required = true;
+        if login.seed_key.is_none() {
+            return Err(AdaptationError::LoginRequired(format!(
+                "this module needs a login for basic settings: it refused the start of \
+                 `{channel}` with NRC 0x{LOGIN_NEEDED_NRC:02X} (securityAccessDenied). Give a \
+                 seed/key handler for SecurityAccess (OpenTune ships no VAG KWP login \
+                 algorithm; an embedding build such as Bench supplies one). Nothing was \
+                 started."
+            )));
         }
+        let sec = establish(
+            diag,
+            &KwpLogin {
+                session: None,
+                ..*login
+            },
+        )?;
+        rep.login = Some(LoginReport {
+            session: rep.login.as_ref().and_then(|l| l.session),
+            ..sec
+        });
+        basic_enumerate(diag, k)?;
+        started = routine(diag, start, k.enter, &sel);
     }
-    if let Err(e) = routine(diag, start, k.enter, &sel) {
+    if let Err(e) = started {
         // A negative response started nothing. A lost or malformed answer
         // may belong to a start the module executed: its state is unknown,
         // so this is reported like a failed poll, never as "nothing done".

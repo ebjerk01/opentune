@@ -98,7 +98,7 @@
           <button class="btn primary" id="adpKwpRead">Read</button>
         </div>
         <div id="adpKwpWrite" hidden>
-          <div class="banner bad">⚠ Basic settings and adaptation test / save <b>change the module</b>. They need SecurityAccess with a seed/key handler (none ships with OpenTune) and run only on a <b>safe, stationary vehicle</b>. A save is read back; a failed or interrupted write leaves the channel state unknown — read it again.</div>
+          <div class="banner bad">⚠ Basic settings and adaptation test / save <b>change the module</b>. Test / save need SecurityAccess with a seed/key handler (none ships with OpenTune). Basic settings are tried <b>without a login</b> first and use the seed/key id only if the module asks for one (untested on a real car). Run them only on a <b>safe, stationary vehicle</b>. A save is read back; a failed or interrupted write leaves the channel state unknown — read it again.</div>
           <div class="row tight" id="adpKwpAdaptRow">
             <label>Raw value</label><input class="inp sm mono" id="adpKwpValue" placeholder="0..65535 or 0x…" />
             <label>Workshop code (save)</label><input class="inp mono" id="adpKwpWsc" placeholder="6 bytes, 12 hex digits" />
@@ -428,7 +428,10 @@
           const samples = (v.samples || [])
             .map((s) => `<div class="row tight"><span class="muted small">read ${esc(s.index)} status 0x${esc(Number(s.status).toString(16))}</span>${fmtCells(s.cells)}</div>`)
             .join("");
-          out.innerHTML = outcomeLine(v.outcome) + samples +
+          const loginNote = v.login_required
+            ? `<div class="muted small">This module needs a login for basic settings (it refused without one): logged in with the seed/key id, then started.</div>`
+            : "";
+          out.innerHTML = outcomeLine(v.outcome) + loginNote + samples +
             (v.started && !v.stopped && v.outcome && v.outcome.outcome !== "planned" ? `<div class="banner bad">⚠ Basic settings may still be running on the module until its session ends.</div>` : "") +
             planList(v.plan) + kwpTarget(v.target);
         } else {

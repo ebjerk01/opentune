@@ -9,8 +9,9 @@
 //! SecurityAccess) and, end to end, random TP2.0 bus faults.
 //!
 //! What must hold, whatever happens:
-//! * a write is refused before any I/O unless confirmed, with a session and a
-//!   seed/key handler;
+//! * a write is refused before any I/O unless confirmed, with a session and
+//!   (adaptation test / save) a seed/key handler; basic settings without a
+//!   handler start nothing on a module that wants a login;
 //! * `Err` from a write means the module holds nothing new: no test value
 //!   and no save reached it;
 //! * success (`Verified` / `Tested`) only when the module really holds the
@@ -281,11 +282,16 @@ fn basic_settings_end_stopped_or_report_why_not() {
     let mut kinds = [0usize; 4];
     for seed in 0..CASES {
         let mut r = Rng(0xB5_0000 + seed);
-        let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+        // Half the modules run basic settings without a login, half refuse
+        // with 0x33 until unlocked (the flow then logs in and starts again).
+        let unit = Arc::new(Mutex::new(SimKwpModule {
+            basic_settings_needs_security: r.below(2) == 0,
+            ..SimKwpModule::default()
+        }));
         let polls = 1 + r.below(4) as u32;
         let mut t = Faulty {
             unit: unit.clone(),
-            at: r.below(6 + polls as u64 + 1) as usize,
+            at: r.below(8 + polls as u64 + 1) as usize,
             fault: random_fault(&mut r),
             n: 0,
             hit: None,
@@ -373,8 +379,14 @@ fn unconfirmed_or_unsecured_writes_send_nothing() {
         let e = kwp::write_adaptation(&mut diag, &d, "Adaptation 1", 1, mode, &login, &opts);
         assert!(matches!(e, Err(AdaptationError::NotConfirmed(_))), "{e:?}");
         let e = kwp::run_basic_settings(&mut diag, &d, "Basic settings 60", 1, 0, &login, &opts);
-        // The basic-settings gate needs no workshop code.
-        if opts.workshop_code.is_some() {
+        // The basic-settings gate needs no workshop code, and no seed/key
+        // handler up front: without one, a module that wants a login (the
+        // default synthetic module) refuses and nothing is started.
+        if opts.workshop_code.is_some() && login.seed_key.is_none() {
+            assert!(matches!(e, Err(AdaptationError::LoginRequired(_))), "{e:?}");
+            let u = lock(&unit);
+            assert!(u.basic_active.is_none() && !u.services().contains(&0x27));
+        } else if opts.workshop_code.is_some() {
             assert!(matches!(e, Err(AdaptationError::NotConfirmed(_))), "{e:?}");
             assert_eq!(sent.get(), 0);
         }

@@ -18,11 +18,14 @@
 // and `adaptation_kwp_adapt` drive the engine's `kwp` path on a TP2.0 channel
 // (raw-CAN drivers) or a K-line driver at an explicit module address, or on
 // the engine's synthetic module (`sim`). Basic settings and adaptation test /
-// save are ack-gated here and gated again in the engine (session + a seed/key
-// handler for SecurityAccess, resolved through the plugin `SeedKeys`; OpenTune
-// ships no VAG login algorithm, so the public app can run them only against
-// the simulator with its test-only `kwpsim-test`). The adapter is closed after
-// each KWP operation so the TP2.0 channel is torn down.
+// save are ack-gated here and gated again in the engine (confirmation and a
+// session). Adaptation test / save also need a seed/key handler for
+// SecurityAccess, resolved through the plugin `SeedKeys`; OpenTune ships no
+// VAG login algorithm, so the public app can run them only against the
+// simulator with its test-only `kwpsim-test`. Basic settings are tried
+// without a login and use the handler only when the module refuses with NRC
+// 0x33 (untested on a real car). The adapter is closed after each KWP
+// operation so the TP2.0 channel is torn down.
 
 use crate::adapter::{self, AdapterHub, Addr, ConnKey, Session};
 use crate::seedkeys::SeedKeys;
@@ -497,8 +500,10 @@ fn kwp_read_on(
 
 /// Run basic settings on a `kwp_basic_settings` channel: start, read the
 /// measuring block in basic-settings mode `polls` times, stop. ACK-GATED
-/// (unless `dry_run`, which returns the plan and opens nothing) and needs a
-/// seed/key handler for SecurityAccess.
+/// (unless `dry_run`, which returns the plan and opens nothing). Tried
+/// without a login; the seed/key handler is used only when the module refuses
+/// with NRC 0x33 (`login_required` in the result), and without one that
+/// refusal is a "needs a login" error. Untested on a real car.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn adaptation_kwp_basic(
@@ -968,6 +973,34 @@ mod tests {
         })
         .unwrap();
         assert!(r.is_ok(), "{r:?}");
+        // Basic settings: tried without a login. The synthetic module wants
+        // one, so without a seed/key id it is refused (nothing started) ...
+        let basic = |auth: KwpAuth| {
+            let opts = KwpWriteOptions {
+                dry_run: false,
+                confirmed: true,
+                workshop_code: None,
+            };
+            sim_run(500, move |d| {
+                let sk = auth.handler()?;
+                kwp::run_basic_settings(
+                    d,
+                    &kwp_def(),
+                    "Basic settings 60",
+                    1,
+                    0,
+                    &auth.login(sk.as_deref()),
+                    &opts,
+                )
+                .map_err(|e| e.to_string())
+            })
+        };
+        let no_key = KwpAuth::new(None, None, None, &SeedKeys::default(), true).unwrap();
+        let e = basic(no_key).unwrap_err();
+        assert!(e.contains("needs a login for basic settings"), "{e}");
+        // ... and with one it logs in after the refusal and runs.
+        let r = basic(auth).unwrap();
+        assert!(r.login_required && r.started && r.stopped, "{r:?}");
         // Unknown ids fail before anything is opened.
         assert!(KwpAuth::new(None, None, Some("vag".into()), &SeedKeys::default(), true).is_err());
     }
