@@ -259,12 +259,72 @@ pub struct AccessObd {
     pub sources: Vec<usize>,
 }
 
+/// Whether an access route exists: `true`, `false` (a source says there is
+/// none) or `"unknown"` (no public source documents one either way). Plain
+/// JSON booleans keep parsing, so older files and embedders are unaffected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Possible {
+    Yes,
+    No,
+    Unknown,
+}
+
+impl Possible {
+    /// Only `Yes` counts as an available route (`read_methods` is a bool).
+    pub fn is_yes(self) -> bool {
+        self == Possible::Yes
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Possible::Yes => "true",
+            Possible::No => "false",
+            Possible::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for Possible {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for Possible {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Possible::Yes => s.serialize_bool(true),
+            Possible::No => s.serialize_bool(false),
+            Possible::Unknown => s.serialize_str("unknown"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Possible {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Bool(bool),
+            Str(String),
+        }
+        match Raw::deserialize(d)? {
+            Raw::Bool(true) => Ok(Possible::Yes),
+            Raw::Bool(false) => Ok(Possible::No),
+            Raw::Str(s) if s == "unknown" => Ok(Possible::Unknown),
+            Raw::Str(s) => Err(serde::de::Error::custom(format!(
+                "possible must be true, false or \"unknown\", not \"{s}\""
+            ))),
+        }
+    }
+}
+
 /// Access on the bench through the unit's own connector, case closed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccessBench {
-    /// Must equal `read_methods.bench`.
-    pub possible: bool,
+    /// `true` must match `read_methods.bench = true`; `false`/`"unknown"`
+    /// match `read_methods.bench = false`.
+    pub possible: Possible,
     pub how: String,
     pub confidence: Confidence,
     pub sources: Vec<usize>,
@@ -315,10 +375,11 @@ pub struct BootPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccessBoot {
-    /// Must equal `read_methods.boot`. `false` means no cited source
-    /// documents a usable boot path (not that one is proven impossible;
-    /// `entry` says which).
-    pub possible: bool,
+    /// `true`: a documented boot route (points, entry, reachable required).
+    /// `false`: a source says there is no boot route (entry `none`).
+    /// `"unknown"`: no public source documents one either way.
+    /// `true` must match `read_methods.boot = true`; the others match `false`.
+    pub possible: Possible,
     pub entry: BootEntry,
     /// The processor's boot mode in plain words (loader, serial settings).
     #[serde(default)]
@@ -833,13 +894,13 @@ fn validate_access(u: &Unit, a: &Access, err: &mut dyn FnMut(String)) {
             rm.obd.as_str()
         ));
     }
-    if a.bench.possible != rm.bench {
+    if a.bench.possible.is_yes() != rm.bench {
         err(format!(
             "access.bench.possible ({}) disagrees with read_methods.bench ({})",
             a.bench.possible, rm.bench
         ));
     }
-    if a.boot.possible != rm.boot {
+    if a.boot.possible.is_yes() != rm.boot {
         err(format!(
             "access.boot.possible ({}) disagrees with read_methods.boot ({})",
             a.boot.possible, rm.boot
@@ -879,21 +940,44 @@ fn validate_access(u: &Unit, a: &Access, err: &mut dyn FnMut(String)) {
 
     // Boot.
     let b = &a.boot;
-    if b.possible {
-        if b.points.is_empty() {
-            err("access.boot: possible=true needs at least one boot point".into());
+    match b.possible {
+        Possible::Yes => {
+            if b.points.is_empty() {
+                err("access.boot: possible=true needs at least one boot point".into());
+            }
+            if b.reachable == Reachable::Unknown {
+                err(
+                    "access.boot: possible=true needs 'reachable' (external-connector or open-case)"
+                        .into(),
+                );
+            }
+            if matches!(b.entry, BootEntry::None | BootEntry::Unknown) {
+                err("access.boot: possible=true needs a known 'entry'".into());
+            }
         }
-        if b.reachable == Reachable::Unknown {
-            err(
-                "access.boot: possible=true needs 'reachable' (external-connector or open-case)"
-                    .into(),
-            );
+        Possible::No => {
+            // A source says there is no boot route.
+            if b.entry != BootEntry::None {
+                err("access.boot: possible=false (no boot route) needs entry 'none'; use possible \"unknown\" when no source documents a route".into());
+            }
+            if !b.points.is_empty() {
+                err("access.boot: possible=false cannot list boot points".into());
+            }
+            if b.reachable != Reachable::Unknown {
+                err("access.boot: possible=false needs reachable 'unknown'".into());
+            }
         }
-        if matches!(b.entry, BootEntry::None | BootEntry::Unknown) {
-            err("access.boot: possible=true needs a known 'entry'".into());
+        Possible::Unknown => {
+            if b.entry != BootEntry::Unknown {
+                err("access.boot: possible \"unknown\" needs entry 'unknown'".into());
+            }
+            if !b.points.is_empty() {
+                err("access.boot: possible \"unknown\" cannot list boot points".into());
+            }
+            if b.reachable != Reachable::Unknown {
+                err("access.boot: possible \"unknown\" needs reachable 'unknown'".into());
+            }
         }
-    } else if b.entry == BootEntry::None && !b.points.is_empty() {
-        err("access.boot: entry 'none' cannot list boot points".into());
     }
     let boot_sources: BTreeSet<usize> = b.sources.iter().copied().collect();
     for (i, p) in b.points.iter().enumerate() {

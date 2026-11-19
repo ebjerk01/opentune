@@ -224,7 +224,7 @@
       ]
     },
     "boot": {
-      "possible": false,
+      "possible": "unknown",
       "entry": "unknown",
       "points": [],
       "reachable": "unknown",

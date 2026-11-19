@@ -187,16 +187,63 @@ fn rule_boot_possible_needs_point_entry_and_reachable() {
     let mut v = base();
     v["access"]["boot"]["entry"] = json!("unknown");
     assert_issue(&v, "possible=true needs a known 'entry'");
-    // Not possible: nothing else is required.
+    // Not documented: "unknown" with entry/reachable unknown and no points.
     let mut v = base();
     v["read_methods"]["boot"] = json!(false);
-    v["access"]["boot"] = json!({"possible": false, "entry": "unknown", "reachable": "unknown",
+    v["access"]["boot"] = json!({"possible": "unknown", "entry": "unknown", "reachable": "unknown",
         "notes": "No public source documents a boot mode.", "confidence": "unverified", "sources": [1]});
     assert_eq!(issues(&v), Vec::<String>::new());
-    // entry 'none' with points is contradictory.
-    v["access"]["boot"]["entry"] = json!("none");
+    let mut w = v.clone();
+    w["access"]["boot"]["entry"] = json!("board-pad");
+    assert_issue(&w, "possible \"unknown\" needs entry 'unknown'");
+    let mut w = v.clone();
+    w["access"]["boot"]["reachable"] = json!("open-case");
+    assert_issue(&w, "possible \"unknown\" needs reachable 'unknown'");
+    let mut w = v.clone();
+    w["access"]["boot"]["points"] = base()["access"]["boot"]["points"].clone();
+    assert_issue(&w, "possible \"unknown\" cannot list boot points");
+    // "unknown" agrees with read_methods.boot = false, never with true.
+    let mut w = v.clone();
+    w["read_methods"]["boot"] = json!(true);
+    assert_issue(&w, "access.boot.possible (unknown) disagrees");
+    // No route: false needs entry 'none', no points, reachable unknown.
+    let mut v = base();
+    v["read_methods"]["boot"] = json!(false);
+    v["access"]["boot"] = json!({"possible": false, "entry": "none", "reachable": "unknown",
+        "notes": "The datasheet says the boot pins are fused off.", "confidence": "community", "sources": [1]});
+    assert_eq!(issues(&v), Vec::<String>::new());
+    let mut w = v.clone();
+    w["access"]["boot"]["entry"] = json!("unknown");
+    assert_issue(&w, "possible=false (no boot route) needs entry 'none'");
     v["access"]["boot"]["points"] = base()["access"]["boot"]["points"].clone();
-    assert_issue(&v, "entry 'none' cannot list boot points");
+    assert_issue(&v, "possible=false cannot list boot points");
+}
+
+#[test]
+fn possible_reads_bools_and_unknown_and_rejects_other_strings() {
+    use opentune_db::Possible;
+    assert_eq!(
+        serde_json::from_value::<Possible>(json!(true)).unwrap(),
+        Possible::Yes
+    );
+    assert_eq!(
+        serde_json::from_value::<Possible>(json!(false)).unwrap(),
+        Possible::No
+    );
+    assert_eq!(
+        serde_json::from_value::<Possible>(json!("unknown")).unwrap(),
+        Possible::Unknown
+    );
+    assert!(serde_json::from_value::<Possible>(json!("maybe")).is_err());
+    for p in [Possible::Yes, Possible::No, Possible::Unknown] {
+        let back: Possible = serde_json::from_value(serde_json::to_value(p).unwrap()).unwrap();
+        assert_eq!(back, p);
+    }
+    assert_eq!(
+        serde_json::to_value(Possible::Unknown).unwrap(),
+        json!("unknown")
+    );
+    assert_eq!(serde_json::to_value(Possible::Yes).unwrap(), json!(true));
 }
 
 #[test]
@@ -311,7 +358,7 @@ fn filled_units_validate() {
         .access
         .clone()
         .unwrap();
-    assert!(a.boot.possible);
+    assert!(a.boot.possible.is_yes());
     assert_eq!(
         serde_json::to_value(a.boot.reachable).unwrap(),
         json!("open-case")

@@ -62,7 +62,7 @@ list, like pins); every part needs at least one source.
 |---|---|
 | `obd.mode` | What works through the vehicle's diagnostic socket: `read+write`, `read` (complete read, no programming), `write-only` (programming, but a complete original read needs bench or boot), `none`, `unknown` (no source either way, never guessed). |
 | `bench` | Talking to the unit on the desk through **its own connector, case closed**. `how` says which pins and what it gives you. |
-| `boot` | A processor boot / service mode. `possible: false` means no cited source documents a usable path; `entry` then says `unknown` (nobody says) or `none` (a source says there is none). `reachable: open-case` means the case must be opened. |
+| `boot` | A processor boot / service mode. `possible` is a tri-state: `true` (a documented route), `false` (a source says there is **no** route; `entry: none`), or `"unknown"` (no public source documents one either way; `entry: unknown`). Prefer `"unknown"` over `false` when nobody says. `reachable: open-case` means the case must be opened. `bench.possible` takes the same three values. |
 | `boot.points` | Where to strap. `connector:<connector>-<pin>` must name a `signal: boot` pin of the unit; `pcb:<label>` names a pad, component pin or test point. A point's confidence may not exceed the boot block's. |
 | `security` | Whether a complete **read over the diagnostic protocol** (`diag_read`) and **programming** (`flash_write`) need security access. Facts only. |
 
@@ -75,14 +75,17 @@ Related optional fields:
 
 ### Validator rules (`opentune db validate`)
 
-1. **`read_methods` agrees with `access`**: `obd` = `obd.mode`, `bench` =
-   `bench.possible`, `boot` = `boot.possible`. A mismatch is an error.
+1. **`read_methods` agrees with `access`**: `obd` = `obd.mode`; `bench` and
+   `boot` (booleans) are `true` exactly when `bench.possible` / `boot.possible`
+   is `true` (`false` and `"unknown"` both mean `false` there). A mismatch is
+   an error. Plain JSON booleans for `possible` are still accepted.
 2. **Every part cites a source**, indices in range; `verified` needs two
    distinct sources (the same index twice counts once). A boot point marked
    `verified` needs two distinct boot sources.
 3. **`boot.possible: true` needs** at least one point, a known `entry` (not
-   `none`/`unknown`) and `reachable` other than `unknown`. `entry: none`
-   cannot list points.
+   `none`/`unknown`) and `reachable` other than `unknown`.
+   **`false` needs** `entry: none`, no points and `reachable: unknown`.
+   **`"unknown"` needs** `entry: unknown`, no points and `reachable: unknown`.
 4. **Points resolve**: `connector:` to a boot pin of the unit, `pcb:` with a
    label, and a board point is never `external-connector`. Point confidence
    is not higher than the boot block's; `resistor_ohms` is positive.

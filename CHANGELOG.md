@@ -12,6 +12,12 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- Control-unit database: `access.boot.possible` and `access.bench.possible`
+  accept `"unknown"` (no public source documents a route) next to `true` /
+  `false` (a source says there is none); plain booleans are still accepted.
+  The five profiles that said `false` for "not documented" (EDC16U34,
+  EDC17CP14, PCR2.1, DQ250 02E, Haldex Gen4) now say `"unknown"`, and the ECU
+  database panel shows "unknown (not documented)".
 - **Diagnostics log** (desktop, local only, on by default): crashes (Rust
   panics, with location; backtrace with `RUST_BACKTRACE`), uncaught errors in
   the app window, every command that fails (name + error text, never its

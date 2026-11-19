@@ -212,7 +212,7 @@
       ]
     },
     "boot": {
-      "possible": false,
+      "possible": "unknown",
       "entry": "unknown",
       "mcu_mode": "The TC1796 supports serial bootstrap over ASC0 or CAN (Infineon, Table 7). The mode used on this ECU is unknown.",
       "points": [],

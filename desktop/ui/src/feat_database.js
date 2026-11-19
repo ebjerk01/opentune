@@ -91,6 +91,12 @@
     if (s.startsWith("pcb:")) return `Board: ${esc(s.slice(4))}`;
     return esc(s);
   };
+  // access.*.possible: true / false / "unknown" (no public source either way).
+  function possibleKv(p) {
+    if (p === true) return kv("Possible", "yes");
+    if (p === false) return kv("Possible", "no");
+    return `<div class="k">Possible</div><div class="v muted">unknown (not documented)</div>`;
+  }
   function part(title, conf, body) {
     return `<div class="db-access-part"><div class="card-title-row"><h3 class="db-conn">${title}</h3>${confPill(conf)}</div>${body}</div>`;
   }
@@ -107,8 +113,8 @@
         <td class="small muted">${esc(p.note || "")}</td></tr>`).join("");
     return `<div class="card db-access"><h2>Access</h2>
       ${part("OBD port", o.confidence, `<div class="meta-grid">${kv("Mode", o.mode)}${kv("Protocol", o.protocol)}</div>${o.notes ? `<p class="small">${esc(o.notes)}</p>` : ""}${refs(o.sources)}`)}
-      ${part("Bench", be.confidence, `<div class="meta-grid">${kv("Possible", be.possible ? "yes" : "no")}</div>${be.how ? `<p class="small">${esc(be.how)}</p>` : ""}${refs(be.sources)}`)}
-      ${part("Boot mode", bo.confidence, `<div class="meta-grid">${kv("Possible", bo.possible ? "yes" : "no")}${kv("Entry", ENTRY[bo.entry] || bo.entry)}<div class="k">Reach</div><div class="v">${reach}</div>${kv("Boot mode", bo.mcu_mode)}${kv("Reset timing", bo.reset_timing)}</div>
+      ${part("Bench", be.confidence, `<div class="meta-grid">${possibleKv(be.possible)}</div>${be.how ? `<p class="small">${esc(be.how)}</p>` : ""}${refs(be.sources)}`)}
+      ${part("Boot mode", bo.confidence, `<div class="meta-grid">${possibleKv(bo.possible)}${kv("Entry", ENTRY[bo.entry] || bo.entry)}<div class="k">Reach</div><div class="v">${reach}</div>${kv("Boot mode", bo.mcu_mode)}${kv("Reset timing", bo.reset_timing)}</div>
         ${bo.reachable === "open-case" ? '<div class="banner bad">The boot points are on the board: the case has to be opened. Take ESD precautions, and confirm every point by continuity before strapping it.</div>' : ""}
         ${points ? `<div class="db-tw"><table class="tbl db-boot-points"><thead><tr><th>Point</th><th>Where</th><th>Action</th><th>Confidence</th><th>Note</th></tr></thead><tbody>${points}</tbody></table></div>` : ""}
         ${bo.notes ? `<p class="small">${esc(bo.notes)}</p>` : ""}${refs(bo.sources)}`)}

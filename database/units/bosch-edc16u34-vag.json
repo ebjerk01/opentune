@@ -244,7 +244,7 @@
       ]
     },
     "boot": {
-      "possible": false,
+      "possible": "unknown",
       "entry": "unknown",
       "mcu_mode": null,
       "points": [],

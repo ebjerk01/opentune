@@ -116,7 +116,7 @@
           "additionalProperties": false,
           "required": ["possible", "how", "confidence", "sources"],
           "properties": {
-            "possible": { "type": "boolean", "description": "Must equal read_methods.bench." },
+            "possible": { "oneOf": [{ "type": "boolean" }, { "const": "unknown" }], "description": "true / false / \"unknown\" (not documented). true must match read_methods.bench = true; false and \"unknown\" match false." },
             "how": { "type": "string", "minLength": 1 },
             "confidence": { "$ref": "#/$defs/confidence" },
             "sources": { "$ref": "#/$defs/source_refs" }
@@ -127,7 +127,7 @@
           "additionalProperties": false,
           "required": ["possible", "entry", "reachable", "notes", "confidence", "sources"],
           "properties": {
-            "possible": { "type": "boolean", "description": "Must equal read_methods.boot. true needs 1+ point, a known entry and reachable other than unknown." },
+            "possible": { "oneOf": [{ "type": "boolean" }, { "const": "unknown" }], "description": "true: documented route (1+ point, a known entry, reachable not unknown). false: a source says there is none (entry none, no points, reachable unknown). \"unknown\": not documented (entry unknown, no points, reachable unknown). true must match read_methods.boot = true; the others match false." },
             "entry": { "enum": ["connector-pin", "board-pad", "bdm-jtag", "none", "unknown"] },
             "mcu_mode": { "type": ["string", "null"] },
             "points": { "type": "array", "items": { "$ref": "#/$defs/boot_point" } },
