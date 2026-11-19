@@ -134,7 +134,7 @@ fn filler(r: &mut Rng) -> String {
     let mut s = String::new();
     for _ in 0..r.below(12) {
         match r.below(8) {
-            0 => s.push_str("\n"),
+            0 => s.push('\n'),
             1 => s.push_str("\": \""),
             2 => s.push_str(" Ærø – ü ✓ "),
             3 => s.push_str(" 0x7E0 "),
