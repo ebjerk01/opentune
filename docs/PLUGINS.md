@@ -38,7 +38,9 @@ fn main() {
         data_roots: vec![/* e.g. the plugin's own data dir in dev */],
         checksums: vec![/* extra fn(&str) -> Option<Box<dyn ChecksumAlgo>> */],
         seedkeys: vec![/* fn(&str) -> Option<Box<dyn SeedKey>>, see "Seed/key algorithms" */],
+        seedkey_loader: None,
         updater: false, // true only with a plugins.updater section in tauri.conf.json
+        diagnostics: None, // or Some(DiagUpload { .. }), see DIAGNOSTICS.md
     };
     opentune_desktop::builder_with(tauri::Builder::default(), config)
         .manage(MyState::default())
@@ -56,7 +58,7 @@ What the library provides:
 | Item | Purpose |
 |---|---|
 | `builder_with(builder, DesktopConfig)` | Registers the dialog (and optionally updater) plugin and a setup plugin that manages all core state. Leaves `Builder::setup` and the invoke handler to you. Do not register dialog/updater yourself. |
-| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `seedkeys` resolvers (see below; empty in the public app), `seedkey_loader` (the user's UnlockECU-format definitions file + provider(s), `None` = off; honoured only on alpha / bench channels, see [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)), `updater` on/off. `Default` = the public app's settings. |
+| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `seedkeys` resolvers (see below; empty in the public app), `seedkey_loader` (the user's UnlockECU-format definitions file + provider(s), `None` = off; honoured only on alpha / bench channels, see [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)), `updater` on/off, `diagnostics` (`None` in the public app; `Some(DiagUpload { endpoint, token, label, mode })` gives your build a diagnostics upload target, `DiagMode::Manual` or `DiagMode::Auto(AutoPolicy { .. })` — the only way automatic mode can be turned on; see [DIAGNOSTICS.md](DIAGNOSTICS.md#uploading-diagnostics)). `Default` = the public app's settings. |
 | `BuildChannel` | Managed state behind the `build_channel` command. `STABLE`, `ALPHA` (public `--features alpha`), `BENCH`, or any name. Every channel except `stable` enables the debug commands. |
 | `public_handler()` / `public_commands()` | The core invoke handler and the names of every core command. |
 | `extension_handler![..]` / `with_extra_commands(names, handler)` | An invoke handler that sends your command names to your `generate_handler!` and everything else to the core. A name that collides with a core command (or repeats) panics at startup. |
@@ -66,6 +68,7 @@ What the library provides:
 | `open_registry_driver(&ConnKey)` | Opens a registry driver bound to a key (the hub's opener). |
 | `AppData`, `DebugLog`, `Checksums`, `SeedKeys` | Managed state your commands can take as `tauri::State`. `DebugLog::push` lines are mirrored into the diagnostics log. |
 | `diaglog` module | The local diagnostics log ([DIAGNOSTICS.md](DIAGNOSTICS.md)): `record(level, src, msg, ctx)` adds a record through the one masked write path; `read_tail`, `read_since_session`, `read_all`, `sessions`, `log_dir` read it back. Your commands' errors are logged by the frontend like the core's. |
+| `DiagUpload`, `DiagMode`, `AutoPolicy`, `SecretString` | The diagnostics upload target for `DesktopConfig::diagnostics` (`diagupload` module; `diagupload::Url` re-exports the URL type). The token's `Debug` / `Display` never show it. Keep a real endpoint and token out of public source. |
 
 ## Adapter access and writes
 

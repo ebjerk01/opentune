@@ -64,7 +64,7 @@ scrolling will be slow. Remove it from whatever starts OpenTune.
 ## Diagnostics log
 
 OpenTune keeps a local log file of crashes, errors in the app window, failed
-commands and startup steps (it is never sent anywhere). The card shows the
+commands and startup steps (the public app never sends it anywhere). The card shows the
 last 100 records; pick a **Level** to show only warnings and errors.
 
 - **Open folder** opens the folder with `opentune.log` (and up to five older
@@ -77,6 +77,28 @@ SecurityAccess seeds and keys are masked and long hex payloads shortened
 before anything is written; file contents are never recorded. Paths and a VIN
 in an error message can still be there, so review the lines before sharing
 them. Details: docs/DIAGNOSTICS.md.
+
+## Diagnostics upload
+
+Only in a build that configures an upload target (a plugin build, or
+`OPENTUNE_DIAG_ENDPOINT` set by you) a **Diagnostics** card appears here and
+under About & updates. In the public app it is hidden and nothing is sent.
+
+- **Allow sending diagnostics** (off by default) must be on before anything
+  can be sent by hand.
+- **Send diagnostics…** opens a dialog: write an optional note, press
+  **Preview** to see the exact text that will be sent (VINs, part numbers,
+  paths, user and host names, IP addresses and seeds/keys are already replaced
+  by markers such as `<VIN>`), then **Send**.
+- After a crash the next start only offers to send.
+- A plugin build may send automatically. It says so once at the first start
+  and shows **Diagnostics: auto → host** in the sidebar; **Send diagnostics
+  automatically** turns it off.
+- The history lists the last 20 uploads; **Show payload** shows exactly what
+  was sent.
+
+Never sent: flash images, datalogs, definitions, CAN captures or any file you
+opened. `OPENTUNE_DIAG=off` turns every upload off.
 
 ## Safety
 

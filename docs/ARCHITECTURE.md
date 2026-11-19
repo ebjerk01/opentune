@@ -125,6 +125,10 @@ The abstraction every app talks to and every driver implements.
   data (ECU definitions, pack manifests) and its checks.
 - `privacy` — the heuristic personal-data scan behind `privacy-scan` and the
   validators (VIN-like ids, e-mail addresses, serial-number-like values).
+- `redact` — replaces personal data in text that leaves the machine (VINs,
+  part numbers, paths, user / host names, IP / MAC / e-mail addresses,
+  seeds / keys) with markers; used by the desktop diagnostics upload
+  ([`DIAGNOSTICS.md`](DIAGNOSTICS.md#redaction)).
 - `registry` — `Registry`/`DriverEntry`: enumerate and construct drivers by id,
   so apps don't hard-code which drivers exist.
 - `capabilities` — `Capabilities`: what a driver supports (CAN/CAN-FD, K-line,

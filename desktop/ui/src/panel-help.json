@@ -211,7 +211,7 @@
   },
   "debug": {
     "title": "Debug",
-    "summary": "Send raw UDS/OBD requests, run the offline UDS simulator, keep a session log, check rendering and read the local diagnostics log (crashes, errors, startup steps). Alpha builds only; raw requests are sent unchecked.",
+    "summary": "Send raw UDS/OBD requests, run the offline UDS simulator, keep a session log, check rendering, read the local diagnostics log (crashes, errors, startup steps) and, in a build with an upload target, send it redacted after a preview. Alpha builds only; raw requests are sent unchecked.",
     "needs": ["Alpha build", "Adapter (for raw requests)"],
     "risk": "writes-ecu",
     "guide": "31-debug"
@@ -225,7 +225,7 @@
   },
   "about": {
     "title": "About & updates",
-    "summary": "Show the installed version and check for, download and install a signed update.",
+    "summary": "Show the installed version and check for, download and install a signed update. In a build set up to upload diagnostics, also the Diagnostics settings (consent, preview and send, automatic-mode switch, upload history).",
     "needs": ["Internet (to update)"],
     "risk": "none",
     "guide": "33-about"

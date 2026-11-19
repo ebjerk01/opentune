@@ -24,6 +24,29 @@ section (alpha/bench builds) until they are vehicle-tested.
   card **Diagnostics log**: tail with a level filter, Open folder, Copy last
   200 lines, Clear. Nothing is sent anywhere. Docs:
   [DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
+- **Diagnostics upload** (desktop, capability only: the public app ships no
+  endpoint and no token and sends nothing). A target comes from a plugin
+  build's `DesktopConfig.diagnostics` or from `OPENTUNE_DIAG_ENDPOINT` /
+  `OPENTUNE_DIAG_TOKEN` (manual mode only); `OPENTUNE_DIAG=off` turns every
+  upload off. **Manual**: needs the per-user setting "Allow sending
+  diagnostics" (off by default) and a click on Send after a preview of the
+  exact redacted payload; after a crash the next start only offers to send.
+  **Automatic** (plugin builds only): crash report on the next start,
+  coalesced error reports, optional periodic session summary; one-time notice
+  with Turn off, sidebar indicator "Diagnostics: auto → host", a global off
+  switch, at most 1 upload per 10 min and 20 a day, a 2 MiB offline queue
+  retried at the next slot. Payloads hold only diagnostics-log records, a
+  session summary and the note (never images, datalogs, definitions, CAN
+  captures or opened files), are redacted as a whole and capped at 2 MiB.
+  HTTPS only (reqwest/rustls already used by the updater), Bearer token, 30 s
+  timeout, no redirects; the token never appears in logs, previews, history
+  or errors. Diagnostics card in About & updates and the Debug panel with the
+  upload history (exact payload per upload). Docs:
+  [DIAGNOSTICS.md](docs/DIAGNOSTICS.md#uploading-diagnostics).
+- **`opentune_core::redact`**: replaces VINs (also inside hex dumps), part
+  numbers (VAG, Bosch, Siemens, Mercedes), labelled serials, e-mail, paths,
+  user / host names, IP and MAC addresses and SecurityAccess seeds/keys with
+  markers (`<VIN>`, `<PART>`, `<PATH>/basename`, …).
 - **ECU database access profiles**: each control unit can say how it is
   reached — OBD, bench, boot mode (entry, strap points, whether the case must
   be opened, reset timing) and the security access a read or write needs —
@@ -145,6 +168,10 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- **Breaking for embedders: `DesktopConfig` gained a `diagnostics` field**
+  (the diagnostics upload target). A plugin that builds `DesktopConfig` with a
+  struct literal adds `diagnostics: None` (or its own `DiagUpload`); one that
+  uses `..DesktopConfig::default()` needs no change.
 - Desktop (Linux): **GPU rendering on by default; DMA-BUF disabled only on
   detected known-bad setups.** OpenTune no longer sets
   `WEBKIT_DISABLE_DMABUF_RENDERER=1` unconditionally: it does so only when

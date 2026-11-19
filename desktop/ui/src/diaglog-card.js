@@ -100,7 +100,7 @@
     c.id = "dlCard";
     c.innerHTML =
       '<h2>Diagnostics log</h2>' +
-      '<p class="hint muted small">Errors, crashes, failed commands and startup steps, kept in a local file on this machine (nothing is sent anywhere). SecurityAccess seeds and keys are masked and long hex payloads cut before they are written; file contents are never recorded.</p>' +
+      '<p class="hint muted small">Errors, crashes, failed commands and startup steps, kept in a local file on this machine. It leaves the machine only through the Diagnostics card (shown when this build has an upload target), redacted and after a preview. SecurityAccess seeds and keys are masked and long hex payloads cut before they are written; file contents are never recorded.</p>' +
       '<div class="row"><label>Level <select id="dlLevel" class="inp">' +
       '<option value="debug">all</option><option value="info">info and up</option><option value="warn">warnings and errors</option><option value="error">errors only</option>' +
       '</select></label>' +

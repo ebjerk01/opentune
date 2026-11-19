@@ -18,6 +18,16 @@ Shows the installed version and checks for a newer signed release.
 - **Update check failed** — usually no internet. Try again later.
 - **Blocked — "…" is running** — a flash or map write-back is in progress. Updates are not allowed to start until it finishes.
 
+## Diagnostics
+
+Only when this build is set up to upload diagnostics (a plugin build, or the
+`OPENTUNE_DIAG_ENDPOINT` environment variable) a **Diagnostics** card is
+shown here: where reports go, **Allow sending diagnostics** (off by default),
+**Send diagnostics…** with a preview of the exact redacted text, the switch
+for automatic sending in a build that has it, and the last uploads. The public
+app has no upload target and sends nothing. See the Debug guide and
+docs/DIAGNOSTICS.md.
+
 ## Safety
 
 - Nothing is downloaded until you ask, and nothing is installed unless its signature is valid.
