@@ -91,7 +91,7 @@ fn parse_candump(line: &str) -> Option<LogFrame> {
         hex_bytes(payload).filter(|d| d.len() <= 8)?
     };
     Some(LogFrame {
-        ts: ts.trim().parse().ok(),
+        ts: finite_ts(ts),
         channel: Some(channel),
         id,
         extended,
@@ -119,7 +119,7 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
             return None;
         }
         return Some(LogFrame {
-            ts: cols[0].parse().ok(),
+            ts: finite_ts(cols[0]),
             channel: None,
             id,
             extended,
@@ -148,7 +148,7 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
             .collect::<Option<Vec<u8>>>()?;
         return Some(LogFrame {
             // SavvyCAN writes microseconds.
-            ts: cols[0].parse::<f64>().ok().map(|us| us / 1e6),
+            ts: finite_ts(cols[0]).map(|us| us / 1e6),
             channel: Some(format!("bus{}", cols[4])),
             id,
             extended,
@@ -174,13 +174,18 @@ fn is_header(line: &str) -> bool {
         || l.starts_with("end triggerblock")
 }
 
-/// An ASC line starts with a bare relative timestamp (no commas: that is CSV).
+/// An ASC line starts with a bare relative timestamp, plain decimal digits
+/// (no commas: that is CSV; `nan`, `inf` or `1e3` are not timestamps).
 fn is_asc(line: &str) -> bool {
     !line.contains(',')
-        && line
-            .split_whitespace()
-            .next()
-            .is_some_and(|t| t.parse::<f64>().is_ok())
+        && line.split_whitespace().next().is_some_and(|t| {
+            t.bytes().all(|b| b.is_ascii_digit() || b == b'.') && t.parse::<f64>().is_ok()
+        })
+}
+
+/// A log timestamp: a finite number, else none.
+fn finite_ts(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 /// One Vector ASC line. `Ok(None)` is an event line (no CAN frame: start of
@@ -545,6 +550,25 @@ base dec  timestamps absolute
                 .collect::<Vec<_>>(),
             vec![(0x7FF, false), (0x1FFF_FFFF, true), (0x800, true)]
         );
+    }
+
+    #[test]
+    fn timestamps_are_finite_or_absent() {
+        // Regression: `nan` / `inf` parse as f64, so such a line became an
+        // ASC frame with a NaN timestamp, and candump / CSV logs carried NaN
+        // or infinite times into the summary.
+        let text = "\
+nan 1 7E8 Rx d 1 00
+inf 1 7E8 Rx d 1 00
+(nan) can0 7E8#00
+(inf) can0 7E8#00
+inf,7E8,0,1,00
+NaN,000007E8,false,Rx,1,1,00
+";
+        let p = parse_log(text);
+        assert_eq!(p.bad_lines, 2, "the two ASC-looking lines");
+        assert_eq!(p.frames.len(), 4);
+        assert!(p.frames.iter().all(|f| f.ts.is_none()), "{:?}", p.frames);
     }
 
     #[test]
