@@ -239,6 +239,28 @@ fn response_pending_is_waited_out_and_a_leaked_one_is_an_error() {
     );
 }
 
+#[test]
+fn a_cut_off_group_answer_is_an_error_not_an_empty_group() {
+    // Regression: `61 07` (the echo, nothing after it) read as a group with
+    // no cells and no error.
+    for answer in [vec![0x61, 0x07], vec![0x61, 0x07, 0x1A, 0x00]] {
+        let mut t = Script(vec![
+            (vec![0x10, KWP_SESSION], vec![0x50, KWP_SESSION]),
+            (vec![0x21, 0x07], answer.clone()),
+        ]);
+        let mut r = Dq250Reader::start(&mut t, Some(KWP_SESSION), 300);
+        let g = r.group(7, &GroupLabels::default());
+        assert!(g.cells.is_empty(), "{answer:02X?}");
+        assert!(
+            g.error
+                .as_deref()
+                .unwrap()
+                .contains("without a single cell"),
+            "{g:?}"
+        );
+    }
+}
+
 /// Answers from a script, in order; anything else is a protocol error.
 struct Script(Vec<(Vec<u8>, Vec<u8>)>);
 
@@ -453,7 +475,8 @@ fn a_garbage_answering_unit_never_panics_or_decodes_mis_echoed_data() {
             }
             let g = r.group(7, &GroupLabels::default());
             if g.error.is_none() {
-                assert!(g.cells.len() <= 256 && g.raw_hex.len() % 2 == 0);
+                assert!(!g.cells.is_empty() && g.cells.len() <= 256);
+                assert!(g.raw_hex.len() % 2 == 0);
             } else {
                 assert!(g.cells.is_empty());
             }

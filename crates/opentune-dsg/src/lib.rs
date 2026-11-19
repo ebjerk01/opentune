@@ -533,6 +533,17 @@ impl<'a> Dq250Reader<'a> {
     pub fn group(&mut self, group: u8, labels: &GroupLabels) -> Group {
         let (r, first) = self.read(|k| k.read_local_id(group));
         let mut g = match r {
+            // The echo with not even one cell after it is a cut-off answer.
+            Ok(rec) if rec.len() < 3 => Group {
+                group,
+                cells: Vec::new(),
+                raw_hex: String::new(),
+                error: Some(format!(
+                    "the unit answered group {group} without a single cell ({})",
+                    hex(&rec)
+                )),
+                notes: Vec::new(),
+            },
             Ok(rec) => decode_group(group, &rec, labels),
             Err(e) => Group {
                 group,
