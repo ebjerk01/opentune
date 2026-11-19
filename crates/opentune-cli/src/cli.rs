@@ -554,6 +554,112 @@ pub enum AdaptAction {
         /// Channel name (as in the definition).
         channel: String,
     },
+    /// KWP2000 (VAG, TP2.0 or K-line): read a `kwp_group` measuring block or a
+    /// `kwp_adaptation` channel. Read-only.
+    KwpRead {
+        /// Channel name (as in the definition).
+        channel: String,
+        #[command(flatten)]
+        kwp: KwpConn,
+    },
+    /// KWP2000 basic settings on a `kwp_basic_settings` channel: start, read
+    /// the measuring block in basic-settings mode, stop. Commands the module:
+    /// needs `--ack` and `--seedkey` (or `--dry-run`).
+    KwpBasic {
+        /// Channel name (as in the definition).
+        channel: String,
+        /// Measuring-block reads while basic settings run.
+        #[arg(long, default_value_t = 3)]
+        polls: u32,
+        /// Pause between reads.
+        #[arg(long, default_value_t = 500)]
+        interval_ms: u64,
+        #[command(flatten)]
+        gate: KwpGate,
+        #[command(flatten)]
+        kwp: KwpConn,
+    },
+    /// KWP2000 adaptation test: apply a raw value temporarily, read it back,
+    /// exit (not stored). Needs `--ack` and `--seedkey` (or `--dry-run`).
+    KwpTest {
+        /// Channel name (as in the definition).
+        channel: String,
+        /// Raw 16-bit value (decimal or 0x hex).
+        #[arg(long)]
+        value: String,
+        #[command(flatten)]
+        gate: KwpGate,
+        #[command(flatten)]
+        kwp: KwpConn,
+    },
+    /// KWP2000 adaptation save: test, store with the workshop code, read back.
+    /// Needs `--ack`, `--seedkey` and `--wsc` (or `--dry-run`).
+    KwpSave {
+        /// Channel name (as in the definition).
+        channel: String,
+        /// Raw 16-bit value (decimal or 0x hex).
+        #[arg(long)]
+        value: String,
+        /// The module's 6-byte workshop code, 12 hex digits.
+        #[arg(long, value_name = "HEX")]
+        wsc: Option<String>,
+        #[command(flatten)]
+        gate: KwpGate,
+        #[command(flatten)]
+        kwp: KwpConn,
+    },
+}
+
+/// The connection of the `adaptation kwp-*` actions: `--sim`, or the parent
+/// `--driver` with a TP2.0 (raw-CAN) or K-line address.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct KwpConn {
+    /// Run against the built-in synthetic KWP module over the core TP2.0
+    /// simulator (no hardware; `--seedkey kwpsim-test` unlocks it).
+    #[arg(long)]
+    pub sim: bool,
+    /// Serial device (slcan, K-line) or CAN interface (socketcan, gsusb).
+    #[arg(long, value_name = "PORT")]
+    pub port: Option<String>,
+    /// Serial baud of the adapter link.
+    #[arg(long, value_name = "BAUD")]
+    pub baud: Option<String>,
+    /// Vehicle bus (driver option `bus`).
+    #[arg(long, value_name = "BUS")]
+    pub bus: Option<String>,
+    /// TP2.0 logical address of the module (raw-CAN drivers), e.g. 0x01.
+    #[arg(long, value_name = "ADDR")]
+    pub tp20_addr: Option<String>,
+    /// K-line address of the module (K-line drivers), e.g. 0x01.
+    #[arg(long, value_name = "ADDR")]
+    pub kline_addr: Option<String>,
+    /// Extra driver option (repeatable), e.g. `--opt tp20_keepalive_ms=500`.
+    #[arg(long = "opt", value_name = "KEY=VALUE")]
+    pub opts: Vec<String>,
+    /// KWP2000 session started first (`none` skips it; writes need one).
+    #[arg(long, default_value = "0x89")]
+    pub session: String,
+    /// Seed/key handler id for SecurityAccess, resolved by the embedding build
+    /// (OpenTune ships no VAG login algorithm; `kwpsim-test` unlocks `--sim`).
+    #[arg(long, value_name = "ID")]
+    pub seedkey: Option<String>,
+    /// SecurityAccess requestSeed level (sendKey is level + 1).
+    #[arg(long, default_value = "0x03")]
+    pub level: String,
+    /// JSON output.
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The safety flags of the KWP writes.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct KwpGate {
+    /// Acknowledge that this commands the module.
+    #[arg(long)]
+    pub ack: bool,
+    /// Print the request plan; send nothing.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Subcommand)]

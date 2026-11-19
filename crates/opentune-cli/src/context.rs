@@ -52,9 +52,10 @@ impl CliContext {
 
     /// Resolve a seed-key handler id through the embedder's resolvers, in
     /// order, then `sa2:<hex>` / `sa2:@<file>` (the SA2 VM running a script
-    /// the user supplies in the id), then the `udssim` simulator's test-only
-    /// handler (`udssim-test`, `seed XOR 0xA5` — it unlocks only the
-    /// simulator). The public build ships no algorithm or script.
+    /// the user supplies in the id), then the simulators' test-only handlers
+    /// (`udssim-test`, `seed XOR 0xA5`, and `kwpsim-test` for the synthetic
+    /// KWP module — each unlocks only its simulator). The public build ships no
+    /// algorithm or script.
     pub fn seed_key(&self, id: &str) -> Option<Box<dyn SeedKey>> {
         self.seedkeys
             .iter()
@@ -64,6 +65,7 @@ impl CliContext {
                 _ => None,
             })
             .or_else(|| opentune_udssim::driver::test_seed_key(id))
+            .or_else(|| opentune_adaptation::sim::test_seed_key(id))
     }
 
     /// [`seed_key`](Self::seed_key), erroring on an unknown id (or on an
