@@ -136,6 +136,19 @@ verified/unverified split: [BMW-CONTAINERS.md](BMW-CONTAINERS.md).
 | [CDFN/bmw-virtual-reader](https://github.com/CDFN/bmw-virtual-reader) | No licence; facts only | BTLD + SWFL segments combined into one flat image by target address. |
 | [LeonB1ham/svt-psdzdata-export](https://github.com/LeonB1ham/svt-psdzdata-export) | No licence; facts only | The `swe/` class folders (btld, swfl, swfk, cafd, …) and that CAFD files are `.caf`. |
 
+## Module coding labels and formats
+
+See [CODING.md](CODING.md) for what each source contributed and the sources
+checked and not used.
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [jilleb/mib2-toolbox](https://github.com/jilleb/mib2-toolbox) | — | MIT | Licence checked 2026-11-19. `Toolbox/GEM/mqb-coding.esd` @ `a8e2f08`: the MIB2 High (module 5F) long-coding table (byte, mask, label, options), converted one-to-one into the `vag-mib2-coding` pack with its MIT notice. |
+| [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) | ~450 | BSD-2-Clause | `lib/constants.py`: DID `0x0600` "VW Coding Value". |
+| [carp3/AsBuilt-Browser](https://github.com/carp3/AsBuilt-Browser) | — | MIT | Licence checked 2026-11-19. The Ford As-Built line checksum and its test vector (`ChecksumCalculator.tsx` + test) and the `.ab` XML structure (`types.ts`, comparer tests). Own implementation in `opentune_coding::asbuilt`. |
+| [consp/apim-asbuilt-decode](https://github.com/consp/apim-asbuilt-decode) | — | GPL-3.0 | Licence checked 2026-11-19. Format only: the same checksum, 5-byte lines and block `n` = DID `0xDE00 + n - 1`. Its label data is **not** used (stated to come from OEM binaries and forum sheets). |
+| [5555l/ccf_parser](https://github.com/5555l/ccf_parser) | — | GPL-3.0 | Licence checked 2026-11-19. The CCF parameter-descriptor XML structure (`block/group/parameter/select/option`, `id` byte range, big-endian `mask`, masked option values). OpenTune reads user-supplied descriptors only; it ships none and does not decrypt anything. |
+
 ## Licence compatibility
 
 OpenTune is **GPL-3.0-or-later**. The rules we follow when drawing on the work
@@ -144,11 +157,14 @@ above:
 - **MIT / BSD (permissive)** — code and patterns may be reused in OpenTune,
   keeping the original copyright/licence notice. Covers VW_Flash, ME7Sum,
   moto-ecu-checksum, OpenVehicleDiag, python-udsoncan, python-can-isotp,
-  cantools, SavvyCAN, esp32-isotp-ble-bridge, kw1281test, vag-diag-sim.
+  cantools, SavvyCAN, esp32-isotp-ble-bridge, kw1281test, vag-diag-sim,
+  mib2-toolbox (its MIT notice ships with the `vag-mib2-coding` pack),
+  AsBuilt-Browser.
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
-  NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later) and uclcli.
+  NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later), uclcli,
+  apim-asbuilt-decode and ccf_parser.
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
   RomRaider, pyA2L, Speeduino and LibreTune.
