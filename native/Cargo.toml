@@ -26,10 +26,13 @@ opentune-db = { path = "../crates/opentune-db" }
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 rfd = "0.18"
 serde = { version = "1", features = ["derive"] }
+# .otproj tuning projects (same JSON format as the Tauri app).
+serde_json = "1"
 # --screenshot mode (review / docs): writes the captured frame as PNG.
 png = "0.18"
 # Adapter discovery + the ELM327 AT link (top bar); same major as the core drivers.
 serialport = "4"
 
 [dev-dependencies]
-serde_json = "1"
+# Vault tests write backups with the core's own writer (real on-disk layout).
+opentune-flash = { path = "../crates/opentune-flash" }
