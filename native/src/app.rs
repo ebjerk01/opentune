@@ -191,6 +191,30 @@ impl eframe::App for App {
         self.last_frame = Some(start);
         let t = theme::tokens(&ctx);
 
+        // Drop a dump on the window, or Ctrl+O, to open it.
+        let dropped = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .find(|p| p.is_file())
+        });
+        let ctrl_o = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O));
+        let pick = dropped.or_else(|| {
+            ctrl_o
+                .then(|| {
+                    rfd::FileDialog::new()
+                        .add_filter("flash image", &["bin", "ori", "mod", "hex", "BIN"])
+                        .pick_file()
+                })
+                .flatten()
+        });
+        if let Some(p) = pick {
+            self.flash.open(&self.defs, p, &mut self.settings);
+            self.view = View::Flash;
+        }
+        let hovering_file = ctx.input(|i| !i.raw.hovered_files.is_empty());
+
         egui::Panel::top("gbar")
             .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
             .show(ui, |ui| self.top.ui(ui, &t, &mut self.settings));
@@ -242,6 +266,27 @@ impl eframe::App for App {
                 other => views::placeholder::ui(ui, &t, other),
             });
 
+        if hovering_file {
+            let r = ctx.content_rect();
+            let p = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("drop"),
+            ));
+            p.rect_filled(r, 0.0, t.bg.gamma_multiply(0.85));
+            p.rect_stroke(
+                r.shrink(18.0),
+                egui::CornerRadius::same(theme::RADIUS),
+                egui::Stroke::new(2.0, t.accent),
+                egui::StrokeKind::Inside,
+            );
+            p.text(
+                r.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("{}  Drop to open the dump", crate::icons::FOLDER_OPEN),
+                theme::font(theme::DISPLAY, 22.0),
+                t.accent,
+            );
+        }
         if let Some(s) = &mut self.shot {
             s.step(&ctx);
         }
