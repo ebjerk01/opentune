@@ -657,3 +657,31 @@ textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: verti
   .dv-val { font-size: 34px; }
   .dv-hero .dv-val, .panel.dv-kiosk .dv-hero .dv-val { font-size: 56px; }
 }
+
+/* ---- Custom listbox (listbox.js) ----------------------------------------- */
+/* The native <select> stays in the DOM as the value store, never shown. */
+.ot-lb-native { display: none !important; }
+button.ot-lb {
+  display: inline-flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  max-width: 100%; line-height: 1.25;
+}
+.ot-lb .ot-lb-val { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ot-lb .ot-lb-chev {
+  flex: none; width: 6px; height: 6px; opacity: .7;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.ot-lb.open .ot-lb-chev { transform: translateY(1px) rotate(-135deg); }
+.ot-lb:disabled { opacity: .55; cursor: default; }
+.ot-lb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ot-lb-pop {
+  position: fixed; z-index: 2000; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--card); color: var(--ink); border: 1px solid var(--card-border); border-radius: 8px;
+  padding: 4px; font-size: 13px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+}
+.ot-lb-opt { padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.ot-lb-opt.active { background: var(--accent-soft); }
+.ot-lb-opt[aria-selected="true"] { font-weight: 700; color: var(--accent); }
+.ot-lb-opt[aria-disabled="true"] { color: var(--muted); cursor: default; }
+/* sidebar adapter box: the driver picker spans the row */
+#connDriver + .ot-lb { width: 100%; }

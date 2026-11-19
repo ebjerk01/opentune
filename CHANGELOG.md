@@ -131,6 +131,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- Desktop: the sidebar's adapter **driver** and **CAN bus** pickers no longer
+  open their menu past the screen edge in fullscreen (WebKitGTK placed the
+  native `<select>` popup itself). They are now an in-page listbox
+  (`listbox.js`) that opens down when it fits, otherwise up, stays inside the
+  window and scrolls inside when long; full keyboard support (arrows,
+  Home/End, Page Up/Down, type-ahead, Enter/Space, Esc) and combobox/listbox
+  ARIA roles. The hidden `<select>` keeps the value, so nothing else changed.
 - **`openport2` (Tactrix OpenPort 2.0) driver audited against the public
   protocol notes and rewritten at the wire level** (bisak/openport-j2534,
   Mackanized/op2j2534, roffe/libj2534_openport2; facts only). The old code could

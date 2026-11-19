@@ -124,6 +124,10 @@ async function initConnBar() {
     '<div id="connDoipList" class="conn-doip-list" hidden></div>' +
     '<div class="conn-row"><button id="connDetect" class="btn">Detect adapter</button></div>';
   foot.insertBefore(bar, $("adapterBadge"));
+  // In-page listboxes instead of native <select> popups: WebKitGTK places a
+  // native popup itself, past the screen edge for these bottom-pinned pickers
+  // in fullscreen. The <select>s stay (hidden) as the value store.
+  if (window.OTListbox) ["connDriver", "connBus"].forEach((id) => window.OTListbox.enhance($(id)));
   try {
     const list = await driverList();
     const sel = $("connDriver"); sel.innerHTML = "";
