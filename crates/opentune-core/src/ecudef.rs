@@ -75,8 +75,21 @@ fn key_hit(value: &str, keys: &[String]) -> bool {
 }
 
 impl EcuDef {
+    /// Evidence level `example`: placeholder addresses/maps, shown as
+    /// "Example — placeholder data" and never matched against a real unit.
+    pub fn is_example(&self) -> bool {
+        self.provenance
+            .as_ref()
+            .is_some_and(|p| p.evidence == crate::provenance::EXAMPLE)
+    }
+
     /// True if an ECU reporting `id` matches this definition's identify keys.
+    /// An `example` definition never matches.
     pub fn matches_id(&self, id: &EcuId) -> bool {
+        // Placeholder data must never identify a real unit.
+        if self.is_example() {
+            return false;
+        }
         if let Some(hw) = &id.hw_number {
             if key_hit(hw, &self.identify.part_numbers) {
                 return true;

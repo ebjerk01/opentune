@@ -139,6 +139,7 @@ evidence for.
 
 | State | Meaning |
 |---|---|
+| **example** | Data only: placeholder addresses/maps kept as a worked example. Never used to identify a real unit; shown as "Example — placeholder data". (Definitions and packs only.) |
 | **implemented** | Code exists and compiles; behaviour not yet tested. |
 | **synthetic-tested** | Unit/integration tests pass on synthetic data (generated images, the UDS simulator, canned frames). |
 | **real-image-tested** | Verified against real dumps / definition files (offline). |

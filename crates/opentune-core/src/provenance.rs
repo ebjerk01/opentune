@@ -8,8 +8,8 @@
 //! `docs/CONTRIBUTING-ECUDEFS.md`.
 //!
 //! The evidence vocabulary is the project's validation-state vocabulary
-//! (`docs/DEVELOPMENT.md` §7), lowest to highest: `implemented`,
-//! `synthetic-tested`, `real-image-tested`, `bench-tested`, `vehicle-tested`.
+//! (`docs/DEVELOPMENT.md` §7), lowest to highest: `example` (placeholder data
+//! that never identifies a real unit), `implemented`, `synthetic-tested`, `real-image-tested`, `bench-tested`, `vehicle-tested`.
 //! It records the highest state the data as a whole has reached — per-map
 //! confidence stays in each map's `CONFIDENCE:` label.
 //!
@@ -21,7 +21,8 @@ use serde::{Deserialize, Serialize};
 
 /// The validation-state vocabulary (`docs/DEVELOPMENT.md` §7), in increasing
 /// order of evidence. The only accepted values of an `evidence` field.
-pub const EVIDENCE_LEVELS: [&str; 5] = [
+pub const EVIDENCE_LEVELS: [&str; 6] = [
+    "example",
     "implemented",
     "synthetic-tested",
     "real-image-tested",
@@ -110,6 +111,10 @@ impl Provenance {
         check(&self.sources, &self.license, &self.evidence, location)
     }
 }
+
+/// The level of placeholder/template data: an `example` definition is never
+/// used to identify a real unit.
+pub const EXAMPLE: &str = "example";
 
 /// Is `s` one of [`EVIDENCE_LEVELS`]?
 pub fn is_evidence_level(s: &str) -> bool {

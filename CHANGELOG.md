@@ -11,6 +11,26 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Added
+- Evidence level **`example`** (below `implemented`) for placeholder definitions:
+  never used to identify a real unit, labelled "Example — placeholder data".
+
+### Changed
+- **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
+  the id no longer carries a hardware part number. Identification is unchanged (the
+  part number stays a match key); anything referencing the old id (scripts, packs,
+  saved sessions) must use the new one. Its `vehicle-tested` evidence now states
+  that it covers only the live identity read.
+- Evidence levels corrected after review: `bosch-edc16-toyota` is now `example`
+  (placeholder addresses and maps); the Haldex Gen4 ECU definition is
+  `synthetic-tested` (its decode is checked against a public CAN capture, not a
+  flash image).
+
+### Fixed
+- The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
+  EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
+  Example definitions are now skipped by identification.
+
 ## [0.7.0] - 2026-11-19
 
 ### Added
