@@ -110,6 +110,12 @@ function showPanel(name) {
   document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.panel === name));
   if (main && switching) main.scrollTop = panelScroll[name] || 0;
   currentPanel = name;
+  if (switching) {
+    // An open custom listbox (listbox.js) belongs to the old view; the render
+    // check (render-check.js, OPENTUNE_PERF) measures each panel's scrolling.
+    if (window.OTListbox) window.OTListbox.closeAll();
+    if (window.OTRender) window.OTRender.panelSwitched(name);
+  }
   if (window.OTNav && window.OTNav.activated) window.OTNav.activated(name);
   if (!panelShown.has(name)) {
     panelShown.add(name);

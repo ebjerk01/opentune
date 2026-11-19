@@ -85,3 +85,12 @@ test("showPanel keeps each panel's scroll position in #main", () => {
   assert.equal(main.scrollTop, 40);
   assert.deepEqual(seen, ["maps", "guide", "maps", "maps", "guide"], "showPanel reports every switch to OTNav");
 });
+
+test("cheap repaints: no filter / path transitions on live tiles, contained tiles and grids", () => {
+  const paused = rule(".dv-paused .dv-tile");
+  assert.equal(paused.filter, undefined, "a filter re-rasterises every paused tile");
+  assert.ok(paused.opacity, "paused tiles are dimmed with opacity");
+  assert.equal(rule(".g-val").transition, undefined, "the gauge arc path is not animated on every update");
+  assert.equal(rule(".dv-tile").contain, "content");
+  assert.equal(rule(".heatwrap").contain, "content");
+});

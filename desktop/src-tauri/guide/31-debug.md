@@ -38,6 +38,29 @@ Every raw exchange and adapter probe is logged with the target id and timing.
 **Refresh**, **Clear**, or **Save…** it as a text file to attach to a bug
 report.
 
+## Render check
+
+Shows how WebKitGTK draws on this machine and measures how smoothly panels
+scroll. Use it when the app feels laggy.
+
+- **Read environment** lists the rendering-related environment variables the
+  app sees (`WEBKIT_DISABLE_COMPOSITING_MODE`, `WEBKIT_DISABLE_DMABUF_RENDERER`,
+  `GDK_BACKEND`, `XDG_SESSION_TYPE`; whether a Wayland / X11 display and an
+  AppImage are in use), the GPU render nodes and their driver, whether the
+  DMA-BUF renderer is on and which rule turned it off (if any), what OpenTune
+  set itself, and the WebGL renderer (`llvmpipe` means software rendering).
+- **Measure scrolling**: pick a panel and press the button. The app switches
+  to that panel; scroll it up and down for about 5 seconds. It then returns
+  here with the frame rate, the median and 95th-percentile frame time and the
+  number of long frames (over 50 ms). A smooth panel shows about 60 fps and
+  17 ms frames on a 60 Hz screen.
+
+Results are added to the session log. Start the app with `OPENTUNE_PERF=1` to
+log the environment at startup and measure the first scroll after every panel
+switch (printed to the terminal too). If `WEBKIT_DISABLE_COMPOSITING_MODE` is
+set, the app shows a warning once: everything is drawn on the CPU and
+scrolling will be slow. Remove it from whatever starts OpenTune.
+
 ## Safety
 
 - **Raw requests are sent exactly as typed.** There is no check, no backup and no confirmation. A write (`2E`), routine (`31`), reset (`11`) or clear (`14`) acts on the module immediately. Only send requests you understand.

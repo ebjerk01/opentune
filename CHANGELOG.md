@@ -120,7 +120,34 @@ section (alpha/bench builds) until they are vehicle-tested.
   chunking. `opentune info` / `identify` / `read --driver openport2` now run end
   to end against it over a pty. Offline only.
 
+- Desktop **Render check** (Debug panel): the WebKit/GTK environment the app
+  sees (a fixed whitelist: `WEBKIT_DISABLE_COMPOSITING_MODE`,
+  `WEBKIT_DISABLE_DMABUF_RENDERER`, `GDK_BACKEND`, `XDG_SESSION_TYPE`,
+  Wayland/X11 display and AppImage presence, `/dev/dri` render nodes), the
+  WebGL renderer, and scroll frame timing per panel (fps, p50/p95 frame time,
+  long frames) measured while you scroll for ~5 s. Results go to the session
+  log; `OPENTUNE_PERF=1` logs the environment at startup and measures every
+  panel's first scroll (also on stderr). New commands `render_env` and
+  `render_note`.
+- Desktop: a one-time, dismissible warning when `WEBKIT_DISABLE_COMPOSITING_MODE`
+  is set (everything is CPU-painted, scrolling will be slow).
+
 ### Changed
+- Desktop (Linux): **GPU rendering on by default; DMA-BUF disabled only on
+  detected known-bad setups.** OpenTune no longer sets
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` unconditionally: it does so only when
+  there is no usable render node, with the NVIDIA proprietary driver, on a
+  virtual GPU, with forced software GL, on remote X, or when the last start
+  never drew a frame (self-heal: fallback, one retry after 2 clean starts,
+  then off for good). Overrides: `OPENTUNE_KEEP_WEBKIT_ENV=1`, a user-set
+  `WEBKIT_DISABLE_DMABUF_RENDERER`, and the new `OPENTUNE_DMABUF=auto|on|off`.
+  The startup trace, `render_env` and the Render check show the decision and
+  the rule. See docs/TROUBLESHOOTING-STARTUP.md.
+- Desktop repaint costs: Drive view tiles and the map heat grids use
+  `contain: content` (a tile's update repaints only that tile); paused Drive
+  view tiles are dimmed with opacity and muted colours instead of a
+  `grayscale` filter; the Dashboard gauge arc no longer animates its path on
+  every sample.
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
   part number stays a match key); anything referencing the old id (scripts, packs,
@@ -143,6 +170,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- Desktop: the sidebar's adapter **driver** and **CAN bus** pickers no longer
+  open their menu past the screen edge in fullscreen (WebKitGTK placed the
+  native `<select>` popup itself). They are now an in-page listbox
+  (`listbox.js`) that opens down when it fits, otherwise up, stays inside the
+  window and scrolls inside when long; full keyboard support (arrows,
+  Home/End, Page Up/Down, type-ahead, Enter/Space, Esc) and combobox/listbox
+  ARIA roles. The hidden `<select>` keeps the value, so nothing else changed.
 - **`openport2` (Tactrix OpenPort 2.0) driver audited against the public
   protocol notes and rewritten at the wire level** (bisak/openport-j2534,
   Mackanized/op2j2534, roffe/libj2534_openport2; facts only). The old code could

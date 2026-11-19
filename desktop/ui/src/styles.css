@@ -215,7 +215,7 @@ table.tbl tr:last-child td { border-bottom: 0; }
 .note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; padding: 10px 12px; border-left: 3px solid var(--accent); background: rgba(232, 113, 26, 0.06); border-radius: 0 6px 6px 0; margin-top: 10px; }
 
 /* Map heat grid */
-.heatwrap { overflow: auto; margin-top: 12px; }
+.heatwrap { overflow: auto; margin-top: 12px; contain: content; }
 table.heat { border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
 table.heat td, table.heat th { padding: 4px 6px; text-align: center; border: 1px solid var(--card-border); white-space: nowrap; }
 table.heat th { color: var(--ink-soft); background: var(--panel); font-weight: 600; }
@@ -394,7 +394,7 @@ table.heat td.cell.clamped.diff-up, table.heat td.cell.clamped.diff-down { box-s
 .g-svg { width: 100%; max-width: 260px; display: block; }
 .g-track { fill: none; stroke: var(--line); stroke-width: 12; stroke-linecap: round; }
 .g-red { fill: none; stroke: var(--bad-bg); stroke-width: 12; }
-.g-val { fill: none; stroke: var(--accent); stroke-width: 12; stroke-linecap: round; transition: d .25s ease; }
+.g-val { fill: none; stroke: var(--accent); stroke-width: 12; stroke-linecap: round; }
 .g-val.hot { stroke: var(--bad); }
 .g-tick { fill: var(--muted); font: 600 9px var(--mono); }
 .g-num { fill: var(--ink); font: 700 30px var(--mono); font-variant-numeric: tabular-nums; }
@@ -595,6 +595,8 @@ textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: verti
 .dv-tile {
   background: var(--card); border: 2px solid var(--card-border); border-radius: 14px; padding: 12px 16px 10px;
   display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  /* a tile's per-sample repaint stays inside the tile */
+  contain: content;
 }
 .dv-hero { grid-column: span 2; }
 .dv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -636,7 +638,11 @@ textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: verti
 .dv-tile[data-state="lost"] .dv-badge { background: var(--bad); color: #fff; }
 .dv-tile[data-state="nodata"] .dv-badge { background: rgba(127, 127, 127, 0.2); color: var(--ink-soft); }
 .dv-tile:not([data-state="live"]) .dv-spark path { stroke: var(--muted); }
-.dv-paused .dv-tile { filter: grayscale(1); opacity: .7; }
+/* paused: dimmed with plain colours (a CSS filter re-rasterises every tile) */
+.dv-paused .dv-tile { opacity: .6; border-color: var(--line); }
+.dv-paused .dv-tile:not([data-level="crit"]) .dv-val { color: var(--muted); }
+.dv-paused .dv-tile:not([data-level="crit"]) .dv-fill { background: var(--muted); }
+.dv-paused .dv-tile:not([data-level="crit"]) .dv-spark path { stroke: var(--muted); }
 .dv-kiosk-only { display: none; }
 /* fullscreen / kiosk: only the status strip, transport and tiles */
 .panel.dv-kiosk.active {
@@ -656,4 +662,43 @@ textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: verti
   .dv-tile { padding: 10px 12px 8px; }
   .dv-val { font-size: 34px; }
   .dv-hero .dv-val, .panel.dv-kiosk .dv-hero .dv-val { font-size: 56px; }
+}
+
+/* ---- Custom listbox (listbox.js) ----------------------------------------- */
+/* The native <select> stays in the DOM as the value store, never shown. */
+.ot-lb-native { display: none !important; }
+button.ot-lb {
+  display: inline-flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  max-width: 100%; line-height: 1.25;
+}
+.ot-lb .ot-lb-val { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ot-lb .ot-lb-chev {
+  flex: none; width: 6px; height: 6px; opacity: .7;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.ot-lb.open .ot-lb-chev { transform: translateY(1px) rotate(-135deg); }
+.ot-lb:disabled { opacity: .55; cursor: default; }
+.ot-lb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ot-lb-pop {
+  position: fixed; z-index: 2000; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--card); color: var(--ink); border: 1px solid var(--card-border); border-radius: 8px;
+  padding: 4px; font-size: 13px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+}
+.ot-lb-opt { padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.ot-lb-opt.active { background: var(--accent-soft); }
+.ot-lb-opt[aria-selected="true"] { font-weight: 700; color: var(--accent); }
+.ot-lb-opt[aria-disabled="true"] { color: var(--muted); cursor: default; }
+/* sidebar adapter box: the driver picker spans the row */
+#connDriver + .ot-lb { width: 100%; }
+
+/* ---- Render check (render-check.js) -------------------------------------- */
+.rc-warn { display: flex; align-items: center; gap: 12px; color: var(--warn); }
+.rc-warn .rc-warn-text { flex: 1 1 auto; }
+.rc-env { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; }
+.rc-results td:first-child { font-weight: 600; }
+.rc-overlay {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1500; max-width: min(360px, calc(100vw - 36px));
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: var(--card); color: var(--ink); border: 2px solid var(--accent);
 }

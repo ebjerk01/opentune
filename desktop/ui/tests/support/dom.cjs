@@ -117,10 +117,13 @@ class Element {
   }
   setAttribute(k, v) { if (k === "id") this.id = v; else this.attributes[k] = String(v); }
   getAttribute(k) { return attrOf(this, k); }
+  removeAttribute(k) { delete this.attributes[k]; }
   addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); }
   removeEventListener() {}
   dispatch(t, ev) { (this.listeners[t] || []).forEach((fn) => fn(Object.assign({ target: this, preventDefault() {} }, ev))); }
   click() { this.dispatch("click"); if (this.onclick) this.onclick({ target: this }); }
+  dispatchEvent(ev) { this.dispatch(ev.type, ev); return true; }
+  contains(n) { for (let e = n; e; e = e.parentElement) if (e === this) return true; return false; }
   _all() { return this.children.flatMap((c) => [c, ...c._all()]); }
   querySelectorAll(sel) { return this._all().filter((e) => matches(e, sel)); }
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
@@ -180,6 +183,7 @@ function makeDocument({ strictIds = false } = {}) {
   doc.querySelectorAll = (sel) => doc.body.querySelectorAll(sel);
   doc.querySelector = (sel) => doc.body.querySelector(sel);
   doc.addEventListener = (t, fn) => { (doc.listeners[t] = doc.listeners[t] || []).push(fn); };
+  doc.removeEventListener = (t, fn) => { doc.listeners[t] = (doc.listeners[t] || []).filter((f) => f !== fn); };
   return doc;
 }
 
@@ -202,6 +206,7 @@ function makeWindow(opts = {}) {
     fetch: () => new Promise(() => {}),
     alert() {}, confirm: () => false,
     addEventListener() {}, removeEventListener() {},
+    Event: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
     __TAURI__: opts.tauri || {
       core: { invoke: () => new Promise(() => {}) },
       dialog: { open: () => new Promise(() => {}), save: () => new Promise(() => {}) },
