@@ -297,6 +297,16 @@ fn opt_unsigned(
     }
 }
 
+/// Optional course-over-ground field: degrees in `0..=360` (some receivers
+/// write 360.0 for north).
+fn opt_course(s: &str, sentence: &'static str) -> Result<Option<f64>, NmeaError> {
+    let field = "course";
+    match opt_num(s, sentence, field)? {
+        Some(v) if !(0.0..=360.0).contains(&v) => Err(NmeaError::Malformed { sentence, field }),
+        v => Ok(v),
+    }
+}
+
 fn opt_time(s: &str, sentence: &'static str) -> Result<Option<UtcTime>, NmeaError> {
     if s.is_empty() {
         return Ok(None);
@@ -460,7 +470,7 @@ fn parse_rmc(f: &[&str]) -> Result<Rmc, NmeaError> {
         valid,
         position: opt_position(f, 2, S)?,
         speed_knots: opt_unsigned(get(f, 6), S, "speed")?,
-        course_deg: opt_num(get(f, 7), S, "course")?,
+        course_deg: opt_course(get(f, 7), S)?,
         date: opt_date(get(f, 8), S)?,
         mode: opt_mode(get(f, 11), S)?,
     })
@@ -516,7 +526,7 @@ fn parse_vtg(f: &[&str]) -> Result<Vtg, NmeaError> {
     const S: &str = "VTG";
     if f.len() == 4 {
         return Ok(Vtg {
-            course_deg: opt_num(get(f, 0), S, "course")?,
+            course_deg: opt_course(get(f, 0), S)?,
             speed_knots: opt_unsigned(get(f, 2), S, "speed knots")?,
             speed_kmh: opt_unsigned(get(f, 3), S, "speed km/h")?,
             mode: None,
@@ -533,7 +543,7 @@ fn parse_vtg(f: &[&str]) -> Result<Vtg, NmeaError> {
         }
     }
     Ok(Vtg {
-        course_deg: opt_num(get(f, 0), S, "course")?,
+        course_deg: opt_course(get(f, 0), S)?,
         speed_knots: opt_unsigned(get(f, 4), S, "speed knots")?,
         speed_kmh: opt_unsigned(get(f, 6), S, "speed km/h")?,
         mode: opt_mode(get(f, 8), S)?,
@@ -648,6 +658,11 @@ mod tests {
             "GPVTG,054.7,T,034.4,M,005.5,N,010.2,X,A",
             "GPVTG,054.7,T,034.4,M,005.5,N,010.2,K,ZZ",
             "GPVTG,1e3,T,034.4,M,005.5,N,010.2,K,A",
+            // Regression: a course outside 0..=360 degrees used to be kept.
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,-5,010120",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,360.1,010120",
+            "GPVTG,720,T,034.4,M,005.5,N,010.2,K,A",
+            "GPVTG,-0.5,034.4,005.5,010.2",
         ] {
             assert!(
                 matches!(parse_sentence(&s(body)), Err(NmeaError::Malformed { .. })),
