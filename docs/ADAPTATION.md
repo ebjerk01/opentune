@@ -118,7 +118,10 @@ module's 6-byte workshop code. Values are range-checked against the channel's
 `min`/`max`; a test or save is read back (`verified`, `tested` or
 `verify_failed`). A dry run returns the request plan and sends nothing.
 Basic settings are always stopped after the reads, unless the session was
-lost (the module leaves basic settings with it).
+lost (the module leaves basic settings with it). A start the module refused
+(negative response) is an error: nothing started. A start whose answer was
+lost or malformed is reported as `aborted` at step `start`, because the
+module may have started.
 
 ## CLI
 

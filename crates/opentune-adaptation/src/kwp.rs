@@ -1074,9 +1074,10 @@ pub enum BasicSettingsOutcome {
         /// Why.
         message: String,
     },
-    /// A poll failed. With `session_lost` nothing more was sent (the module
-    /// leaves basic settings with the session); otherwise a stop was sent
-    /// ([`BasicSettingsReport::stopped`]).
+    /// A poll failed, or the start's answer was lost or malformed (step
+    /// `start`: the module may have started). With `session_lost` nothing
+    /// more was sent (the module leaves basic settings with the session);
+    /// otherwise a stop was sent ([`BasicSettingsReport::stopped`]).
     Aborted {
         /// The step that failed.
         step: String,
@@ -1115,7 +1116,10 @@ pub struct BasicSettingsReport {
 /// was lost.
 ///
 /// `Err` only when nothing was started (pre-flight, the gate, the login, the
-/// enumerate or the start itself failed).
+/// enumerate failed, or the module refused the start with a negative
+/// response). A start whose answer was lost or malformed may have started the
+/// module: that is `Ok` with [`BasicSettingsOutcome::Aborted`] at step
+/// `start` (and [`BasicSettingsReport::started`] false).
 pub fn run_basic_settings(
     diag: &mut dyn RawDiag,
     def: &AdaptationDef,
@@ -1172,7 +1176,24 @@ pub fn run_basic_settings(
             }
         }
     }
-    routine(diag, start, k.enter, &sel)?;
+    if let Err(e) = routine(diag, start, k.enter, &sel) {
+        // A negative response started nothing. A lost or malformed answer
+        // may belong to a start the module executed: its state is unknown,
+        // so this is reported like a failed poll, never as "nothing done".
+        if matches!(e, AdaptationError::NegativeResponse { .. }) {
+            return Err(e);
+        }
+        let session_lost = is_session_loss(&e);
+        if !session_lost {
+            rep.stopped = routine(diag, sid::STOP_ROUTINE_BY_LOCAL_ID, k.enter, &sel).is_ok();
+        }
+        rep.outcome = BasicSettingsOutcome::Aborted {
+            step: "start".into(),
+            message: e.to_string(),
+            session_lost,
+        };
+        return Ok(rep);
+    }
     rep.started = true;
 
     let mut failure: Option<(String, AdaptationError)> = None;
