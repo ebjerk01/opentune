@@ -13,6 +13,7 @@
   ],
   "cpu": null,
   "flash_kib": 1024,
+  "flash_note": "Flash chip by hardware revision: a 29F400 (512 KiB; the chip of the sibling VAG EDC15P in the cited boot-mode post) or a 29F800 (1 MiB; OpenTune's edc15c6 checksum is validated on 1 MiB images). Confirm from the chip marking on your board before reading.",
   "eeprom": null,
   "bus": [
     "kline",
@@ -24,8 +25,8 @@
   "read_methods": {
     "obd": "read+write",
     "bench": true,
-    "boot": false,
-    "notes": "Diagnostics/programming over K-line (ISO 14230 KWP2000, per OpenTune's bosch-edc15c6 definition). No boot-mode procedure is documented in the cited sources."
+    "boot": true,
+    "notes": "Diagnostics/programming over K-line (ISO 14230 KWP2000, per OpenTune's bosch-edc15c6 definition); a full read needs the ECU's security access (access.security). Board-level boot mode (C167 bootstrap loader, case open) is described in access.boot and is unverified for this unit."
   },
   "checksum": "edc15c6",
   "ecudef": "bosch-edc15c6",
@@ -234,6 +235,87 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "Infineon C167CR Derivatives User's Manual V3.1: ch. 14 bootstrap loader (P0L.4 low at the end of reset, Fig. 14-2 8 kOhm pull-down, identification bytes C5h/D5h), Table 19-2 reset configuration",
+      "url": "https://www.keil.com/dd/docs/datashts/infineon/c167cr_um.pdf"
+    },
+    {
+      "title": "Infineon C167CR data sheet: P-MQFP-144 pin 104 = P0L.4/AD4",
+      "url": "https://www.infineon.com/assets/row/public/documents/10/57/infineon-c167cr-ds-en.pdf"
+    },
+    {
+      "title": "Infineon SAK-C167CR-LM errata sheet: CPU.7 warm hardware reset shorter than 1032 TCL",
+      "url": "https://www.infineon.com/assets/row/public/documents/10/52/ab12-1.pdf"
+    },
+    {
+      "title": "AMD Am29F800B data sheet: 44-pin SO, DQ4 = pin 24",
+      "url": "https://sy-dep-epc-lpc.web.cern.ch/components/datasheets/epc%20%28fgc-dccts%29/_fgc2/Memory/Flash/am29f800b.pdf"
+    },
+    {
+      "title": "OBD2Express blog (retailer post): reading a VAG EDC15P (29F400) in boot mode, flash pin 24 to ground at power-up",
+      "url": "https://obd2expresscouk.bcz.com/2019/03/04/fgtech-galletto-4-read-vag-edc15p-in-boot-mode/"
+    },
+    {
+      "title": "OpenTune docs/C167-BSL.md: C167 bootstrap-mode read on EDC15 (sequence, strap, K-line link)",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/C167-BSL.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "KWP2000 (ISO 14230) on the K-line, connector pin 3-28",
+      "notes": "The K-line pin agrees between both pinout sources. That a complete read and a write work over the diagnostic link is carried over from OpenTune's bosch-edc15c6 definition: no cited source states it for this unit and it has not been tried on one yet. A complete read needs security access (see security).",
+      "confidence": "unverified",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "On the desk through the three connector blocks: terminal 30 on 2-13, terminal 15 on 1-1, K-line on 3-28 (both sources agree). Ground is disputed (1-5 or 1-6): find it by continuity before powering. Same protocol and security access as in the car.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "C167-family bootstrap loader (BSL) on ASC0 (RxD0 = P3.11, TxD0 = P3.10), 8N1: after reset the host sends one zero byte, the BSL takes its baud rate from it and answers with an identification byte (C5h = C167 derivatives, D5h = devices with identification registers), then loads exactly 32 bytes of loader code. On EDC15 boards ASC0 reaches the K-line through the board's transceiver.",
+      "points": [
+        {
+          "name": "Flash DQ4 to CPU P0L.4/AD4",
+          "location": "pcb:flash DQ4 (pin 24 of the SO-44 29F400/29F800)",
+          "action": "pull-to-gnd",
+          "resistor_ohms": 8000,
+          "note": "Only valid if the board routes flash DQ4 to CPU AD4 (C167CR P-MQFP-144 pin 104 = P0L.4/AD4): confirm continuity between flash pin 24 and CPU pin 104 before using it. The C167CR manual's example pull-down on P0L.4 is 8 kOhm.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "P0L.4 must read low at the end of the hardware reset: apply the pull-down before power-up and release it once the BSL has answered (the cited EDC15P post releases after about 5 s; OpenTune's notes cite 2-3 s). P0L.5, P0L.3 and P0L.2 must read high (Table 19-2: P0L.5..2 = 1 0 1 1 selects the standard bootstrap loader). A hardware reset pulse must last at least 1032 TCL (errata CPU.7).",
+      "reachable": "open-case",
+      "notes": "Board level only: the case has to be opened. No public source documents this route for the EDC15C6 itself: the C167 bootstrap loader is the EDC15 platform's, and grounding flash pin 24 at power-up is reported for the sibling VAG EDC15P in a retailer blog post. Check the CPU marking (C167 family) and the flash chip on your board first. OpenTune's BSL read only reads; it never writes or erases.",
+      "confidence": "unverified",
+      "sources": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "security": {
+      "diag_read": "required",
+      "flash_write": "required",
+      "notes": "A complete flash read and programming over KWP2000 need the ECU's Mercedes security access (programming session); not yet confirmed on a unit. OpenTune ships no OEM key: supply your own through the off-by-default seed/key loader, or use the board-level boot read, which runs before the ECU software.",
+      "confidence": "unverified",
+      "sources": [
+        8
+      ]
+    }
+  }
 }

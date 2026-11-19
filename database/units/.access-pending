@@ -7,7 +7,6 @@
 # that has `access` is an error), never add one. See docs/UNIT-ACCESS-PROFILE.md.
 bosch-dq381-vag
 bosch-edc15-vag
-bosch-edc15c6-mercedes
 bosch-edc16c3x-bmw
 bosch-edc16u34-vag
 bosch-edc17cp14-vag
