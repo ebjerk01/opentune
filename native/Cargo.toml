@@ -21,10 +21,16 @@ opentune-core = { path = "../crates/opentune-core" }
 opentune-checksum = { path = "../crates/opentune-checksum" }
 opentune-scan = { path = "../crates/opentune-scan" }
 opentune-db = { path = "../crates/opentune-db" }
+# Log viewer: CSV parsing (OpenTune Live log + generic wide CSV) and stats.
+opentune-logview = { path = "../crates/opentune-logview" }
+# Controllers view: drivetrain controller definitions (ctrldefs/).
+opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
 
 # GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 rfd = "0.18"
+# Log viewer time plot; 0.38 is the release built on egui 0.37.
+egui_plot = "0.38"
 serde = { version = "1", features = ["derive"] }
 # .otproj tuning projects (same JSON format as the Tauri app).
 serde_json = "1"
