@@ -23,8 +23,8 @@
 //! ([`SimEcu::demo`]) for UI work without hardware; it never touches the hub.
 
 use crate::adapter::{self, AdapterHub, ConnKey, PollLink, Session};
-use opentune_core::resilient::Liveness;
 use opentune_core::obd::{self, sim::SimEcu, ObdSession, Readout};
+use opentune_core::resilient::Liveness;
 use opentune_core::Interface;
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
@@ -644,7 +644,11 @@ mod tests {
         let v = read_impl(&r.hub, c, vec![0x0C]).unwrap();
         assert_eq!(v["link"]["state"], "up");
         assert!(v["values"]["rpm"].is_number());
-        assert_eq!(r.opens.load(Ordering::SeqCst), 2, "re-opened after the reset");
+        assert_eq!(
+            r.opens.load(Ordering::SeqCst),
+            2,
+            "re-opened after the reset"
+        );
     }
 
     #[test]

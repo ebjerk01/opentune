@@ -115,11 +115,13 @@ pub fn open(
     wire.configure(&mut cfg, target);
     drv.open(&cfg).map_err(|e| anyhow!("open {driver}: {e}"))?;
     wire.prepare(drv.as_mut()).map_err(|e| anyhow!("{e}"))?;
-    Ok(Some(Box::new(move |req: &[u8]| -> Result<Vec<u8>, String> {
-        wire.with_transport(drv.as_mut(), target, |t| {
-            t.request(req, timeout_ms).map_err(|e| e.to_string())
-        })?
-    })))
+    Ok(Some(Box::new(
+        move |req: &[u8]| -> Result<Vec<u8>, String> {
+            wire.with_transport(drv.as_mut(), target, |t| {
+                t.request(req, timeout_ms).map_err(|e| e.to_string())
+            })?
+        },
+    )))
 }
 
 /// For SSM: identify the module, keep the parameters it supports and switch

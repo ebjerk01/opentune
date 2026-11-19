@@ -508,7 +508,8 @@ pub fn prepare(
     max_packet_len: usize,
     ids: &[&str],
 ) -> Result<SsmPrepared, String> {
-    let init = identify(diag).map_err(|e| format!("SSM init (BF) to the {target:?} failed: {e}"))?;
+    let init =
+        identify(diag).map_err(|e| format!("SSM init (BF) to the {target:?} failed: {e}"))?;
     let sel = select(def, &init, target);
     let not_logged = ids
         .iter()
@@ -541,7 +542,10 @@ mod tests {
     fn targets_parse_and_wires_configure() {
         assert_eq!("ECU".parse::<SsmTarget>(), Ok(SsmTarget::Ecu));
         assert_eq!(" transmission ".parse::<SsmTarget>(), Ok(SsmTarget::Tcu));
-        assert!("abs".parse::<SsmTarget>().unwrap_err().contains("ecu or tcu"));
+        assert!("abs"
+            .parse::<SsmTarget>()
+            .unwrap_err()
+            .contains("ecu or tcu"));
         let mut k = opentune_core::ConnectConfig::default();
         SsmWire::KLine.configure(&mut k, SsmTarget::Tcu);
         assert_eq!((k.tx_id, k.bitrate), (0x18, 4800));

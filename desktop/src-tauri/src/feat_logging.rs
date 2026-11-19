@@ -143,7 +143,9 @@ pub async fn log_poll_once(
         bus.as_deref(),
         addr,
     );
-    let (samples, link) = hub.run("live log", move |s| poll_on(s, &key, timeout_ms, &def, &ids))?;
+    let (samples, link) = hub.run("live log", move |s| {
+        poll_on(s, &key, timeout_ms, &def, &ids)
+    })?;
     let rows: Vec<Value> = samples.iter().map(sample_json).collect();
 
     Ok(json!({
@@ -627,9 +629,10 @@ fn open_link(
         let drv = s.interface(key)?;
         match ssm {
             Some(q) => q.wire.prepare(drv),
-            None => drv.diag().map(|_| ()).ok_or_else(|| {
-                format!("driver '{}' has no diagnostic transport", key.driver)
-            }),
+            None => drv
+                .diag()
+                .map(|_| ())
+                .ok_or_else(|| format!("driver '{}' has no diagnostic transport", key.driver)),
         }
     })();
     if r.is_err() {
@@ -1103,9 +1106,7 @@ pub fn tick_live(state: &LiveLogState) -> Result<Value, String> {
         Ok(r) => r?,
         // Re-opening the adapter (and re-defining) can outlast a tick: the
         // panel gets the link state instead of an error.
-        Err(mpsc::RecvTimeoutError::Timeout) if run.link().is_some_and(|l| l.down()) => {
-            Vec::new()
-        }
+        Err(mpsc::RecvTimeoutError::Timeout) if run.link().is_some_and(|l| l.down()) => Vec::new(),
         Err(mpsc::RecvTimeoutError::Timeout) => return Err("live tick timed out".into()),
         Err(mpsc::RecvTimeoutError::Disconnected) => {
             let why = run.info().ended.clone().unwrap_or_default();
@@ -1206,8 +1207,7 @@ pub fn ssm_request(
         Some(t) => t.parse()?,
         None => SsmTarget::Ecu,
     };
-    let max_packet_len =
-        max_packet.unwrap_or(opentune_core::protocol::ssm::DEFAULT_MAX_PACKET_LEN);
+    let max_packet_len = max_packet.unwrap_or(opentune_core::protocol::ssm::DEFAULT_MAX_PACKET_LEN);
     SsmPollConfig { max_packet_len }.validate()?;
     Ok(Some(SsmRequest {
         wire,
@@ -1271,23 +1271,14 @@ pub async fn log_start(
     state: tauri::State<'_, LiveLogState>,
 ) -> Result<Value, String> {
     let def = load_def(&def_path)?;
-    let ssm = ssm_request(
-        transport.as_deref(),
-        ssm_target.as_deref(),
-        ssm_max_packet,
-    )?;
+    let ssm = ssm_request(transport.as_deref(), ssm_target.as_deref(), ssm_max_packet)?;
     let (key, target, cfg) = match &ssm {
         Some(r) => {
             if fast {
                 return Err("Fast (0x2C) is UDS; SSM always batches its reads".into());
             }
-            let (key, target) = ssm_key(
-                &driver,
-                port.as_deref(),
-                baud.as_deref(),
-                bus.as_deref(),
-                r,
-            );
+            let (key, target) =
+                ssm_key(&driver, port.as_deref(), baud.as_deref(), bus.as_deref(), r);
             let cfg = FastLogConfig {
                 ssm: Some(SsmPollConfig {
                     max_packet_len: r.max_packet_len,
@@ -1379,14 +1370,14 @@ mod tests {
 
     use crate::adapter::testkit::{SimBus, SimFault};
     use crate::adapter::Addr;
-    use opentune_core::resilient::VirtualClock;
-    use std::sync::atomic::Ordering as AtOrd;
     use opentune_core::ecudef::Endian;
+    use opentune_core::resilient::VirtualClock;
     use opentune_logdef::{
         Addressing, Conversion, ConversionFit, EcuGroup, LogDef, LogParam, ProtocolGroup,
         ProtocolKind, SourceFormat,
     };
     use opentune_udssim::server::{DddidConfig, ServerConfig, UdsServer};
+    use std::sync::atomic::Ordering as AtOrd;
 
     fn did_param(id: &str, did: u16, factor: f64) -> LogParam {
         LogParam {
@@ -1768,17 +1759,30 @@ mod tests {
             states.push(t["link"]["state"].as_str().unwrap_or("").to_string());
             if seen.contains(&"reconnected".to_string()) && value(&t, "rpm") > 0.0 {
                 resumed = true;
-                assert_eq!(t["status"]["mode"], "fast-2c", "re-defined after the reopen");
+                assert_eq!(
+                    t["status"]["mode"], "fast-2c",
+                    "re-defined after the reopen"
+                );
                 assert_eq!(t["link"]["state"], "up");
                 assert_eq!(t["link"]["reconnects"], 1);
                 assert_eq!(t["link"]["drops"], 1);
                 break;
             }
         }
-        assert!(resumed, "values resumed: markers {seen:?}, states {states:?}");
-        assert_eq!(seen, ["lost", "reopen-failed", "reopen-failed", "reconnected"]);
+        assert!(
+            resumed,
+            "values resumed: markers {seen:?}, states {states:?}"
+        );
+        assert_eq!(
+            seen,
+            ["lost", "reopen-failed", "reopen-failed", "reconnected"]
+        );
         assert!(states.iter().any(|s| s == "silent"), "{states:?}");
-        assert_eq!(fault.opened.load(AtOrd::SeqCst), 2, "one initial open + one reopen");
+        assert_eq!(
+            fault.opened.load(AtOrd::SeqCst),
+            2,
+            "one initial open + one reopen"
+        );
         // Backoff on the virtual clock: never a hot spin.
         assert!(clock.sleeps().iter().all(|&ms| ms > 0));
         assert!(clock.slept_ms() >= 100 + 200 + 400, "{:?}", clock.sleeps());
@@ -1809,7 +1813,10 @@ mod tests {
         assert_eq!(markers(&t), ["lost"], "{t}");
         assert!(state.current().unwrap().wait_done(Duration::from_secs(5)));
         let e = tick_live(&state).unwrap_err();
-        assert!(e.contains("adapter reset") && e.contains("session stopped"), "{e}");
+        assert!(
+            e.contains("adapter reset") && e.contains("session stopped"),
+            "{e}"
+        );
         assert!(released(&hub));
     }
 
@@ -1891,7 +1898,10 @@ mod tests {
             assert!(notes.contains("capability bit clear): P_NOPE"), "{notes}");
             assert!(notes.contains("other module"), "{notes}");
             let ids: Vec<&str> = st.params.iter().filter_map(|p| p["id"].as_str()).collect();
-            assert!(ids.contains(&"P_RPM") && !ids.contains(&"P_NOPE"), "{ids:?}");
+            assert!(
+                ids.contains(&"P_RPM") && !ids.contains(&"P_NOPE"),
+                "{ids:?}"
+            );
             let t = tick_live(&state).unwrap();
             assert_eq!(t["status"]["mode"], "ssm-a8");
             assert!(value(&t, "P_RPM").is_finite(), "{t}");
@@ -1916,10 +1926,9 @@ mod tests {
         stop_live(&hub, &state).unwrap();
 
         // Nothing selected is supported: a start error that says why.
-        let e = await_live_start(
-            begin_live(&hub, &state, ssm_req("ssm", "ecu", &["P_NOPE"])).unwrap(),
-        )
-        .unwrap_err();
+        let e =
+            await_live_start(begin_live(&hub, &state, ssm_req("ssm", "ecu", &["P_NOPE"])).unwrap())
+                .unwrap_err();
         assert!(e.contains("P_NOPE") && e.contains("5A5A000001"), "{e}");
         assert!(released(&hub));
     }
