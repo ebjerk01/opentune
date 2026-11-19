@@ -73,6 +73,21 @@ impl ElmStream for TcpElm {
     fn flush(&mut self) -> std::io::Result<()> {
         Write::flush(&mut self.sock)
     }
+    /// Discard what a late reply left in the socket (e.g. `NO DATA` printed
+    /// after we gave up on a request, or a reset banner) so it is not read as
+    /// the answer to the next request. Bounded, for an adapter that streams.
+    fn drain_input(&mut self) {
+        if self.sock.set_nonblocking(true).is_ok() {
+            let mut buf = [0u8; 256];
+            for _ in 0..64 {
+                match Read::read(&mut self.sock, &mut buf) {
+                    Ok(n) if n > 0 => {}
+                    _ => break,
+                }
+            }
+            let _ = self.sock.set_nonblocking(false);
+        }
+    }
 }
 
 /// Bluetooth RFCOMM (or any USB-serial) ELM327 over a serial device.
@@ -455,6 +470,9 @@ impl Interface for Elm327NetDriver {
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
+        // Re-open (e.g. after `Error::AdapterReset`): release the previous
+        // connection first; many WiFi adapters accept one client only.
+        self.transport = None;
         let stream = self.connect_stream(cfg)?;
         let mut transport = ElmTransport::new(stream);
         transport.init(cfg)?;
@@ -859,14 +877,14 @@ mod tests {
     /// returns `WouldBlock` once the scripted bytes are exhausted.
     struct MockStream {
         inbox: VecDeque<u8>,
-        pub written: Vec<u8>,
+        written: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     }
 
     impl MockStream {
         fn new(script: &[u8]) -> Self {
             Self {
                 inbox: script.iter().copied().collect(),
-                written: Vec::new(),
+                written: std::sync::Arc::default(),
             }
         }
     }
@@ -885,7 +903,7 @@ mod tests {
             }
         }
         fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
-            self.written.extend_from_slice(buf);
+            self.written.lock().unwrap().extend_from_slice(buf);
             Ok(())
         }
         fn flush(&mut self) -> std::io::Result<()> {
@@ -899,6 +917,57 @@ mod tests {
         let mut t = ElmTransport::new(Box::new(MockStream::new(b"62 F1 90 31 32 33\r>")));
         let resp = t.request(&[0x22, 0xF1, 0x90], 500).unwrap();
         assert_eq!(resp, vec![0x62, 0xF1, 0x90, 0x31, 0x32, 0x33]);
+    }
+
+    #[test]
+    fn response_pending_must_echo_the_request_service() {
+        // Matching `7F 31 78`: waited on, the real reply follows.
+        let mut t = ElmTransport::new(Box::new(MockStream::new(b"7F3178\r\r>7101FF00\r")));
+        assert_eq!(
+            t.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap(),
+            vec![0x71, 0x01, 0xFF, 0x00]
+        );
+        // `7F 22 78` to a 0x31 request: handed back at once, not waited on.
+        let mut t = ElmTransport::new(Box::new(MockStream::new(b"7F2278\r\r>")));
+        let start = Instant::now();
+        assert_eq!(
+            t.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap(),
+            vec![0x7F, 0x22, 0x78]
+        );
+        assert!(start.elapsed() < Duration::from_millis(250));
+    }
+
+    /// Clone quirk (docs/DRIVERS.md): a receive filter sticks until `ATZ`
+    /// and a bare `ATCRA` is rejected. Every open resets with `ATZ` before its
+    /// one `ATCRA <id>`, and never sends a bare `ATCRA`.
+    #[test]
+    fn every_open_resets_with_atz_and_never_sends_bare_atcra() {
+        for (tx, rx) in [(0x7E0, 0x7E8), (0x7E1, 0x7E9)] {
+            let mock = MockStream::new(handshake_script().as_bytes());
+            let written = std::sync::Arc::clone(&mock.written);
+            let mut d = Elm327NetDriver::with_stream(Box::new(mock));
+            d.open(&ConnectConfig {
+                tx_id: tx,
+                rx_id: rx,
+                ..ConnectConfig::default()
+            })
+            .unwrap();
+            let log = String::from_utf8(written.lock().unwrap().clone()).unwrap();
+            let cmds: Vec<&str> = log.split('\r').filter(|c| !c.is_empty()).collect();
+            assert!(!cmds.iter().any(|c| c.trim().eq_ignore_ascii_case("ATCRA")));
+            let filter = format!("ATCRA {rx:03X}");
+            let atz = cmds.iter().position(|c| *c == "ATZ").expect("ATZ");
+            let at_filter = cmds.iter().position(|c| *c == filter).expect("filter");
+            assert!(atz < at_filter, "{cmds:?}");
+            assert_eq!(cmds.iter().filter(|c| c.starts_with("ATCRA")).count(), 1);
+        }
+    }
+
+    #[test]
+    fn power_cycle_mid_session_is_adapter_reset() {
+        let mut t = ElmTransport::new(Box::new(MockStream::new(b"\x00\xFF\r\rELM327 v1.5\r\r>")));
+        let err = t.request(&[0x01, 0x0C], 300).unwrap_err();
+        assert!(matches!(err, Error::AdapterReset(_)), "{err:?}");
     }
 
     /// Replies for the AT handshake of a default (11-bit ISO-TP) `open`.

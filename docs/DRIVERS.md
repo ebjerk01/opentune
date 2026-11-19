@@ -260,7 +260,8 @@ name the address and the bytes read so far. Some negative responses get a hint:
 
 Each memory request waits 3 s (option `timeout_ms`), longer than the 2 s UDS
 default, because the ELM adds its own latency. `responsePending` (0x78) is
-handled in the ELM reply parser with the P2* budget.
+handled in the ELM reply parser with the P2* budget, and only when it echoes
+the request's service (see "ELM reply parser" below).
 
 **Dry run.** `Elm327Obd::plan_read_memory(region)` lists, without sending
 anything, every line the read would write, in order: the `AT` pacing and each
@@ -346,9 +347,43 @@ using a separate script, 2026-11-18):
 The driver is built around this. It resets with `ATZ` on every open, sets one
 physical `ATSH`/`ATCRA` pair per session and never sends a bare `ATCRA`.
 Scans re-bind per module by opening again (CLI and the desktop adapter hub).
-A unit test pins it (`every_open_resets_with_atz_and_never_sends_bare_atcra`).
+A unit test pins it (`every_open_resets_with_atz_and_never_sends_bare_atcra`)
+in each of the three ELM drivers (`elm327obd`, `elm327`, `elm327net`).
 Any future in-session retargeting must send `ATAR` (or `ATZ`) before the new
 filter, never a bare `ATCRA`.
+
+**ELM reply parser** (`opentune_core::protocol::elm`, shared by `elm327obd`,
+`elm327` and `elm327net`). What it does with what a clone prints on a car:
+
+- **responsePending is echo-checked.** A `7F <sid> 78` is waited on (P2*,
+  5 s per pending, at most 64) only when `<sid>` is the service of the request
+  that was sent, like `diag::is_response_pending` on every other driver. A
+  `7F xx 78` for another service is handed back as the reply at once, and the
+  UDS/KWP client reports it as mis-correlated.
+- **Several ECUs answering** (a functional request, headers off): responses
+  are never concatenated. A positive response for the request's service wins
+  over another ECU's negative one; otherwise the first response is the reply.
+  A single frame from another ECU inside a multi-frame reply is an error,
+  never spliced data.
+- **Adapter error lines** (`NO DATA`, `STOPPED`, `BUFFER FULL`, `CAN ERROR`,
+  `BUS BUSY`, `?`, `ERRxx`, ...) end the read at once with a protocol error;
+  in the middle of a multi-frame reply too, so a short image is never
+  returned. The request is not retried automatically.
+- `SEARCHING...`, `OK` and the K-line `BUS INIT: ...OK` banner are skipped.
+- **A stray `>`**: before any text it is ignored; in the middle of a line it is
+  dropped when more text follows straight away, and taken as the prompt when
+  the adapter then goes idle (a clone that skips the final line break).
+- **Power cycle mid-session.** The clone's UART can emit a burst of
+  non-printable bytes, then its `ELM327 v1.5` banner. Lines of only
+  non-printable bytes are skipped; the banner anywhere in a reply (even after
+  an error line, or inside a multi-frame reply) is `Error::AdapterReset`,
+  returned at once. If the banner was missed, the next request comes back
+  echoed (echo is on again after the reboot), which is `AdapterReset` too,
+  never parsed as data. The caller re-opens the interface: every ELM driver's
+  `open` releases the previous port or socket first (a serial port is opened
+  exclusively) and runs the full `ATZ` init again. `elm327net` also drains a
+  TCP socket before each request, so a late `NO DATA` or banner from an
+  earlier exchange is not read as the next answer.
 
 Not yet validated against a real ECU. The first car session (read-only, see
 [`FIRST-CAR-TEST.md`](FIRST-CAR-TEST.md)) should start with
@@ -359,21 +394,36 @@ Not yet validated against a real ECU. The first car session (read-only, see
 `crates/drivers/kline-elm327` (crate `opentune-driver-elm327`, id `elm327`)
 has the same single-frame transmit limit on CAN. Its UDS `read_memory` plans
 the request format before anything is sent, security access included, and
-uses the compact `addressAndLengthFormatIdentifier`s:
+uses the compact `addressAndLengthFormatIdentifier`s (the planning helpers in
+`opentune_core::protocol::elm::compact` are shared with `elm327obd`):
 
 - `read_mode=upload` (default): `RequestUpload 0x35` with format `0x22`
   (16-bit address) or `0x13` (24-bit address, 255-byte windows, one
   request/transfer/exit cycle per window). A 32-bit address is refused with a
   pointer to `read_mode=rmba`.
 - `read_mode=rmba`: `ReadMemoryByAddress 0x23` with format `0x14` (32-bit
-  address, 1-byte size), `read_chunk` bytes per request (default 32, 1..=255;
-  this driver does not pace the ECU's consecutive frames).
+  address, 1-byte size), `read_chunk` bytes per request (default 32, at most
+  what the size field holds; this driver does not pace the ECU's consecutive
+  frames).
+- `alfid=<hex>` picks another compact format, e.g. `12` (16-bit address,
+  8-bit size) or `23` (24-bit address, 16-bit size, rmba). It is checked
+  before anything is sent: address + size must fit 5 bytes for 0x23 and 4 for
+  0x35 (else `Unsupported`), and the region's highest address must fit the
+  address field (else `Config`).
 
-K-line reads (KWP2000, and UDS over K-line) are unchanged. Writes on CAN still
-use the 4-byte format and are refused by the 7-byte check; use `elm327obd`'s
-bench path or a raw-CAN interface. Like `elm327obd`, this is unit-tested
-against scripted ELM replies only. It has no dry run (`plan_read_memory` is
-`None`).
+**Dry run.** `Interface::plan_read_memory` lists the hex requests the read
+would write (`2711`, `2712<key>` when a seed/key handler is set, each 0x23
+chunk, or each `35`/`3601..`/`37` upload window) and sends nothing. It fails
+where the read would fail before the bus (a format that does not fit,
+security required without a handler). It is `None` on K-line and for KWP2000,
+so `opentune read --driver elm327 --plan` works for UDS on CAN.
+
+**Writes on CAN are refused before anything is sent** (`Unsupported`, no
+security access, no session): `RequestDownload` with its 4-byte format and
+the `TransferData` blocks do not fit one frame. Use a raw-CAN interface, or
+`elm327obd`'s bench-only single-frame download. K-line reads and writes
+(KWP2000, and UDS over K-line) are unchanged. Like `elm327obd`, this is
+unit-tested against scripted ELM replies only.
 
 ## 3f. VW TP2.0 on the raw-CAN drivers (`socketcan`, `slcan`, `gsusb`)
 

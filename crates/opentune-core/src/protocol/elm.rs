@@ -25,10 +25,26 @@
 //! structured error) and [`read_reply`] is the request-side read loop built on
 //! it, which handles responsePending without waiting for a prompt that a genuine
 //! ELM never prints between the pending frame and the real answer.
+//!
+//! A responsePending only counts when it echoes the service of the request
+//! that was sent (the request hex both functions take), the same check as
+//! [`diag::is_response_pending`](crate::protocol::diag::is_response_pending):
+//! a `7F xx 78` for another service is handed back as the reply, and the
+//! client reports it as mis-correlated.
+//!
+//! Adapter robustness (seen on a real car with a v1.5 clone): every adapter
+//! error line (`NO DATA`, `STOPPED`, `BUFFER FULL`, `CAN ERROR`, `?`, ...) is an
+//! error, never data; `SEARCHING...` and the K-line init banner are skipped;
+//! a stray `>` in the middle of a line is dropped when more text follows; and a
+//! power cycle mid-session (the `ELM327 v1.5` banner, possibly after a burst of
+//! non-printable noise, or the request echoed back) is
+//! [`Error::AdapterReset`]: the caller re-opens the interface.
 
+use crate::protocol::diag::is_response_pending;
 use crate::{Error, Result};
 use std::time::{Duration, Instant};
 
+pub mod compact;
 pub mod monitor;
 
 /// Largest request a CAN ELM327 can send. With `ATCAF1` the adapter wraps the
@@ -47,21 +63,19 @@ pub const MAX_PENDING: usize = 64;
 /// What one block of ELM text contains, after errors have been ruled out.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ElmBlock {
-    /// The first complete response that is **not** a responsePending, if any.
-    /// Later responses (e.g. other ECUs answering a functional request) are
-    /// deliberately not concatenated onto it.
+    /// The reply: the first complete response that is **not** a
+    /// responsePending for the request, if any. When several ECUs answer (a
+    /// functional request), a positive response for the request's service is
+    /// preferred over another ECU's negative one. Responses are never
+    /// concatenated.
     pub response: Option<Vec<u8>>,
-    /// Number of responsePending (`7F xx 78`) responses seen.
+    /// Number of responsePending (`7F <sid> 78`, `sid` = the request's
+    /// service) responses seen.
     pub pending: usize,
     /// A multi-frame reply that has started but not finished:
     /// `(expected_len, bytes_so_far)`. Only reported when no complete
     /// non-pending response precedes it.
     pub incomplete: Option<(usize, usize)>,
-}
-
-/// True for a UDS/KWP `7F <sid> 78` responsePending.
-pub fn is_response_pending(resp: &[u8]) -> bool {
-    resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78
 }
 
 /// Reject a request a CAN ELM327 cannot transmit (see [`MAX_CAN_REQUEST`]),
@@ -86,14 +100,22 @@ pub fn request_hex(req: &[u8]) -> String {
     req.iter().map(|b| format!("{b:02X}")).collect()
 }
 
-/// Classify one trimmed, upper-cased ELM line as an adapter error, if it is one.
-fn line_error(line: &str, raw: &str, sent_hex: &str) -> Option<Error> {
-    // A reset mid-session puts the adapter back to defaults (echo on, header
-    // 7DF, protocol auto): the caller has to re-initialise.
+/// A reset banner: the adapter rebooted (power cycle, brown-out, `ATZ`) and is
+/// back to defaults (echo on, header 7DF, protocol auto), so the caller has to
+/// re-initialise.
+fn reset_error(line: &str, raw: &str) -> Option<Error> {
     if line.contains("ELM327") || line.contains("LV RESET") {
         return Some(Error::AdapterReset(format!(
             "ELM327 reset mid-session ({raw}); re-open the interface"
         )));
+    }
+    None
+}
+
+/// Classify one trimmed, upper-cased ELM line as an adapter error, if it is one.
+fn line_error(line: &str, raw: &str, sent_hex: &str) -> Option<Error> {
+    if let Some(e) = reset_error(line, raw) {
+        return Some(e);
     }
     let compact: String = line.chars().filter(|c| !c.is_whitespace()).collect();
     if !sent_hex.is_empty() && compact == sent_hex.to_ascii_uppercase() {
@@ -159,9 +181,12 @@ fn hex_bytes(s: &str) -> Option<Vec<u8>> {
     Some(nibbles.chunks(2).map(|p| (p[0] << 4) | p[1]).collect())
 }
 
-/// Lines the ELM prints that carry no data.
+/// Lines the ELM prints that carry no data. A line of only non-printable bytes
+/// is the noise a clone's UART emits while it powers up (before its banner);
+/// it cannot hold hex data, so it is skipped rather than reported as garbage.
 fn is_noise(line: &str) -> bool {
     line.is_empty()
+        || line.chars().all(|c| !c.is_ascii_graphic())
         || line == "OK"
         || line.starts_with("SEARCHING")
         || (line.starts_with("BUS INIT") && !line.contains("ERROR"))
@@ -177,20 +202,45 @@ struct Group {
 /// Parse one block of ELM327 text (everything before a `>` prompt, or what has
 /// arrived so far) into its responses.
 ///
+/// `sent_hex` is the request as written to the adapter (`22F190`). Its first
+/// byte is the service a responsePending must echo to be waited on (see
+/// [`diag::is_response_pending`](crate::protocol::diag::is_response_pending));
+/// a `7F xx 78` for another service is a reply like any other.
+///
 /// Returns an error for any adapter error line (`NO DATA`, `CAN ERROR`,
 /// `BUS BUSY`, `ERR94`, `?`, …), [`Error::AdapterReset`] when the adapter
-/// reset or echoed `sent_hex` back, and a protocol error for a multi-frame reply
-/// cut short by another line or for text that is not hex. Each line is its own
-/// response: single frames are never concatenated across lines.
+/// reset (anywhere in the block) or echoed `sent_hex` back, and a protocol
+/// error for a multi-frame reply cut short by another line or for text that is
+/// not hex. Each line is its own response: single frames are never
+/// concatenated across lines.
 pub fn parse_block(text: &str, sent_hex: &str) -> Result<ElmBlock> {
     let mut out = ElmBlock::default();
     let mut group: Option<Group> = None;
+    let req = hex_bytes(sent_hex).unwrap_or_default();
+    let positive_sid = req.first().map(|s| s.wrapping_add(0x40));
+    // The first non-pending response, and the first positive one for `req`.
+    let mut first: Option<Vec<u8>> = None;
+    let mut positive: Option<Vec<u8>> = None;
 
-    fn push(resp: Vec<u8>, out: &mut ElmBlock) {
-        if is_response_pending(&resp) {
+    let mut push = |resp: Vec<u8>, out: &mut ElmBlock| {
+        if is_response_pending(&req, &resp) {
             out.pending += 1;
-        } else if out.response.is_none() {
-            out.response = Some(resp);
+            return;
+        }
+        if positive.is_none() && positive_sid.is_some() && resp.first() == positive_sid.as_ref() {
+            positive = Some(resp.clone());
+        }
+        if first.is_none() {
+            first = Some(resp);
+        }
+    };
+
+    // A reset banner anywhere in the block wins over any other line: whatever
+    // came before it belongs to a session the adapter no longer has.
+    for raw in text.split(['\r', '\n']) {
+        let raw = raw.trim();
+        if let Some(e) = reset_error(&raw.to_ascii_uppercase(), raw) {
+            return Err(e);
         }
     }
 
@@ -265,12 +315,19 @@ pub fn parse_block(text: &str, sent_hex: &str) -> Result<ElmBlock> {
         push(bytes, &mut out);
     }
 
+    out.response = positive.or(first);
     if let Some(g) = group {
         if out.response.is_none() {
             out.incomplete = Some((g.total, g.data.len()));
         }
     }
     Ok(out)
+}
+
+/// Does `text` end inside a line (printable text after the last line break)?
+fn ends_mid_line(text: &str) -> bool {
+    let tail = text.rsplit(['\r', '\n']).next().unwrap_or_default();
+    !tail.trim().is_empty()
 }
 
 fn truncated(total: usize, got: usize) -> Error {
@@ -292,9 +349,15 @@ fn truncated(total: usize, got: usize) -> Error {
 ///   expecting another prompt, and returns the first non-pending response line.
 ///   The request is never re-issued (and a bare `\r`, which repeats the last
 ///   command on an ELM, is never sent).
-/// - Each responsePending pushes the deadline out to `p2_star_ms` from now.
+/// - Each responsePending (for the request's service) pushes the deadline out
+///   to `p2_star_ms` from now. A `7F xx 78` for another service is returned as
+///   the reply (the client reports it as mis-correlated), never waited on.
 /// - A multi-frame reply that is still short at the prompt or deadline is an
 ///   error, never silently short data.
+/// - A `>` in the middle of a line (text since the last line break) is stray
+///   when more bytes follow at once: it is dropped and the line continues. If
+///   the adapter goes idle after it, it was the prompt of a clone that omits
+///   the final line break, and the block ends there.
 pub fn read_reply(
     read_byte: &mut dyn FnMut() -> Result<Option<u8>>,
     sent_hex: &str,
@@ -308,27 +371,45 @@ pub fn read_reply(
     let mut text_pending = 0usize;
     // The adapter returned to the prompt after only responsePending frames.
     let mut after_prompt = false;
+    // A `>` arrived mid-line; decided by the next read (data = stray).
+    let mut prompt_mid_line = false;
 
     loop {
-        match read_byte()? {
-            Some(b'>') => {
-                let block = parse_block(&text, sent_hex)?;
-                if let Some(resp) = block.response {
-                    return Ok(resp);
-                }
-                if let Some((total, got)) = block.incomplete {
-                    return Err(truncated(total, got));
-                }
-                if block.pending > 0 {
-                    after_prompt = true;
-                    pending_seen += block.pending.saturating_sub(text_pending);
-                    deadline = Instant::now() + Duration::from_millis(p2_star_ms);
-                }
-                // An empty block is a stray prompt (e.g. left over from an
-                // earlier exchange): keep waiting for the real reply.
-                text.clear();
-                text_pending = 0;
+        let byte = read_byte()?;
+        let prompt = match byte {
+            Some(b'>') if ends_mid_line(&text) => {
+                prompt_mid_line = true;
+                false
             }
+            Some(b'>') => true,
+            // Idle right after a mid-line `>`: it was the prompt.
+            None => std::mem::take(&mut prompt_mid_line),
+            Some(_) => {
+                // More text right after a mid-line `>`: it was stray.
+                prompt_mid_line = false;
+                false
+            }
+        };
+        if prompt {
+            let block = parse_block(&text, sent_hex)?;
+            if let Some(resp) = block.response {
+                return Ok(resp);
+            }
+            if let Some((total, got)) = block.incomplete {
+                return Err(truncated(total, got));
+            }
+            if block.pending > 0 {
+                after_prompt = true;
+                pending_seen += block.pending.saturating_sub(text_pending);
+                deadline = Instant::now() + Duration::from_millis(p2_star_ms);
+            }
+            // An empty block is a stray prompt (e.g. left over from an
+            // earlier exchange): keep waiting for the real reply.
+            text.clear();
+            text_pending = 0;
+        }
+        match byte {
+            Some(b'>') | None => {}
             Some(b) => {
                 text.push(b as char);
                 if b == b'\r' || b == b'\n' {
@@ -348,7 +429,6 @@ pub fn read_reply(
                     }
                 }
             }
-            None => {}
         }
         if pending_seen > MAX_PENDING {
             return Err(Error::Timeout(p2_star_ms));
@@ -441,6 +521,144 @@ mod tests {
         assert_eq!(out.len(), 20);
         assert_eq!(&out[..3], &[0x62, 0xF1, 0x90]);
         assert_eq!(&out[3..], b"WVWZZZ1KZAW000001");
+    }
+
+    fn read_bytes(script: &[u8], sent: &str) -> Result<Vec<u8>> {
+        let mut q: VecDeque<u8> = script.iter().copied().collect();
+        let mut r = move || Ok(q.pop_front());
+        read_reply(&mut r, sent, 200, 300)
+    }
+
+    #[test]
+    fn matching_response_pending_is_waited_on() {
+        // `7F 31 78` answers the 0x31 request: counted, and the real reply
+        // after it is returned.
+        let b = parse_block("7F3178\r", "3101FF00").unwrap();
+        assert_eq!((b.pending, b.response), (1, None));
+        assert_eq!(
+            read("7F3178\r\r>7101FF00\r", "3101FF00").unwrap(),
+            vec![0x71, 0x01, 0xFF, 0x00]
+        );
+    }
+
+    #[test]
+    fn mismatched_response_pending_is_handed_back() {
+        // `7F 22 78` echoes another service than the 0x31 request: it is not
+        // a reason to wait, it is the reply (the client then reports it as
+        // mis-correlated), like `diag::is_response_pending` on every driver.
+        let b = parse_block("7F2278\r", "3101FF00").unwrap();
+        assert_eq!(b.pending, 0);
+        assert_eq!(b.response, Some(vec![0x7F, 0x22, 0x78]));
+        let start = Instant::now();
+        assert_eq!(
+            read("7F2278\r\r>", "3101FF00").unwrap(),
+            vec![0x7F, 0x22, 0x78]
+        );
+        assert!(
+            start.elapsed() < Duration::from_millis(250),
+            "not waited on"
+        );
+        // After a matching pending (clone back at the prompt), a mismatched
+        // one is the reply too, not another extension.
+        assert_eq!(
+            read("7F3178\r\r>7F2278\r", "3101FF00").unwrap(),
+            vec![0x7F, 0x22, 0x78]
+        );
+        // With no request to compare against, nothing is pending.
+        assert_eq!(parse_block("7F3178\r", "").unwrap().pending, 0);
+    }
+
+    #[test]
+    fn positive_reply_wins_over_another_ecus_negative_one() {
+        // Functional request answered by two ECUs (headers off, so they cannot
+        // be told apart): the positive reply for the service is the answer.
+        let b = parse_block("7F0112\r410D64\r", "010D").unwrap();
+        assert_eq!(b.response, Some(vec![0x41, 0x0D, 0x64]));
+        let b = parse_block("7F2278\r7101FF00\r", "3101FF00").unwrap();
+        assert_eq!(b.response, Some(vec![0x71, 0x01, 0xFF, 0x00]));
+        // Only negatives: the first one, never a concatenation.
+        let b = parse_block("7F0D12\r7F0D31\r", "0D").unwrap();
+        assert_eq!(b.response, Some(vec![0x7F, 0x0D, 0x12]));
+        // Two multi-frame answers: the first complete one.
+        let two = "00A\r0:62F19031323334\r1:35363738\r00A\r0:62F19041424344\r1:45464748\r";
+        let b = parse_block(two, "22F190").unwrap();
+        assert_eq!(&b.response.unwrap()[3..], b"1234567");
+        // A single frame from another ECU inside a multi-frame is an error,
+        // never spliced data.
+        assert!(parse_block("00A\r0:62F19031323334\r410D64\r1:35363738\r", "22F190").is_err());
+    }
+
+    #[test]
+    fn searching_is_skipped_and_its_failure_is_an_error() {
+        assert_eq!(
+            read("SEARCHING...\r410D64\r\r>", "010D").unwrap(),
+            vec![0x41, 0x0D, 0x64]
+        );
+        let e = read("SEARCHING...\rUNABLE TO CONNECT\r\r>", "010D").unwrap_err();
+        assert!(matches!(e, Error::Protocol(_)), "{e:?}");
+    }
+
+    #[test]
+    fn adapter_error_lines_end_the_read_at_once() {
+        // Each of these is the whole answer: an error, not a wait for P2*.
+        for t in ["STOPPED", "BUFFER FULL", "CAN ERROR", "NO DATA", "?"] {
+            let start = Instant::now();
+            let e = read(&format!("{t}\r\r>"), "22F190").unwrap_err();
+            assert!(matches!(e, Error::Protocol(_)), "{t}: {e:?}");
+            assert!(start.elapsed() < Duration::from_millis(150), "{t}");
+        }
+        // BUFFER FULL in the middle of a multi-frame reply: an error, not a
+        // short image.
+        let e = read("014\r0:62F19031323334\rBUFFER FULL\r\r>", "22F190").unwrap_err();
+        assert!(
+            matches!(&e, Error::Protocol(m) if m.contains("BUFFER FULL")),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn stray_prompt_mid_line_is_dropped() {
+        // A `>` inside a line with more text right behind it is stray.
+        assert_eq!(
+            read("410D>64\r\r>", "010D").unwrap(),
+            vec![0x41, 0x0D, 0x64]
+        );
+        assert_eq!(
+            read(
+                "014\r0:62F190575657\r1:5A5A5A>314B5A41\r2:57303030303031\r\r>",
+                "22F190"
+            )
+            .unwrap()
+            .len(),
+            20
+        );
+        // A `>` straight after the data with the adapter idle afterwards is
+        // the prompt of a clone that skips the final line break.
+        let start = Instant::now();
+        assert_eq!(read("410D64>", "010D").unwrap(), vec![0x41, 0x0D, 0x64]);
+        assert!(start.elapsed() < Duration::from_millis(150));
+        let e = read("NO DATA>", "010D").unwrap_err();
+        assert!(matches!(e, Error::Protocol(_)), "{e:?}");
+    }
+
+    #[test]
+    fn power_cycle_mid_session_is_adapter_reset() {
+        // Power-up noise from the clone's UART, then its banner, arriving
+        // where the reply to a request was expected.
+        let mut script = vec![0x00, 0xFF, b'\r', 0xFE, b'\r'];
+        script.extend_from_slice(b"\rELM327 v1.5\r\r>");
+        let e = read_bytes(&script, "010C").unwrap_err();
+        assert!(matches!(e, Error::AdapterReset(_)), "{e:?}");
+        // ... in the middle of a multi-frame reply.
+        let e = read("014\r0:62F19031323334\r\r\rELM327 v1.5\r\r>", "22F190").unwrap_err();
+        assert!(matches!(e, Error::AdapterReset(_)), "{e:?}");
+        // A banner anywhere in a block wins over an earlier error line.
+        let e = parse_block("STOPPED\r\rELM327 v1.5\r", "010C").unwrap_err();
+        assert!(matches!(e, Error::AdapterReset(_)), "{e:?}");
+        // The banner was missed (drained) and the next request meets the
+        // rebooted defaults: echo on, spaces on, protocol search.
+        let e = read("010C\rSEARCHING...\r41 0C 1A F8 \r\r>", "010C").unwrap_err();
+        assert!(matches!(e, Error::AdapterReset(_)), "{e:?}");
     }
 
     #[test]
