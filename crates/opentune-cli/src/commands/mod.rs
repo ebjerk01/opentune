@@ -4,7 +4,7 @@ use crate::cli::{Command, ContainerAction};
 use crate::context::CliContext;
 use crate::{
     bsl_cmd, candump, ctrldef_cmd, doip_cmd, dsg_cmd, gps_cmd, haldex_cmd, obd_cmd, recipe_cmd,
-    seedkey_cmd, ts_cmd,
+    romraider_cmd, seedkey_cmd, ts_cmd,
 };
 use anyhow::Result;
 
@@ -116,6 +116,8 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             strict,
         } => formats::import_fastecu(file, rom, base_dir, into, out, strict),
         Command::ImportEcuflash { file, into } => formats::import_ecuflash(file, into),
+        Command::ImportRomraiderLogger(args) => romraider_cmd::import(args),
+        Command::ExportRomraiderLogger(args) => romraider_cmd::export(args),
         Command::ImportOls {
             file,
             version,

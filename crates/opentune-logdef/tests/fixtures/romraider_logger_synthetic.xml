@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic RomRaider-format logger definition for OpenTune's importer
+     tests. It follows the element/attribute structure of RomRaider's
+     published logger.dtd but every id, address, ROM ID and scaling here is
+     made up (addresses match opentune_core::protocol::ssmsim::demo); it
+     describes no real vehicle and contains no RomRaider definition data. -->
+<logger version="opentune-synthetic-1">
+  <protocols>
+    <protocol id="SSM" baud="4800" databits="8" stopbits="1" parity="0" connect_timeout="2000" send_timeout="55">
+      <transports>
+        <transport id="iso9141" name="K-Line" desc="synthetic">
+          <module id="ecu" address="0x10" desc="Engine" tester="0xF0" fastpoll="true"/>
+        </transport>
+      </transports>
+      <parameters>
+        <parameter id="P1" name="Coolant" desc="linear, two units" ecubyteindex="8" ecubit="7" target="1">
+          <address>0x001000</address>
+          <conversions>
+            <conversion units="C" expr="x-40" format="0" gauge_min="-40" gauge_max="140" gauge_step="20"/>
+            <conversion units="F" expr="32+9*(x-40)/5" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P2" name="Engine Speed" desc="one address per byte" ecubyteindex="8" ecubit="6" target="3">
+          <address>0x001001</address>
+          <address>0x001002</address>
+          <conversions>
+            <conversion units="rpm" expr="x/4" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P3" name="Vehicle Speed" desc="two units" ecubyteindex="8" ecubit="5" target="3">
+          <address length="1">0x001003</address>
+          <conversions>
+            <conversion units="km/h" expr="x" format="0"/>
+            <conversion units="mph" expr="x*0.5" format="0.0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P4" name="Lambda Thing" desc="non-affine expression" target="1">
+          <address>0x001003</address>
+          <conversions>
+            <conversion units="AFR" expr="14.7/(1+x)" format="0.00"/>
+          </conversions>
+        </parameter>
+        <parameter id="P5" name="Comparison" desc="outside the safe grammar" target="1">
+          <address>0x001004</address>
+          <conversions>
+            <conversion units="" expr="x &gt; 4" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P6" name="Half Good" desc="second conversion unusable" target="1">
+          <address>0x001005</address>
+          <conversions>
+            <conversion units="V" expr="x*0.02" format="0.00" storagetype="uint8"/>
+            <conversion units="state" expr="if(x,1,0)" format="0">
+              <replace value="0" with="Off"/>
+              <replace value="1" with="On"/>
+            </conversion>
+          </conversions>
+        </parameter>
+        <parameter id="P7" name="Too Far" desc="past the 3-byte SSM range" target="1">
+          <address length="2">0x1000000</address>
+          <conversions>
+            <conversion units="" expr="x" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P8" name="Calibration Tag" desc="text" target="1">
+          <address length="4">0x001040</address>
+          <conversions>
+            <conversion units="" expr="x" format="0" storagetype="string"/>
+          </conversions>
+        </parameter>
+        <parameter id="P9" name="Signed Trim" desc="signed 16-bit, little endian" target="1">
+          <address length="2">0x001006</address>
+          <conversions>
+            <conversion units="%" expr="x/100" format="0.00" storagetype="int16" endian="little"/>
+          </conversions>
+        </parameter>
+        <parameter id="P200" name="Speed Times Revs" desc="calculated, unit-qualified reference" target="1">
+          <depends>
+            <ref parameter="P2"/>
+            <ref parameter="P3"/>
+          </depends>
+          <conversions>
+            <conversion units="x" expr="[P3:mph]*P2/1000" format="0.00"/>
+          </conversions>
+        </parameter>
+        <parameter id="P201" name="Coolant Plus Rom" desc="calculated from a per-ECU parameter" target="1">
+          <depends>
+            <ref parameter="P1"/>
+            <ref ecuparam="E1"/>
+          </depends>
+          <conversions>
+            <conversion units="" expr="P1+E1" format="0.00"/>
+          </conversions>
+        </parameter>
+        <parameter id="P202" name="Chained" desc="calculated from a calculated parameter" target="1">
+          <depends>
+            <ref parameter="P200"/>
+          </depends>
+          <conversions>
+            <conversion units="x" expr="P200*2" format="0.00"/>
+          </conversions>
+        </parameter>
+        <parameter id="P203" name="Not Computable" desc="depends but uses x" target="1">
+          <depends>
+            <ref parameter="P2"/>
+          </depends>
+          <conversions>
+            <conversion units="" expr="x*2" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P204" name="Wrong Unit" desc="references a unit P3 does not have" target="1">
+          <depends>
+            <ref parameter="P3"/>
+          </depends>
+          <conversions>
+            <conversion units="" expr="[P3:knots]*2" format="0"/>
+          </conversions>
+        </parameter>
+        <parameter id="P205" name="Loop A" desc="cycle" target="1">
+          <depends><ref parameter="P206"/></depends>
+          <conversions><conversion units="" expr="P206+1" format="0"/></conversions>
+        </parameter>
+        <parameter id="P206" name="Loop B" desc="cycle" target="1">
+          <depends><ref parameter="P205"/></depends>
+          <conversions><conversion units="" expr="P205+1" format="0"/></conversions>
+        </parameter>
+        <parameter id="P207" name="Refused Input" desc="depends on a refused parameter" target="1">
+          <depends><ref parameter="P5"/></depends>
+          <conversions><conversion units="" expr="P5*2" format="0"/></conversions>
+        </parameter>
+      </parameters>
+      <switches>
+        <switch id="S1" name="Demo Switch" desc="bit 3" byte="0x001010" bit="3" ecubyteindex="9" ecubit="3" target="1"/>
+      </switches>
+      <dtcodes>
+        <dtcode id="D1" name="P0000 Synthetic" desc="" tmpaddr="0x000100" memaddr="0x000200" bit="0"/>
+      </dtcodes>
+      <ecuparams>
+        <ecuparam id="E1" name="ROM Float" desc="per-ECU float" target="1">
+          <ecu id="5A5A000001,5A5A0000AA">
+            <address length="4">0x00FF80</address>
+          </ecu>
+          <ecu id="5A5A000002">
+            <address length="4">0x00FF90</address>
+          </ecu>
+          <conversions>
+            <conversion units="deg" expr="x" format="0.00" storagetype="float"/>
+          </conversions>
+        </ecuparam>
+        <ecuparam id="E2" name="ROM Flag" desc="per-ECU bit" target="1">
+          <ecu id="5A5A000001">
+            <address length="1" bit="3">0x001010</address>
+          </ecu>
+          <conversions>
+            <conversion units="" expr="x" format="0"/>
+          </conversions>
+        </ecuparam>
+      </ecuparams>
+    </protocol>
+    <protocol id="OBD" baud="500000" databits="8" stopbits="1" parity="0" connect_timeout="2000" send_timeout="55">
+      <transports>
+        <transport id="iso15765" name="CAN bus" desc="synthetic">
+          <module id="ecu" address="0x7E0" desc="Engine" tester="0x7E8"/>
+        </transport>
+      </transports>
+      <parameters>
+        <parameter id="O5" name="Coolant (OBD)" desc="pid 05" ecubyteindex="0" ecubit="3" target="1">
+          <address length="1">0x05</address>
+          <conversions><conversion units="C" expr="x-40" format="0"/></conversions>
+        </parameter>
+        <parameter id="O12" name="Engine Speed (OBD)" desc="pid 0C" ecubyteindex="1" ecubit="4" target="1">
+          <address length="2">0x0C</address>
+          <conversions><conversion units="rpm" expr="x/4" format="0"/></conversions>
+        </parameter>
+        <parameter id="O20" name="O2 Voltage (OBD)" desc="first byte of a two-value PID" target="1">
+          <address length="1">0x14</address>
+          <conversions><conversion units="V" expr="x/200" format="0.000"/></conversions>
+        </parameter>
+        <parameter id="O1B" name="MIL (OBD)" desc="bit inside a PID" target="1">
+          <address length="1" bit="7">0x01</address>
+          <conversions><conversion units="" expr="x" format="0"/></conversions>
+        </parameter>
+        <parameter id="O200" name="Revs (hundreds)" desc="calculated" target="1">
+          <depends><ref parameter="O12"/></depends>
+          <conversions><conversion units="x100rpm" expr="O12/100" format="0.0"/></conversions>
+        </parameter>
+      </parameters>
+    </protocol>
+    <protocol id="DS2" baud="9600" databits="8" stopbits="1" parity="2" connect_timeout="2000" send_timeout="55">
+      <transports>
+        <transport id="ds2" name="K-Line" desc="synthetic">
+          <module id="dme" address="0x12" desc="Engine"/>
+        </transport>
+      </transports>
+      <ecuparams>
+        <ecuparam id="B1" name="Telegram Value" desc="group addressing" target="1" group="0x0B" subgroup="0x03" groupsize="32">
+          <ecu id="SYNTH1"><address length="2">0x0004</address></ecu>
+          <conversions><conversion units="rpm" expr="x" format="0"/></conversions>
+        </ecuparam>
+      </ecuparams>
+    </protocol>
+  </protocols>
+</logger>

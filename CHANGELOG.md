@@ -51,6 +51,27 @@ section (alpha/bench builds) until they are vehicle-tested.
 - Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
   `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
   `implemented` evidence.
+- **RomRaider logger definitions import / export**: `import-romraider-logger
+  <logger.xml> [--protocol SSM|OBD] [--ecu <ROM id>] -o <logdef.json>` turns a
+  RomRaider `logger.xml` into an OpenTune JSON logger definition with a
+  per-parameter report (linear / expression / calculated / switch / text /
+  refused); anything that cannot be logged correctly is disabled with the reason
+  (unsupported expression, input not imported — e.g. a per-ECU parameter without
+  `--ecu` —, missing unit conversion, cycle, address out of range). DS2 and
+  Consult protocols are refused. `export-romraider-logger` writes the
+  representable subset back (round-trip tested). Independent implementation of
+  the published format; no RomRaider definition files are committed (they carry
+  no licence) — validated at development time against four public files and on
+  demand with `OPENTUNE_ROMRAIDER_LOGGER`. Synthetic-tested only.
+- **Expression conversions and calculated live-log channels**: conversions that
+  are not affine (`14.7/(1+x)`) are evaluated per sample by a safe expression
+  evaluator (`opentune_logdef::expr`, no `eval`); RomRaider `<depends>`
+  parameters (`(P12*60)/P8`, `[P7:psi]-[P24:psi]`, EcuFlash `GetLogParam`) are
+  computed each round from the other channels, which are logged automatically
+  (polling, `--fast` and SSM). New `ConversionFit::Expression`.
+- `LogDef::validate` (duplicate ids, protocol/addressing mismatches, bits outside
+  the read, unresolved or cyclic references); `packs validate` now runs it on
+  pack loggers. `opentune log --def` reads JSON logger definitions as well as XML.
 
 ### Changed
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
@@ -72,6 +93,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   adaptation test / save still need a login. **Untested on a real car.**
 
 ### Fixed
+- Logger definitions: a real RomRaider `logger.xml` (with its `<!DOCTYPE>`
+  header) failed to parse; an `x` inside a function name or parameter id was
+  upper-cased by the equation normalizer; a bit on an OBD PID / UDS DID was
+  silently dropped (now left unaddressed with a warning); an OBD `<address
+  length>` is now the value width, so one byte of a two-value PID is no longer
+  read as both; `<ecuparam>` addresses now honour `bit` and one-address-per-byte
+  fragments; DS2 / Consult parameters are no longer read as plain memory.
 - The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
   EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
   Example definitions are now skipped by identification.

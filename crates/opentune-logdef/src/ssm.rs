@@ -156,6 +156,9 @@ fn drop_reason(p: &LogParam, init: &SsmInit, target: SsmTarget) -> Option<&'stat
             None
         }
         Addressing::Memory { .. } => Some("address past the 3-byte SSM range"),
+        // Kept for now; `select` drops it again unless everything it
+        // references is logged too.
+        Addressing::Unknown if crate::derived::is_computable(p) => None,
         _ if !p.depends_on.is_empty() => Some("derived from other parameters (not evaluated)"),
         _ => Some("no SSM address"),
     }
@@ -199,6 +202,32 @@ pub fn select(def: &LogDef, init: &SsmInit, target: SsmTarget) -> SsmSelection {
                 }
                 None => true,
             });
+        }
+        // Calculated parameters need every parameter they reference; drop
+        // the ones whose inputs this module does not log (to a fixed point,
+        // for calculated-on-calculated chains).
+        loop {
+            let kept: std::collections::HashSet<String> = proto
+                .ecus
+                .iter()
+                .flat_map(|g| g.params.iter().map(|p| p.id.clone()))
+                .collect();
+            let mut changed = false;
+            for group in &mut proto.ecus {
+                group.params.retain(|p| {
+                    let ok = crate::derived::references(p)
+                        .iter()
+                        .all(|id| kept.contains(id));
+                    if !ok {
+                        note_drop("derived from parameters this module does not log", &p.id);
+                        changed = true;
+                    }
+                    ok
+                });
+            }
+            if !changed {
+                break;
+            }
         }
         proto.ecus.retain(|g| !g.params.is_empty());
     }
@@ -271,6 +300,11 @@ pub(crate) fn plan(params: &[LogParam], cfg: &SsmPollConfig) -> SsmPlan {
                 && u64::from(*address) + u64::from(*length) - 1 <= u64::from(wire::MAX_ADDRESS) =>
             {
                 (*address, u32::from(*length))
+            }
+            Addressing::Unknown if crate::derived::is_calculated(p) => {
+                // Computed from the other channels after each read.
+                slots.push(None);
+                continue;
             }
             _ => {
                 notes.push(format!("{}: no SSM address; not read", p.id));

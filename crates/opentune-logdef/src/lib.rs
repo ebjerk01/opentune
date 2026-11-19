@@ -56,9 +56,29 @@
 //! the raw value is the single uppercase variable `X` and then fitted with
 //! [`opentune_xdf::math::linear_from_equation`] — the exact fitter the XDF and
 //! EcuFlash importers use. A linear equation becomes
-//! [`ConversionFit::Linear`] `{ factor, offset }`; anything non-linear (`x*x`,
-//! or a `GetLogParam("…")` cross-parameter reference) is flagged
-//! [`ConversionFit::NonLinear`] rather than silently approximated.
+//! [`ConversionFit::Linear`] `{ factor, offset }`. Anything else the safe
+//! expression grammar of [`expr`] accepts (`1/x`, `14.7/(1+x)`, or a
+//! calculated parameter's `(P12*60)/P8`, `[P7:psi]-[P24:psi]`,
+//! `GetLogParam("…")`) is [`ConversionFit::Expression`] and evaluated per
+//! sample; the rest is flagged [`ConversionFit::NonLinear`] rather than
+//! silently approximated.
+//!
+//! ## Calculated parameters
+//!
+//! A parameter whose primary conversion references other parameters is
+//! computed after each round from those parameters' values ([`derived`]);
+//! selecting it pulls the referenced parameters into the log.
+//!
+//! ## Importing and exporting RomRaider logger definitions
+//!
+//! [`romraider::import_romraider_logger`] turns a RomRaider `logger.xml` into
+//! a checked OpenTune logger definition (one protocol, the standard parameters
+//! plus one ECU's `<ecuparam>`s) with a per-parameter report; anything that
+//! cannot be logged correctly is disabled and says why.
+//! [`romraider::export_romraider_logger`] writes the representable subset of
+//! a [`LogDef`] back as `logger.xml`. [`LogDef::validate`] is the structural
+//! check both use (and `packs validate` runs on pack loggers); [`load`] reads
+//! either a JSON [`LogDef`] or a logger XML.
 //!
 //! ## Text channels
 //!
@@ -71,8 +91,11 @@
 //!
 //! ## What v1 does not do (recorded, never silent)
 //!
-//! * Dependencies (`<depends>`/`<dependson>` refs and `GetLogParam` references)
-//!   are **captured** in [`LogParam::depends_on`] but not resolved.
+//! * A `<depends>` parameter whose conversion does not reference the
+//!   parameters it depends on cannot be computed; it stays unaddressed.
+//! * `<replace>` value labels are noted, not modeled (the number is logged).
+//! * BMW DS2 and Nissan Consult (`NCS`) protocols keep their parameters
+//!   unaddressed (their telegram addressing is not modeled).
 //! * `<dtcodes>` (diagnostic trouble codes) and the Format-B (`<ecus>`)
 //!   `byte`/`bit` attributes are not modeled; `<dtcodes>` presence is noted in
 //!   [`LogDef::warnings`]. Only the RomRaider `<logger>` capability attributes
@@ -84,8 +107,18 @@
 #![warn(missing_docs)]
 
 mod convert;
+pub mod derived;
+pub mod expr;
 mod model;
 mod parse;
+pub mod romraider;
+mod validate;
+
+pub use expr::{LogExpr, ParamRef};
+pub use romraider::{
+    export_romraider_logger, import_romraider_logger, ImportedParam, ParamStatus, RomRaiderImport,
+    RomRaiderImportOptions,
+};
 
 pub use model::{
     Addressing, AltAddress, Conversion, ConversionFit, ConvertFactor, EcuGroup, LogDef, LogParam,
@@ -118,6 +151,16 @@ pub use resilient::{link_event_sample, LINK_PARAM_ID};
 
 pub mod trigger;
 pub use trigger::{TriggerCsvWriter, TriggerEngine, TriggerOutput, TriggerReport, TriggerSet};
+
+/// Read a logger definition from text: a JSON [`LogDef`] (a pack's
+/// `loggers/*.json`, or what `import-romraider-logger` writes) when the text
+/// is a JSON object, otherwise a RomRaider-style `logger.xml` via [`parse`].
+pub fn load(text: &str) -> std::result::Result<LogDef, String> {
+    if text.trim_start().starts_with('{') {
+        return serde_json::from_str(text).map_err(|e| format!("JSON logger definition: {e}"));
+    }
+    parse(text).map_err(|e| e.to_string())
+}
 
 /// Error parsing a RomRaider-style logger document.
 #[derive(Debug)]
@@ -245,12 +288,23 @@ mod tests {
     }
 
     #[test]
-    fn depends_is_flagged_not_resolved() {
+    fn depends_without_a_referencing_expression_is_not_calculated() {
         let def = parse(SSM_LOGGER).unwrap();
         let (_p, _e, dep) = def.params().find(|(_, _, p)| p.id == "P200").unwrap();
         assert_eq!(dep.depends_on, vec!["P8".to_string()]);
-        // Depends-only parameter has no address of its own.
+        // Depends-only parameter has no address of its own, and `x` does not
+        // reference P8, so it is not a calculated parameter.
         assert_eq!(dep.addressing, Addressing::Unknown);
+        assert!(!derived::is_calculated(dep));
+    }
+
+    #[test]
+    fn load_reads_json_and_xml() {
+        let def = parse(SSM_LOGGER).unwrap();
+        let json = serde_json::to_string(&def).unwrap();
+        assert_eq!(load(&json).unwrap(), def);
+        assert_eq!(load(SSM_LOGGER).unwrap(), def);
+        assert!(load("{ nope").is_err());
     }
 
     #[test]
@@ -394,23 +448,26 @@ mod tests {
             .find(|(_, _, p)| p.id == "Coolant Temperature")
             .unwrap();
         assert_eq!(ect.convert_group.as_deref(), Some("temp"));
-        // GetLogParam reference captured as a dependency and flagged non-linear.
+        // GetLogParam reference captured as a dependency and evaluated per
+        // sample from the referenced parameter.
         let (_p, _e, inj) = def
             .params()
             .find(|(_, _, p)| p.id == "Injector Duty")
             .unwrap();
         assert_eq!(inj.depends_on, vec!["Engine Speed".to_string()]);
-        assert!(matches!(
+        assert_eq!(
             inj.conversion.as_ref().unwrap().fit,
-            ConversionFit::NonLinear { .. }
-        ));
-        // The convert_factor with a GetLogParam expr is also flagged.
+            ConversionFit::Expression {
+                refs: vec!["Engine Speed".into()]
+            }
+        );
+        // The convert_factor with a GetLogParam expr references it too.
         let inj_cf = def
             .convert_factors
             .iter()
             .find(|c| c.kind == "inj")
             .unwrap();
-        assert!(matches!(inj_cf.fit, ConversionFit::NonLinear { .. }));
+        assert!(matches!(inj_cf.fit, ConversionFit::Expression { .. }));
     }
 
     // ---- Errors & serde ----

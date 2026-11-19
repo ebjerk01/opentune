@@ -10,15 +10,23 @@ use roxmltree::{Document, Node};
 
 use crate::convert::{fit_equation, parse_address, storage_type};
 use crate::model::{
-    Addressing, AltAddress, Conversion, ConvertFactor, EcuGroup, LogDef, LogParam, ProtocolGroup,
-    ProtocolKind, SourceFormat, SsmParamInfo, ValueKind,
+    Addressing, AltAddress, Conversion, ConversionFit, ConvertFactor, EcuGroup, LogDef, LogParam,
+    ProtocolGroup, ProtocolKind, SourceFormat, SsmParamInfo, ValueKind,
 };
 use crate::{Error, Result};
 use opentune_core::ecudef::{DataType, Endian};
 
 /// Parse a RomRaider-style `logger.xml` document from a string.
+///
+/// Real RomRaider files start with `<!DOCTYPE logger SYSTEM "logger.dtd">`;
+/// the declaration is accepted (the external DTD is never fetched, and the
+/// XML reader bounds internal entity expansion).
 pub fn parse(xml: &str) -> Result<LogDef> {
-    let doc = Document::parse(xml).map_err(|e| Error::Xml(e.to_string()))?;
+    let opts = roxmltree::ParsingOptions {
+        allow_dtd: true,
+        ..roxmltree::ParsingOptions::default()
+    };
+    let doc = Document::parse_with_options(xml, opts).map_err(|e| Error::Xml(e.to_string()))?;
     let root = doc.root_element();
     match root.tag_name().name() {
         "logger" => parse_logger(root),
@@ -31,6 +39,11 @@ pub fn parse(xml: &str) -> Result<LogDef> {
 fn classify(proto_id: &str, mode: Option<&str>, warnings: &mut Vec<String>) -> ProtocolKind {
     if proto_id.eq_ignore_ascii_case("SSM") {
         return ProtocolKind::SubaruSsm;
+    }
+    if unmodeled_protocol(proto_id) {
+        return ProtocolKind::Other {
+            id: proto_id.to_string(),
+        };
     }
     match mode.map(str::trim) {
         Some("1") | Some("01") => ProtocolKind::Obd2Mode01,
@@ -55,6 +68,13 @@ fn classify(proto_id: &str, mode: Option<&str>, warnings: &mut Vec<String>) -> P
     }
 }
 
+/// RomRaider protocols whose addressing OpenTune does not model: BMW DS2
+/// (`group`/`subgroup` telegrams) and Nissan Consult (NCS). Their parameters
+/// keep [`Addressing::Unknown`] so nothing reads them as plain memory.
+pub(crate) fn unmodeled_protocol(id: &str) -> bool {
+    ["DS2", "NCS"].iter().any(|p| id.eq_ignore_ascii_case(p))
+}
+
 /// Build an [`Addressing`] from a protocol kind and a raw address + length/bit.
 fn make_addressing(
     kind: &ProtocolKind,
@@ -65,10 +85,20 @@ fn make_addressing(
     ctx: &str,
     warnings: &mut Vec<String>,
 ) -> Addressing {
+    if matches!(kind, ProtocolKind::Other { id } if unmodeled_protocol(id)) {
+        // Reported once per protocol by the caller.
+        return Addressing::Unknown;
+    }
     let Some(addr) = addr else {
         warnings.push(format!("{ctx}: missing or unparsable address"));
         return Addressing::Unknown;
     };
+    if bit.is_some() && matches!(kind, ProtocolKind::Obd2Mode01 | ProtocolKind::UdsMode22) {
+        warnings.push(format!(
+            "{ctx}: a bit inside an OBD PID / UDS DID is not modeled; parameter left unaddressed"
+        ));
+        return Addressing::Unknown;
+    }
     match kind {
         ProtocolKind::Obd2Mode01 => Addressing::ObdPid { pid: addr as u8 },
         ProtocolKind::UdsMode22 => Addressing::UdsDid { did: addr as u16 },
@@ -123,7 +153,10 @@ fn parse_f64(s: Option<&str>) -> Option<f64> {
 fn conversion_from_node(node: Node) -> (Conversion, Option<DataType>, Option<Endian>, Vec<String>) {
     let expr = node.attribute("expr").unwrap_or("x");
     let (expr, fit) = fit_equation(expr);
-    let deps = extract_dependencies(node.attribute("expr").unwrap_or(""));
+    let deps = match &fit {
+        ConversionFit::Expression { refs } => refs.clone(),
+        _ => extract_dependencies(node.attribute("expr").unwrap_or("")),
+    };
     let st = node.attribute("storagetype").and_then(storage_type);
     let endian = node.attribute("endian").map(|e| parse_endian(Some(e)));
     let conv = Conversion {
@@ -160,6 +193,13 @@ fn parse_logger(root: Node) -> Result<LogDef> {
             .and_then(|b| b.trim().parse::<u32>().ok());
         let mut std_params = Vec::new();
         let mut ecu_groups: Vec<EcuGroup> = Vec::new();
+        if unmodeled_protocol(&id) {
+            warnings.push(format!(
+                "protocol '{id}': its addressing (DS2 group/subgroup telegrams, Consult) is not \
+                 modeled and OpenTune has no live transport for it; its parameters are kept \
+                 unaddressed"
+            ));
+        }
 
         // Standard parameters: <parameters mode?>.
         for params in proto.children().filter(|n| n.has_tag_name("parameters")) {
@@ -248,32 +288,13 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
         }
     }
 
-    // <address length? bit?>HEX (first wins; extras ignored with a note).
+    // <address length? bit?>HEX, or one <address> per byte.
     let addresses: Vec<Node> = p.children().filter(|n| n.has_tag_name("address")).collect();
-    if let Some(first) = addresses.first() {
-        let addr = first.text().and_then(parse_address);
-        let mut length = first
-            .attribute("length")
-            .and_then(|l| l.trim().parse::<u8>().ok());
-        // One `<address>` per byte (older SSM definitions): consecutive
-        // fragments are one value of that many bytes.
-        let fragments: Vec<Option<u32>> = addresses
-            .iter()
-            .map(|a| a.text().and_then(parse_address))
-            .collect();
-        let contiguous = addresses.len() > 1
-            && length.is_none()
-            && addresses.len() <= 8
-            && fragments.iter().enumerate().all(|(i, a)| {
-                matches!((a, addr), (Some(a), Some(b)) if u64::from(*a) == u64::from(b) + i as u64)
-            });
-        if contiguous {
-            length = Some(addresses.len() as u8);
-        }
-        let bit = first
-            .attribute("bit")
-            .and_then(|b| b.trim().parse::<u8>().ok());
-        let (conversions, st, endian) = logger_conversions(p, &mut depends_on);
+    if !addresses.is_empty() {
+        let (addr, length, bit) =
+            address_fragments(&addresses, &format!("parameter '{id}'"), warnings);
+        let (conversions, st, endian) = logger_conversions(p, &mut depends_on, warnings, &id);
+        let st = st.or_else(|| obd_width(kind, length));
         addressing = make_addressing(
             kind,
             addr,
@@ -283,12 +304,6 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
             &format!("parameter '{id}'"),
             warnings,
         );
-        if addresses.len() > 1 && !contiguous {
-            warnings.push(format!(
-                "parameter '{id}': {} multi-byte <address> fragments; only the first is modeled",
-                addresses.len()
-            ));
-        }
         return Some(finish_param(
             id,
             name,
@@ -305,7 +320,7 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
     }
 
     // depends-only parameter: no address of its own.
-    let (conversions, st, endian) = logger_conversions(p, &mut depends_on);
+    let (conversions, st, endian) = logger_conversions(p, &mut depends_on, warnings, &id);
     Some(finish_param(
         id,
         name,
@@ -327,12 +342,22 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
 fn logger_conversions(
     owner: Node,
     depends_on: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+    id: &str,
 ) -> (Vec<Conversion>, Option<DataType>, Option<Endian>) {
     let mut conversions = Vec::new();
     let mut st = None;
     let mut endian = None;
     if let Some(convs) = owner.children().find(|n| n.has_tag_name("conversions")) {
         for c in convs.children().filter(|n| n.has_tag_name("conversion")) {
+            let labels = c.children().filter(|n| n.has_tag_name("replace")).count();
+            if labels > 0 {
+                warnings.push(format!(
+                    "parameter '{id}': {labels} <replace> value label(s) in the '{}' conversion \
+                     are not modeled; the number is logged",
+                    c.attribute("units").unwrap_or("")
+                ));
+            }
             let (conv, cst, cend, deps) = conversion_from_node(c);
             st = st.or(cst);
             endian = endian.or(cend);
@@ -392,28 +417,37 @@ fn logger_ecuparam(
     };
     let name = ep.attribute("name").unwrap_or(&id).to_string();
     let desc = ep.attribute("desc").unwrap_or("").to_string();
+    let enabled = ep
+        .attribute("enabled")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     let kind = classify(proto_id, None, warnings);
     let mut depends_on = Vec::new();
-    let (conversions, st, endian) = logger_conversions(ep, &mut depends_on);
+    let (conversions, st, endian) = logger_conversions(ep, &mut depends_on, warnings, &id);
+    if !unmodeled_protocol(proto_id)
+        && ["group", "subgroup", "groupsize"]
+            .iter()
+            .any(|a| ep.attribute(*a).is_some())
+    {
+        warnings.push(format!(
+            "ecuparam '{id}': group/subgroup/groupsize (DS2 telegram) attributes are not modeled"
+        ));
+    }
 
     for ecu in ep.children().filter(|n| n.has_tag_name("ecu")) {
         let Some(ecu_id) = ecu.attribute("id").map(str::to_string) else {
             continue;
         };
-        let addr_node = ecu.children().find(|n| n.has_tag_name("address"));
-        let addr = addr_node.and_then(|a| a.text()).and_then(parse_address);
-        let length = addr_node
-            .and_then(|a| a.attribute("length"))
-            .and_then(|l| l.trim().parse::<u8>().ok());
-        let addressing = make_addressing(
-            &kind,
-            addr,
-            length,
-            None,
-            st,
-            &format!("ecuparam '{id}' / ecu '{ecu_id}'"),
-            warnings,
-        );
+        let addresses: Vec<Node> = ecu
+            .children()
+            .filter(|n| n.has_tag_name("address"))
+            .collect();
+        let ctx = format!("ecuparam '{id}' / ecu '{ecu_id}'");
+        let (addr, length, bit) = if addresses.is_empty() {
+            (None, None, None)
+        } else {
+            address_fragments(&addresses, &ctx, warnings)
+        };
+        let addressing = make_addressing(&kind, addr, length, bit, st, &ctx, warnings);
         let param = with_kind(
             finish_param(
                 id.clone(),
@@ -426,7 +460,7 @@ fn logger_ecuparam(
                 conversions.clone(),
                 depends_on.clone(),
                 None,
-                None,
+                enabled,
             ),
             ep,
         );
@@ -442,6 +476,60 @@ fn logger_ecuparam(
                 params: vec![param],
             }),
         }
+    }
+}
+
+/// The address, length and bit of a parameter's `<address>` element(s): the
+/// first one's `length`/`bit`, or, for the older one-`<address>`-per-byte
+/// style, consecutive fragments read as one value of that many bytes. Gappy
+/// fragments keep only the first (with a warning).
+fn address_fragments(
+    addresses: &[Node],
+    ctx: &str,
+    warnings: &mut Vec<String>,
+) -> (Option<u32>, Option<u8>, Option<u8>) {
+    let first = addresses[0];
+    let addr = first.text().and_then(parse_address);
+    let mut length = first
+        .attribute("length")
+        .and_then(|l| l.trim().parse::<u8>().ok());
+    let fragments: Vec<Option<u32>> = addresses
+        .iter()
+        .map(|a| a.text().and_then(parse_address))
+        .collect();
+    let contiguous = addresses.len() > 1
+        && length.is_none()
+        && addresses.len() <= 8
+        && fragments.iter().enumerate().all(|(i, a)| {
+            matches!((a, addr), (Some(a), Some(b)) if u64::from(*a) == u64::from(b) + i as u64)
+        });
+    if contiguous {
+        length = Some(addresses.len() as u8);
+    }
+    if addresses.len() > 1 && !contiguous {
+        warnings.push(format!(
+            "{ctx}: {} multi-byte <address> fragments; only the first is modeled",
+            addresses.len()
+        ));
+    }
+    let bit = first
+        .attribute("bit")
+        .and_then(|b| b.trim().parse::<u8>().ok());
+    (addr, length, bit)
+}
+
+/// For an OBD-II PID with a declared `length` and no `storagetype`: the
+/// unsigned type of that width, so a one-byte value of a multi-value PID is
+/// read from its own byte only.
+fn obd_width(kind: &ProtocolKind, length: Option<u8>) -> Option<DataType> {
+    if *kind != ProtocolKind::Obd2Mode01 {
+        return None;
+    }
+    match length? {
+        1 => Some(DataType::U8),
+        2 => Some(DataType::U16),
+        4 => Some(DataType::U32),
+        _ => None,
     }
 }
 

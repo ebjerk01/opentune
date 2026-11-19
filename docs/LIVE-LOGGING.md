@@ -10,15 +10,21 @@
 | Memory (`<address>`) | `23 14 <addr:4> <len:1>` | `63 <data>` |
 | Subaru SSM (`<protocol id="SSM">`, `--transport ssm`) | `A8 00 <addr:3>…` (batched) | `E8 <byte per address>` |
 
-The raw bytes are decoded in the channel's endian and passed through its linear
-conversion. A signed `storagetype` (`int8`/`int16`/`int32`) is sign-extended
-and a `float` one is read as an IEEE-754 single before the conversion; the
-CSV `raw` column keeps the unsigned bit pattern.
-Non-linear conversions, failed reads and unknown addressing are noted per
+The raw bytes are decoded in the channel's endian and passed through its
+conversion: linear (`x*0.25`, `(x-128)*100/128`) or an expression in the safe
+grammar below (`14.7/(1+x)`). A signed `storagetype` (`int8`/`int16`/`int32`)
+is sign-extended and a `float` one is read as an IEEE-754 single before the
+conversion; the CSV `raw` column keeps the unsigned bit pattern. A
+**calculated** channel (RomRaider `<depends>`, e.g. `(P12*60)/P8`) is computed
+from the other channels of the same round (see
+[RomRaider logger definitions](#romraider-logger-definitions)).
+Unsupported conversions, failed reads and unknown addressing are noted per
 sample, never guessed.
 
 ```sh
 opentune log --def logger.xml --driver <id> --rounds 500 --out run.csv [IDS…]
+# or an OpenTune JSON logger definition (import-romraider-logger -o, pack loggers/*.json)
+opentune log --def ssm.json --driver <id> --rounds 500 --out run.csv [IDS…]
 ```
 
 The CSV columns are `round,param_id,name,raw,value,units,note,text,ts`:
@@ -198,8 +204,11 @@ bytes 0–2 are the SSM ID, 3–7 the ROM ID, and the capability bitmap starts a
 index 8. A standard `<parameter>` or `<switch>` is logged only when its
 capability bit is set; an `<ecuparam>` only for the `<ecu id>` equal to the ROM
 ID (comma-separated id lists match too); and only parameters whose `target`
-(1 = ECU, 2 = TCU, 3 = both) includes the selected module. Derived parameters
-(`<depends>`, no address of their own) are not evaluated. Everything left out
+(1 = ECU, 2 = TCU, 3 = both) includes the selected module. A calculated
+parameter (`<depends>`, no address of its own) is kept when every parameter
+its expression references is kept, and computed after each read; one whose
+inputs this module does not log, or whose conversion does not reference its
+dependencies, is left out. Everything left out
 is listed on stderr with the reason, and a parameter id given on the command
 line that is not logged gets a warning. Older definitions that give a
 multi-byte value as one `<address>` per byte are read as one value when the
@@ -232,6 +241,105 @@ pseudo-terminal tests of the `kkl` and `kline-bridge` raw K-line. Not yet run
 against a Subaru, and the K-line bridge's 60 ms reply gap is not verified
 against SSM reply latency. The ELM327 drivers are not wired for SSM (see
 [DRIVERS.md](DRIVERS.md#3k-optional-raw-k-line-kline-for-ssm2)).
+
+## RomRaider logger definitions
+
+`opentune import-romraider-logger` turns a RomRaider logger definition
+(`logger.xml`, the open format of RomRaider's `logger.dtd`) into an OpenTune
+logger definition: the JSON `LogDef` a pack keeps in `loggers/*.json` and that
+`log --def` and the desktop **Live log** read. It imports **one protocol** (SSM
+or OBD; default the first in the file) with its standard `<parameters>` and
+`<switches>`, plus, with `--ecu <ROM id>`, that ECU's `<ecuparam>` addresses
+(comma-separated `<ecu id>` lists match too).
+
+```sh
+opentune import-romraider-logger logger.xml --ecu 2F12785206 -o ssm-2f12785206.json --report report.json
+opentune log --def ssm-2f12785206.json --driver kkl --transport ssm --rounds 500 --out run.csv
+# Back to RomRaider's format (the representable subset; omissions are listed)
+opentune export-romraider-logger ssm-2f12785206.json -o logger-subset.xml
+```
+
+Every parameter gets a status in the summary (and in `--report`):
+
+| Status | Meaning |
+|---|---|
+| `linear` | `<address>` read, affine conversion (`x/4`, `(x-128)*100/128`) |
+| `expression` | `<address>` read, non-affine conversion evaluated per sample (`14.7/(1+x)`, `1/(x*.0004882812)`) |
+| `calculated` | computed from other imported parameters each round (`(P8*P21)/1200`, `[P7:psi]-[P24:psi]`) |
+| `switch` | one bit (`<switch byte bit>`, or `<address bit>`) |
+| `text` | `storagetype` string / bcd / hex, decoded as text |
+| `refused` | kept in the file but **disabled** (`"enabled": false`) with the reason; its conversion is marked unusable, so even a forced read shows only the raw value with a note |
+
+A parameter is refused, never silently wrong, when its expression is outside
+the grammar, it references a parameter that is not imported or was refused
+(for a per-ECU input the report says to pass `--ecu`), it asks for a unit
+conversion the referenced parameter does not have (`[P9:knots]`), the
+references form a cycle, it has `<depends>` but its conversion does not use
+them (`x*2` with no address), or its address is outside the 3-byte SSM range.
+An *alternative* conversion that cannot be evaluated is dropped from the
+parameter and named in its detail. The output passes `LogDef::validate`.
+
+**Expression grammar** (`opentune_logdef::expr`, parsed to a tree and
+evaluated; nothing is handed to an interpreter): numbers (`12`, `.004`, `1e-3`,
+`0x1F`), the raw value `x` (EcuFlash `[value]`), parameter references (a bare
+id `P8` = that parameter in its primary, first, conversion; `[P9:mph]` = in the
+conversion with those units, which may contain `/` or `µ`; EcuFlash
+`GetLogParam("…")` = a bare id), `+ - * /`, `^` (power, right-associative),
+unary minus, parentheses, and `abs sqrt exp ln log10 floor ceil round min max
+pow`. Comparisons, conditionals and other functions are refused with the
+construct named. Evaluation fails, leaving the sample empty with a note, on a
+division by zero, a non-finite result or a missing input.
+
+**Calculated parameters at run time** (`opentune_logdef::derived`). Selecting
+a calculated parameter also logs the parameters it references (placed before
+it in the CSV), on every path: polling, `--fast` (they are computed, not
+polled) and SSM. After each round the calculated channels are evaluated from
+that round's values; an input that did not answer gives `calculated: P8 has no
+value this round` instead of a stale number.
+
+**Also converted**: one-`<address>`-per-byte fragments (consecutive = one
+value), `storagetype`/`endian` (signed, `float`, little-endian), `gauge_min` /
+`gauge_max` / `gauge_step`, `format`, SSM `ecubyteindex`/`ecubit`/`target`,
+and OBD `<address length>` as the value width (so one byte of a two-value PID
+such as `14` is read from its own byte).
+
+**Not modeled (reported in the notes)**: `<replace>` value labels (the number
+is logged), `<dtcodes>`, `<transports>`/`<module>` (OpenTune picks the module
+with `--ssm-target`), OBD supported-PID capability bits (an unsupported PID
+answers with a negative response, noted per sample), a bit inside an OBD PID
+(refused), and the **DS2** (BMW, `group`/`subgroup` telegrams) and **NCS**
+(Nissan Consult) protocols: OpenTune has no live transport for them, so
+`--protocol DS2` is an error and their parameters are never read as plain
+memory. A real RomRaider file starts with `<!DOCTYPE logger SYSTEM
+"logger.dtd">`; the declaration is accepted (the external DTD is not fetched
+and entity expansion is bounded).
+
+**Export** (`export-romraider-logger`, `opentune_logdef::export_romraider_logger`)
+writes memory, PID and DID parameters, switches, per-ECU parameters,
+`<depends>` and conversions, and lists what it leaves out (`<alt>` addresses,
+EcuFlash unit-conversion groups, protocols without addressing). UDS DID and
+mode-23 sections are written with a `mode` attribute, an OpenTune/FastECU
+extension RomRaider itself does not read. Importing an export reproduces the
+definition (tested).
+
+**Licences and validation.** RomRaider is GPL-2.0-or-later; this is an
+independent implementation of the published format, no RomRaider code is used.
+The community definition files (RomRaider/SubaruDefs and forks) carry no
+licence, so **none are committed**: the tests use a synthetic fixture
+(`crates/opentune-logdef/tests/fixtures/romraider_logger_synthetic.xml`, every
+construct above, addresses served by the SSM simulator) and log the imported
+definition end to end against `ssmsim` and a scripted OBD-II ECU. The importer
+was also run, at development time only, against four public `logger.xml` files
+(RomRaider/SubaruDefs `standard` and `metric`, a fork's `STD_EN` and
+`METRIC_EN`; 160–440 parameters each): all import and validate, with and
+without an `--ecu`, every ECU id in one file imports, and export → re-import
+reproduces the definition. To repeat that check on your own copy:
+
+```sh
+OPENTUNE_ROMRAIDER_LOGGER=/path/to/logger.xml cargo test -p opentune-logdef --test romraider real_romraider -- --nocapture
+```
+
+**Validation state: synthetic-tested.** Not yet logged on a Subaru.
 
 ## Long runs, dropped links and reconnect
 

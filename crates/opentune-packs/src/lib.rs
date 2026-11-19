@@ -416,6 +416,10 @@ fn load_one(
         },
         Kind::Logger => match serde_json::from_str::<LogDef>(text) {
             Ok(d) => {
+                let errs = d.validate();
+                if !errs.is_empty() {
+                    return Err(format!("logger validation: {}", errs.join("; ")));
+                }
                 pack.loggers.push(d);
                 Ok((String::new(), String::new()))
             }
