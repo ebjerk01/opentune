@@ -14,6 +14,9 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [0.7.0] - 2026-11-19
 
 ### Added
+- **Guide: dumping a Mercedes 722.6 TCU (EGS51/52/53)** — how to tell the three
+  generations apart and read your own unit (bench only); states plainly that OpenTune
+  has no EGS flash checksum yet.
 - **"Check my car" guided wizard** (desktop, Bench): a read-only walk through
   identify → scan → fault codes → live data, tested end to end on the virtual
   car and an OBD simulator.
