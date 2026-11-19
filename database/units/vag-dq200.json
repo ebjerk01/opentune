@@ -18,10 +18,10 @@
   ],
   "protocols": [],
   "read_methods": {
-    "obd": "unknown",
-    "bench": false,
+    "obd": "write-only",
+    "bench": true,
     "boot": false,
-    "notes": "No open source documents a read path or flash layout for DQ200 software. Factory flash containers are VAG FRF/ODX files using the method 0x11 table cipher + compression (vag-tcu-tools); OpenTune does not decode them for DQ200 yet."
+    "notes": "Programming through the vehicle's diagnostic socket is documented (VW workshop software updates of the mechatronic with the VAS tester / ODIS; a tool vendor lists OBD write), but no cited source documents a complete original read over OBD (the vendor lists only a 'virtual' read). ecupinouts publishes a CAN bench connection (+12 V twice, ground, CAN-H, CAN-L on the 11-pin plug; pin numbers only in its drawing). No processor boot route is documented. Factory flash containers are VAG FRF/ODX files using the method 0x11 table cipher + compression (vag-tcu-tools); OpenTune does not decode them for DQ200 yet."
   },
   "checksum": null,
   "ecudef": null,
@@ -44,7 +44,7 @@
     "0AM927769G",
     "0AM927769K"
   ],
-  "notes": "Seven-speed dry-clutch DSG (0AM, later 0CW), 200 Nm class, mechatronic inside the gearbox. Identify only: no DQ200 read was available, so no definition, checksum or maps are claimed; opentune-scan recognises 0AM/0CW part numbers in an image as DQ200 (medium tier). Vehicle list per the cited listing (not exhaustive). No pinout is given: no open source with a pin-level drawing for this unit was found, so none is guessed.",
+  "notes": "Seven-speed dry-clutch DSG (0AM, later 0CW), 200 Nm class, mechatronic inside the gearbox. Identify only: no DQ200 read was available, so no definition, checksum or maps are claimed; opentune-scan recognises 0AM/0CW part numbers in an image as DQ200 (medium tier). Vehicle list per the cited listing (not exhaustive). No pin table is given: the public bench drawing (ecupinouts) marks the pins by position only, without numbers, so none is recorded or guessed.",
   "connectors": [],
   "bench": null,
   "pinout_confidence": null,
@@ -57,6 +57,71 @@
     {
       "title": "dspl1236/vag-tcu-tools docs/PLATFORM_RESEARCH.md (MIT): DQ200 0CW FRFs, method 0x11",
       "url": "https://github.com/dspl1236/vag-tcu-tools/blob/main/docs/PLATFORM_RESEARCH.md"
+    },
+    {
+      "title": "ecupinouts.com: Temic DQ200 (DSG7, 0AM/0CW) bench pinout",
+      "url": "https://ecupinouts.com/en/vag-dq200/"
+    },
+    {
+      "title": "Volkswagen of America via NHTSA: Emissions Service Action 38C4, Jetta Hybrid 2013-2016 mechatronic unit software (update with the VAS diagnostic tester / ODIS)",
+      "url": "https://static.nhtsa.gov/odi/tsbs/2020/MC-10170643-0001.pdf"
+    },
+    {
+      "title": "Volkswagen of America via NHTSA: Safety Recall 34J6, Jetta Hybrid mechatronic accumulator housing (0AM repair kit)",
+      "url": "https://static.nhtsa.gov/odi/rcl/2019/RCRIT-19V866-4357.pdf"
+    },
+    {
+      "title": "Volkswagen New Zealand: DQ200 mechatronics unit campaign (software update of the mechatronic control unit)",
+      "url": "https://volkswagen.co.nz/en/owners-and-servicing/about-my-car/campaigns-and-recalls/mechatronics-unit.html"
+    },
+    {
+      "title": "AutoTuner: Temic DQ200 support announcement (OBD virtual read and OBD write; tool vendor page, fallback)",
+      "url": "https://www.autotuner.com/blogs/news/temic-dq200"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": null,
+      "notes": "VW updates the DQ200 mechatronic software in the workshop: the NZ DQ200 campaign names a software update of the mechatronic control unit, and the US Jetta Hybrid action (a 0AM mechatronic per recall 34J6) does it with the VAS diagnostic tester running ODIS. Factory software ships as FRF/ODX flash containers (vag-tcu-tools counts 145 for 0CW). A tool vendor lists OBD write and only a 'virtual' OBD read. No cited source documents a complete original read through the diagnostic socket, so this is write-only. The diagnostic protocol is not stated in the cited sources; the unit is on CAN.",
+      "confidence": "community",
+      "sources": [
+        3,
+        4,
+        5,
+        1,
+        6
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "ecupinouts publishes a CAN bench connection on the 11-pin VAG DQ200 (0AM/0CW) mechatronic plug: two +12 V pins, one ground, CAN-H and CAN-L. The pins are marked by position in its drawing only, without numbers, so no pin is recorded here: take the positions from the drawing and confirm each with a multimeter before applying power; add 120 ohm across CAN-H/CAN-L if the interface does not terminate. It speaks the same diagnostic protocol as in the car; what can be read that way is not documented.",
+      "confidence": "community",
+      "sources": [
+        2
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "No cited public source names the DQ200 processor or documents a boot, bootstrap or debug-port route; the bench pinout lists only power, ground and CAN. Commercial bench-tool procedures are not used.",
+      "confidence": "unverified",
+      "sources": [
+        2
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The cited sources do not state whether a diagnostic read or programming of the DQ200 requests security access (the VW workshop documents only describe the tester-driven update). OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        3
+      ]
+    }
+  }
 }
