@@ -102,6 +102,13 @@ pub struct IsoTp {
     /// How many response-pending (NRC 0x78) replies to tolerate before the
     /// [`DiagTransport::request`] loop gives up.
     pub max_response_pending: u32,
+    /// CAN id our flow-control frames go to when *receiving* a multi-frame
+    /// reply. `None` (default) uses [`tx_id`](Self::tx_id). Set it when
+    /// `tx_id` is a **functional** id: with OBD-II functional addressing
+    /// (`tx_id` `0x7DF`, `rx_id` `0x7E8`) ISO 15765-4 sends the flow control
+    /// physically, to the responder's request id (`0x7E0`), and an ECU
+    /// ignores a flow control on `0x7DF`.
+    pub fc_tx_id: Option<u32>,
 }
 
 /// Flow-control parameters received from the ECU during a segmented transmit.
@@ -121,6 +128,7 @@ impl IsoTp {
             st_min: 0,
             wft_max: 16,
             max_response_pending: 32,
+            fc_tx_id: None,
         }
     }
 
@@ -134,14 +142,31 @@ impl IsoTp {
     }
 
     /// Receive the next frame addressed to us, skipping frames with other ids.
+    ///
+    /// `timeout_ms` bounds the **whole** wait, not each frame: on a busy bus
+    /// (broadcast traffic, a second responder to a functional request) the
+    /// unrelated frames keep arriving, and restarting the timeout on each of
+    /// them would never time out while the ECU stays silent. On a quiet bus
+    /// (a gateway's diagnostic CAN carries nothing until queried) the link's
+    /// own timeout ends the wait as before.
     fn recv_from_ecu(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
+        let deadline = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_millis(timeout_ms));
+        let mut wait = timeout_ms;
         loop {
-            let (id, data) = self.link.recv_frame(timeout_ms)?;
+            let (id, data) = self.link.recv_frame(wait)?;
             if id == self.rx_id {
                 if data.is_empty() {
                     return Err(Error::Protocol("empty CAN frame".into()));
                 }
                 return Ok(data);
+            }
+            if let Some(d) = deadline {
+                let left = d.saturating_duration_since(std::time::Instant::now());
+                wait = u64::try_from(left.as_millis()).unwrap_or(u64::MAX);
+                if wait == 0 {
+                    return Err(Error::Timeout(timeout_ms));
+                }
             }
         }
     }
@@ -324,7 +349,7 @@ impl IsoTp {
             self.block_size,
             self.st_min,
         ]);
-        self.link.send_frame(self.tx_id, &fc)
+        self.link.send_frame(self.fc_tx_id.unwrap_or(self.tx_id), &fc)
     }
 }
 
