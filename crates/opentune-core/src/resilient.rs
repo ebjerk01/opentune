@@ -48,9 +48,10 @@ pub const SLEEP_SLICE_MS: u64 = 200;
 
 /// Prefix of a [`RawDiag`] error that means the link is certainly gone
 /// ([`is_link_lost`]): the loop treats it as lost at once instead of waiting
-/// for [`ReconnectPolicy::dead_after`] dead rounds. The owning wrappers
-/// ([`OwnedDiag`](crate::OwnedDiag), [`InterfaceDiag`](crate::InterfaceDiag))
-/// add it; an embedder's own `RawDiag` may too.
+/// for [`ReconnectPolicy::dead_after`] dead rounds. The core wrappers
+/// ([`CoreDiag`](crate::CoreDiag), [`OwnedDiag`](crate::OwnedDiag),
+/// [`InterfaceDiag`](crate::InterfaceDiag)) add it; an embedder's own
+/// `RawDiag` may too.
 pub const LINK_LOST_PREFIX: &str = "link lost: ";
 
 /// Whether a transport error means the session is certainly gone and only a

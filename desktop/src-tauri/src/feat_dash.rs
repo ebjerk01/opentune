@@ -22,7 +22,8 @@
 //! The pseudo driver `obdsim` serves a simulated turbo-diesel
 //! ([`SimEcu::demo`]) for UI work without hardware; it never touches the hub.
 
-use crate::adapter::{self, AdapterHub, ConnKey, Session};
+use crate::adapter::{self, AdapterHub, ConnKey, PollLink, Session};
+use opentune_core::resilient::Liveness;
 use opentune_core::obd::{self, sim::SimEcu, ObdSession, Readout};
 use opentune_core::Interface;
 use serde_json::{json, Value};
@@ -123,23 +124,30 @@ fn supported_on(
     Ok((sess, pids, vin))
 }
 
-/// One poll on the hub worker: `(session, readout, battery_mv)`. When nothing
-/// answered at all, drops the opened adapter (next tick re-opens it) and
-/// returns a fresh session so an unplugged adapter cannot poison the cache.
+/// One poll on the hub worker: `(session, readout, battery_mv, link)`. When
+/// nothing answered at the transport (and the adapter reports no battery
+/// voltage either), or the adapter reset, drops the opened adapter (next tick
+/// re-opens it) and returns a fresh session so an unplugged adapter cannot
+/// poison the cache. A poll the ECU only refused (negative responses) is
+/// alive: the adapter and the learned session are kept.
 fn read_on(
     s: &mut Session,
     key: &ConnKey,
     mut sess: ObdSession,
     pids: &[u8],
-) -> Result<(ObdSession, Readout, Option<u32>), String> {
-    let ro = s.with_diag(key, TIMEOUT_MS, |d| Ok(sess.read(d, pids)))?;
+) -> Result<(ObdSession, Readout, Option<u32>, PollLink), String> {
+    let (ro, link) = s.with_diag(key, TIMEOUT_MS, |d| {
+        let mut lv = Liveness::new(d);
+        let ro = sess.read(&mut lv, pids);
+        Ok((ro, PollLink::of(&lv)))
+    })?;
     let battery_mv = battery(s, key);
-    let nothing = ro.values.values().all(Option::is_none);
-    if !pids.is_empty() && nothing && battery_mv.is_none() {
+    let silent = link.state == "silent" && battery_mv.is_none();
+    if !pids.is_empty() && (link.state == "lost" || silent) {
         s.invalidate();
         sess = ObdSession::new();
     }
-    Ok((sess, ro, battery_mv))
+    Ok((sess, ro, battery_mv, link))
 }
 
 fn supported_json(pids: BTreeSet<u8>, vin: Option<String>) -> Value {
@@ -149,12 +157,20 @@ fn supported_json(pids: BTreeSet<u8>, vin: Option<String>) -> Value {
     })
 }
 
-fn read_json(ro: Readout, battery_mv: Option<u32>) -> Value {
+/// `{ t_ms, battery_mv, values, errors, link }`. A lost link (adapter reset)
+/// is also noted in `errors.link`.
+fn read_json(ro: Readout, battery_mv: Option<u32>, link: PollLink) -> Value {
+    let mut errors = ro.errors;
+    if link.state == "lost" {
+        let why = link.error.clone().unwrap_or_else(|| "link lost".into());
+        errors.insert("link".into(), format!("{why} — re-opening the adapter"));
+    }
     json!({
         "t_ms": now_ms(),
         "battery_mv": battery_mv,
         "values": ro.values,
-        "errors": ro.errors,
+        "errors": errors,
+        "link": link,
     })
 }
 
@@ -182,12 +198,16 @@ fn read_impl(hub: &AdapterHub, conn: Conn, pids: Vec<u8>) -> Result<Value, Strin
         let mut sess = sess;
         let ro = sess.read(&mut ecu, &pids);
         store_session(cache, sess);
-        return Ok(read_json(ro, Some(14_100)));
+        let up = PollLink {
+            state: "up",
+            error: None,
+        };
+        return Ok(read_json(ro, Some(14_100), up));
     }
     let key = conn.key()?;
-    let (sess, ro, battery_mv) = hub.run(OP, move |s| read_on(s, &key, sess, &pids))?;
+    let (sess, ro, battery_mv, link) = hub.run(OP, move |s| read_on(s, &key, sess, &pids))?;
     store_session(cache, sess);
-    Ok(read_json(ro, battery_mv))
+    Ok(read_json(ro, battery_mv, link))
 }
 
 /// The OBD channel table (offline). One row per dashboard channel; a PID with
@@ -353,18 +373,28 @@ mod tests {
     use opentune_core::{
         Capabilities, ConnectConfig, EcuId, Error, InterfaceInfo, MemoryRegion, Progress,
     };
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{mpsc, Arc};
 
     /// A fake adapter whose transport is a [`SimEcu`] (or answers nothing).
     struct ObdIface {
         ecu: Option<SimEcu>,
         requests: Arc<AtomicUsize>,
+        /// Refuse every request (`7F <sid> 12`), no battery reading.
+        nrc: bool,
+        /// Fail the next request with an adapter reset.
+        reset: Arc<AtomicBool>,
     }
 
     impl DiagTransport for ObdIface {
         fn request(&mut self, req: &[u8], timeout_ms: u64) -> opentune_core::Result<Vec<u8>> {
             self.requests.fetch_add(1, Ordering::SeqCst);
+            if self.reset.swap(false, Ordering::SeqCst) {
+                return Err(Error::AdapterReset("banner".into()));
+            }
+            if self.nrc {
+                return Ok(vec![0x7F, req.first().copied().unwrap_or(0), 0x12]);
+            }
             match self.ecu.as_mut() {
                 Some(e) => e.request(req).map_err(Error::Protocol),
                 None => Err(Error::Timeout(timeout_ms)),
@@ -391,7 +421,7 @@ mod tests {
             Ok(())
         }
         fn battery_millivolts(&mut self) -> opentune_core::Result<Option<u32>> {
-            Ok(self.ecu.as_ref().map(|_| 12_600))
+            Ok(self.ecu.as_ref().filter(|_| !self.nrc).map(|_| 12_600))
         }
         fn read_ecu_id(&mut self) -> opentune_core::Result<EcuId> {
             Err(Error::Unsupported("sim".into()))
@@ -423,13 +453,24 @@ mod tests {
         opens: Arc<AtomicUsize>,
         requests: Arc<AtomicUsize>,
         last_tx: Arc<AtomicUsize>,
+        reset: Arc<AtomicBool>,
     }
 
     fn rig(alive: bool) -> Rig {
+        rig_with(alive, false)
+    }
+
+    fn rig_with(alive: bool, nrc: bool) -> Rig {
         let opens = Arc::new(AtomicUsize::new(0));
         let requests = Arc::new(AtomicUsize::new(0));
         let last_tx = Arc::new(AtomicUsize::new(0));
-        let (o, r, t) = (opens.clone(), requests.clone(), last_tx.clone());
+        let reset = Arc::new(AtomicBool::new(false));
+        let (o, r, t, x) = (
+            opens.clone(),
+            requests.clone(),
+            last_tx.clone(),
+            reset.clone(),
+        );
         let hub = AdapterHub::spawn(move || -> Opener {
             Box::new(move |k: &ConnKey| {
                 o.fetch_add(1, Ordering::SeqCst);
@@ -437,6 +478,8 @@ mod tests {
                 Ok(Box::new(ObdIface {
                     ecu: alive.then(|| SimEcu::demo(0)),
                     requests: r.clone(),
+                    nrc,
+                    reset: x.clone(),
                 }) as Box<dyn Interface>)
             })
         });
@@ -445,6 +488,7 @@ mod tests {
             opens,
             requests,
             last_tx,
+            reset,
         }
     }
 
@@ -573,6 +617,34 @@ mod tests {
             2,
             "invalidated after silence"
         );
+    }
+
+    #[test]
+    fn a_poll_the_ecu_only_refused_is_alive() {
+        // Every request gets a negative response and the adapter reports no
+        // battery voltage: no value, but the link answered — keep the adapter.
+        let r = rig_with(true, true);
+        let c = conn("elm327obd");
+        let v = read_impl(&r.hub, c.clone(), vec![0x0C, 0x05]).unwrap();
+        assert!(v["values"]["rpm"].is_null());
+        assert_eq!(v["link"]["state"], "up", "{v}");
+        read_impl(&r.hub, c, vec![0x0C, 0x05]).unwrap();
+        assert_eq!(r.opens.load(Ordering::SeqCst), 1, "no re-open for NRCs");
+    }
+
+    #[test]
+    fn adapter_reset_is_noted_and_reopens() {
+        let r = rig(true);
+        let c = conn("elm327obd");
+        r.reset.store(true, Ordering::SeqCst);
+        let v = read_impl(&r.hub, c.clone(), vec![0x0C]).unwrap();
+        assert_eq!(v["link"]["state"], "lost", "{v}");
+        let note = v["errors"]["link"].as_str().unwrap();
+        assert!(note.contains("adapter reset"), "{note}");
+        let v = read_impl(&r.hub, c, vec![0x0C]).unwrap();
+        assert_eq!(v["link"]["state"], "up");
+        assert!(v["values"]["rpm"].is_number());
+        assert_eq!(r.opens.load(Ordering::SeqCst), 2, "re-opened after the reset");
     }
 
     #[test]

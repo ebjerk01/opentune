@@ -50,10 +50,12 @@ impl<'a> CoreDiag<'a> {
 }
 
 impl RawDiag for CoreDiag<'_> {
+    /// Like the owning wrappers: a negative response comes back as raw `7F`
+    /// bytes and an error that means the link is gone (an adapter reset)
+    /// carries [`LINK_LOST_PREFIX`](crate::resilient::LINK_LOST_PREFIX), so a
+    /// borrowed transport classifies the same as an owned one.
     fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
-        self.inner
-            .request(req, self.timeout_ms)
-            .map_err(|e| e.to_string())
+        raw_result(self.inner.request(req, self.timeout_ms))
     }
 }
 

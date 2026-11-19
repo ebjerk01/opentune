@@ -80,13 +80,26 @@ pub(crate) fn registry() -> Registry {
     r
 }
 
-/// Open a registry driver bound to `key`: its serial port/baud, CAN bus select
+/// The pseudo-driver id of the simulated SSM module
+/// (`opentune_core::protocol::ssmsim`, synthetic): opened by
+/// [`open_registry_driver`] without hardware, like `obdsim` for the
+/// Dashboard. Not in the registry.
+pub const SSM_SIM_DRIVER: &str = "ssmsim";
+
+/// Open a registry driver bound to `key` (or the [`SSM_SIM_DRIVER`]): its serial port/baud, CAN bus select
 /// (`hs`/`ms` — for a switched ELM327 this must match the dongle's physical
 /// HS/MS-CAN switch) and the target module's CAN request/response ids. Only the
 /// adapter worker ([`adapter::AdapterHub`]) calls this; panels go through the hub.
 pub fn open_registry_driver(key: &adapter::ConnKey) -> Result<Box<dyn Interface>, String> {
-    let reg = registry();
     let driver = &key.driver;
+    if driver.trim() == SSM_SIM_DRIVER {
+        // Offline: the synthetic SSM module (Live log, SSM transports).
+        let mut sim = opentune_core::protocol::ssmsim::SsmSim::demo();
+        sim.open(&key.config()?)
+            .map_err(|e| format!("open {driver}: {e}"))?;
+        return Ok(Box::new(sim));
+    }
+    let reg = registry();
     let mut drv = reg
         .make(driver)
         .ok_or_else(|| format!("unknown driver '{driver}'"))?;
