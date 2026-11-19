@@ -9,12 +9,14 @@
 //!         0x10 transceive <kwp-frame…>
 //!   D->H: 0x81 init-result <status…> | 0x90 rx <kwp-frame…> | 0xEE error <code>
 use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
+use opentune_core::protocol::kline::KLineRaw;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::{
     Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
     Progress, Result,
 };
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::time::Duration;
 
@@ -24,6 +26,88 @@ struct Bridge {
     port: Box<dyn serialport::SerialPort>,
     target: u8,
     source: u8,
+    /// Raw K-line ([`KLineRaw`]) state: bytes written but not yet sent in a
+    /// `0x10 transceive`, and reply bytes not yet read.
+    raw: RawState,
+}
+
+#[derive(Default)]
+struct RawState {
+    pending: Vec<u8>,
+    rx: VecDeque<u8>,
+}
+
+/// Largest transceive payload: the firmware's USB frame and reply buffers are
+/// 80 bytes.
+const MAX_TRANSCEIVE: usize = 80;
+
+/// The bus unframed, for protocols that frame their own packets (SSM2).
+///
+/// The firmware's `0x10 transceive` sends bytes and returns everything heard
+/// until a 60 ms quiet gap, with the echo already removed. `write` buffers the
+/// bytes; the first `read` after it runs the transceive and hands the reply
+/// out. A module that takes longer than the gap to start answering is missed
+/// (the firmware's limit, not verified against a car).
+impl KLineRaw for Bridge {
+    fn set_baud(&mut self, baud: u32) -> Result<()> {
+        let b = u16::try_from(baud).map_err(|_| {
+            Error::Config(format!("the bridge cannot run the K-line at {baud} baud"))
+        })?;
+        self.send(0x03, &b.to_be_bytes())
+    }
+
+    fn clear_input(&mut self) -> Result<()> {
+        self.raw.rx.clear();
+        Ok(())
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        if self.raw.pending.len() + bytes.len() > MAX_TRANSCEIVE {
+            return Err(Error::Config(format!(
+                "the bridge sends at most {MAX_TRANSCEIVE} bytes per transceive"
+            )));
+        }
+        self.raw.pending.extend_from_slice(bytes);
+        Ok(())
+    }
+
+    fn read(&mut self, buf: &mut [u8], timeout_ms: u64) -> Result<usize> {
+        if self.raw.rx.is_empty() && !self.raw.pending.is_empty() {
+            let tx = std::mem::take(&mut self.raw.pending);
+            self.send(0x10, &tx)?;
+            for _ in 0..8 {
+                match self.recv(timeout_ms)? {
+                    (0x90, data) => {
+                        self.raw.rx.extend(data);
+                        break;
+                    }
+                    (0xEE, data) => {
+                        return Err(Error::Protocol(format!(
+                            "device error 0x{:02X}",
+                            data.first().copied().unwrap_or(0)
+                        )))
+                    }
+                    _ => continue,
+                }
+            }
+        }
+        if self.raw.rx.is_empty() {
+            return Err(Error::Timeout(timeout_ms));
+        }
+        let n = buf.len().min(self.raw.rx.len());
+        for (slot, b) in buf.iter_mut().zip(self.raw.rx.drain(..n)) {
+            *slot = b;
+        }
+        Ok(n)
+    }
+
+    fn echoes(&self) -> bool {
+        false
+    }
+
+    fn max_write(&self) -> Option<usize> {
+        Some(MAX_TRANSCEIVE)
+    }
 }
 
 impl Bridge {
@@ -181,6 +265,12 @@ impl Interface for BridgeDriver {
         self.bridge.as_mut().map(|t| t as &mut dyn DiagTransport)
     }
 
+    /// The raw K-line (echo removed on the device) for self-framing protocols
+    /// such as SSM2; open with `options["init"] = "none"` to skip the wake-up.
+    fn kline(&mut self) -> Option<&mut dyn KLineRaw> {
+        self.bridge.as_mut().map(|t| t as &mut dyn KLineRaw)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let path = cfg
             .options
@@ -194,25 +284,24 @@ impl Interface for BridgeDriver {
             port,
             target: cfg.tx_id as u8,
             source: 0xF1,
+            raw: RawState::default(),
         };
         // optional K-line baud
         if let Some(baud) = cfg.options.get("baud").and_then(|s| s.parse::<u32>().ok()) {
             b.send(0x03, &[(baud >> 8) as u8, baud as u8])?;
         }
-        // init
-        let five = cfg
-            .options
-            .get("init")
-            .map(|s| s == "5baud")
-            .unwrap_or(false);
-        if five {
-            b.send(0x02, &[b.target])?;
-        } else {
-            b.send(0x01, &[])?;
-        }
-        let (cmd, data) = b.recv(2000)?;
-        if cmd != 0x81 || data.first().copied().unwrap_or(0xFF) != 0 {
-            return Err(Error::Protocol("K-line init failed".into()));
+        // init: `none` skips the wake-up (SSM2 just starts talking).
+        let init = cfg.options.get("init").map(String::as_str);
+        if init != Some("none") {
+            if init == Some("5baud") {
+                b.send(0x02, &[b.target])?;
+            } else {
+                b.send(0x01, &[])?;
+            }
+            let (cmd, data) = b.recv(2000)?;
+            if cmd != 0x81 || data.first().copied().unwrap_or(0xFF) != 0 {
+                return Err(Error::Protocol("K-line init failed".into()));
+            }
         }
         self.bridge = Some(b);
         self.cfg = Some(cfg.clone());
@@ -389,8 +478,43 @@ mod seedkey_hook_tests {
             port,
             target: 0x10,
             source: 0xF1,
+            raw: RawState::default(),
         });
         assert!(d.diag().is_some(), "diag() must expose the K-line bridge");
+        assert!(d.kline().is_some(), "kline() must expose the raw K-line");
+    }
+
+    /// SSM2 over the bridge's raw K-line: the device has queued the module's
+    /// reply (echo already removed, as the firmware does) in a `0x90` frame.
+    #[cfg(unix)]
+    #[test]
+    fn ssm_runs_over_the_raw_kline() {
+        use opentune_core::protocol::ssm::{build_packet, SsmClient, SsmKLine, ECU, TESTER};
+        use std::io::Write;
+        let (host, mut adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let mut b = Bridge {
+            port: Box::new(host),
+            target: ECU,
+            source: 0xF1,
+            raw: RawState::default(),
+        };
+        let reply = build_packet(TESTER, ECU, &[0xE8, 0x6E, 0x0C]).unwrap();
+        let mut dev = vec![SYNC, 0x90, reply.len() as u8];
+        dev.extend(reply);
+        adapter.write_all(&dev).unwrap();
+        adapter.flush().unwrap();
+        let mut kl = SsmKLine::new(&mut b, ECU);
+        let got = SsmClient::new(&mut kl, 500)
+            .read_addresses(&[0x00_1000, 0x00_1003])
+            .unwrap();
+        assert_eq!(got, vec![0x6E, 0x0C]);
+        // Too long for one transceive: refused before anything is sent.
+        let mut kl = SsmKLine::new(&mut b, ECU);
+        let e = SsmClient::new(&mut kl, 500)
+            .with_max_packet_len(259)
+            .read_addresses(&[0u32; 30])
+            .unwrap_err();
+        assert!(e.to_string().contains("80-byte"), "{e}");
     }
     use std::collections::VecDeque;
 
@@ -404,6 +528,7 @@ mod seedkey_hook_tests {
             port: Box::new(host),
             target: 0x10,
             source: 0xF1,
+            raw: RawState::default(),
         };
         for r in replies {
             // ISO-14230 frame from the ECU to the tester.
