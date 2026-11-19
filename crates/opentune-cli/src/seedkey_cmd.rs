@@ -17,6 +17,15 @@ pub enum SeedkeyAction {
     /// ODX / SGO: the ODX `SECURITY` block with method `SA2`, or the SGO SA2
     /// field). Offline only; nothing is sent to a vehicle.
     Sa2(Sa2Args),
+    /// Check your own UnlockECU-format definitions file: list what would load
+    /// (names, levels, lengths, provider, parameter keys and types — never
+    /// values), what the immobiliser / anti-theft refuse-list refuses, and
+    /// what fails validation. Runs nothing. Use it with `--seedkey-defs` and
+    /// `--seedkey-provider` on live commands (docs/SEEDKEY-LOADER.md).
+    Defs {
+        /// The definitions file (JSON).
+        file: PathBuf,
+    },
 }
 
 #[derive(clap::Args)]
@@ -60,7 +69,48 @@ pub struct Sa2Args {
 pub fn run(action: SeedkeyAction) -> Result<()> {
     match action {
         SeedkeyAction::Sa2(a) => sa2(a),
+        SeedkeyAction::Defs { file } => defs(&file),
     }
+}
+
+fn defs(file: &std::path::Path) -> Result<()> {
+    let set = opentune_seedkey_loader::DefinitionSet::load(file).map_err(|e| anyhow!(e))?;
+    println!(
+        "{}: {} loadable, {} refused, {} rejected",
+        file.display(),
+        set.definitions.len(),
+        set.refused.len(),
+        set.rejected.len()
+    );
+    for d in &set.definitions {
+        let aliases = if d.aliases.is_empty() {
+            String::new()
+        } else {
+            format!(" (aliases: {})", d.aliases.join(", "))
+        };
+        let params: Vec<String> = d
+            .parameters
+            .iter()
+            .map(|p| format!("{}:{}", p.key, p.value.type_name()))
+            .collect();
+        println!(
+            "  #{:<4} {}{aliases}  level 0x{:02X}  seed {} key {}  provider {}  params [{}]",
+            d.index,
+            d.ecu_name,
+            d.access_level,
+            d.seed_length,
+            d.key_length,
+            d.provider,
+            params.join(", ")
+        );
+    }
+    for r in &set.refused {
+        println!("  {r}");
+    }
+    for r in &set.rejected {
+        println!("  {r}");
+    }
+    Ok(())
 }
 
 fn sa2(a: Sa2Args) -> Result<()> {

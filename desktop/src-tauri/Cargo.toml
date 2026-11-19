@@ -88,6 +88,9 @@ opentune-tsini = { path = "../../crates/opentune-tsini" }
 opentune-tsproto = { path = "../../crates/opentune-tsproto" }
 # VAG SA2 seed/key interpreter + the user's own flash containers (SA2 panel).
 opentune-sa2 = { path = "../../crates/opentune-sa2" }
+# Off-by-default loader for the user's own UnlockECU-format seed/key files
+# (DesktopConfig::seedkey_loader; Bench tier: alpha / bench channels only).
+opentune-seedkey-loader = { path = "../../crates/opentune-seedkey-loader" }
 opentune-container = { path = "../../crates/opentune-container" }
 
 [features]

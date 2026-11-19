@@ -1,0 +1,33 @@
+# Interop LOADER for UnlockECU-format seed/key definition files.
+#
+# This crate ships NO seed/key algorithm ("provider") and NO definition or
+# constant. It reads a definitions file the USER supplies, refuses anything in
+# the immobiliser / anti-theft class (CONTRIBUTING.md scope), and hands each
+# computation to a provider the USER configures: an external provider program
+# (JSON over stdin/stdout, no shell) or the generic built-in SA2 interpreter
+# (`opentune-sa2`) over the user's own InstructionTape. Off by default.
+[package]
+name = "opentune-seedkey-loader"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Off-by-default interop loader for user-supplied UnlockECU-format seed/key definitions: strict validation, an immobiliser/anti-theft refuse-list, and a runtime provider boundary (external provider program over JSON stdin/stdout, or the built-in SA2 VM). Ships no algorithm and no data."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+opentune-sa2 = { path = "../opentune-sa2" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+opentune-udssim = { path = "../opentune-udssim" }
+
+# End-to-end test with its own `main`: the test binary doubles as the synthetic
+# provider program (re-executed with an environment marker), so no provider
+# binary is shipped by this crate.
+[[test]]
+name = "provider_e2e"
+harness = false

@@ -115,6 +115,12 @@ pub struct DesktopConfig {
     /// order by id. The public app has none: OpenTune ships no seed/key
     /// algorithm, so without a plugin every secured path stays plan-only.
     pub seedkeys: Vec<SeedKeyResolver>,
+    /// The user's UnlockECU-format seed/key definitions file and provider(s)
+    /// (see `docs/SEEDKEY-LOADER.md`), answering ids `unlockecu:<EcuName>`.
+    /// `None` (the default) keeps the loader off. Bench tier: honoured only
+    /// on a channel with `debug_enabled()` (alpha / bench), ignored with a
+    /// startup message on stable.
+    pub seedkey_loader: Option<opentune_seedkey_loader::LoaderConfig>,
     /// Register the self-updater plugin. Needs a `plugins.updater` section
     /// (endpoint + pubkey) in the embedding app's `tauri.conf.json`; when off,
     /// the update commands report "updater unavailable".
@@ -128,6 +134,7 @@ impl Default for DesktopConfig {
             data_roots: Vec::new(),
             checksums: Vec::new(),
             seedkeys: Vec::new(),
+            seedkey_loader: None,
             updater: true,
         }
     }
@@ -156,6 +163,7 @@ pub fn builder_with(
         data_roots,
         checksums,
         seedkeys,
+        seedkey_loader,
         updater,
     } = config;
     let core = tauri::plugin::Builder::<tauri::Wry>::new("opentune-core")
@@ -168,9 +176,14 @@ pub fn builder_with(
             // on a background thread and every command reads the cache.
             startup::warm(data.ecudefs.clone(), data.catalog.clone());
             app.manage(data);
+            let loader = crate::seedkeys::loader_for(seedkey_loader.as_ref(), &channel)
+                .unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    None
+                });
             app.manage(channel);
             app.manage(Checksums(checksums));
-            app.manage(SeedKeys::new(seedkeys));
+            app.manage(SeedKeys::new(seedkeys).with_loader(loader));
             app.manage(OpGuard::default());
             app.manage(DebugLog::default());
             app.manage(adapter::AdapterHub::with_registry());

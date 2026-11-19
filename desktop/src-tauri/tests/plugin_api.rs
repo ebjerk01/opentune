@@ -51,6 +51,7 @@ fn plugin_api_paths_and_shapes() {
         data_roots: vec![std::path::PathBuf::from("data")],
         checksums,
         seedkeys,
+        seedkey_loader: None,
         updater: false,
     };
     assert!(cfg.channel.debug_enabled());

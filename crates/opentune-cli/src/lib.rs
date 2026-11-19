@@ -64,6 +64,8 @@ mod util;
 
 pub use cli::ConnectArgs;
 pub use context::CliContext;
+/// The seed/key definitions loader ([`CliConfig::seedkey_loader`]).
+pub use opentune_seedkey_loader as seedkey_loader;
 
 /// Looks up an extra seed-key handler by id (the `--seedkey` value).
 pub type SeedKeyResolver = fn(&str) -> Option<Box<dyn opentune_core::protocol::seedkey::SeedKey>>;
@@ -105,6 +107,11 @@ pub struct CliConfig {
     pub drivers: Vec<(&'static str, &'static str, DriverFactory)>,
     /// Extra top-level subcommands.
     pub extra: Vec<ExtraCommand>,
+    /// Load a user's UnlockECU-format seed/key definitions with the given
+    /// provider(s) (see `docs/SEEDKEY-LOADER.md`). `None` (the default) keeps
+    /// the loader off; the `--seedkey-defs` / `--seedkey-provider` flags, when
+    /// given, take precedence.
+    pub seedkey_loader: Option<opentune_seedkey_loader::LoaderConfig>,
 }
 
 impl Default for CliConfig {
@@ -116,6 +123,7 @@ impl Default for CliConfig {
             checksums: Vec::new(),
             drivers: Vec::new(),
             extra: Vec::new(),
+            seedkey_loader: None,
         }
     }
 }
@@ -214,7 +222,8 @@ where
 {
     let mut cmd = command(&cfg)?;
     let matches = cmd.try_get_matches_from_mut(args)?;
-    let ctx = CliContext::from_config(&cfg);
+    let mut ctx = CliContext::from_config(&cfg);
+    ctx.set_seedkey_loader(seedkey_loader(&matches, &cfg)?);
     if let Some((name, sub)) = matches.subcommand() {
         if let Some(extra) = cfg.extra.iter().find(|e| e.command.get_name() == name) {
             return (extra.run)(sub, &ctx);
@@ -222,6 +231,48 @@ where
     }
     let cli = cli::Cli::from_arg_matches(&matches).map_err(|e| e.format(&mut cmd))?;
     commands::dispatch(&ctx, cli.cmd)
+}
+
+/// The seed/key definitions loader the flags (or else `cfg`) configure, with
+/// its load report on stderr. `None` when neither configures one (the
+/// default). Both a definitions file and a provider are required.
+fn seedkey_loader(
+    m: &clap::ArgMatches,
+    cfg: &CliConfig,
+) -> anyhow::Result<Option<opentune_seedkey_loader::Loader>> {
+    use opentune_seedkey_loader::{Loader, LoaderConfig, ProviderSpec};
+    let defs = m.get_one::<std::path::PathBuf>("seedkey_defs").cloned();
+    let provs: Vec<String> = m
+        .get_many::<String>("seedkey_provider")
+        .map(|v| v.cloned().collect())
+        .unwrap_or_default();
+    let lc = match (defs, provs.is_empty()) {
+        (None, true) => cfg.seedkey_loader.clone(),
+        (Some(defs), false) => {
+            let providers = provs
+                .iter()
+                .map(|s| ProviderSpec::parse(s))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!("--seedkey-provider: {e}"))?;
+            Some(LoaderConfig::new(defs, providers))
+        }
+        (Some(_), true) => anyhow::bail!(
+            "--seedkey-defs needs --seedkey-provider too: the definitions loader stays off \
+             until you name both your file and a provider ('builtin:sa2' or the absolute path \
+             of your provider program)"
+        ),
+        (None, false) => {
+            anyhow::bail!("--seedkey-provider needs --seedkey-defs (your definitions file)")
+        }
+    };
+    let Some(lc) = lc else {
+        return Ok(None);
+    };
+    let loader = Loader::new(&lc).map_err(|e| anyhow::anyhow!(e))?;
+    for line in loader.report() {
+        eprintln!("{line}");
+    }
+    Ok(Some(loader))
 }
 
 /// Print an error the way the binary always has and pick its exit code.

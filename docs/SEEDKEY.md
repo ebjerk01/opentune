@@ -224,6 +224,17 @@ are asked first, so a plugin that provides `sa2` itself keeps precedence.
 
 ---
 
+## Your own definitions file (UnlockECU format)
+
+If you keep seed/key definitions in the UnlockECU JSON format, OpenTune can
+load **your** file and route each key to **your** provider program (or to the
+SA2 interpreter for `VolkswagenSA2` entries): `--seedkey unlockecu:<EcuName>`
+with `--seedkey-defs <FILE> --seedkey-provider <builtin:sa2|/abs/path>`. It
+is off by default, refuses immobiliser / anti-theft entries, and ships no
+algorithm or data. See [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md).
+
+---
+
 ## Example (demo) implementation
 
 A **demonstration** `SeedKey` lives in each driver's `#[cfg(test)]`

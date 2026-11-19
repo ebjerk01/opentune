@@ -85,7 +85,7 @@ a top-level command is added without a row here.
 | `opentune vault` | List archived reads in a backup vault directory |
 | `opentune scan` | Scan a directory of ECU dumps offline, emit identification JSON |
 | `opentune container` | Decode a flash container (VAG FRF / ODX / ODX-F / SGO, Ford VBF, BMW PSdZData SWE `.bin`+`.xml`, [`BMW-CONTAINERS.md`](BMW-CONTAINERS.md)); lists the SA2 seed/key scripts it declares; `--flat` writes a flat image; `container identify` names a file's format |
-| `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
+| `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)); `seedkey defs <FILE>` checks your own UnlockECU-format definitions file (what loads, is refused, is rejected; never values) for use with the global `--seedkey-defs` / `--seedkey-provider` flags ([`SEEDKEY-LOADER.md`](SEEDKEY-LOADER.md)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
 | `opentune coding` | Module coding over UDS (read, decode, edit, write), offline EGS52 candidate coding CRC (`egs52-crc`), Ford As-Built checksum check / store export (`asbuilt`) and CCF/CCC descriptor import (`import-ccf`) ([`CODING.md`](CODING.md)) |
 | `opentune adaptation` | Adaptation channels: UDS value / routine / actuator, timed actuator tests on declared channels (`actuator list`, `actuator run`: plan by default, `--ack` executes, control always returned), and VAG KWP2000 over TP2.0 or K-line (`kwp-read`, `kwp-basic`, `kwp-test`, `kwp-save`; [`ADAPTATION.md`](ADAPTATION.md)) |
@@ -199,6 +199,7 @@ apps that need it.
 | `opentune-recipe` | Portable tune recipes: anchored patches + source identity, strict/relocating apply |
 | `opentune-packs` | Versioned definition packs (defs, labels, channels, scripts, …) |
 | `opentune-sa2` | VAG SA2 seed→key script VM (real instruction set; the script is always the user's own), disassembler and assembler |
+| `opentune-seedkey-loader` | Off-by-default interop loader for the user's own UnlockECU-format seed/key definitions (`unlockecu:<name>` ids): strict validation, immobiliser/anti-theft refuse-list, external provider program over JSON stdin/stdout or the built-in SA2 VM; ships no algorithm or data ([SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)) |
 | `opentune-scan` | Offline ECU-file scanner (family + identity strings) |
 | `opentune-vin`, `opentune-dtc` | VIN / part-number decoding; DTC database + decoder |
 | `opentune-udssim` | In-memory UDS ECU + DoIP entity (TCP data side and UDP discovery / status side, loopback socket servers) for conformance tests; optional flashable-ECU model with fault injection |

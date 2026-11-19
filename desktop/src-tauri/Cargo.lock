@@ -2690,6 +2690,7 @@ dependencies = [
  "opentune-packs",
  "opentune-sa2",
  "opentune-scan",
+ "opentune-seedkey-loader",
  "opentune-servicefn",
  "opentune-tsini",
  "opentune-tsproto",
@@ -2909,6 +2910,15 @@ dependencies = [
  "opentune-core",
  "opentune-vin",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-seedkey-loader"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "opentune-sa2",
  "serde_json",
 ]
 

@@ -13,6 +13,7 @@ pub struct CliContext {
     registry: Registry,
     checksums: Vec<ChecksumResolver>,
     seedkeys: Vec<SeedKeyResolver>,
+    seedkey_loader: Option<opentune_seedkey_loader::Loader>,
 }
 
 impl CliContext {
@@ -27,7 +28,39 @@ impl CliContext {
             registry,
             checksums: cfg.checksums.clone(),
             seedkeys: cfg.seedkeys.clone(),
+            seedkey_loader: None,
         }
+    }
+
+    /// Install (or clear) the user's seed/key definitions loader.
+    pub(crate) fn set_seedkey_loader(&mut self, loader: Option<opentune_seedkey_loader::Loader>) {
+        self.seedkey_loader = loader;
+    }
+
+    /// The user's seed/key definitions loader, when `--seedkey-defs` and
+    /// `--seedkey-provider` (or [`CliConfig::seedkey_loader`]) configured one.
+    pub fn seedkey_loader(&self) -> Option<&opentune_seedkey_loader::Loader> {
+        self.seedkey_loader.as_ref()
+    }
+
+    /// The loader's handler for an `unlockecu:<name>` id: `None` when `id` is
+    /// not of that form, an error when the loader is off or cannot serve it.
+    fn loader_seed_key(&self, id: &str) -> Option<Result<Box<dyn SeedKey>>> {
+        if !opentune_seedkey_loader::Loader::handles(id) {
+            return None;
+        }
+        Some(match &self.seedkey_loader {
+            None => Err(anyhow!(
+                "seed-key id '{id}' needs your definitions file and a provider: \
+                 --seedkey-defs <FILE> --seedkey-provider <builtin:sa2|/abs/path> \
+                 (the definitions loader is off by default; OpenTune ships no algorithm or data)"
+            )),
+            Some(l) => l
+                .seed_key(id)
+                .unwrap_or_else(|| Err(format!("seed-key id '{id}' is not a loader id")))
+                .map(|sk| Box::new(sk) as Box<dyn SeedKey>)
+                .map_err(|e| anyhow!(e)),
+        })
     }
 
     /// The driver registry (public drivers, then the embedder's).
@@ -54,8 +87,9 @@ impl CliContext {
     /// order, then `sa2:<hex>` / `sa2:@<file>` (the SA2 VM running a script
     /// the user supplies in the id), then the simulators' test-only handlers
     /// (`udssim-test`, `seed XOR 0xA5`, and `kwpsim-test` for the synthetic
-    /// KWP module — each unlocks only its simulator). The public build ships no
-    /// algorithm or script.
+    /// KWP module — each unlocks only its simulator). `unlockecu:<name>`
+    /// resolves through the user's definitions loader when one is configured.
+    /// The public build ships no algorithm or script.
     pub fn seed_key(&self, id: &str) -> Option<Box<dyn SeedKey>> {
         self.seedkeys
             .iter()
@@ -64,6 +98,7 @@ impl CliContext {
                 Some(Ok(sk)) => Some(Box::new(sk) as Box<dyn SeedKey>),
                 _ => None,
             })
+            .or_else(|| self.loader_seed_key(id).and_then(Result::ok))
             .or_else(|| opentune_udssim::driver::test_seed_key(id))
             .or_else(|| opentune_adaptation::sim::test_seed_key(id))
     }
@@ -76,6 +111,9 @@ impl CliContext {
         }
         if let Some(sa2) = crate::seedkey_cmd::sa2_from_id(id) {
             return Ok(Box::new(sa2?));
+        }
+        if let Some(loaded) = self.loader_seed_key(id) {
+            return loaded;
         }
         self.seed_key(id).ok_or_else(|| {
             anyhow!(
