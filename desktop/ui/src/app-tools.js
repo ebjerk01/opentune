@@ -64,6 +64,7 @@ async function loadGuideSection(id) {
     const md = await invoke("guide_read", { id });
     $("guideBody").innerHTML = renderMarkdown(md);
     $("guideBody").scrollTop = 0;
+    if (window.OTPinout) window.OTPinout.hydrate($("guideBody"), (unit) => invoke("db_get", { id: unit }));
   } catch (e) { $("guideBody").innerHTML = errBanner(e); }
 }
 // In-guide links: #/guide/<id> switches section; external links open outside.

@@ -12,6 +12,15 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **Bench wiring diagrams**, drawn from the ECU database: every unit with a
+  pinout gets an inline diagram (pins wired to +12 V permanent / ignition,
+  ground, K-line, CAN) in the ECU database panel, and guide pages can embed one
+  with a ```` ```pinout <unit-id> ```` block. Disputed pins are dashed and marked
+  "confirm by continuity"; pins where two sources agree are marked. Design in
+  [UNIT-ACCESS-PROFILE.md](docs/UNIT-ACCESS-PROFILE.md).
+- Guide: **EDC15C6 on the bench** (Mercedes CDI): wiring diagram and steps,
+  with both disputed pins (ground S1-5/S1-6, second terminal 15 S1-7/S1-8)
+  called out.
 - **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
   BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
   `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and

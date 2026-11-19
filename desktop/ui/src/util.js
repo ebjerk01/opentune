@@ -105,6 +105,14 @@
     const flushPara = () => { if (para.length) { html += `<p>${mdInline(para.join(" "))}</p>`; } para = []; };
     while (i < lines.length) {
       let line = lines[i];
+      // ```pinout <unit-id>``` → a placeholder the guide fills with the unit's
+      // data-driven wiring diagram (pinout-svg.js, OTPinout.hydrate).
+      const pm = line.match(/^```pinout\s+([a-z0-9][a-z0-9-]*)\s*$/);
+      if (pm) {
+        flushPara(); i++;
+        while (i < lines.length && !/^```/.test(lines[i])) i++;
+        i++; html += `<div class="pinout-embed" data-unit="${esc(pm[1])}"></div>`; continue;
+      }
       if (/^```/.test(line)) {
         flushPara(); i++; let code = [];
         while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }

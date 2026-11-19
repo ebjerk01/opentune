@@ -88,6 +88,7 @@
     return `<div class="card">${head}
       <div class="banner bad">Check every pin with a multimeter before applying power. Use a current-limited bench supply (about 1 A) and 120 Ω between CAN high and low if the unit is alone on the bus.${u.safety_note ? "<br>" + esc(u.safety_note) : ""}</div>
       ${sum ? `<div class="meta-grid db-bench">${sum}</div>` : ""}
+      ${window.OTPinout ? `<div class="pinout-diagram">${window.OTPinout.svg(u)}</div>` : ""}
       ${conns.map((c) => `
         <h3 class="db-conn">${esc(c.name)}</h3>${c.description ? `<p class="small muted">${esc(c.description)}</p>` : ""}
         <div class="db-tw"><table class="tbl"><thead><tr><th class="mono">Pin</th><th>Function</th><th>Signal</th><th>Note</th></tr></thead><tbody>

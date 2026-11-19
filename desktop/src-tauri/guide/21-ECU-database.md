@@ -19,7 +19,8 @@ Nothing. The database is bundled with the app and works offline.
 - **How to read it** — **OBD** (through the diagnostic port), **bench** (ECU on the desk, wired to its connector), or **boot** (boot mode, usually with the case opened). If only bench or boot is listed, an OBD read is not expected to work.
 - **Checksum family** — the algorithm to choose in the **Checksum** panel, when this edition supports it.
 - **Vehicles** — cars the unit is known to be fitted to. One part number can be used in several cars, and one car can use several part numbers.
-- **Bench pinout** — which connector pins carry power, ground, CAN or K-line, and boot pins. Each pinout has a **confidence level**. Low confidence means the data comes from a single or unverified source.
+- **Bench pinout** — which connector pins carry power, ground, CAN or K-line, and boot pins, as a table and as a **wiring diagram** (pins on the left, wired to the supply and interface on the right). Each pinout has a **confidence level**: *verified* means two or more independent sources agree (not that a unit was measured), *community* means one source, and disputed pins are drawn dashed with a **?** — confirm them by continuity before wiring. Low confidence means the data comes from a single or unverified source.
+- Worked example: [EDC15C6 on the bench](#/guide/44-edc15c6-bench).
 
 ## Common errors
 
