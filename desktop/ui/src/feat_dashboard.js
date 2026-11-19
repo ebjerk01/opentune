@@ -58,8 +58,10 @@
     keys = keys.filter((k) => k !== "rpm" && k !== "boost_kpa" && byKey[k]);
     return keys;
   }
+  // Extra keys another view wants polled too (the Drive view, see OTDash.want).
+  let wanted = [];
   function pidsFor(keys) {
-    const need = new Set(["rpm", ...keys]);
+    const need = new Set(["rpm", ...keys, ...wanted]);
     if (byKey.boost_kpa) BOOST.needs.forEach((k) => need.add(k));
     const pids = new Set();
     need.forEach((k) => { const t = byKey[k]; if (t && t.pid != null && (!supported || supported.has(k))) pids.add(t.pid); });
@@ -122,6 +124,7 @@
         </div>
         <button class="btn sm" id="dashPick" type="button">Choose values…</button>
         <button class="btn sm" id="dashRec" type="button" aria-pressed="false" title="Record the polled values to a Live-log CSV (opens in the Log viewer)">● Record</button>
+        <button class="btn sm" id="dashDrive" type="button" title="Big glanceable tiles of the same polling (Drive view)">Drive view</button>
         <span class="pill neutral" id="dashStatus">idle</span>
         <span class="small muted mono" id="dashRecInfo" aria-live="polite"></span>
       </div>
@@ -363,6 +366,11 @@
         const sp = r && r.values ? r.values.speed : null;
         gps.setVehicleKmh(typeof sp === "number" ? sp : null);
       }
+      // Publish the poll for the Drive view (same data, no second adapter path).
+      if (window.OTDrive) {
+        const vals = window.OTDrive.dashFrame(r && r.values, byKey).concat(gps ? window.OTDrive.samplesFrame(gps.samples()) : []);
+        window.OTDrive.feed.emit({ type: "frame", source: "dashboard", tMs: (r && r.t_ms) || Date.now(), values: vals });
+      }
       if (rec) {
         const vals = Object.assign({}, r && r.values);
         if (texts.vin != null) vals.vin = texts.vin;
@@ -376,6 +384,7 @@
       const m = typeof e === "string" ? e : (e && e.message) || "error";
       const busy = /busy/i.test(m);
       status(busy ? "accent" : "bad", busy ? "adapter busy — retrying" : m);
+      if (window.OTDrive) window.OTDrive.feed.emit({ type: "error", source: "dashboard", message: m, busy });
       if (!busy && ++failures >= 3) stopRecord("connection lost");
     } finally {
       inFlight = false;
@@ -383,6 +392,8 @@
   }
 
   async function start() {
+    if (timer) return;
+    await ensureInit();
     if (timer) return;
     $("dashStart").disabled = true;
     status("accent", "reading supported values…");
@@ -408,6 +419,7 @@
   }
   function stop() {
     stopRecord("stopped");
+    if (timer && window.OTDrive) window.OTDrive.feed.emit({ type: "stop", source: "dashboard" });
     if (timer) clearInterval(timer);
     timer = null;
     $("dashStart").disabled = false;
@@ -439,6 +451,7 @@
   $("dashStart").addEventListener("click", start);
   $("dashStop").addEventListener("click", stop);
   $("dashRec").addEventListener("click", () => (rec ? stopRecord() : startRecord()));
+  $("dashDrive").addEventListener("click", () => window.OTDriveView && window.OTDriveView.showLive());
   // A recording ends when the panel is hidden, the adapter goes away or the
   // window closes (polling itself carries on as before).
   new MutationObserver(() => {
@@ -461,7 +474,22 @@
     drawGauges();
     drawTiles();
   }
+  let ready = null;
+  const ensureInit = () => ready || (ready = init());
   // Build the gauges when the panel is first opened, not at app startup.
-  if (window.onPanelFirstShow) window.onPanelFirstShow("dashboard", init);
-  else init();
+  if (window.onPanelFirstShow) window.onPanelFirstShow("dashboard", ensureInit);
+  else ensureInit();
+
+  // The polling, for the Drive view: it starts / stops this same loop (one
+  // adapter path) and asks for its channels to be polled as well.
+  window.OTDash = {
+    async start() {
+      if (window.OT && window.OT.has && !window.OT.has(["diag"])) throw "no adapter with a diagnostic link — Detect one first";
+      await start();
+      if (!timer) throw $("dashStatus").textContent || "could not start";
+    },
+    stop,
+    running: () => !!timer,
+    want(keys) { wanted = (keys || []).filter((k) => typeof k === "string"); },
+  };
 })();
