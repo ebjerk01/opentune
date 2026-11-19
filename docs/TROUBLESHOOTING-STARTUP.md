@@ -9,6 +9,50 @@ underneath: GTK/WebKit initialisation, the GPU renderer, D-Bus timeouts, or the
 AppImage runtime. This page explains how to find out which one it is on your
 machine.
 
+## Recommended launch environment
+
+Start OpenTune with as little WebKit/GTK tuning as possible. The usual cause
+of a laggy window is a launcher, wrapper script or `.desktop` file that sets
+a workaround variable globally.
+
+| Variable | Recommendation | Why |
+|---|---|---|
+| `WEBKIT_DISABLE_COMPOSITING_MODE` | **Leave unset** | Turns off accelerated compositing: every pixel is painted on the CPU, and the whole window (sidebar included) scrolls slowly. OpenTune shows a one-time warning when it is set. Use it only to work around a GPU fault, and only after measuring (section 2). |
+| `GDK_BACKEND` | Leave unset (native Wayland on a Wayland session) | Native Wayland is preferred. Set `GDK_BACKEND=x11` only if the window will not appear on Wayland. |
+| `WEBKIT_DISABLE_DMABUF_RENDERER` | Leave unset; OpenTune decides | See below. A value you set is never changed. |
+
+Tested 2026-11-19: AMD GPU (amdgpu) on a local Wayland session, with
+compositing and DMA-BUF on, scrolls smoothly. The same machine with
+`WEBKIT_DISABLE_COMPOSITING_MODE=1` lagged across the whole window, sidebar
+included.
+
+### What OpenTune sets itself
+
+On Linux, OpenTune sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` before WebKit
+starts, unless you set that variable yourself. `OPENTUNE_KEEP_WEBKIT_ENV=1`
+skips this and leaves every WebKit variable as inherited (section 2).
+
+OpenTune never sets `WEBKIT_DISABLE_COMPOSITING_MODE` or `GDK_BACKEND`.
+
+### Render check
+
+Alpha/bench builds have a **Render check** card in the Debug panel. It shows
+the rendering environment the app sees (the variables above, whether a
+Wayland/X11 display and an AppImage are in use, the `/dev/dri` render nodes,
+what OpenTune set), the WebGL renderer (`llvmpipe` or `SwiftShader` means
+software GL), and measures scrolling: pick a panel, press **Measure scrolling**
+and scroll it for about 5 seconds. A smooth panel shows about 60 fps with p50
+and p95 frame times near 17 ms on a 60 Hz screen; a CPU-painted window shows
+long frames (over 50 ms) and a low frame rate. Results go to the session log.
+
+On any build, `OPENTUNE_PERF=1` logs the same environment at startup and
+measures the first ~5 s of scrolling after every panel switch, printed to
+stderr:
+
+```bash
+OPENTUNE_PERF=1 ./OpenTune.AppImage 2>&1 | grep -E '\[perf|render:'
+```
+
 ## 1. Get a timing breakdown
 
 ```bash
@@ -208,3 +252,5 @@ is only a workaround for GPU faults.
 - `lsb_release -a`, `uname -r`, `echo $XDG_SESSION_TYPE`, GPU and driver
   (`lspci -k | grep -A3 VGA`, `glxinfo -B | head`).
 - Whether the extracted AppImage and the `.deb` behave the same.
+- For slow scrolling: the Render check output (Debug panel, or the
+  `OPENTUNE_PERF=1` lines).
