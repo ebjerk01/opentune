@@ -5,7 +5,9 @@
 //! for Simos engine ECUs and the DQ/DL/AL/VL/ZF transmission (TCU) families
 //! (DQ200 → AL1000, DQ250-MQB, DQ381, DL382/DL501, ZF-8HP, …), plus the Ford /
 //! Volvo / Mazda **VBF** (Versatile Binary Format) module-flash file (see
-//! [`vbf`]) — a plaintext container that needs no key material.
+//! [`vbf`]) — a plaintext container that needs no key material — and the BMW
+//! **PSdZData SWE** flash container (`.xml` descriptor + `.bin`, NRV2B/gzip
+//! segments; see [`bmw`]), read-only and also key-free.
 //!
 //! ## Pipeline
 //!
@@ -49,14 +51,21 @@
 //! * `lsdlsd88/TCU-FRF-SGO-UNPACKER` (MIT) — SGO v2 structure and format-1 ciphers.
 //! * `dspl1236/vag-tcu-tools` (MIT) — DQ381 LZSS, ZF-8HP LZZ (2047 window),
 //!   repeating-XOR / AES-CBC block crypto, ODX-F external-bin parsing.
+//!
+//! Implemented independently from public descriptions (no code copied):
+//! * UCL NRV2B (M. F. X. J. Oberhumer, GPL-2.0-or-later) — [`nrv2b`]; checked
+//!   against the public vector in BMW's `uclcli` (GPL-3.0-or-later).
+//! * The BMW SWE descriptor layout — sources listed in `docs/BMW-CONTAINERS.md`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod bmw;
 pub mod compress;
 pub mod crypto;
 pub mod error;
 pub mod frf;
+pub mod nrv2b;
 pub mod odx;
 pub mod sgo;
 pub mod vbf;
@@ -81,6 +90,8 @@ pub enum SegmentSource {
     Sgo,
     /// A block from a Ford / Volvo / Mazda VBF container.
     Vbf,
+    /// A `FLASH-SEGMENT` of a BMW PSdZData SWE `.bin`.
+    BmwSwe,
 }
 
 /// One decoded flash segment.
@@ -134,6 +145,9 @@ pub enum InputFormat {
     Sgo,
     /// A Ford / Volvo / Mazda VBF flash container (plaintext; no keys needed).
     Vbf,
+    /// A BMW PSdZData SWE `.xml` descriptor. Its data lives in the matching
+    /// `.bin`, so decode it with [`bmw::unpack_pair`], not [`unpack`].
+    BmwSweXml,
 }
 
 /// Best-effort detection of the top-level container format from a byte prefix.
@@ -144,6 +158,8 @@ pub fn detect(bytes: &[u8]) -> InputFormat {
         InputFormat::Zip
     } else if vbf::looks_like_vbf(bytes) {
         InputFormat::Vbf
+    } else if bmw::looks_like_descriptor(bytes) {
+        InputFormat::BmwSweXml
     } else if is_xml_odx(bytes) {
         InputFormat::Odx
     } else {
@@ -216,7 +232,82 @@ pub fn unpack(bytes: &[u8], keys: &Keys) -> Result<Unpacked> {
         }
         // VBF is plaintext (Ford/Volvo/Mazda); no key material is consulted.
         InputFormat::Vbf => Ok(vbf::Vbf::parse(bytes)?.into_unpacked()),
+        InputFormat::BmwSweXml => Err(Error::Unsupported(
+            "this is a BMW SWE .xml descriptor; its flash data is in the matching .bin — \
+             decode the pair (opentune_container::bmw::unpack_pair, or `opentune container \
+             unpack`, which finds the sibling file)"
+                .into(),
+        )),
     }
+}
+
+/// Largest address span [`flatten`] will allocate (256 MiB).
+pub const MAX_FLAT_SPAN: u64 = 256 * 1024 * 1024;
+
+/// A flat memory image built from decoded segments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlatImage {
+    /// Address of `data[0]` (the lowest segment address).
+    pub base: u32,
+    /// The image; gaps between segments hold the fill byte.
+    pub data: Vec<u8>,
+}
+
+/// Place every segment at its address in one flat image, filling gaps with
+/// `fill`. Refuses (rather than guesses) when a segment is not fully decoded,
+/// has no confirmed address, overlaps another, or the span exceeds
+/// [`MAX_FLAT_SPAN`].
+pub fn flatten(segments: &[Segment], fill: u8) -> Result<FlatImage> {
+    let mut placed: Vec<(u64, u64, &Segment)> = Vec::with_capacity(segments.len());
+    for s in segments {
+        let addr = match (s.decoded, s.address) {
+            (true, Some(a)) => u64::from(a),
+            _ => {
+                return Err(Error::Unsupported(format!(
+                    "segment {} is not flash-ready ({}); no flat image built",
+                    s.id,
+                    s.note.as_deref().unwrap_or(if s.decoded {
+                        "no confirmed address"
+                    } else {
+                        "not fully decoded"
+                    })
+                )))
+            }
+        };
+        if s.data.is_empty() {
+            continue;
+        }
+        placed.push((addr, addr + s.data.len() as u64, s));
+    }
+    if placed.is_empty() {
+        return Err(Error::Unsupported("no segment data to place".into()));
+    }
+    placed.sort_by_key(|p| p.0);
+    for w in placed.windows(2) {
+        if w[1].0 < w[0].1 {
+            return Err(Error::Unsupported(format!(
+                "segments {} and {} overlap; no flat image built",
+                w[0].2.id, w[1].2.id
+            )));
+        }
+    }
+    let base = placed[0].0;
+    let end = placed.iter().map(|p| p.1).max().unwrap_or(base);
+    if end - base > MAX_FLAT_SPAN {
+        return Err(Error::Unsupported(format!(
+            "segments span 0x{:X} bytes (limit 0x{MAX_FLAT_SPAN:X}); no flat image built",
+            end - base
+        )));
+    }
+    let mut data = vec![fill; (end - base) as usize];
+    for (a, _, s) in &placed {
+        let off = (a - base) as usize;
+        data[off..off + s.data.len()].copy_from_slice(&s.data);
+    }
+    Ok(FlatImage {
+        base: base as u32,
+        data,
+    })
 }
 
 #[cfg(test)]
@@ -229,5 +320,61 @@ mod tests {
         assert_eq!(detect(b"PK\x03\x04rest"), InputFormat::Zip);
         assert_eq!(detect(b"<?xml version=\"1.0\"?><ODX/>"), InputFormat::Odx);
         assert_eq!(detect(&[0x9f, 0x3a, 0x11, 0x00]), InputFormat::Frf);
+        assert_eq!(
+            detect(
+                b"<?xml version=\"1.0\"?><BINARY-FLASHBLOCK><FLASH-SEGMENTS/></BINARY-FLASHBLOCK>"
+            ),
+            InputFormat::BmwSweXml
+        );
+    }
+
+    fn seg(id: &str, address: Option<u32>, data: &[u8], decoded: bool) -> Segment {
+        Segment {
+            id: id.into(),
+            address,
+            data: data.to_vec(),
+            compression: Compression::None,
+            method: String::new(),
+            source: SegmentSource::BmwSwe,
+            decoded,
+            note: None,
+        }
+    }
+
+    #[test]
+    fn flatten_places_segments_and_refuses_ambiguity() {
+        let img = flatten(
+            &[
+                seg("b", Some(0x1008), &[3, 4], true),
+                seg("a", Some(0x1000), &[1, 2], true),
+            ],
+            0xFF,
+        )
+        .unwrap();
+        assert_eq!(img.base, 0x1000);
+        assert_eq!(
+            img.data,
+            vec![1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 3, 4]
+        );
+        // Overlap, undecoded and unaddressed segments are refused.
+        assert!(flatten(
+            &[
+                seg("a", Some(0), &[1, 2], true),
+                seg("b", Some(1), &[3], true)
+            ],
+            0
+        )
+        .is_err());
+        assert!(flatten(&[seg("a", Some(0), &[1], false)], 0).is_err());
+        assert!(flatten(&[seg("a", None, &[1], true)], 0).is_err());
+        // Span limit.
+        assert!(flatten(
+            &[
+                seg("a", Some(0), &[1], true),
+                seg("b", Some(0x2000_0000), &[1], true)
+            ],
+            0
+        )
+        .is_err());
     }
 }

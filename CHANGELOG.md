@@ -12,12 +12,6 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
-- Evidence level **`example`** (below `implemented`) for placeholder definitions:
-  never used to identify a real unit, labelled "Example — placeholder data".
-- Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
-  `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
-  `implemented` evidence.
-
 ### Changed
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the

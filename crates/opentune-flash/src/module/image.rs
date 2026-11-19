@@ -213,6 +213,7 @@ impl ModuleImage {
             ContainerKind::OdxF => "odx-f",
             ContainerKind::Sgo => "sgo",
             ContainerKind::Vbf => "vbf",
+            ContainerKind::BmwSwe => "bmw-swe",
         };
         let identity = TargetIdentity {
             part_numbers: if u.kind == ContainerKind::Vbf {
@@ -271,6 +272,14 @@ fn block_from_segment(s: &Segment) -> ModuleBlock {
     b.address_known = s.address.is_some();
     b.encoding = match &s.source {
         SegmentSource::Vbf => BlockEncoding::Plain,
+        // Decoding a BMW SWE to plain bytes is supported; how those bytes go
+        // over the wire (compressed or not, signature handling) is not
+        // publicly documented, so the module flasher refuses them.
+        SegmentSource::BmwSwe => BlockEncoding::Other(
+            "BMW SWE segment: the UDS transfer encoding and signature handling are not \
+             publicly documented; flashing BMW containers is not implemented"
+                .into(),
+        ),
         SegmentSource::Sgo => BlockEncoding::Other(format!(
             "SGO block (storage '{}'): SGO is a KWP2000-era container and its UDS wire \
              encoding is not implemented",

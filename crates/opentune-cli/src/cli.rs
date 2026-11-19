@@ -336,7 +336,7 @@ pub enum Command {
         #[arg(long, default_value = "ecudefs")]
         ecudefs: PathBuf,
     },
-    /// Decode a VAG/VW-Group flash container (FRF / ODX / ODX-F / SGO).
+    /// Decode a flash container (VAG FRF / ODX / ODX-F / SGO, Ford VBF, BMW SWE).
     Container {
         #[command(subcommand)]
         action: ContainerAction,
@@ -876,14 +876,27 @@ pub struct CodingConn {
 
 #[derive(Subcommand)]
 pub enum ContainerAction {
-    /// Decode a container, auto-detecting FRF / ZIP / ODX / ODX-F / SGO.
+    /// Decode a container, auto-detecting FRF / ZIP / ODX / ODX-F / SGO / VBF
+    /// and BMW PSdZData SWE pairs (`<class>_<id>.bin|xml.<version>`).
     ///
     /// All key material is CALLER-SUPPLIED via the flags below; this tool ships
-    /// no keys. A bare, already-plaintext ODX/ZIP/SGO needs no keys at all.
+    /// no keys. A bare, already-plaintext ODX/ZIP/SGO/VBF/SWE needs no keys at all.
     Unpack {
-        /// Input container file (format is auto-detected from its contents).
+        /// Input container file (format is auto-detected from its contents;
+        /// a BMW SWE is recognised by its file name or its .xml descriptor).
         #[arg(long = "in")]
         input: PathBuf,
+        /// BMW SWE only: the other half of the pair (the .bin for an .xml input,
+        /// or the .xml for a .bin). Default: the sibling with the same name.
+        #[arg(long)]
+        pair: Option<PathBuf>,
+        /// Also write a flat image of all segments placed at their addresses.
+        /// Refused when any segment is not flash-ready or segments overlap.
+        #[arg(long)]
+        flat: Option<PathBuf>,
+        /// Fill byte for gaps in the --flat image, hex (default FF).
+        #[arg(long, default_value = "FF")]
+        fill: String,
         /// Write one file per decoded segment into this directory.
         #[arg(long)]
         outdir: Option<PathBuf>,
@@ -907,6 +920,17 @@ pub enum ContainerAction {
         /// Which SGO format-1 cipher convention to use.
         #[arg(long, value_enum, default_value_t = SgoCipherArg::Progressive)]
         sgo_cipher: SgoCipherArg,
+    },
+    /// Identify a container file without decoding its payload: the detected
+    /// format and, for a BMW SWE, its process class, id, version and the
+    /// descriptor summary (segments, compression, signature/checksum metadata).
+    Identify {
+        /// The file to identify.
+        #[arg(long = "in")]
+        input: PathBuf,
+        /// BMW SWE only: the .xml descriptor when it is not the sibling of --in.
+        #[arg(long)]
+        pair: Option<PathBuf>,
     },
 }
 

@@ -120,6 +120,22 @@ The driver's USB access uses [kevinmehall/nusb](https://github.com/kevinmehall/n
 
 Both GPL-3 tools bundle **Infineon MiniMon**'s K-line primary loader and monitor kernel (`LOADK.bin`, 32 bytes; `MINIMONK.bin`, 394 bytes) as binaries only. MiniMon is Infineon freeware, not GPL and without source, so OpenTune does **not** ship it: the loader and kernel are user-supplied files, recognised by SHA-256 only (`protocol::KNOWN_PAYLOADS`). See [C167-BSL.md](C167-BSL.md).
 
+## BMW PSdZData SWE flash containers
+
+The `opentune_container::bmw` decoder and the `nrv2b` codec are written from
+these public sources only (facts; no code copied). Full survey and the
+verified/unverified split: [BMW-CONTAINERS.md](BMW-CONTAINERS.md).
+
+| Source | Licence | What OpenTune learned |
+|---|---|---|
+| [I CAN Hack — OEM update files, BMW (SWFL)](https://icanhack.nl/knowledge-base/reverse-engineering/oem-update-files/) | Public article, no open reuse licence identified | The `.xml`/`.bin` pair naming, the `BINARY-FLASHBLOCK` descriptor with `Ident` / `SignatureTable` / `Checksum` SDG groups, the `FLASH-SEGMENT` source/target address table and the `COMPRESSION-STATUS` attribute; compressed segments are NRV. Facts only. |
+| [afflux/uclcli](https://github.com/afflux/uclcli) (BMW Group) | GPL-3.0-or-later | The exact codec variant: `ucl_nrv2b_decompress_safe_8` over the raw segment bytes, no UCL header; its public doctest vector (12 bytes → 1024 × `A5`) is a unit test of `nrv2b`. GPL-3.0 → compatible. |
+| [UCL data compression library](https://www.oberhumer.com/opensource/ucl/) (M. F. X. J. Oberhumer) | GPL-2.0-or-later | The NRV2B algorithm (literal flags, gamma-coded distances and lengths, `0xD00` length bonus, end marker, "input fully consumed" rule). `nrv2b` is an independent implementation. GPL-2.0-or-later → compatible. |
+| [JackieZ123430/psdzdata-swfl-inspector](https://github.com/JackieZ123430/psdzdata-swfl-inspector) | MIT | The `psdzdata/swe/<class>/<class>_<id>.{bin,xml}.<version>` layout, matching elements by local name, optional `0x` address prefixes, inclusive ranges, "uncompressed ⇒ equal source/target lengths", NRV2B for `COMPRESSED`, and its caveat that releases may differ. |
+| [speidy/BMW-SWE-extractor](https://github.com/speidy/BMW-SWE-extractor) | No licence (all rights reserved); facts only | Optional `LONG-NAME`, `COMPRESSION-METHOD` (`gz` / `nrv`) and `CHECKSUM` children; its sample shows a gzip segment whose target range is the *compressed* length — why OpenTune reports, not assumes, that relation. |
+| [CDFN/bmw-virtual-reader](https://github.com/CDFN/bmw-virtual-reader) | No licence; facts only | BTLD + SWFL segments combined into one flat image by target address. |
+| [LeonB1ham/svt-psdzdata-export](https://github.com/LeonB1ham/svt-psdzdata-export) | No licence; facts only | The `swe/` class folders (btld, swfl, swfk, cafd, …) and that CAFD files are `.caf`. |
+
 ## Licence compatibility
 
 OpenTune is **GPL-3.0-or-later**. The rules we follow when drawing on the work
@@ -132,7 +148,7 @@ above:
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
-  NefMotoOpenSource, FreeSSM.
+  NefMotoOpenSource, FreeSSM, UCL (NRV2B, 2-or-later) and uclcli.
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
   RomRaider, pyA2L, Speeduino and LibreTune.
