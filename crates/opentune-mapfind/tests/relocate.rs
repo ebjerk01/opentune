@@ -236,8 +236,13 @@ fn derived_definition_keeps_relocated_maps_with_moved_axes() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ecudefs/bosch-me7.json");
     let mut def = EcuDef::from_json(&std::fs::read_to_string(path).unwrap()).unwrap();
     def.maps = vec![counted_def("boost", da), plain_def("gone", 0x5000, 4, 8)];
+    def.provenance.as_mut().unwrap().evidence = "vehicle-tested".into();
     let r = relocate(&a, &def.maps, &b, &RelocateOptions::default());
     let d = derive_def(&def, &r, "src-relocated", "a.bin", "b.bin");
+    let prov = d.provenance.as_ref().unwrap();
+    assert_eq!(prov.evidence, "real-image-tested", "evidence is capped");
+    let derived_from = prov.sources.last().unwrap();
+    assert!(derived_from.contains("from definition 'bosch-me7'"));
     assert_eq!(d.id, "src-relocated");
     assert_eq!(d.maps.len(), 1);
     let m = &d.maps[0];

@@ -224,11 +224,29 @@ pub enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
-    /// Load definition pack(s) from a directory and report their contents.
+    /// Load definition pack(s) from a directory and report their contents
+    /// (`packs validate <dir>`: the contributor checks CI runs).
+    #[command(args_conflicts_with_subcommands = true)]
     Packs {
         /// A pack directory (contains pack.json), or a root holding several packs.
         #[arg(default_value = "packs")]
         dir: PathBuf,
+        #[command(subcommand)]
+        action: Option<PacksAction>,
+    },
+    /// Scan data files for personal data (VIN-like identifiers, e-mail
+    /// addresses, serial-number-like values) before contributing them. Exits
+    /// non-zero on any finding; findings are printed redacted.
+    PrivacyScan {
+        /// Files or directories (searched recursively for data/text files).
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// Allow-list file: exact synthetic values to ignore, one per line.
+        #[arg(long)]
+        allow: Option<PathBuf>,
+        /// Also emit GitHub Actions `::error` annotations.
+        #[arg(long)]
+        github: bool,
     },
     /// List archived reads in a backup vault directory.
     Vault {
@@ -696,6 +714,25 @@ pub enum DbAction {
 }
 
 #[derive(Subcommand)]
+pub enum PacksAction {
+    /// Check pack(s) for contribution: manifest id/name/version and provenance
+    /// (sources, license, evidence), every definition file loads and
+    /// validates, unknown sub-directories, and a privacy scan of every text
+    /// file. Exits non-zero on any error (see docs/DEFINITION-PACKS.md).
+    Validate {
+        /// A pack directory, or a root holding several packs.
+        #[arg(default_value = "packs")]
+        dir: PathBuf,
+        /// Allow-list file for the privacy scan (exact synthetic values).
+        #[arg(long)]
+        allow: Option<PathBuf>,
+        /// Also print warnings (off by default; only errors show otherwise).
+        #[arg(long)]
+        warnings: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum EcudefsAction {
     /// List the ECU definitions in a directory.
     List {
@@ -717,6 +754,13 @@ pub enum EcudefsAction {
         /// Also print warnings (off by default; only errors show otherwise).
         #[arg(long)]
         warnings: bool,
+        /// Treat a missing `provenance` block as an error (the CI gate and the
+        /// rule for new contributions); without it, it is a warning.
+        #[arg(long)]
+        require_provenance: bool,
+        /// Allow-list file for the privacy scan (exact synthetic values).
+        #[arg(long)]
+        allow: Option<PathBuf>,
     },
     /// Relocate a definition's maps onto a sibling software's read by content
     /// signature (axes/header must match; cell values may differ) and emit a

@@ -42,7 +42,10 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
             path,
             image,
             warnings,
+            require_provenance,
+            allow,
         } => {
+            let allow = super::contrib::load_allow(allow.as_deref())?;
             let img = match &image {
                 Some(p) => Some(std::fs::read(p).with_context(|| format!("read {}", p.display()))?),
                 None => None,
@@ -80,6 +83,10 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
                 if let Some(img) = &img {
                     issues.extend(def.validate_against_image(img));
                 }
+                if require_provenance {
+                    opentune_core::provenance::require(&mut issues);
+                }
+                issues.extend(super::contrib::privacy_issues(&text, &allow));
                 let errs = opentune_core::validate::error_count(&issues);
                 let warns = opentune_core::validate::warn_count(&issues);
                 total_errors += errs;
@@ -97,18 +104,7 @@ pub fn ecudefs(action: EcudefsAction) -> Result<()> {
                     println!("{name}: {errs} error(s), {warns} warning(s)");
                 }
                 for i in shown {
-                    let loc = if i.location.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" [{}]", i.location)
-                    };
-                    println!(
-                        "  {:<6} {:<28}{} {}",
-                        i.severity.tag(),
-                        i.code,
-                        loc,
-                        i.message
-                    );
+                    super::contrib::print_issue(i);
                 }
             }
             println!(
