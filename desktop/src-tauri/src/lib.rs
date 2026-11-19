@@ -32,6 +32,7 @@ use tauri::Manager;
 // adapter hub `adapter::AdapterHub` and the public engine crates). The guided
 // Auto-debug wizard is UI-only (it orchestrates these commands from the browser).
 pub mod adapter;
+mod feat_actuator;
 mod feat_adaptation;
 mod feat_candump;
 mod feat_coding;
@@ -176,6 +177,7 @@ pub fn builder_with(
             app.manage(feat_candump::CandumpState::default());
             app.manage(feat_logging::LiveLogState::default());
             app.manage(feat_haldex::HaldexState::default());
+            app.manage(feat_actuator::ActuatorState::default());
             app.manage(std::sync::Arc::new(feat_ts::TsState::default()));
             startup::mark("setup plugin: done (state managed)");
             Ok(())
@@ -226,6 +228,11 @@ macro_rules! core_command_list {
             feat_adaptation::adaptation_kwp_read,
             feat_adaptation::adaptation_kwp_basic,
             feat_adaptation::adaptation_kwp_adapt,
+            feat_actuator::actuator_list,
+            feat_actuator::actuator_plan,
+            feat_actuator::actuator_start,
+            feat_actuator::actuator_status,
+            feat_actuator::actuator_stop,
             feat_service::service_plan,
             feat_service::service_run,
             feat_logging::log_params,
