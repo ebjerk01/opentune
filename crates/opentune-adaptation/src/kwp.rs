@@ -573,6 +573,10 @@ pub struct GroupReading {
     /// The first attempt hit a session-loss symptom and the read was retried
     /// after re-establishing the session.
     pub reestablished: bool,
+    /// What the decode could not account for (a partial trailing cell, cells
+    /// past [`MAX_CELLS`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 /// Read a `kwp_group` channel (`21 <group>`) after starting `login`'s session
@@ -590,12 +594,34 @@ pub fn read_group(
     establish(diag, login)?;
     let (raw, reestablished) =
         with_reestablish(diag, login, &mut |d: &mut dyn RawDiag| read_local(d, group))?;
+    if raw.len() < 3 {
+        // An echo with not even one cell after it is a cut-off answer, not
+        // a reading.
+        return Err(AdaptationError::Protocol(format!(
+            "KWP2000 measuring block {group}: the answer carries no cells ({})",
+            hex(&raw)
+        )));
+    }
+    let mut notes = Vec::new();
+    if raw.len() % 3 != 0 {
+        notes.push(format!(
+            "{} trailing byte(s) do not form a whole cell (kept in raw)",
+            raw.len() % 3
+        ));
+    }
+    if raw.len() / 3 > MAX_CELLS {
+        notes.push(format!(
+            "record has {} cells; only the first {MAX_CELLS} are decoded",
+            raw.len() / 3
+        ));
+    }
     Ok(GroupReading {
         channel: channel.to_string(),
         group,
         cells: cells(&raw),
         raw,
         reestablished,
+        notes,
     })
 }
 
@@ -1205,12 +1231,17 @@ pub fn run_basic_settings(
             .and_then(|rest| expect_selector(rest, &sel, "basic settings read"));
         match r {
             Ok(rec) => {
+                // `status (formula a b)*`: a record without a single cell is
+                // a cut-off answer, not a sample.
                 let (status, body) = match rec.split_first() {
-                    Some((&s, body)) => (s, body),
-                    None => {
+                    Some((&s, body)) if body.len() >= 3 => (s, body),
+                    _ => {
                         failure = Some((
                             format!("poll {i}"),
-                            AdaptationError::Protocol("basic settings record is empty".into()),
+                            AdaptationError::Protocol(format!(
+                                "basic settings record {} carries no cells",
+                                hex(&rec)
+                            )),
                         ));
                         break;
                     }
@@ -1281,6 +1312,64 @@ mod tests {
             ..KwpAddressing::default()
         };
         assert!(empty.validate("x").is_err());
+    }
+
+    #[test]
+    fn a_cut_off_measuring_block_is_an_error_not_an_empty_reading() {
+        // Regression: `61 01` (the echo, then nothing) read as a successful
+        // group with no cells, and `71 BA 00 3C 00` (status only) as a
+        // basic-settings sample with no cells.
+        let def = AdaptationDef::from_json(
+            r#"{"id": "t", "name": "t", "module": "t", "channels": [
+                {"name": "G", "kind": "kwp_group", "group": 1},
+                {"name": "B", "kind": "kwp_basic_settings", "group": 60}]}"#,
+        )
+        .unwrap();
+        let mut d = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            Ok(match req {
+                [0x21, g] => vec![0x61, *g],
+                [0x31, 0xBA, 0x00, g] => vec![0x71, 0xBA, 0x00, *g, 0x00],
+                [0x32, rest @ ..] => [&[0x72][..], &rest[..1]].concat(),
+                [0x27, l] => vec![0x67, *l, 0, 0],
+                [sid, rest @ ..] => [&[sid + 0x40][..], rest].concat(),
+                [] => vec![],
+            })
+        };
+        let e = read_group(&mut d, &def, "G", &KwpLogin::none()).unwrap_err();
+        assert!(e.to_string().contains("no cells"), "{e}");
+        let mut short =
+            |_: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x61, 0x01, 0x1A]) };
+        assert!(read_group(&mut short, &def, "G", &KwpLogin::none()).is_err());
+        let mut ragged = |_: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            Ok(vec![0x61, 0x01, 0x1A, 0, 50, 0x21])
+        };
+        let g = read_group(&mut ragged, &def, "G", &KwpLogin::none()).unwrap();
+        assert_eq!((g.cells.len(), g.raw.len()), (1, 4));
+        assert!(g.notes[0].contains("1 trailing byte"), "{:?}", g.notes);
+        struct Sk;
+        impl SeedKey for Sk {
+            fn id(&self) -> &str {
+                "t"
+            }
+            fn compute(&self, s: &[u8], _: u8) -> opentune_core::Result<Vec<u8>> {
+                Ok(s.to_vec())
+            }
+        }
+        let sk = Sk;
+        let opts = KwpWriteOptions {
+            confirmed: true,
+            ..KwpWriteOptions::default()
+        };
+        let login = KwpLogin::vag().with_security(VAG_SECURITY_LEVEL, &sk);
+        let rep = run_basic_settings(&mut d, &def, "B", 2, 0, &login, &opts).unwrap();
+        assert!(rep.samples.is_empty());
+        assert!(rep.stopped);
+        match rep.outcome {
+            BasicSettingsOutcome::Aborted { message, .. } => {
+                assert!(message.contains("no cells"), "{message}")
+            }
+            o => panic!("{o:?}"),
+        }
     }
 
     #[test]
