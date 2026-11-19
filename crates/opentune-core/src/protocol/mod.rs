@@ -10,6 +10,10 @@
 //! - [`doip_discovery`]: DoIP vehicle discovery, entity status and power mode
 //!   over UDP, and discovered entity → activated [`DoIpTransport`].
 //! - [`elm`]: ELM327 reply parsing + read loop shared by the ELM drivers.
+//! - [`kline`]: the raw (unframed) K-line driver capability.
+//! - [`ssm`]: Subaru Select Monitor 2 framing, init/capabilities, address
+//!   reads, over a raw K-line or an ISO-TP transport.
+//! - [`ssmsim`]: a simulated SSM2 module (tests, demos).
 //! - [`diag`]: the request/response [`DiagTransport`] trait + NRC helpers.
 //! - [`uds`] / [`kwp2000`]: service clients over a `DiagTransport`.
 //! - [`seedkey`]: the seed→key plugin interface for security access.
@@ -20,8 +24,11 @@ pub mod doip;
 pub mod doip_discovery;
 pub mod elm;
 pub mod isotp;
+pub mod kline;
 pub mod kwp2000;
 pub mod seedkey;
+pub mod ssm;
+pub mod ssmsim;
 pub mod tp20channel;
 pub mod tp20sim;
 pub mod uds;
@@ -33,6 +40,7 @@ pub use diag::{check_response, nrc_name, DiagTransport};
 pub use doip::{DoIpStream, DoIpTransport};
 pub use doip_discovery::{DiscoveredEntity, Discovery, DoIpUdpClient, VehicleIdRequest};
 pub use isotp::{CanLink, IsoTp};
+pub use kline::KLineRaw;
 pub use kwp2000::Kwp2000Client;
 pub use seedkey::SeedKey;
 pub use tp20channel::{CanDiag, CanTransportKind, Tp20Channel, Tp20Options};

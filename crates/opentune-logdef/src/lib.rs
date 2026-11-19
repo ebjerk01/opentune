@@ -38,8 +38,11 @@
 //!   Address-read protocols with no OBD/UDS mode (MUT/DMA, Cdbg, …) classify
 //!   here.
 //! * [`ProtocolKind::SubaruSsm`] — Subaru Select Monitor; addressing is a raw
-//!   memory address. (The SSM transport framing is documented in the reference
-//!   `ssm2-protocol.txt`; it is **not** implemented here — this is a def parser.)
+//!   memory address, plus the RomRaider `ecubyteindex`/`ecubit` capability
+//!   flag and `target` in [`LogParam::ssm`]. The [`ssm`] module selects the
+//!   parameters a connected module supports and a [`LiveSession`] in
+//!   [`LogMode::Ssm`] polls them with batched `A8` reads; the wire framing
+//!   lives in `opentune_core::protocol::ssm`.
 //!
 //! ## Conversions
 //!
@@ -64,9 +67,10 @@
 //!
 //! * Dependencies (`<depends>`/`<dependson>` refs and `GetLogParam` references)
 //!   are **captured** in [`LogParam::depends_on`] but not resolved.
-//! * `<dtcodes>` (diagnostic trouble codes) and SSM fast-poll packing hints
-//!   (Format-B `byte`/`bit` response layout) are not modeled; `<dtcodes>`
-//!   presence is noted in [`LogDef::warnings`].
+//! * `<dtcodes>` (diagnostic trouble codes) and the Format-B (`<ecus>`)
+//!   `byte`/`bit` attributes are not modeled; `<dtcodes>` presence is noted in
+//!   [`LogDef::warnings`]. Only the RomRaider `<logger>` capability attributes
+//!   drive SSM selection.
 //! * Unknown `storagetype`, missing/unparsable addresses and unrecognised
 //!   `mode`s are surfaced as warnings rather than dropped.
 
@@ -79,9 +83,12 @@ mod parse;
 
 pub use model::{
     Addressing, AltAddress, Conversion, ConversionFit, ConvertFactor, EcuGroup, LogDef, LogParam,
-    ProtocolGroup, ProtocolKind, SourceFormat, ValueKind,
+    ProtocolGroup, ProtocolKind, SourceFormat, SsmParamInfo, ValueKind,
 };
 pub use parse::parse;
+
+pub mod ssm;
+pub use ssm::{SsmPollConfig, SsmSelection, SsmTarget};
 
 pub mod live;
 pub use live::{decode_text, poll_once, poll_to_csv, Sample, CSV_HEADER};
@@ -441,6 +448,54 @@ mod tests {
         let back: LogParam = serde_json::from_value(v).unwrap();
         assert_eq!(back.value_kind, ValueKind::Text);
         assert_eq!(serde_json::to_value(&back).unwrap()["value_kind"], "text");
+    }
+
+    #[test]
+    fn ssm_capability_target_and_byte_fragments_are_parsed() {
+        let xml = r#"<logger><protocols><protocol id="SSM" baud="4800">
+          <parameters>
+            <parameter id="P1" name="Two-byte" desc="" ecubyteindex="8" ecubit="6" target="3">
+              <address>0x001001</address><address>0x001002</address>
+              <conversions><conversion units="rpm" expr="x/4" format="0"/></conversions>
+            </parameter>
+            <parameter id="P2" name="Gappy" desc="">
+              <address>0x001001</address><address>0x001009</address>
+              <conversions><conversion units="" expr="x"/></conversions>
+            </parameter>
+          </parameters>
+          <switches><switch id="S1" name="Sw" desc="" byte="0x001010" bit="3" ecubyteindex="9" ecubit="3" target="1"/></switches>
+          <ecuparams><ecuparam id="E1" name="Rom" desc="" target="2">
+            <ecu id="5A5A000001"><address length="4">0x00FF80</address></ecu>
+            <conversions><conversion units="" expr="x" storagetype="float"/></conversions>
+          </ecuparam></ecuparams>
+        </protocol></protocols></logger>"#;
+        let def = parse(xml).unwrap();
+        let get = |id: &str| def.params().find(|(_, _, p)| p.id == id).unwrap().2.clone();
+        let p1 = get("P1");
+        assert_eq!(
+            p1.addressing,
+            Addressing::Memory {
+                address: 0x1001,
+                length: 2,
+                bit: None
+            }
+        );
+        assert_eq!(p1.ssm.unwrap().capability(), Some((8, 6)));
+        assert_eq!(p1.ssm.unwrap().target, Some(3));
+        // Non-consecutive fragments: first only, with a warning.
+        assert!(matches!(
+            get("P2").addressing,
+            Addressing::Memory { length: 1, .. }
+        ));
+        assert!(def.warnings.iter().any(|w| w.contains("'P2'")));
+        assert!(!def.warnings.iter().any(|w| w.contains("'P1'")));
+        assert_eq!(get("S1").ssm.unwrap().capability(), Some((9, 3)));
+        let e1 = get("E1");
+        assert_eq!(e1.ssm.unwrap().target, Some(2));
+        assert_eq!(e1.ssm.unwrap().capability(), None);
+        // Non-SSM parameters carry no SSM info.
+        let obd = parse(OBD_LOGGER).unwrap();
+        assert!(obd.params().all(|(_, _, p)| p.ssm.is_none()));
     }
 
     #[test]

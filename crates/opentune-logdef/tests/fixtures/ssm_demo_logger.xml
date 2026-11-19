@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!-- Synthetic SSM logger definition for OpenTune's SSM simulator
+     (opentune_core::protocol::ssmsim::demo). The ROM IDs, addresses and
+     capability bits are made up; this describes no real vehicle. -->
+<logger version="opentune-ssm-demo">
+  <protocols>
+    <protocol id="SSM" baud="4800">
+      <parameters>
+        <parameter id="P_ECT" name="Coolant Temperature" desc="demo" ecubyteindex="8" ecubit="7" target="1">
+          <address>0x001000</address>
+          <conversions><conversion units="C" expr="x-40" format="0"/></conversions>
+        </parameter>
+        <parameter id="P_RPM" name="Engine Speed" desc="demo" ecubyteindex="8" ecubit="6" target="3">
+          <address>0x001001</address>
+          <address>0x001002</address>
+          <conversions><conversion units="rpm" expr="x/4" format="0"/></conversions>
+        </parameter>
+        <parameter id="P_VSS" name="Vehicle Speed" desc="demo" ecubyteindex="8" ecubit="5" target="3">
+          <address>0x001003</address>
+          <conversions><conversion units="km/h" expr="x" format="0"/></conversions>
+        </parameter>
+        <parameter id="P_NOPE" name="Unsupported Channel" desc="capability bit clear" ecubyteindex="8" ecubit="0" target="1">
+          <address>0x001020</address>
+          <conversions><conversion units="" expr="x"/></conversions>
+        </parameter>
+        <parameter id="P_TCU" name="TCU Channel" desc="transmission only" ecubyteindex="8" ecubit="7" target="2">
+          <address>0x001030</address>
+          <conversions><conversion units="" expr="x"/></conversions>
+        </parameter>
+        <parameter id="P_DERIVED" name="Derived Channel" desc="computed from P_RPM" target="1">
+          <depends><ref parameter="P_RPM"/></depends>
+          <conversions><conversion units="" expr="x*2"/></conversions>
+        </parameter>
+      </parameters>
+      <switches>
+        <switch id="S_DEMO" name="Demo Switch" desc="toggles every read" byte="0x001010" bit="3" ecubyteindex="9" ecubit="3" target="1"/>
+      </switches>
+      <ecuparams>
+        <ecuparam id="E_FLOAT" name="ROM Float" desc="per-ROM float" target="1">
+          <ecu id="5A5A000001"><address length="4">0x00FF80</address></ecu>
+          <ecu id="5A5A000002"><address length="4">0x00FF90</address></ecu>
+          <conversions><conversion units="deg" expr="x" format="0.00" storagetype="float"/></conversions>
+        </ecuparam>
+      </ecuparams>
+    </protocol>
+  </protocols>
+</logger>

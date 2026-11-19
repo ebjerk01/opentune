@@ -19,8 +19,9 @@
 //! negative (`0x7F …`) or short response is likewise recorded in the sample's
 //! note, never guessed, and a non-linear conversion yields the raw value with a
 //! note instead of an approximation. A signed `storagetype` (`int8`/`int16`/
-//! `int32`) is sign-extended before the conversion; [`Sample::raw`] keeps the
-//! unsigned bit pattern as read.
+//! `int32`) is sign-extended and a `float` one read as an IEEE-754 single
+//! before the conversion; [`Sample::raw`] keeps the unsigned bit pattern as
+//! read.
 //!
 //! [`poll_once`] issues one request per channel. The [`crate::fast`] module
 //! adds a faster mode over UDS `0x2C` (DynamicallyDefineDataIdentifier) that
@@ -155,6 +156,11 @@ pub(crate) fn decode_uint(bytes: &[u8], endian: Endian) -> u64 {
 /// RomRaider/EcuFlash definitions intend. Anything else (unsigned, unknown,
 /// or a raw value wider than the declared type) is taken as unsigned.
 fn conversion_input(p: &LogParam, raw: u64) -> f64 {
+    // A `float` storagetype is the IEEE-754 single of the 4 bytes read
+    // (RomRaider's per-ROM SSM parameters are often floats).
+    if p.storagetype == Some(DataType::F32) && raw >> 32 == 0 {
+        return f64::from(f32::from_bits(raw as u32));
+    }
     let bits = match p.storagetype {
         Some(DataType::S8) => 8,
         Some(DataType::S16) => 16,

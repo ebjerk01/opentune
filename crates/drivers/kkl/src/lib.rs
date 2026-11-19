@@ -54,6 +54,7 @@
 //! bit-banging a K-line from userspace and matches what freediag / VAG-COM do.
 
 use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
+use opentune_core::protocol::kline::KLineRaw;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
@@ -363,6 +364,48 @@ impl KklTransport {
     }
 }
 
+/// The bus unframed, for protocols that frame their own packets (SSM2). A KKL
+/// cable hears its own transmission, so the echo comes back in `read`.
+impl KLineRaw for KklTransport {
+    fn set_baud(&mut self, baud: u32) -> Result<()> {
+        self.port
+            .set_baud_rate(baud)
+            .map_err(|e| Error::Config(format!("cannot set K-line baud {baud}: {e}")))
+    }
+
+    fn clear_input(&mut self) -> Result<()> {
+        self.port
+            .clear(serialport::ClearBuffer::Input)
+            .map_err(|e| Error::Io(std::io::Error::other(e)))
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.write_raw(bytes)
+    }
+
+    fn read(&mut self, buf: &mut [u8], timeout_ms: u64) -> Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        loop {
+            match self.port.read(buf) {
+                Ok(n) if n > 0 => return Ok(n),
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(e) => return Err(Error::Io(e)),
+            }
+            if Instant::now() >= deadline {
+                return Err(Error::Timeout(timeout_ms));
+            }
+        }
+    }
+
+    fn echoes(&self) -> bool {
+        true
+    }
+}
+
 impl DiagTransport for KklTransport {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
         self.send_framed(req)?;
@@ -476,6 +519,12 @@ impl Interface for KklDriver {
         self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
     }
 
+    /// The raw K-line (echo included) for self-framing protocols such as
+    /// SSM2; open with `options["init"] = "none"` to skip the wake-up.
+    fn kline(&mut self) -> Option<&mut dyn KLineRaw> {
+        self.transport.as_mut().map(|t| t as &mut dyn KLineRaw)
+    }
+
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let port = cfg
             .options
@@ -493,9 +542,11 @@ impl Interface for KklDriver {
         match init {
             "fast" => transport.fast_init()?,
             "5baud" | "slow" => transport.five_baud_init()?,
+            // No wake-up: protocols such as SSM2 just start talking.
+            "none" => {}
             other => {
                 return Err(Error::Config(format!(
-                    "unknown init \"{other}\" (expected \"fast\" or \"5baud\")"
+                    "unknown init \"{other}\" (expected \"fast\", \"5baud\" or \"none\")"
                 )))
             }
         }
@@ -943,6 +994,42 @@ mod tests {
             key_bytes: None,
         });
         assert!(d.diag().is_some(), "diag() must expose the KKL transport");
+        assert!(d.kline().is_some(), "kline() must expose the raw K-line");
+    }
+
+    /// SSM2 over the raw K-line of a pseudo-terminal "cable": the far end
+    /// echoes the request and answers like a module, and the core SSM
+    /// transport strips the echo and checks the reply.
+    #[cfg(unix)]
+    #[test]
+    fn ssm_runs_over_the_raw_kline() {
+        use opentune_core::protocol::ssm::{build_packet, SsmClient, SsmKLine, ECU, TESTER};
+        use serialport::SerialPort;
+        use std::io::{Read, Write};
+        let (host, mut adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let mut t = KklTransport {
+            port: Box::new(host),
+            target: ECU,
+            source: TESTER_ADDR,
+            key_bytes: None,
+        };
+        let req = build_packet(ECU, TESTER, &[0xA8, 0x00, 0x00, 0x10, 0x00]).unwrap();
+        let n = req.len();
+        let ecu = std::thread::spawn(move || {
+            adapter.set_timeout(Duration::from_secs(2)).unwrap();
+            let mut out = vec![0u8; n];
+            adapter.read_exact(&mut out).unwrap(); // becomes the echo
+            out.extend(build_packet(TESTER, ECU, &[0xE8, 0x6E]).unwrap());
+            adapter.write_all(&out).unwrap();
+            adapter.flush().unwrap();
+            adapter
+        });
+        let mut kl = SsmKLine::new(&mut t, ECU);
+        let got = SsmClient::new(&mut kl, 1000)
+            .read_addresses(&[0x00_1000])
+            .unwrap();
+        let _adapter = ecu.join().unwrap();
+        assert_eq!(got, vec![0x6E]);
     }
     use std::collections::VecDeque;
 

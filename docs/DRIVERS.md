@@ -703,6 +703,40 @@ stops before the requested length is an error, never a short image.
 is tested against a mocked serial link only. The desktop lists it in alpha
 builds.
 
+## 3k. Optional: raw K-line (`kline`) for SSM2
+
+Some K-line protocols frame their own packets: Subaru SSM2 has its own
+`80 <dst> <src> <len>` header and checksum, runs at 4800 baud and needs no
+wake-up, so the KWP2000 `DiagTransport` a K-line driver normally exposes
+cannot carry it. A driver that can hand out the bus unframed overrides
+`kline()` to return a `KLineRaw` (`opentune_core::protocol::kline`):
+
+- `set_baud`, `clear_input`, `write(bytes)` (sent as is, nothing added) and
+  `read(buf, timeout)` (at least one byte, or `Error::Timeout`);
+- `echoes()`: `true` when `read` also returns the tester's own bytes (the
+  half-duplex echo of a plain cable; the protocol layer reads it back and
+  compares it), `false` when the adapter strips it;
+- `max_write()`: the largest burst the adapter accepts, if limited.
+
+`kline()` is available after `open`; open with `options["init"] = "none"` to
+skip the fast/5-baud wake-up. The default returns `None`. The SSM transport
+(`opentune_core::protocol::ssm::SsmKLine`) runs on any `KLineRaw` and is
+itself a payload-level `DiagTransport` (`A8 …` in, `E8 …` out), the same
+shape as an ISO-TP transport carrying SSM over CAN. See
+[LIVE-LOGGING.md](LIVE-LOGGING.md#subaru-ssm2).
+
+| Driver | `kline()` | Echo | Notes |
+|---|---|---|---|
+| `kkl` | the serial port | included | `init=none` skips the wake-up; baud set per call |
+| `kline-bridge` | the firmware's `0x10 transceive` | removed on the device | 80-byte limit per transceive; the reply ends after a 60 ms quiet gap, so a module slower than that to start answering is missed (unverified for SSM) |
+| `elm327`, `elm327obd` | none | — | not wired: the chip frames every ISO 9141 message itself and opens with a 5-baud wake-up that SSM2 does not use; whether that can carry SSM needs a bench check |
+
+For tests and demos, `opentune log --driver ssmsim --transport ssm|ssm-can`
+runs against `opentune_core::protocol::ssmsim::SsmSim`, a synthetic module
+that is both a `KLineRaw` bus (with an optional echo) and a CAN payload
+transport. `ssmsim` is handled by the `log` command, not the registry, like
+`obdsim` for `opentune obd`.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware

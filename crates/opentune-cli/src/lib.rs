@@ -56,6 +56,7 @@ mod obd_cmd;
 mod recipe_cmd;
 mod registry;
 mod seedkey_cmd;
+mod ssm_log;
 mod ts_cmd;
 mod util;
 

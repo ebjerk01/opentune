@@ -184,8 +184,8 @@ pub fn run_log(
     params: &[String],
     fast: opentune_logdef::FastLogConfig,
     gps: Option<LogGps>,
+    ssm: &crate::ssm_log::SsmLogArgs,
 ) -> Result<()> {
-    use opentune_core::CoreDiag;
     use opentune_logdef::{LiveSession, LogMode};
 
     let raw = std::fs::read(def_path)
@@ -196,11 +196,26 @@ pub fn run_log(
 
     let ids: Vec<&str> = params.iter().map(String::as_str).collect();
 
-    let mut drv = open_diag_driver(reg, driver, store)?;
-    let transport = drv
-        .diag()
-        .ok_or_else(|| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
-    let mut diag = CoreDiag::new(transport, timeout_ms);
+    let mut link: Box<dyn opentune_core::RawDiag> =
+        match crate::ssm_log::open(reg, driver, store, timeout_ms, ssm)? {
+            Some(ssm_diag) => ssm_diag,
+            None => {
+                let mut drv = open_diag_driver(reg, driver, store)?;
+                if drv.diag().is_none() {
+                    return Err(anyhow!(
+                        "driver '{driver}' does not expose a diagnostic transport"
+                    ));
+                }
+                Box::new(move |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+                    drv.diag()
+                        .ok_or("the transport is closed")?
+                        .request(req, timeout_ms)
+                        .map_err(|e| e.to_string())
+                })
+            }
+        };
+    let diag: &mut dyn opentune_core::RawDiag = &mut *link;
+    let (def, fast) = crate::ssm_log::prepare(diag, def, fast, ssm, &ids)?;
 
     let mut session = LiveSession::new(&def, &ids, fast).map_err(|e| anyhow!("{e}"))?;
     let mut gps = match gps {
@@ -223,7 +238,7 @@ pub fn run_log(
         }
         None => None,
     };
-    let started = session.start(&mut diag).clone();
+    let started = session.start(diag).clone();
     match started.mode {
         LogMode::Fast2c => {
             let dids: Vec<String> = started
@@ -251,6 +266,12 @@ pub fn run_log(
             "mode: polling ({})",
             started.reason.as_deref().unwrap_or("no reason given")
         ),
+        LogMode::Ssm => {
+            eprintln!("mode: ssm-a8");
+            for n in &started.notes {
+                eprintln!("  note: {n}");
+            }
+        }
     }
 
     let t0 = std::time::Instant::now();
@@ -258,16 +279,16 @@ pub fn run_log(
         Some(path) => {
             let mut f = std::fs::File::create(path)
                 .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
-            session.run_csv_gps(&mut diag, rounds, interval_ms, gps.as_mut(), &mut f)
+            session.run_csv_gps(diag, rounds, interval_ms, gps.as_mut(), &mut f)
         }
         None => {
             let mut stdout = std::io::stdout().lock();
-            session.run_csv_gps(&mut diag, rounds, interval_ms, gps.as_mut(), &mut stdout)
+            session.run_csv_gps(diag, rounds, interval_ms, gps.as_mut(), &mut stdout)
         }
     };
     let elapsed = t0.elapsed().as_secs_f64();
     // Always clear the dynamic DIDs, even if writing the CSV failed.
-    let st = session.stop(&mut diag).clone();
+    let st = session.stop(diag).clone();
     result?;
 
     if st.mode == LogMode::Polling && started.mode == LogMode::Fast2c {

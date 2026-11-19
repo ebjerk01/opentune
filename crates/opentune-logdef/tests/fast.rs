@@ -45,6 +45,7 @@ fn param(id: &str, addressing: Addressing, factor: f64, offset: f64) -> LogParam
         depends_on: Vec::new(),
         convert_group: None,
         enabled: None,
+        ssm: None,
     }
 }
 

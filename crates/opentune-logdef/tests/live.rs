@@ -46,6 +46,7 @@ fn param_with(
         depends_on: Vec::new(),
         convert_group: None,
         enabled: None,
+        ssm: None,
     }
 }
 

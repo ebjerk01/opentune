@@ -385,6 +385,7 @@ mod tests {
             depends_on: Vec::new(),
             convert_group: None,
             enabled: None,
+            ssm: None,
         }
     }
 

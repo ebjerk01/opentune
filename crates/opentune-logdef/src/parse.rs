@@ -11,7 +11,7 @@ use roxmltree::{Document, Node};
 use crate::convert::{fit_equation, parse_address, storage_type};
 use crate::model::{
     Addressing, AltAddress, Conversion, ConvertFactor, EcuGroup, LogDef, LogParam, ProtocolGroup,
-    ProtocolKind, SourceFormat, ValueKind,
+    ProtocolKind, SourceFormat, SsmParamInfo, ValueKind,
 };
 use crate::{Error, Result};
 use opentune_core::ecudef::{DataType, Endian};
@@ -178,7 +178,9 @@ fn parse_logger(root: Node) -> Result<LogDef> {
         for switches in proto.children().filter(|n| n.has_tag_name("switches")) {
             let kind = classify(&id, None, &mut warnings);
             for sw in switches.children().filter(|n| n.has_tag_name("switch")) {
-                if let Some(param) = logger_switch(sw, &kind, &mut warnings) {
+                if let Some(param) =
+                    logger_switch(sw, &kind, &mut warnings).map(|x| with_ssm(x, sw))
+                {
                     std_params.push(param);
                 }
             }
@@ -250,9 +252,24 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
     let addresses: Vec<Node> = p.children().filter(|n| n.has_tag_name("address")).collect();
     if let Some(first) = addresses.first() {
         let addr = first.text().and_then(parse_address);
-        let length = first
+        let mut length = first
             .attribute("length")
             .and_then(|l| l.trim().parse::<u8>().ok());
+        // One `<address>` per byte (older SSM definitions): consecutive
+        // fragments are one value of that many bytes.
+        let fragments: Vec<Option<u32>> = addresses
+            .iter()
+            .map(|a| a.text().and_then(parse_address))
+            .collect();
+        let contiguous = addresses.len() > 1
+            && length.is_none()
+            && addresses.len() <= 8
+            && fragments.iter().enumerate().all(|(i, a)| {
+                matches!((a, addr), (Some(a), Some(b)) if u64::from(*a) == u64::from(b) + i as u64)
+            });
+        if contiguous {
+            length = Some(addresses.len() as u8);
+        }
         let bit = first
             .attribute("bit")
             .and_then(|b| b.trim().parse::<u8>().ok());
@@ -266,7 +283,7 @@ fn logger_parameter(p: Node, kind: &ProtocolKind, warnings: &mut Vec<String>) ->
             &format!("parameter '{id}'"),
             warnings,
         );
-        if addresses.len() > 1 {
+        if addresses.len() > 1 && !contiguous {
             warnings.push(format!(
                 "parameter '{id}': {} multi-byte <address> fragments; only the first is modeled",
                 addresses.len()
@@ -653,6 +670,7 @@ fn finish_param_full(
         convert_group,
         enabled,
         value_kind: ValueKind::Number,
+        ssm: None,
     }
 }
 
@@ -666,8 +684,27 @@ fn node_value_kind(n: Node) -> ValueKind {
         .unwrap_or_default()
 }
 
-/// `p` with the value kind its definition node implies.
+/// `p` with the value kind its definition node implies (and, for SSM, its
+/// selection metadata).
 fn with_kind(mut p: LogParam, n: Node) -> LogParam {
     p.value_kind = node_value_kind(n);
+    with_ssm(p, n)
+}
+
+/// For an SSM parameter, the RomRaider `ecubyteindex`/`ecubit` capability
+/// flag and `target` module from its definition node, when declared.
+fn with_ssm(mut p: LogParam, n: Node) -> LogParam {
+    if p.protocol != ProtocolKind::SubaruSsm {
+        return p;
+    }
+    let num = |a: &str| n.attribute(a).and_then(|v| v.trim().parse::<u16>().ok());
+    let info = SsmParamInfo {
+        ecu_byte_index: num("ecubyteindex"),
+        ecu_bit: num("ecubit").and_then(|b| u8::try_from(b).ok()),
+        target: num("target").and_then(|t| u8::try_from(t).ok()),
+    };
+    if info != SsmParamInfo::default() {
+        p.ssm = Some(info);
+    }
     p
 }

@@ -89,7 +89,7 @@ a top-level command is added without a row here.
 | `opentune adaptation` | Adaptation channels: UDS value / routine / actuator, and VAG KWP2000 over TP2.0 or K-line (`kwp-read`, `kwp-basic`, `kwp-test`, `kwp-save`; [`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
-| `opentune log` | Log live data from a RomRaider-style `logger.xml` to CSV (`--fast`: UDS `0x2C` dynamic DIDs; `--gps <port\|file>`: GPS channels + `speed_error_kmh`, see [`LIVE-LOGGING.md`](LIVE-LOGGING.md#gps-channels)) |
+| `opentune log` | Log live data from a RomRaider-style `logger.xml` to CSV (`--fast`: UDS `0x2C` dynamic DIDs; `--gps <port\|file>`: GPS channels + `speed_error_kmh`, see [`LIVE-LOGGING.md`](LIVE-LOGGING.md#gps-channels); `--transport ssm\|ssm-can`: Subaru SSM2, [`LIVE-LOGGING.md`](LIVE-LOGGING.md#subaru-ssm2)) |
 | `opentune gps` | GPS/GNSS receiver (NMEA 0183 over serial / USB CDC-ACM, e.g. u-blox): one CSV row per fix with NMEA line counters, replay a recorded NMEA file, `--list-ports` ([`LIVE-LOGGING.md`](LIVE-LOGGING.md#gps-channels)) |
 | `opentune obd` | Generic OBD-II: mode-01 live data, readiness, freeze frame, mode-09 info (VIN/CALID/CVN), stored/pending/permanent DTCs |
 | `opentune candump` | Capture a CAN bus to a candump / CSV / ASC log, listen-only where possible |
@@ -143,6 +143,11 @@ The abstraction every app talks to and every driver implements.
     entity into an activated `DoIpTransport`. The `doip` driver
     (`opentune-driver-doip`) wraps both behind `Interface`.
   - `seedkey` — the `SeedKey` plugin interface for security access.
+  - `kline` — `KLineRaw`, the unframed K-line a driver can offer through
+    `Interface::kline()` for self-framing protocols.
+  - `ssm` — Subaru SSM2: packets, echo check, init/capability decoding,
+    batched `A8` reads; `SsmKLine` over a `KLineRaw`, `SsmClient` (writes
+    refused unless armed). `ssmsim` — a simulated SSM module.
 - `ecudef` — `EcuDef` and `load_dir`: data describing a known ECU (protocol,
   memory map, checksum id, seed/key id), loaded from JSON in
   [`ecudefs/`](../ecudefs/). See [`ECU-DEFS.md`](ECU-DEFS.md).
@@ -176,7 +181,7 @@ apps that need it.
 | `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests over UDS; VAG KWP2000 measuring blocks, basic settings and adaptation read/test/save over TP2.0 or K-line (`kwp`, data-defined `kwp_*` channel kinds, gated writes, synthetic module in `sim`) ([`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
-| `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling and fast mode over UDS `0x2C` dynamic DIDs ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
+| `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling, fast mode over UDS `0x2C` dynamic DIDs, and Subaru SSM2 parameter selection + batched `A8` reads ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
 | `opentune-gps` | Optional GPS/GNSS source for live logging: own NMEA 0183 parser (`$--RMC`/`GGA`/`VTG`, any talker, checksum-verified, rejected lines counted), latest-fix tracker with staleness, background serial reader (u-blox style CDC-ACM, no gpsd) and deterministic file replay; `opentune_logdef::gps` turns it into `gps_*` channels ([LIVE-LOGGING.md](LIVE-LOGGING.md#gps-channels)) |
 | `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
 | `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |

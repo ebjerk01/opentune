@@ -42,6 +42,7 @@ fn param(id: &str, name: &str, did: u16, units: &str) -> LogParam {
         depends_on: Vec::new(),
         convert_group: None,
         enabled: None,
+        ssm: None,
     }
 }
 
