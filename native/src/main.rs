@@ -87,6 +87,25 @@ fn parse_args() -> Result<Args, String> {
     Ok(a)
 }
 
+/// The app icon (assets/icon-256.png), decoded for the window.
+fn icon() -> Option<eframe::egui::IconData> {
+    let dec = png::Decoder::new(std::io::Cursor::new(
+        include_bytes!("../assets/icon-256.png").as_slice(),
+    ));
+    let mut r = dec.read_info().ok()?;
+    let mut buf = vec![0; r.output_buffer_size()?];
+    let info = r.next_frame(&mut buf).ok()?;
+    if info.color_type != png::ColorType::Rgba || info.bit_depth != png::BitDepth::Eight {
+        return None;
+    }
+    buf.truncate(info.buffer_size());
+    Some(eframe::egui::IconData {
+        rgba: buf,
+        width: info.width,
+        height: info.height,
+    })
+}
+
 fn main() -> eframe::Result {
     let args = match parse_args() {
         Ok(a) => a,
@@ -105,7 +124,9 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([960.0, 600.0])
-            .with_title("OpenTune"),
+            .with_title("OpenTune")
+            .with_app_id("opentune-native")
+            .with_icon(icon().unwrap_or_default()),
         persist_window: true,
         renderer: eframe::Renderer::Wgpu,
         wgpu_options,

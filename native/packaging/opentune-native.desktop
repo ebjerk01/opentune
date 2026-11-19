@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=OpenTune (native)
+GenericName=ECU diagnostics and tuning
+Comment=Open-source car diagnostics, coding and tuning - native app
+Exec=opentune-native %f
+Icon=opentune-native
+Terminal=false
+Categories=Development;
+Keywords=ECU;OBD;tuning;checksum;hex;
+StartupWMClass=opentune-native
+MimeType=application/octet-stream;text/csv;
