@@ -40,13 +40,13 @@ jobs:
       # transient upstream/nightly lint makes this too noisy, flip `-D warnings`
       # to `-W warnings` to make it non-blocking without removing the step.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
       - name: Build
-        run: cargo build --workspace
+        run: cargo build --locked --workspace
 
   # The UDS simulator against independent third-party clients: python-udsoncan
   # (UDS) over python-doipclient (DoIP) talking to the doip_tcp_entity example on
@@ -74,7 +74,7 @@ jobs:
         run: pip install -r tools/conformance/requirements.txt
 
       - name: Build the loopback DoIP entity
-        run: cargo build -p opentune-udssim --example doip_tcp_entity
+        run: cargo build --locked -p opentune-udssim --example doip_tcp_entity
 
       - name: Run the harness
         run: python tools/conformance/udsoncan_harness.py --entity target/debug/examples/doip_tcp_entity
@@ -105,7 +105,7 @@ jobs:
         run: pip install -r tools/sa2/requirements.txt
 
       - name: Build the evaluator
-        run: cargo build -p opentune-sa2 --example sa2_eval
+        run: cargo build --locked -p opentune-sa2 --example sa2_eval
 
       - name: Differential check
         run: python -I tools/sa2/sa2_differential.py check --fixture crates/opentune-sa2/tests/fixtures/sa2_vectors.txt --eval target/debug/examples/sa2_eval --fresh 2000
@@ -141,7 +141,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build the CLI
-        run: cargo build -p opentune-cli --quiet
+        run: cargo build --locked -p opentune-cli --quiet
 
       - name: Validate ECU definitions (provenance required)
         run: target/debug/opentune ecudefs validate ecudefs --require-provenance
@@ -224,13 +224,13 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Clippy (default features)
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Clippy (--features alpha)
-        run: cargo clippy --all-targets --features alpha -- -D warnings
+        run: cargo clippy --locked --all-targets --features alpha -- -D warnings
 
       - name: Test (--features alpha)
-        run: cargo test --features alpha
+        run: cargo test --locked --features alpha
 
   # The UI is plain JS with no bundler, so nothing else would notice a syntax
   # error before a user opens the panel. Cheap: no Rust, no npm install.

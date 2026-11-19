@@ -120,6 +120,13 @@ button.nav-group-label:focus-visible { outline: 2px solid var(--accent); outline
 .sidebar-foot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .data-status { font-size: 10.5px; color: var(--sidebar-ink-dim); word-break: break-all; line-height: 1.4; }
 .offline-badge { font-size: 11px; color: var(--good); margin-top: 7px; font-weight: 600; }
+/* Sidebar adapter bar (app-boot.js initConnBar). The row is a flex box whose
+   fields shrink to the pane: without min-width: 0 the port input (default
+   size=20) plus the HS/MS picker ran ~20px past the 228px sidebar. */
+.conn-row { display: flex; gap: 6px; margin-bottom: 4px; min-width: 0; }
+.conn-row[hidden] { display: none; } /* display: flex would beat the UA [hidden] rule (DoIP row) */
+.conn-row > .inp { flex: 1 1 0; min-width: 0; width: 100%; }
+.conn-row > #connBus + .ot-lb, .conn-row > select#connBus:not(.ot-lb-native) { flex: 0 0 64px; }
 
 /* Main */
 #main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 30px 60px; }
@@ -720,6 +727,17 @@ button.ot-lb {
   padding: 18px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 .dgu-modal h2 { margin-top: 0; }
+/* "What's new" after an update (whatsnew.js), on the dialog above. */
+.wn-modal { width: min(560px, 100%); }
+.wn-modal h2 { margin-bottom: 2px; }
+.wn-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  margin: 14px 0 4px; font-weight: 700;
+}
+.wn-list { margin: 0; padding-left: 18px; line-height: 1.45; }
+.wn-list li + li { margin-top: 3px; }
+.wn-list code { font-family: var(--mono); font-size: 12px; }
+.wn-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dgu-modal .row { margin-top: 12px; }
 .dgu-note, .dgu-allow { display: block; margin-top: 10px; }
 .dgu-note textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; font-family: inherit; }

@@ -12,6 +12,10 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **Desktop: "What's new" after an update.** The first start after an update
+  shows that version's highlights once, from the changelog built into the app
+  (nothing is fetched); a fresh install shows nothing. Updates from 0.7.x are
+  recognised by the app's own saved UI state.
 - Control-unit database: boot points accept `action: "connect"` (attach a
   BDM / JTAG probe to a header or pads), allowed only with `entry: bdm-jtag`
   and never as a pin `strap`.
@@ -65,8 +69,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   boot points and an "OpenTune ships no OEM key" statement; there is no field
   for key material. `opentune db validate --require-access` (CI) fails on any
   new unit without a profile (`database/units/.access-pending` lists the older
-  units, and only shrinks). Filled: Bosch EDC15C6 (worked example), Mercedes
-  EGS52, DQ250 02E and Haldex Gen4. The ECU database panel shows an
+  units, and only shrinks). Filled: Bosch EDC15C6 (worked example), EDC15
+  (VAG), EDC16U34, EDC16C3x, EDC17CP14, ME7.5, ME7.5.10, Siemens MS41/MS42/MS43,
+  PCR2.1, Mercedes EGS52, DQ250 02E, DQ200, DQ381, DL382, ZF 8HP Gen1 and Haldex
+  Gen4/Gen5, each from public sources with stated licences; where nobody
+  documents a route the profile says "unknown". The ECU database panel shows an
   **Access** card. Docs: [UNIT-ACCESS-PROFILE.md](docs/UNIT-ACCESS-PROFILE.md).
 - **Bench wiring diagrams**, drawn from the ECU database: every unit with a
   pinout gets an inline diagram (pins wired to +12 V permanent / ignition,
@@ -177,6 +184,9 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- CI and `scripts/check.sh` build, lint and test with `--locked` (the
+  workspace, `desktop/src-tauri` and the release builds), so a stale
+  `Cargo.lock` fails the run instead of being silently updated.
 - **Breaking for embedders: `DesktopConfig` gained a `diagnostics` field**
   (the diagnostics upload target). A plugin that builds `DesktopConfig` with a
   struct literal adds `diagnostics: None` (or its own `DiagUpload`); one that
@@ -218,6 +228,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- Desktop "What's new": versions compare with semver pre-release precedence,
+  so an update from a pre-release to its final release (e.g. `1.0.0-rc.1` to
+  `1.0.0`) shows the popup instead of being taken for a downgrade.
+- Desktop: the sidebar adapter row no longer runs about 20 px past the pane;
+  the port field and the HS/MS picker now shrink to fit.
 - Desktop: the sidebar's adapter **driver** and **CAN bus** pickers no longer
   open their menu past the screen edge in fullscreen (WebKitGTK placed the
   native `<select>` popup itself). They are now an in-page listbox

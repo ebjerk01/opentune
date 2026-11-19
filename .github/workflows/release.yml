@@ -143,7 +143,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build the opentune CLI
-        run: cargo build --release -p opentune-cli --target ${{ matrix.target }}
+        run: cargo build --locked --release -p opentune-cli --target ${{ matrix.target }}
 
       # opentune-<tag>-<target>.tar.gz (unix) / .zip (windows).
       - name: Package (Unix)
@@ -261,13 +261,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --ci --bundles "${{ steps.bundles.outputs.list }}"
+        run: npx tauri build --ci --bundles "${{ steps.bundles.outputs.list }}" -- --locked
 
       # Dry run: identical bundles, updater signing skipped explicitly.
       - name: Build desktop bundles (unsigned dry run)
         if: needs.prepare.outputs.publish != 'true'
         working-directory: desktop
-        run: npx tauri build --ci --no-sign --bundles "${{ steps.bundles.outputs.list }}"
+        run: npx tauri build --ci --no-sign --bundles "${{ steps.bundles.outputs.list }}" -- --locked
 
       - name: Collect bundles (+ .sig)
         run: |

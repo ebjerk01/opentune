@@ -139,6 +139,9 @@
     diag_upload_send: () => { throw "no diagnostics upload is configured in this build"; },
     diag_upload_payload: () => { throw "that payload is no longer kept"; },
     diag_upload_panel: () => null,
+    // "What's new" (whatsnew.rs): nothing to show in the preview.
+    whatsnew_check: () => null,
+    whatsnew_seen: () => null,
   };
 
   async function invoke(cmd, args) {
