@@ -88,7 +88,9 @@ Added:
   alive-check and vehicle-discovery loops now share one absolute monotonic
   deadline per exchange (`TOTAL_DIAG_TIMEOUT_MS`, with `P2_STAR_MS` for the
   extended per-response window) instead of resetting a per-message timeout, so
-  trickled traffic can't keep an exchange alive forever. The UDS request is sent
+  trickled traffic can't keep an exchange alive forever. (Batch 5: that cap is
+  a ceiling only; the response window itself follows the caller's timeout, see
+  "Response timing" below.) The UDS request is sent
   **once**; on 0x78 the transport keeps receiving without re-sending
   (`responsepending_does_not_resend_the_request`).
 - **Alive check.** Entity-initiated alive-check requests (type 0x0007) that
@@ -150,8 +152,17 @@ stays the transport's responsibility (where it re-reads without re-sending).
   the `HOST[:PORT][?key=value]` address string are in `docs/DRIVERS.md` §3i.
   Its loopback tests run those engines against the udssim TCP/UDP entity.
   `Capabilities::doip` marks it (it declares no `can`).
-- Known transport-level behaviour seen from the driver: `DoIpTransport::request`
-  bounds an exchange by `TOTAL_DIAG_TIMEOUT_MS` (60 s) at least, whatever the
-  caller's per-request timeout, so an ECU behind a gateway that never answers
-  holds an engine for up to a minute. A target the entity does not know is
-  answered at once with diagnostic NACK `0x03` (an absent module in a scan).
+- Response timing (`DoIpTransport::request`, since batch 5): the wait for the
+  UDS response honours the caller's per-request timeout (P2). Until the entity
+  acknowledges the diagnostic message the window is at least
+  `DIAG_ACK_TIMEOUT_MS` (2 s, ISO 13400-2 A_DoIP_Diagnostic_Message); a
+  positive ack restarts it at the caller's timeout; a `responsePending` that
+  echoes this request's service restarts it at P2\* (`P2_STAR_MS`, 5 s); a
+  0x78 for another service is handed back, not waited on. Nothing extends the
+  exchange past `TOTAL_DIAG_TIMEOUT_MS` (60 s, or the caller's timeout if
+  longer). So a silent ECU behind an acknowledging gateway fails after the
+  caller's timeout, and one with no ack at all after 2 s — previously both held
+  an engine for 60 s. Tested against the udssim TCP entity's silent-target mode
+  (`DoIpSimStream::set_silent`, `crates/opentune-udssim/tests/doip_timeout.rs`).
+  A target the entity does not know is answered at once with diagnostic NACK
+  `0x03` (an absent module in a scan).
