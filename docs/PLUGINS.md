@@ -64,7 +64,8 @@ What the library provides:
 | `check_extra_commands(&names)` | The collision check `with_extra_commands` runs, as a `Result` instead of a panic: `Err` names the first command that repeats or shadows a core command. Useful in a plugin test. |
 | `adapter` module | `AdapterHub` (managed; `run`, `start_op`), `Session` (`with_diag`, `interface`), `ConnKey`, `Addr`, `resolve`, `read_addr`, `write_addr`, `enter_extended_session`, `leave_session`, `apply_seed_key`. `Addr::json(assumed)` gives the UI's `{ tx, rx, assumed }` target object (hex strings; `assumed` = the engine ECU was assumed for a read). |
 | `open_registry_driver(&ConnKey)` | Opens a registry driver bound to a key (the hub's opener). |
-| `AppData`, `DebugLog`, `Checksums`, `SeedKeys` | Managed state your commands can take as `tauri::State`. |
+| `AppData`, `DebugLog`, `Checksums`, `SeedKeys` | Managed state your commands can take as `tauri::State`. `DebugLog::push` lines are mirrored into the diagnostics log. |
+| `diaglog` module | The local diagnostics log ([DIAGNOSTICS.md](DIAGNOSTICS.md)): `record(level, src, msg, ctx)` adds a record through the one masked write path; `read_tail`, `read_since_session`, `read_all`, `sessions`, `log_dir` read it back. Your commands' errors are logged by the frontend like the core's. |
 
 ## Adapter access and writes
 

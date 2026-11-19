@@ -211,7 +211,7 @@
   },
   "debug": {
     "title": "Debug",
-    "summary": "Send raw UDS/OBD requests, run the offline UDS simulator and keep a session log. Alpha builds only; raw requests are sent unchecked.",
+    "summary": "Send raw UDS/OBD requests, run the offline UDS simulator, keep a session log, check rendering and read the local diagnostics log (crashes, errors, startup steps). Alpha builds only; raw requests are sent unchecked.",
     "needs": ["Alpha build", "Adapter (for raw requests)"],
     "risk": "writes-ecu",
     "guide": "31-debug"

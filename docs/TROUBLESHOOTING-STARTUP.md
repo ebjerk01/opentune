@@ -296,3 +296,7 @@ workaround for GPU faults.
 - Whether the extracted AppImage and the `.deb` behave the same.
 - For slow scrolling: the Render check output (Debug panel, or the
   `OPENTUNE_PERF=1` lines).
+- The diagnostics log (`opentune.log`): every start's startup marks, the
+  DMA-BUF decision and any crash or error are recorded there even without the
+  trace. Where it lives and what it holds: [DIAGNOSTICS.md](DIAGNOSTICS.md).
+  Review it before you attach it.

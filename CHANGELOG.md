@@ -12,6 +12,18 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **Diagnostics log** (desktop, local only, on by default): crashes (Rust
+  panics, with location; backtrace with `RUST_BACKTRACE`), uncaught errors in
+  the app window, every command that fails (name + error text, never its
+  arguments), the Debug session log and the startup steps go to
+  `<app data dir>/logs/opentune.log` as JSON lines, 1 MiB per file with five
+  rotated files. Each start writes a session header (version, channel, OS,
+  WebKit version, DMA-BUF render decision). SecurityAccess seeds/keys are
+  masked and hex payloads over 64 bytes cut before anything is written; file
+  contents are never recorded; window reports are rate-limited. Debug panel
+  card **Diagnostics log**: tail with a level filter, Open folder, Copy last
+  200 lines, Clear. Nothing is sent anywhere. Docs:
+  [DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 - **ECU database access profiles**: each control unit can say how it is
   reached — OBD, bench, boot mode (entry, strap points, whether the case must
   be opened, reset timing) and the security access a read or write needs —

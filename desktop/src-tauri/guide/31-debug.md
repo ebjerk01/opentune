@@ -61,6 +61,23 @@ switch (printed to the terminal too). If `WEBKIT_DISABLE_COMPOSITING_MODE` is
 set, the app shows a warning once: everything is drawn on the CPU and
 scrolling will be slow. Remove it from whatever starts OpenTune.
 
+## Diagnostics log
+
+OpenTune keeps a local log file of crashes, errors in the app window, failed
+commands and startup steps (it is never sent anywhere). The card shows the
+last 100 records; pick a **Level** to show only warnings and errors.
+
+- **Open folder** opens the folder with `opentune.log` (and up to five older
+  `opentune.log.1` … `.5`).
+- **Copy last 200 lines** puts the newest 200 records on the clipboard, as
+  they are in the file, for a bug report.
+- **Clear…** deletes the log after a confirmation.
+
+SecurityAccess seeds and keys are masked and long hex payloads shortened
+before anything is written; file contents are never recorded. Paths and a VIN
+in an error message can still be there, so review the lines before sharing
+them. Details: docs/DIAGNOSTICS.md.
+
 ## Safety
 
 - **Raw requests are sent exactly as typed.** There is no check, no backup and no confirmation. A write (`2E`), routine (`31`), reset (`11`) or clear (`14`) acts on the module immediately. Only send requests you understand.
