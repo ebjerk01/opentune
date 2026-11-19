@@ -1477,6 +1477,7 @@ version = "0.7.0"
 dependencies = [
  "opentune-core",
  "opentune-gps",
+ "opentune-logview",
  "opentune-udssim",
  "opentune-xdf",
  "roxmltree",

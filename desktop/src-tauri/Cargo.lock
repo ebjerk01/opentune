@@ -2610,6 +2610,7 @@ name = "opentune-coding"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
+ "roxmltree",
  "serde",
  "serde_json",
 ]
@@ -2866,6 +2867,7 @@ dependencies = [
  "opentune-xdf",
  "roxmltree",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
