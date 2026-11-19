@@ -785,6 +785,10 @@ impl Interface for Elm327Obd {
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
         let bus = CanBus::from_option(cfg.options.get("bus").map(String::as_str));
+        // Re-open (e.g. after `Error::AdapterReset`): release the previous
+        // port first. A serial port is opened exclusively, so opening the same
+        // device again while the old handle lives would fail.
+        self.transport = None;
         let stream = self.connect_stream(cfg)?;
         let mut transport = ElmTransport::new(stream);
         transport.baud = cfg
@@ -1221,6 +1225,53 @@ mod tests {
         let dtcs = d.read_dtcs().unwrap();
         assert_eq!(dtcs.len(), 1);
         assert_eq!(dtcs[0].dtc.code, "P0101");
+    }
+
+    #[test]
+    fn response_pending_must_echo_the_request_service() {
+        // Matching `7F 31 78`: waited on.
+        let mut d = open_mock(&["7F3178\r7101FF00"]);
+        let t = d.diag().unwrap();
+        assert_eq!(
+            t.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap(),
+            [0x71, 0x01, 0xFF, 0x00]
+        );
+        // `7F 22 78` to a 0x31 request: handed back at once, not waited on;
+        // the UDS client reports it as mis-correlated.
+        let mut d = open_mock(&["7F2278", "7F2278"]);
+        let start = std::time::Instant::now();
+        let resp = d
+            .diag()
+            .unwrap()
+            .request(&[0x31, 0x01, 0xFF, 0x00], 300)
+            .unwrap();
+        assert_eq!(resp, [0x7F, 0x22, 0x78]);
+        assert!(start.elapsed() < Duration::from_millis(250));
+        let err = UdsClient::new(d.diag().unwrap())
+            .routine_control(0x01, 0xFF00, &[])
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::Protocol(m) if m.contains("mis-correlated")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn power_cycle_mid_log_is_adapter_reset_and_a_new_open_recovers() {
+        // UART noise and the banner where a logging poll's reply should be.
+        let mut d = open_mock(&["410C1AF8", "\u{0}\r\rELM327 v1.5"]);
+        assert!((d.live_rpm().unwrap() - 1726.0).abs() < 0.01);
+        let err = d.live_rpm().unwrap_err();
+        assert!(matches!(err, Error::AdapterReset(_)), "{err:?}");
+        // The caller re-opens: a full ATZ re-init, then polling goes on.
+        let mock = MockElm::new(&["410C1B00"]);
+        let written = mock.written();
+        d.injected = Some(Box::new(mock));
+        d.open(&ConnectConfig::default()).unwrap();
+        assert!(String::from_utf8(written.lock().unwrap().clone())
+            .unwrap()
+            .starts_with("ATZ\r"));
+        assert!((d.live_rpm().unwrap() - 1728.0).abs() < 0.01);
     }
 
     #[test]

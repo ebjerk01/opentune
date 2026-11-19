@@ -28,6 +28,9 @@
 
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::elm;
+use opentune_core::protocol::elm::compact::{
+    check_alfid, field_max, last_address, transfer_alfid, RMBA_FIELD_BUDGET,
+};
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::{next_block_seq, seed_is_unlocked, sid, UdsClient};
 use opentune_core::{ConnectConfig, Error, MemoryRegion, Phase, Progress, Result};
@@ -35,14 +38,6 @@ use opentune_core::{ConnectConfig, Error, MemoryRegion, Phase, Progress, Result}
 /// Largest `TransferData` payload one single-frame request can carry:
 /// 7 bytes minus the service id and the block sequence counter.
 pub const MAX_TX_BLOCK_DATA: usize = elm::MAX_CAN_REQUEST - 2;
-
-/// Bytes left for `memoryAddress` + `memorySize` in a 0x23 request
-/// (`23 <alfid>` + 5).
-const RMBA_FIELD_BUDGET: usize = elm::MAX_CAN_REQUEST - 2;
-
-/// Bytes left for `memoryAddress` + `memorySize` in a 0x34/0x35 request
-/// (`3x <dfi> <alfid>` + 4).
-const TRANSFER_FIELD_BUDGET: usize = elm::MAX_CAN_REQUEST - 3;
 
 /// Largest ISO-TP payload, minus the 0x63 response id.
 const MAX_RMBA_CHUNK: u32 = 4094;
@@ -294,90 +289,6 @@ impl MemOptions {
         let alfid = transfer_alfid(self.alfid, last, "RequestDownload (0x34)")?;
         Ok((alfid, field_max(alfid >> 4)))
     }
-}
-
-/// The last byte address of a non-empty region; a region that wraps past
-/// 0xFFFF_FFFF is a configuration error.
-fn last_address(region: MemoryRegion) -> Result<u32> {
-    if region.length == 0 {
-        return Err(Error::Config("empty memory region".into()));
-    }
-    region
-        .address
-        .checked_add(region.length - 1)
-        .ok_or_else(|| {
-            Error::Config(format!(
-                "region 0x{:08X}+0x{:X} runs past the 32-bit address space",
-                region.address, region.length
-            ))
-        })
-}
-
-/// Bytes needed to express `v`.
-fn bytes_needed(v: u32) -> usize {
-    match v {
-        0..=0xFF => 1,
-        0x100..=0xFFFF => 2,
-        0x1_0000..=0xFF_FFFF => 3,
-        _ => 4,
-    }
-}
-
-/// Largest value an `n`-byte field holds.
-fn field_max(n: u8) -> u32 {
-    match n {
-        0 => 0,
-        1..=3 => (1u32 << (8 * u32::from(n))) - 1,
-        _ => u32::MAX,
-    }
-}
-
-/// Check that `alfid` is a valid format that fits `budget` request bytes and
-/// can express every address up to `last`.
-fn check_alfid(alfid: u8, last: u32, budget: usize, service: &str) -> Result<()> {
-    let size_len = usize::from(alfid >> 4);
-    let addr_len = usize::from(alfid & 0x0F);
-    if !(1..=4).contains(&size_len) || !(1..=4).contains(&addr_len) {
-        return Err(Error::Config(format!(
-            "{service}: addressAndLengthFormatIdentifier 0x{alfid:02X} is not a valid 1..=4-byte format"
-        )));
-    }
-    if size_len + addr_len > budget {
-        return Err(Error::Unsupported(format!(
-            "{service}: format 0x{alfid:02X} needs {} address+size bytes but an ELM327 \
-             single-frame request leaves only {budget}; use a smaller format (alfid option) \
-             or a raw-CAN interface (slcan/gs_usb/SocketCAN/J2534)",
-            size_len + addr_len
-        )));
-    }
-    if bytes_needed(last) > addr_len {
-        return Err(Error::Config(format!(
-            "{service}: address 0x{last:08X} does not fit the {addr_len}-byte address of format 0x{alfid:02X}"
-        )));
-    }
-    Ok(())
-}
-
-/// Format for 0x34/0x35 within the 4-byte address+size budget: the override
-/// if given, else `0x22` for 16-bit addresses or `0x13` for 24-bit ones. A
-/// 32-bit address is refused (it leaves no byte for the size).
-fn transfer_alfid(over: Option<u8>, last: u32, service: &str) -> Result<u8> {
-    let alfid = match over {
-        Some(a) => a,
-        None => match bytes_needed(last) {
-            1 | 2 => 0x22,
-            3 => 0x13,
-            _ => {
-                return Err(Error::Unsupported(format!(
-                    "{service}: address 0x{last:08X} needs a 4-byte address field, which leaves \
-                     no room for the size in an ELM327 single-frame request (7 bytes); use \
-                     read_mode=rmba for reads, or a raw-CAN interface (slcan/gs_usb/SocketCAN/J2534)"
-                )))
-            }
-        },
-    };
-    check_alfid(alfid, last, TRANSFER_FIELD_BUDGET, service)?;
-    Ok(alfid)
 }
 
 /// A UDS client with the memory P2 budget.
@@ -757,6 +668,7 @@ pub fn write(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentune_core::protocol::elm::compact::bytes_needed;
 
     fn cfg(pairs: &[(&str, &str)]) -> ConnectConfig {
         let mut c = ConnectConfig::default();
