@@ -142,6 +142,12 @@ impl TriggerArgs {
             .with_context(|| format!("read trigger file {}", path.display()))?;
         let set = TriggerSet::load_json(&text)
             .map_err(|e| anyhow!("trigger file {}: {e}", path.display()))?;
+        if self.split && !set.gates() {
+            bail!(
+                "--split needs a record or split trigger; {} has only mark triggers",
+                path.display()
+            );
+        }
         Ok(Some(set))
     }
 }

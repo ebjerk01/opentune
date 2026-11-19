@@ -275,6 +275,28 @@ fn log_gated_with_no_fire_writes_only_the_header() {
         String::from_utf8_lossy(&o.stderr).contains("add --out"),
         "{o:?}"
     );
+    // --split with only mark triggers has nothing to split.
+    let marks = write(
+        "only-marks.json",
+        r#"{"triggers":[{"name":"m","action":"mark","when":{"channel":"vss","op":">","value":1}}]}"#,
+    );
+    let out = tmp("never.csv");
+    let o = exec(&[
+        "log",
+        "--def",
+        s(&def),
+        "--trigger",
+        s(&marks),
+        "--split",
+        "--out",
+        s(&out),
+    ]);
+    assert!(!o.status.success());
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("only mark triggers"),
+        "{o:?}"
+    );
+    assert!(!out.exists());
     // A broken trigger file is refused before anything is logged.
     let bad = write("bad.json", r#"{"triggers":[]}"#);
     let o = exec(&["log", "--def", s(&def), "--trigger", s(&bad)]);
