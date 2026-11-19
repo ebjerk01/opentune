@@ -22,7 +22,7 @@
     "obd": "read+write",
     "bench": true,
     "boot": true,
-    "notes": "ms4x.net: read/write over the OBD K-line (in the car or on the bench); boot mode (C167 bootstrap) gives full 1:1 access including the bootloader."
+    "notes": "OBD and closed-case bench programming use K-line. Stock OBD reads omit part of the bootloader. Full-ROM access depends on a compatible RAM agent or the open-case C167 bootstrap route."
   },
   "checksum": null,
   "ecudef": "bmw-ms4x-ms42",
@@ -262,6 +262,67 @@
     {
       "title": "ecupinouts.com: Siemens MS42 bench pinout",
       "url": "https://ecupinouts.com/en/ms42/"
+    },
+    {
+      "title": "BimmerStein ECU Tool (GPL-3.0-only): MS42/MS43 read and write support by boot variant",
+      "url": "https://github.com/CAATZ/BimmerStein-ECU-Tool/blob/main/docs/MS42_MS43.md"
+    },
+    {
+      "title": "Infineon C167CR/C167SR data sheet: PORT0 pin definitions and bootstrap selection at reset",
+      "url": "https://www.infineon.com/assets/row/public/documents/10/57/infineon-c167cr-ds-en.pdf"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "BMW DS2 over K-line (stock programming route).",
+      "notes": "Stock OBD programming writes the program and calibration regions. Its 512 KiB read omits part of the bootloader. BimmerStein documents full-ROM transfers using a temporary RAM agent on supported MS42 boot variants.",
+      "confidence": "community",
+      "sources": [
+        2,
+        4
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "For closed-case K-line programming, supply +12 V to X60001-7 and ignition X60004-26, ground X60001-4 and connect K-line at X60004-32. CAN is unused for this connection.",
+      "confidence": "community",
+      "sources": [
+        2,
+        3
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "Infineon C167 on-chip bootstrap loader.",
+      "points": [
+        {
+          "name": "C167 bootstrap test pad",
+          "location": "pcb:test pad beside C167 pin 104",
+          "action": "pull-to-gnd",
+          "note": "MS4X identifies this pad on the MS42 board. The processor data sheet identifies P0L.4 as the bootstrap input.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "Ground the pad before power-up. MS4X reports releasing it about ten seconds after power-up, before reading or writing.",
+      "reachable": "open-case",
+      "notes": "MS4X documents this open-case route for a byte-for-byte flash backup.",
+      "confidence": "community",
+      "sources": [
+        2,
+        5
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The cited programming guides do not establish whether a complete diagnostic read or a flash write requires security access. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        2,
+        4
+      ]
+    }
+  }
 }
