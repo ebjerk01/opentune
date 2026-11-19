@@ -136,10 +136,16 @@ The frontend is served directly from `ui/index.html` (`build.frontendDist` is
 Nothing heavy runs before the window paints. The ECU definitions and the
 catalog are parsed once on a background thread and cached. Startup-path
 commands are `async`, so they run off the GTK thread. Panels load their data
-the first time they are shown (`window.onPanelFirstShow`). On Linux the app
-sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless that variable is already set.
-To opt out, set `OPENTUNE_KEEP_WEBKIT_ENV=1`. If the app starts slowly, run it
-with `OPENTUNE_TRACE_STARTUP=1` to get a timing breakdown. See
+the first time they are shown (`window.onPanelFirstShow`). On Linux GPU
+rendering stays on: the app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` only on a
+detected known-bad setup (no usable render node, NVIDIA proprietary driver,
+virtual GPU, forced software GL, remote X) or after a start that never drew
+(self-heal), and never if you set that variable yourself. `OPENTUNE_DMABUF=
+auto|on|off` overrides the choice; `OPENTUNE_KEEP_WEBKIT_ENV=1` leaves the
+environment untouched. If the app starts slowly, run it with
+`OPENTUNE_TRACE_STARTUP=1` to get a timing breakdown; the Debug panel's
+**Render check** (`render_env`, `render_note`) shows the render environment
+and measures scroll frame timing. See
 [docs/TROUBLESHOOTING-STARTUP.md](../docs/TROUBLESHOOTING-STARTUP.md).
 
 ## Auto-update (signed GitHub Releases)
