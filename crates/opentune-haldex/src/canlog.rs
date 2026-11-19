@@ -73,15 +73,22 @@ fn parse_candump(line: &str) -> Option<LogFrame> {
     let channel = parts.next()?.to_string();
     let frame = parts.next()?;
     let (id_s, payload) = frame.split_once('#')?;
+    // can-utils writes 3 hex digits for an 11-bit id and 8 for a 29-bit one.
+    if id_s.is_empty() || id_s.len() > 8 || !id_s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     let extended = id_s.len() > 3;
     let id = u32::from_str_radix(id_s, 16).ok()?;
+    if id > if extended { 0x1FFF_FFFF } else { 0x7FF } {
+        return None;
+    }
     let data = if let Some(fd) = payload.strip_prefix('#') {
         // `##<flags nibble><data>`
-        hex_bytes(fd.get(1..)?)?
+        hex_bytes(fd.get(1..)?).filter(|d| d.len() <= 64)?
     } else if payload.starts_with('R') {
         Vec::new()
     } else {
-        hex_bytes(payload)?
+        hex_bytes(payload).filter(|d| d.len() <= 8)?
     };
     Some(LogFrame {
         ts: ts.trim().parse().ok(),
@@ -108,7 +115,7 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
         let extended = parse_bool(cols[2])?;
         let dlc: usize = cols[3].parse().ok()?;
         let data = hex_bytes(cols[4])?;
-        if data.len() != dlc {
+        if data.len() != dlc || dlc > 64 || (!extended && id > 0x7FF) {
             return None;
         }
         return Some(LogFrame {
@@ -123,7 +130,10 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
     if cols.len() >= 6 {
         let (id, _) = parse_id(cols[1])?;
         let extended = parse_bool(cols[2])?;
-        let len: usize = cols[5].parse().ok()?;
+        let len: usize = cols[5].parse().ok().filter(|&n| n <= 64)?;
+        if !extended && id > 0x7FF {
+            return None;
+        }
         let bytes: Vec<&str> = cols[6..]
             .iter()
             .copied()
@@ -504,6 +514,37 @@ base dec  timestamps absolute
         assert_eq!((f[4].id, f[4].data.clone()), (0x457, vec![0x0A, 0x0B]));
         assert_eq!((f[5].id, f[5].data.clone()), (704, vec![255, 16]));
         assert_eq!(f[5].channel.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn ids_and_payloads_must_fit_the_frame_type() {
+        // Regression: an 11-bit id above 0x7FF, a 29-bit id above 0x1FFFFFFF
+        // (or a 32-bit one), a signed id, a classic payload over 8 bytes and
+        // a CSV frame whose id contradicts its 11-bit flag were all read as
+        // frames.
+        let text = "\
+(1.0) can0 FFF#00
+(1.0) can0 FFFFFFFF#00
+(1.0) can0 +7E8#00
+(1.0) can0 7E8#000102030405060708
+(1.0) can0 7E8##
+1.0,800,0,1,00
+1,00000800,false,Rx,1,1,00
+";
+        let p = parse_log(text);
+        assert_eq!(p.frames, vec![]);
+        assert_eq!(p.bad_lines, 7);
+        // The edges are kept.
+        let p =
+            parse_log("(1.0) can0 7FF#0001020304050607\n(1.0) can0 1FFFFFFF#00\n1.0,800,1,1,00\n");
+        assert_eq!(p.bad_lines, 0);
+        assert_eq!(
+            p.frames
+                .iter()
+                .map(|f| (f.id, f.extended))
+                .collect::<Vec<_>>(),
+            vec![(0x7FF, false), (0x1FFF_FFFF, true), (0x800, true)]
+        );
     }
 
     #[test]
