@@ -720,6 +720,55 @@ mod tests {
     }
 
     #[test]
+    fn controller_edge_cases_are_noted_never_fatal() {
+        let d = temp_dir("ctrl-edge");
+        write(&d, "pack.json", r#"{"id":"p","name":"P"}"#);
+        let with = |id: &str, extra: &str| {
+            controller(id).replacen(r#""safety""#, &format!(r#"{extra},"safety""#), 1)
+        };
+        // Only a warning (partly overlapping signals): loads.
+        write(
+            &d,
+            "controllers/warn-only.json",
+            &with(
+                "warn-only",
+                r#""buses":[{"name":"main","bitrate":500000,"frames":[{"id":"0x100","name":"F",
+                  "signals":[{"name":"a","start":0,"len":16},{"name":"b","start":8,"len":4}]}]}]"#,
+            ),
+        );
+        // An error the ctrldef rules added later (one cell, two meanings).
+        write(
+            &d,
+            "controllers/dup-cell.json",
+            &with(
+                "dup-cell",
+                r#""live":[{"name":"x","source":{"kind":"kwp_measuring_block","group":1,"cell":0}},
+                  {"name":"y","source":{"kind":"kwp_measuring_block","group":1,"cell":0}}]"#,
+            ),
+        );
+        // Not JSON at all, empty, and a JSON array.
+        write(&d, "controllers/binary.json", "\u{feff}\u{0}\u{1}PK");
+        write(&d, "controllers/empty.json", "");
+        write(&d, "controllers/array.json", "[]");
+        let pack = load_pack(&d).unwrap();
+        let ids: Vec<&str> = pack.controllers.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, vec!["warn-only"]);
+        assert_eq!(pack.report.notes.len(), 4, "{:?}", pack.report.notes);
+        let dup = pack
+            .report
+            .notes
+            .iter()
+            .find(|n| n.file.ends_with("dup-cell.json"))
+            .unwrap();
+        assert!(
+            dup.message.contains("live.kwp_duplicate"),
+            "{}",
+            dup.message
+        );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
     fn missing_manifest_is_an_error() {
         let d = temp_dir("nomanifest");
         assert!(matches!(load_pack(&d), Err(PackError::NoManifest(_))));
