@@ -50,6 +50,8 @@ Format & review (see `docs/CONTRIBUTING-ECUDEFS.md`, `docs/ECU-DEFS.md`, `docs/M
 
 - [ ] `opentune packs validate packs/<id>` reports **0 errors** (`id` = folder name, `version`, `license`, `sources`, `evidence` set; every file loads)
 - [ ] Logger conversions: `expr` and `fit` describe the same line (`cargo test -p opentune-packs`)
+- [ ] Controller definitions: `opentune controller validate packs/<id>/controllers --warnings` reports 0 errors
+- [ ] `synthetic-tested` or higher is backed by a test that runs the definitions on synthetic data built from the source (see `docs/PACK-AUTHORING.md`)
 - [ ] A row for the pack is added / updated in `packs/README.md`
 
 ## Scope (`README.md` "what OpenTune will NOT do" / `CONTRIBUTING.md`)

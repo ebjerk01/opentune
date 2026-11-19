@@ -143,6 +143,10 @@ to ignore, one per line, for deliberate synthetic data the heuristics flag.
 
 ## Writing a pack
 
+This section is the short version. [PACK-AUTHORING.md](PACK-AUTHORING.md) is
+the full step-by-step guide (sources, scaffold, validate, privacy scan, tests,
+evidence, pull request), worked through on `packs/community-drivetrain/`.
+
 1. **Copy the scaffold.** `cp -r packs/_template packs/<your-id>` and set `id`
    (= the folder name), `name`, `version`, `license`, `sources` and `evidence`
    in `pack.json`. Delete the sub-folders you do not need.
@@ -190,6 +194,9 @@ to ignore, one per line, for deliberate synthetic data the heuristics flag.
      [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md) (public sources with licences,
      safety notes, evidence words). Check it with
      `opentune controller validate packs/<your-id>/controllers --warnings`.
+     `packs/community-drivetrain/` is a worked example (CAN frames transcribed
+     from opendbc DBCs, tested in
+     `crates/opentune-packs/tests/community_drivetrain.rs`).
    - **Trigger set** (`triggers/*.json`, `TriggerSet`) — copy
      `packs/generic-obd2/triggers/wot-pull.json` and follow
      [LIVE-LOGGING.md](LIVE-LOGGING.md#triggers); try it offline with
@@ -202,6 +209,8 @@ to ignore, one per line, for deliberate synthetic data the heuristics flag.
 4. **Check it.** `opentune packs validate packs/<your-id>` must report 0
    errors (it also runs on a fork: point it at any pack folder), and
    `cargo test -p opentune-packs` (the `repo_packs` tests load and validate
-   every pack under `packs/`).
+   every pack under `packs/`). `opentune privacy-scan packs/<your-id>` must be
+   clean. Claiming `synthetic-tested` or higher needs a test that exercises the
+   definitions (e.g. decodes synthetic frames with them).
 5. **Document it.** Add a row to `packs/README.md` with contents, license and
    sources.

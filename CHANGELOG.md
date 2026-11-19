@@ -12,6 +12,19 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **First community definition pack, `community-drivetrain`**: three drivetrain
+  controller definitions not in `ctrldefs/`, transcribed from opendbc (MIT) DBCs
+  and firmware-query fingerprints: Hyundai / Kia TCU (`TCU11`-`TCU13`, UDS
+  `0x7E1`), Hyundai / Kia 4WD coupling (`_4WD11`-`_4WD13` plus ABS wheel speeds)
+  and the Subaru Global-platform transmission (`Transmission`, `CVT`, wheel
+  speeds, UDS `0x7E1`). **synthetic-tested** only: every frame is decoded from
+  synthetic payloads built from the DBC layouts; the UDS channels are untested
+  and nothing has been checked against a real car or capture.
+- **[PACK-AUTHORING.md](docs/PACK-AUTHORING.md)**, a step-by-step "write and
+  submit a pack" guide worked through on that pack (scope, sources, scaffold,
+  DBC transcription, validate, privacy scan, synthetic tests, evidence, pull
+  request), linked from CONTRIBUTING.md; the PR template's pack checklist now
+  asks for the controller validator and a synthetic test.
 - **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
   BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
   `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and
