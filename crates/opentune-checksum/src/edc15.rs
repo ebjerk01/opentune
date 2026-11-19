@@ -76,7 +76,9 @@
 //! [`correct`](Edc15C6::correct) refuses (returns [`Error::Unsupported`]) when
 //! the image is not recognised, or when two chained blocks both fail (the
 //! block boundary between them would then be ambiguous) — never guessing.
-use crate::{BlockStatus, ChecksumAlgo, Fix};
+use crate::{
+    BlockReport, BlockStatus, ChecksumAlgo, ChecksumKind, Fix, Recognition, Representation,
+};
 use opentune_core::{Error, MemoryRegion, Result};
 
 /// VAG TDI v4.1(v2) 512 KiB region directory (region boundaries; each
@@ -446,6 +448,30 @@ impl ChecksumAlgo for Edc15C6 {
         Ok(out)
     }
 
+    /// A validated layout is the family itself, not a chance match: a VAG TDI
+    /// v4.1v2 directory or a well-formed EDC15C6 block walk, each with at least
+    /// one stored 32-bit checksum reproduced (the same rule [`correct`] uses).
+    /// Located-only `edc15c6-field-*` entries of an unrecognised image stay
+    /// [`Recognition::Consistent`].
+    ///
+    /// [`correct`]: Self::correct
+    fn verify_report(
+        &self,
+        image: &[u8],
+        representation: Representation,
+    ) -> Result<Vec<BlockReport>> {
+        let recognition = if is_vag_tdi(image).is_some() || is_c6(image).is_some() {
+            Recognition::Recognised
+        } else {
+            Recognition::Consistent
+        };
+        Ok(self
+            .verify(image)?
+            .into_iter()
+            .map(|s| BlockReport::new(s, representation, ChecksumKind::Embedded, recognition))
+            .collect())
+    }
+
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
         // Mercedes EDC15C6: correct only a recognised, unambiguous walk.
         if let Some(blocks) = is_c6(image) {
@@ -695,6 +721,36 @@ mod tests {
         assert_eq!(fixes[0].offset, 0x1_BFFC);
         assert!(algo.verify(&img).unwrap().iter().all(|s| s.ok));
         assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn c6_recognised_layout_reports_supported_located_fields_do_not() {
+        let algo = Edc15C6;
+        let mut img = synthetic_c6();
+        let rep = algo
+            .verify_report(&img, Representation::RawFullImage)
+            .unwrap();
+        assert_eq!(rep.len(), 3);
+        assert!(rep
+            .iter()
+            .all(|r| r.recognition == Recognition::Recognised && r.is_supported()));
+        // A tuned (stale) block stays recognised but is not supported until fixed.
+        img[0x1_1234] ^= 0x5A;
+        let rep = algo
+            .verify_report(&img, Representation::RawFullImage)
+            .unwrap();
+        assert_eq!(rep.iter().filter(|r| r.is_supported()).count(), 2);
+        assert!(rep.iter().all(|r| r.recognition == Recognition::Recognised));
+
+        // Unrecognised 1 MiB image: located field only, never "supported".
+        let mut img = vec![0xC3u8; C6_IMAGE_LEN];
+        c6_mark(&mut img, 0x0F_BFFC);
+        let rep = algo
+            .verify_report(&img, Representation::RawFullImage)
+            .unwrap();
+        assert_eq!(rep.len(), 1);
+        assert_eq!(rep[0].recognition, Recognition::Consistent);
+        assert!(!rep[0].is_supported());
     }
 
     #[test]

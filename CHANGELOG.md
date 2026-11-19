@@ -228,6 +228,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- EDC15C6: `checksum verify` reports a real EDC15C6 (or VAG TDI v4.1v2) image
+  as a recognised family instead of "mathematical match only"; the
+  `bosch-edc15c6` definition now names the `edc15c6` checksum (map write-back
+  can fix it directly) and the 1 MiB flash size the bootstrap read and the
+  checksum use.
 - Desktop "What's new": versions compare with semver pre-release precedence,
   so an update from a pre-release to its final release (e.g. `1.0.0-rc.1` to
   `1.0.0`) shows the popup instead of being taken for a downgrade.
