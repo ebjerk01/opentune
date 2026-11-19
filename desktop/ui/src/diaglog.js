@@ -19,7 +19,8 @@
   const MAX_STACK = 2000;
   const REPEAT_MS = 10000;
   // Not wrapped: the log's own commands (no loops) and fire-and-forget notes.
-  const QUIET = new Set(["diag_log", "diag_log_tail", "diag_log_info", "diag_log_clear", "diag_log_open_folder", "startup_mark", "render_note"]);
+  const QUIET = new Set(["diag_log", "diag_log_tail", "diag_log_info", "diag_log_clear", "diag_log_open_folder", "startup_mark", "render_note",
+    "diag_upload_status", "diag_upload_set", "diag_upload_preview", "diag_upload_send", "diag_upload_payload", "diag_upload_panel"]);
 
   const clip = (s, n) => {
     const t = String(s == null ? "" : s);

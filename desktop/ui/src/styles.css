@@ -702,3 +702,28 @@ button.ot-lb {
   padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
   background: var(--card); color: var(--ink); border: 2px solid var(--accent);
 }
+
+/* ---- Diagnostics upload (diagup.js) -------------------------------------- */
+.dgu-ind {
+  display: block; width: 100%; margin-top: 7px; padding: 0; border: 0; background: transparent; text-align: left;
+  font: inherit; font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer; overflow-wrap: anywhere;
+}
+.dgu-ind.off { color: var(--sidebar-ink-dim); font-weight: 400; }
+.dgu-ind:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dgu-back {
+  position: fixed; inset: 0; z-index: 1800; display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 12, 18, 0.45); padding: 16px;
+}
+.dgu-modal {
+  box-sizing: border-box; width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--card); color: var(--ink); border: 1px solid var(--card-border); border-radius: 10px;
+  padding: 18px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.dgu-modal h2 { margin-top: 0; }
+.dgu-modal .row { margin-top: 12px; }
+.dgu-note, .dgu-allow { display: block; margin-top: 10px; }
+.dgu-note textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; font-family: inherit; }
+.dgu-pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; margin-top: 12px; font-size: 11.5px; }
+.dgu-hist { margin-top: 8px; font-size: 12px; border-collapse: collapse; }
+.dgu-hist th, .dgu-hist td { text-align: left; padding: 3px 10px 3px 0; vertical-align: top; }
+.dgu-hist td:nth-child(4) { overflow-wrap: anywhere; }

@@ -47,6 +47,12 @@
   const LOG = ["preview: demo backend started — nothing here talks to hardware"];
   const log = (line) => { LOG.push(line); if (LOG.length > 400) LOG.shift(); };
   const DIAG_LEVELS = ["debug", "info", "warn", "error"];
+  // Diagnostics upload status of the public app: nothing configured.
+  const DIAG_UP = {
+    configured: false, mode: "none", source: null, host: null, label: null, policy: null, env_off: false, insecure: false,
+    allow_send: false, auto_off: false, auto_active: false, notice_needed: false, crash_offer: null, history: [],
+    queue: { items: 0, bytes: 0, cap: 2097152 }, next_slot: null, limits: { min_gap_s: 600, per_day: 20, max_payload: 2097152 }, notes: [],
+  };
   const DIAG = [
     { ts: new Date(t0).toISOString(), level: "info", src: "startup", msg: "session start", ctx: { session: true, version: VERSION, channel: "alpha", os: "linux", webkit: "2.46.0" } },
     { ts: new Date(t0).toISOString(), level: "info", src: "startup", msg: "setup plugin: start", ctx: { ms: 12.5 } },
@@ -126,6 +132,13 @@
     diag_log_info: () => ({ state: "on", dir: "demo/logs", file: "demo/logs/opentune.log", files: 1, bytes: JSON.stringify(DIAG).length, max_file_bytes: 1048576, rotated_files: 5 }),
     diag_log_open_folder: () => { throw "Preview: there is no folder to open here."; },
     diag_log_clear: () => { DIAG.length = 1; return null; },
+    // Diagnostics upload (diagupload/): the public app has no upload target.
+    diag_upload_status: () => DIAG_UP,
+    diag_upload_set: () => DIAG_UP,
+    diag_upload_preview: () => { throw "no diagnostics upload is configured in this build"; },
+    diag_upload_send: () => { throw "no diagnostics upload is configured in this build"; },
+    diag_upload_payload: () => { throw "that payload is no longer kept"; },
+    diag_upload_panel: () => null,
   };
 
   async function invoke(cmd, args) {

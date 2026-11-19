@@ -117,6 +117,8 @@ function showPanel(name) {
     if (window.OTRender) window.OTRender.panelSwitched(name);
   }
   if (window.OTNav && window.OTNav.activated) window.OTNav.activated(name);
+  // Counted for an embedder's automatic diagnostics summary (diagup.js).
+  if (switching && window.OTDiagUp) window.OTDiagUp.panelOpened(name);
   if (!panelShown.has(name)) {
     panelShown.add(name);
     (panelFirstShow[name] || []).splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
