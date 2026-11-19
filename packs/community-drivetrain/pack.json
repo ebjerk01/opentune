@@ -1,0 +1,29 @@
+{
+  "id": "community-drivetrain",
+  "name": "Community drivetrain controllers",
+  "version": "0.1.0",
+  "maker": "Hyundai / Kia, Subaru",
+  "platform": "Hyundai / Kia classic CAN; Subaru Global platform",
+  "vehicles": [
+    "Hyundai Sonata 2018-19",
+    "Hyundai Tucson 2019, 2021",
+    "Hyundai Veloster 2019-20",
+    "Kia Optima 2017, 2019-20",
+    "Subaru Impreza 2017-22",
+    "Subaru Crosstrek / XV 2018-23",
+    "Subaru Forester 2019-24",
+    "Subaru Outback 2020-23",
+    "Subaru Legacy 2020-22",
+    "Subaru Ascent 2019-23"
+  ],
+  "author": "OpenTune contributors",
+  "license": "GPL-3.0-or-later",
+  "description": "The first community definition pack and the worked example of docs/PACK-AUTHORING.md: three drivetrain controller definitions that are not in the built-in ctrldefs/ set - the Hyundai / Kia TCU (TCU11-TCU13 broadcast, UDS 0x7E1), the Hyundai / Kia 4WD coupling controller (_4WD11-_4WD13 broadcast plus ABS wheel speeds) and the Subaru Global platform transmission (Transmission / CVT broadcast plus wheel speeds, UDS 0x7E1). Signal layouts are transcribed from opendbc (MIT); diagnostic ids come from opendbc's firmware-query fingerprints and ISO 15765-4. Evidence: synthetic-tested - every frame is decoded from synthetic payloads built independently of the files (crates/opentune-packs/tests/community_drivetrain.rs); the UDS channels are untested (implemented) and nothing has been checked against a real car or capture. Meanings beyond the upstream DBC names and scales are marked per signal; checksums are not verified.",
+  "sources": [
+    "commaai/opendbc opendbc/dbc/generator/hyundai/hyundai_can.dbc @ 27fa1c5d8eed (MIT, Copyright (c) 2020, Comma.ai, Inc.)",
+    "commaai/opendbc opendbc/dbc/generator/subaru/subaru_global_2017.dbc and _subaru_global.dbc @ 27fa1c5d8eed (MIT, Copyright (c) 2020, Comma.ai, Inc.)",
+    "commaai/opendbc opendbc/car/hyundai/{values,fingerprints}.py and opendbc/car/subaru/{values,fingerprints}.py @ 27fa1c5d8eed (MIT): platforms, transmission request ids, identification requests",
+    "ISO 15765-4 (response id = request id + 8, 500 kbit/s OBD-II CAN rate)"
+  ],
+  "evidence": "synthetic-tested"
+}

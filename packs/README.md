@@ -2,8 +2,9 @@
 
 Data that the coding / adaptation / service / auto-scan / live-log engines run
 on. Each sub-folder with a `pack.json` is one pack; see
-[`docs/DEFINITION-PACKS.md`](../docs/DEFINITION-PACKS.md) for the format and a
-"writing a pack" walkthrough. Inspect them with `opentune packs packs`. The
+[`docs/DEFINITION-PACKS.md`](../docs/DEFINITION-PACKS.md) for the format and
+[`docs/PACK-AUTHORING.md`](../docs/PACK-AUTHORING.md) for a step-by-step
+"write and submit a pack" guide. Inspect them with `opentune packs packs`. The
 desktop app bundles this folder and opens its file pickers here.
 
 | Pack | Contents | License | Sources |
@@ -11,6 +12,7 @@ desktop app bundles this folder and opens its file pickers here.
 | [`generic-obd2`](generic-obd2/) | Auto-scan module lists (ISO 15765-4 physical `0x7E0`-`0x7E7` and functional `0x7DF`), a mode-01 logger for 34 common PIDs, a datalogging trigger set (WOT pull on PID `0x0C`/`0x11`, coolant over-temperature mark), 6 service scripts (readiness, stored / pending / permanent DTCs, VIN, **mode-04 clear = write**) | GPL-3.0-or-later | SAE J1979 / ISO 15031-5, ISO 15765-4 |
 | [`iso14229-identification`](iso14229-identification/) | Logger def of the identification DIDs `0xF180`-`0xF19F` (shown as text / BCD dates / hex records in the live logger), 4 read-only DID scripts (VIN, active session, spare part number, ECU serial) | GPL-3.0-or-later | ISO 14229-1 Annex C; names cross-checked with [opendbc `uds.py`](https://github.com/commaai/opendbc/blob/master/opendbc/car/uds.py) (MIT) |
 | [`vag-modules`](vag-modules/) | Auto-scan list of 7 VAG modules on UDS/CAN (engine, DSG, airbag, EPS, ACC radar, front camera, Haldex) | GPL-3.0-or-later | [opendbc](https://github.com/commaai/opendbc/tree/master/opendbc/car/volkswagen) (MIT, © comma.ai), [bri3d/VW_Flash](https://github.com/bri3d/VW_Flash) (BSD-2-Clause, © Brian Ledbetter and contributors) — cited per entry |
+| [`community-drivetrain`](community-drivetrain/) | 3 drivetrain controller definitions not in `ctrldefs/`: Hyundai / Kia TCU (`TCU11`-`TCU13`, UDS `0x7E1`), Hyundai / Kia 4WD coupling (`_4WD11`-`_4WD13` + ABS wheel speeds), Subaru Global-platform transmission (`Transmission`, `CVT`, wheel speeds, UDS `0x7E1`). synthetic-tested. The worked example of [`docs/PACK-AUTHORING.md`](../docs/PACK-AUTHORING.md); details in its [README](community-drivetrain/README.md) | GPL-3.0-or-later | [opendbc](https://github.com/commaai/opendbc) @ `27fa1c5d8eed` (MIT, © comma.ai) DBCs and firmware-query fingerprints, ISO 15765-4 |
 | [`_template`](_template/) | Copy-me scaffold (not loaded: `_`-prefixed folders are skipped) | GPL-3.0-or-later | — |
 
 ## Provenance rules
