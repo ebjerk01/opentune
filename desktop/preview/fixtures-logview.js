@@ -102,6 +102,19 @@
     return { index: i, t: T[i], values: CH.map((c, k) => ({ name: c.name, unit: c.unit, value: COLS[k][i] })) };
   };
 
+  // Drive view replay: every row of the synthetic drive on one time axis.
+  F.log_replay = async ({ path, channels }) => {
+    known(path);
+    await wait(120);
+    const names = channels && channels.length ? channels : CH.map((c) => c.name);
+    const series = names.map((n) => {
+      const k = CH.findIndex((c) => c.name === n);
+      if (k < 0) throw `no channel '${n}' in this log`;
+      return { name: CH[k].name, unit: CH[k].unit, t: [], v: COLS[k].slice() };
+    });
+    return { path, rows: T.length, stride: 1, t: T.slice(), series, time_label: "s", median_dt: 1 / HZ, epoch_start: null };
+  };
+
   // ---- map overlay ----------------------------------------------------------
   const RPM = [800, 1250, 1750, 2000, 2250, 2500, 3000, 3500, 4000, 4500];
   const IQ = [0, 5, 10, 20, 30, 40, 50, 60];

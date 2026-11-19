@@ -236,6 +236,7 @@ macro_rules! core_command_list {
             feat_logview::log_open,
             feat_logview::log_series,
             feat_logview::log_sample_at,
+            feat_logview::log_replay,
             feat_logview::log_def_maps,
             feat_logview::log_map_hits,
             feat_obd::obd_live,
@@ -463,6 +464,8 @@ mod embed_tests {
             "probe_adapter",
             "coding_read",
             "obd_live",
+            "obd_read",
+            "log_replay",
             "checksum_fix",
             "update_relaunch",
         ] {

@@ -266,6 +266,73 @@ pub fn sample_at(log: &Log, t: f64) -> Option<(usize, f64, Vec<Option<f64>>)> {
     Some((idx, log.t[idx], vals))
 }
 
+/// Full-resolution frames for replaying a log through a live view (the
+/// desktop Drive view): one shared time axis and every requested channel's
+/// value per row, `None` where the row has no valid sample.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Replay {
+    /// Rows in the log.
+    pub rows: usize,
+    /// `1` when every row is returned; `k` when each returned row stands for
+    /// `k` consecutive log rows (the last valid value of each channel in that
+    /// block, at the block's last time), so a very long log stays bounded.
+    pub stride: usize,
+    /// Row times.
+    pub t: Vec<f64>,
+    /// One entry per requested channel, in request order; `t` is empty (the
+    /// shared axis above applies).
+    pub series: Vec<Series>,
+}
+
+/// Most values (rows × channels) [`replay`] returns in one call.
+pub const MAX_REPLAY_CELLS: usize = 4_000_000;
+
+/// Frames of `channels` (every channel when empty) for replay, at most
+/// `max_rows` rows and [`MAX_REPLAY_CELLS`] values. Unlike [`series`] this
+/// never mixes minima and maxima: a decimated row holds what a live display
+/// would have shown at the end of its block (the latest valid sample).
+pub fn replay(log: &Log, channels: &[&str], max_rows: usize) -> Result<Replay> {
+    let chans: Vec<&crate::Channel> = if channels.is_empty() {
+        log.channels.iter().collect()
+    } else {
+        channels
+            .iter()
+            .map(|n| log.require(n))
+            .collect::<Result<Vec<_>>>()?
+    };
+    let n = log.len();
+    let cap = max_rows
+        .max(1)
+        .min((MAX_REPLAY_CELLS / chans.len().max(1)).max(1));
+    let stride = n.div_ceil(cap).max(1);
+    let mut t = Vec::with_capacity(n.div_ceil(stride));
+    let mut series: Vec<Series> = chans
+        .iter()
+        .map(|c| Series {
+            name: c.name.clone(),
+            unit: c.unit.clone(),
+            t: Vec::new(),
+            v: Vec::with_capacity(n.div_ceil(stride)),
+        })
+        .collect();
+    let mut start = 0;
+    while start < n {
+        let end = (start + stride).min(n);
+        t.push(log.t[end - 1]);
+        for (s, c) in series.iter_mut().zip(&chans) {
+            let v = c.values[start..end].iter().rev().find(|v| v.is_finite());
+            s.v.push(v.copied());
+        }
+        start = end;
+    }
+    Ok(Replay {
+        rows: n,
+        stride,
+        t,
+        series,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -397,5 +464,43 @@ mod tests {
         assert_eq!(sample_at(&log, 0.036).unwrap().0, 4);
         assert_eq!(sample_at(&log, -5.0).unwrap().0, 0);
         assert_eq!(sample_at(&log, 99.0).unwrap().0, 9);
+    }
+
+    #[test]
+    fn replay_returns_every_row_when_it_fits() {
+        let log = synth(1000);
+        let r = replay(&log, &[], 5000).unwrap();
+        assert_eq!(r.stride, 1);
+        assert_eq!(r.rows, 1000);
+        assert_eq!(r.t, log.t);
+        assert_eq!(r.series.len(), 2);
+        assert!(r.series.iter().all(|s| s.t.is_empty() && s.v.len() == 1000));
+        assert_eq!(r.series[1].v[500], None, "NaN becomes a gap");
+        assert_eq!(r.series[0].v[13], Some(log.channels[0].values[13]));
+        assert!(replay(&log, &["nope"], 10).is_err());
+    }
+
+    #[test]
+    fn replay_decimates_to_the_latest_valid_sample_per_block() {
+        let log = synth(1001);
+        let r = replay(&log, &["b", "a"], 100).unwrap();
+        assert_eq!(r.series[0].name, "b", "request order");
+        assert_eq!(r.stride, 11);
+        assert_eq!(r.t.len(), 1001usize.div_ceil(11));
+        // Each row is the block's last time and last value.
+        assert_eq!(r.t[0], log.t[10]);
+        assert_eq!(r.series[1].v[0], Some(log.channels[0].values[10]));
+        assert_eq!(*r.t.last().unwrap(), *log.t.last().unwrap());
+        // Row 45 covers 495..=505 of `b`, whose sample 500 is NaN: the block's
+        // latest valid one (505) is used, never the gap.
+        assert_eq!(r.series[0].v[45], Some(log.channels[1].values[505]));
+    }
+
+    #[test]
+    fn replay_treats_zero_max_rows_as_one() {
+        let log = synth(10);
+        let r = replay(&log, &["a"], 0).unwrap();
+        assert_eq!(r.stride, 10, "max_rows 0 is treated as 1");
+        assert_eq!(r.t.len(), 1);
     }
 }
