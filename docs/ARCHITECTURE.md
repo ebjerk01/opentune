@@ -82,7 +82,7 @@ a top-level command is added without a row here.
 | `opentune privacy-scan` | Scan data files for VIN-like identifiers, e-mail addresses and serial-number-like values (redacted output, `--allow` list, `--github` annotations) ([`CONTRIBUTING.md`](../CONTRIBUTING.md)) |
 | `opentune vault` | List archived reads in a backup vault directory |
 | `opentune scan` | Scan a directory of ECU dumps offline, emit identification JSON |
-| `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO); lists the SA2 seed/key scripts it declares |
+| `opentune container` | Decode a flash container (VAG FRF / ODX / ODX-F / SGO, Ford VBF, BMW PSdZData SWE `.bin`+`.xml`, [`BMW-CONTAINERS.md`](BMW-CONTAINERS.md)); lists the SA2 seed/key scripts it declares; `--flat` writes a flat image; `container identify` names a file's format |
 | `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
 | `opentune coding` | Module coding over UDS (read, decode, edit, write) and offline EGS52 candidate coding CRC (`egs52-crc`) |
@@ -184,7 +184,7 @@ apps that need it.
 |---|---|
 | `opentune-a2l`, `opentune-xdf`, `opentune-ecuflash`, `opentune-ols` | Import ASAM A2L, TunerPro XDF, EcuFlash/RomRaider XML (plus FastECU's reading of them and MapPack CSV, `opentune_ecuflash::fastecu`) and WinOLS `.ols` map definitions (A2L/XDF export too). `opentune_xdf::report` is the shared per-object clean/warned/refused report |
 | `opentune-image` | Sparse addressed image model with Intel HEX / Motorola SREC I/O |
-| `opentune-container` | VAG flash containers (FRF / ODX / ODX-F / SGO) |
+| `opentune-container` | Flash containers: VAG (FRF / ODX / ODX-F / SGO), Ford VBF, BMW PSdZData SWE (read-only, NRV2B) |
 | `opentune-cbf` | Mercedes CBF diagnostic-description parser |
 | `opentune-coding` | Module coding engine (read / decode / edit / safe write-back) |
 | `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests over UDS (timed IO-control tests with tester present and automatic return of control in `actuator`); VAG KWP2000 measuring blocks, basic settings and adaptation read/test/save over TP2.0 or K-line (`kwp`, data-defined `kwp_*` channel kinds, gated writes, synthetic module in `sim`) ([`ADAPTATION.md`](ADAPTATION.md)) |

@@ -321,7 +321,9 @@ mod tests {
         assert_eq!(detect(b"<?xml version=\"1.0\"?><ODX/>"), InputFormat::Odx);
         assert_eq!(detect(&[0x9f, 0x3a, 0x11, 0x00]), InputFormat::Frf);
         assert_eq!(
-            detect(b"<?xml version=\"1.0\"?><BINARY-FLASHBLOCK><FLASH-SEGMENTS/></BINARY-FLASHBLOCK>"),
+            detect(
+                b"<?xml version=\"1.0\"?><BINARY-FLASHBLOCK><FLASH-SEGMENTS/></BINARY-FLASHBLOCK>"
+            ),
             InputFormat::BmwSweXml
         );
     }
@@ -350,10 +352,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(img.base, 0x1000);
-        assert_eq!(img.data, vec![1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 3, 4]);
+        assert_eq!(
+            img.data,
+            vec![1, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 3, 4]
+        );
         // Overlap, undecoded and unaddressed segments are refused.
         assert!(flatten(
-            &[seg("a", Some(0), &[1, 2], true), seg("b", Some(1), &[3], true)],
+            &[
+                seg("a", Some(0), &[1, 2], true),
+                seg("b", Some(1), &[3], true)
+            ],
             0
         )
         .is_err());
@@ -361,7 +369,10 @@ mod tests {
         assert!(flatten(&[seg("a", None, &[1], true)], 0).is_err());
         // Span limit.
         assert!(flatten(
-            &[seg("a", Some(0), &[1], true), seg("b", Some(0x2000_0000), &[1], true)],
+            &[
+                seg("a", Some(0), &[1], true),
+                seg("b", Some(0x2000_0000), &[1], true)
+            ],
             0
         )
         .is_err());

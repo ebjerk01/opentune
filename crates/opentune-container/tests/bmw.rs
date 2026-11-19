@@ -174,7 +174,11 @@ fn gzip_segments_and_length_mismatch_are_reported() {
     let amb = bmw::unpack_pair(&xml(gz.len() as u32 - 1), &gz).unwrap();
     assert!(!amb.segments[0].decoded);
     assert_eq!(amb.segments[0].data, plain);
-    assert!(amb.segments[0].note.as_deref().unwrap().contains("ambiguous"));
+    assert!(amb.segments[0]
+        .note
+        .as_deref()
+        .unwrap()
+        .contains("ambiguous"));
     assert!(flatten(&amb.segments, 0xFF).is_err());
 }
 

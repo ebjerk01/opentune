@@ -103,7 +103,9 @@ impl ProcessClass {
             ProcessClass::Btld => "bootloader (flash container)",
             ProcessClass::Swfl => "software (flash container)",
             ProcessClass::Swfk | ProcessClass::Ibad => "flash container (.bin + .xml)",
-            ProcessClass::Cafd => "coding data (.caf) — format not publicly documented, not decoded",
+            ProcessClass::Cafd => {
+                "coding data (.caf) — format not publicly documented, not decoded"
+            }
             ProcessClass::Other(_) => "unrecognised process class",
         }
     }
@@ -364,7 +366,9 @@ impl SweDescriptor {
 pub fn looks_like_descriptor(bytes: &[u8]) -> bool {
     let head = &bytes[..bytes.len().min(16 * 1024)];
     let s = String::from_utf8_lossy(head);
-    s.trim_start_matches('\u{feff}').trim_start().starts_with('<')
+    s.trim_start_matches('\u{feff}')
+        .trim_start()
+        .starts_with('<')
         && (s.contains("BINARY-FLASHBLOCK") || s.contains("FLASH-SEGMENTS"))
 }
 
@@ -431,9 +435,8 @@ pub fn parse_descriptor(xml: &str) -> Result<SweDescriptor> {
         .enumerate()
     {
         let addr = |name: &str| -> Result<u64> {
-            let text = child_text(s, name).ok_or_else(|| {
-                Error::Xml(format!("FLASH-SEGMENT #{index} has no {name}"))
-            })?;
+            let text = child_text(s, name)
+                .ok_or_else(|| Error::Xml(format!("FLASH-SEGMENT #{index} has no {name}")))?;
             parse_hex_addr(&format!("FLASH-SEGMENT #{index} {name}"), &text)
         };
         let source_start = addr("SOURCE-START-ADDRESS")?;
@@ -621,7 +624,9 @@ mod tests {
         let c = SweName::parse("cafd_00004146.caf.003_037_007").unwrap();
         assert_eq!(c.class, ProcessClass::Cafd);
         assert_eq!(
-            SweName::parse("BTLD_0000ABCD.xml.001_002_003").unwrap().class,
+            SweName::parse("BTLD_0000ABCD.xml.001_002_003")
+                .unwrap()
+                .class,
             ProcessClass::Btld
         );
         for bad in [

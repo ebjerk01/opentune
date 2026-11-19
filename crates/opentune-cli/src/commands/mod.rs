@@ -149,6 +149,9 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
         Command::Container { action } => match action {
             ContainerAction::Unpack {
                 input,
+                pair,
+                flat,
+                fill,
                 outdir,
                 frf_key,
                 aes_key,
@@ -158,6 +161,9 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
                 sgo_cipher,
             } => container::container_unpack(container::ContainerUnpackArgs {
                 input,
+                pair,
+                flat,
+                fill,
                 outdir,
                 frf_key,
                 aes_key,
@@ -166,6 +172,9 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
                 sgo_table,
                 sgo_cipher,
             }),
+            ContainerAction::Identify { input, pair } => {
+                container::container_identify(&input, pair.as_deref())
+            }
         },
         Command::Cbf { file, json, dtcs } => reference::cbf(file, json, dtcs),
         Command::Coding { action } => engines::run_coding(reg, action),
