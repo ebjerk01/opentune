@@ -42,6 +42,9 @@ pub enum ObdAction {
         /// note,text`; the Log viewer opens it) instead of printing.
         #[arg(long, value_name = "CSV")]
         out: Option<std::path::PathBuf>,
+        /// Datalogging triggers on the --out CSV (`--trigger`, `--split`).
+        #[command(flatten)]
+        trigger: crate::livelog::TriggerArgs,
         /// Hex PIDs (e.g. `0C 05 78`). Default: every supported table PID.
         pids: Vec<String>,
     },
@@ -513,11 +516,19 @@ fn run_read(
     run: &crate::livelog::RunArgs,
     json: bool,
     out: Option<&std::path::Path>,
+    trigger: &crate::livelog::TriggerArgs,
     mut pids: Vec<u8>,
 ) -> Result<()> {
     use opentune_core::resilient::{run_resilient, RunOptions, SystemClock};
     let limits = run.limits()?;
     let policy = run.policy()?;
+    let triggers = trigger.load()?;
+    if triggers.is_some() && out.is_none() {
+        return Err(anyhow!(
+            "--trigger applies to the recorded CSV: add --out <file.csv>"
+        ));
+    }
+    let split = trigger.split || triggers.as_ref().is_some_and(|t| t.splits());
     let mut link = open_read_link(reg, conn)?;
     let mut session = ObdSession::new();
     let discovered = pids.is_empty();
@@ -530,10 +541,17 @@ fn run_read(
             .filter(|&p| obd::channels_for_pid(p).next().is_some())
             .collect();
     }
+    if let Some(set) = &triggers {
+        let keys: Vec<&str> = pids
+            .iter()
+            .flat_map(|&p| obd::channels_for_pid(p))
+            .map(|c| c.key)
+            .collect();
+        crate::livelog::warn_missing_channels(set, &keys);
+    }
     let out_w = match out {
         Some(p) => {
-            let f = std::fs::File::create(p).map_err(|e| anyhow!("create {}: {e}", p.display()))?;
-            let mut w = std::io::BufWriter::new(f);
+            let mut w = crate::livelog::CsvOut::open(Some(p), triggers, split)?;
             writeln!(w, "{}", obd::LIVE_LOG_HEADER)?;
             ReadOut::Csv(w)
         }
@@ -564,19 +582,33 @@ fn run_read(
         open_read_link(reg, conn).map_err(|e| format!("{e:#}"))
     };
     let report = run_resilient(&mut job, link, &mut reopen, &opts)?;
-    if let ReadOut::Csv(w) = &mut job.out {
-        w.flush()?;
-    }
+    let npids = job.pids.len();
+    let triggered = match job.out {
+        ReadOut::Csv(w) => w.finish()?,
+        _ => None,
+    };
     if let Some(line) = crate::livelog::link_summary(&report) {
         eprintln!("{line}");
     }
+    if let Some(o) = &triggered {
+        for line in crate::livelog::trigger_summary(o) {
+            eprintln!("{line}");
+        }
+    }
     if let Some(p) = out {
-        eprintln!(
-            "Recorded {} poll(s) of {} PID(s) to {}",
-            report.rounds,
-            job.pids.len(),
-            p.display()
-        );
+        match &triggered {
+            Some(o) if split => eprintln!(
+                "Recorded {} poll(s) of {npids} PID(s); {} window file(s) next to {}",
+                report.rounds,
+                o.files.len(),
+                p.display()
+            ),
+            _ => eprintln!(
+                "Recorded {} poll(s) of {npids} PID(s) to {}",
+                report.rounds,
+                p.display()
+            ),
+        }
     }
     Ok(())
 }
@@ -631,10 +663,11 @@ pub fn run(reg: &Registry, action: ObdAction) -> Result<()> {
             run,
             json,
             out,
+            trigger,
             pids,
         } => {
             let pids: Vec<u8> = pids.iter().map(|s| parse_pid(s)).collect::<Result<_>>()?;
-            run_read(reg, &conn, &run, json, out.as_deref(), pids)?
+            run_read(reg, &conn, &run, json, out.as_deref(), &trigger, pids)?
         }
         ObdAction::Readiness(args) => run_inspect(reg, &args, only(|s| s.readiness = true), 0)?,
         ObdAction::Freeze { args, frame } => {

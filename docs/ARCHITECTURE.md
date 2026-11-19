@@ -190,7 +190,7 @@ apps that need it.
 | `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests over UDS (timed IO-control tests with tester present and automatic return of control in `actuator`); VAG KWP2000 measuring blocks, basic settings and adaptation read/test/save over TP2.0 or K-line (`kwp`, data-defined `kwp_*` channel kinds, gated writes, synthetic module in `sim`) ([`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
-| `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling, fast mode over UDS `0x2C` dynamic DIDs, and Subaru SSM2 parameter selection + batched `A8` reads ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
+| `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling, fast mode over UDS `0x2C` dynamic DIDs, Subaru SSM2 parameter selection + batched `A8` reads, and datalogging triggers (gated windows, marker rows) ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
 | `opentune-gps` | Optional GPS/GNSS source for live logging: own NMEA 0183 parser (`$--RMC`/`GGA`/`VTG`, any talker, checksum-verified, rejected lines counted), latest-fix tracker with staleness, background serial reader (u-blox style CDC-ACM, no gpsd) and deterministic file replay; `opentune_logdef::gps` turns it into `gps_*` channels ([LIVE-LOGGING.md](LIVE-LOGGING.md#gps-channels)) |
 | `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
 | `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |

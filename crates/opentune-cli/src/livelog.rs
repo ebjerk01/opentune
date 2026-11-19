@@ -1,8 +1,14 @@
 //! Run-length and reconnect flags shared by `log` and `obd read`, mapped onto
-//! [`opentune_core::resilient`] (the loop both commands run on).
-use anyhow::{anyhow, Result};
+//! [`opentune_core::resilient`] (the loop both commands run on), and the
+//! `--trigger` / `--split` output layer ([`opentune_logdef::trigger`]).
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Args;
 use opentune_core::resilient::{ReconnectPolicy, RunLimits, RunReport};
+use opentune_logdef::{TriggerCsvWriter, TriggerOutput, TriggerReport, TriggerSet};
+use std::cell::RefCell;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -111,6 +117,193 @@ pub fn link_summary(r: &RunReport) -> Option<String> {
     Some(s)
 }
 
+/// Datalogging triggers on the recorded CSV.
+#[derive(Args, Debug, Clone, Default)]
+pub struct TriggerArgs {
+    /// Datalogging triggers: an `opentune-triggers` JSON file (e.g. a pack's
+    /// `triggers/*.json`). `record`/`split` triggers keep only the windows
+    /// around their condition (pre/post history, start and end marker rows);
+    /// `mark` triggers add a marker row when they fire.
+    #[arg(long, value_name = "FILE")]
+    pub trigger: Option<PathBuf>,
+    /// With --trigger and --out: one CSV per recording window,
+    /// `<out>-001.csv`, `<out>-002.csv`, … (as a `split` trigger does).
+    #[arg(long, requires = "trigger")]
+    pub split: bool,
+}
+
+impl TriggerArgs {
+    /// Read and validate the trigger file, if one was given.
+    pub fn load(&self) -> Result<Option<TriggerSet>> {
+        let Some(path) = &self.trigger else {
+            return Ok(None);
+        };
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("read trigger file {}", path.display()))?;
+        let set = TriggerSet::load_json(&text)
+            .map_err(|e| anyhow!("trigger file {}: {e}", path.display()))?;
+        if self.split && !set.gates() {
+            bail!(
+                "--split needs a record or split trigger; {} has only mark triggers",
+                path.display()
+            );
+        }
+        Ok(Some(set))
+    }
+}
+
+/// Warn (stderr) about trigger comparisons whose channel is not logged.
+pub fn warn_missing_channels(set: &TriggerSet, logged: &[&str]) {
+    for c in set.missing_channels(logged) {
+        eprintln!("trigger: warning: '{c}' is not among the logged channels; that comparison stays unknown");
+    }
+}
+
+/// `<dir>/<stem>-NNN.<ext>` for window `n` of a split log written to `base`.
+pub fn window_path(base: &Path, n: u32) -> PathBuf {
+    let stem = base
+        .file_stem()
+        .map_or_else(|| "log".into(), |s| s.to_string_lossy().into_owned());
+    let ext = base
+        .extension()
+        .map_or_else(|| "csv".into(), |s| s.to_string_lossy().into_owned());
+    base.with_file_name(format!("{stem}-{n:03}.{ext}"))
+}
+
+/// What the triggers did, with the files a split log wrote.
+pub struct TriggerOutcome {
+    /// The engine's report.
+    pub report: TriggerReport,
+    /// Per-window files, in window order (empty unless split).
+    pub files: Vec<PathBuf>,
+}
+
+/// The CSV destination of a live log: the file / stdout, or the trigger
+/// layer in front of it (one file, or one file per window).
+pub enum CsvOut {
+    /// Everything as logged.
+    Plain(Box<dyn Write>),
+    /// Through the triggers.
+    Triggered {
+        /// The trigger layer.
+        w: Box<TriggerCsvWriter<'static>>,
+        /// Files opened for windows (split).
+        files: Rc<RefCell<Vec<PathBuf>>>,
+    },
+}
+
+impl CsvOut {
+    /// Open the destination: `out` (or stdout), through `set` when given.
+    /// `split` (or a `split` trigger) writes one file per window next to
+    /// `out`, which it then requires.
+    pub fn open(out: Option<&Path>, set: Option<TriggerSet>, split: bool) -> Result<Self> {
+        let plain = |out: Option<&Path>| -> Result<Box<dyn Write>> {
+            Ok(match out {
+                Some(p) => {
+                    let f = std::fs::File::create(p)
+                        .map_err(|e| anyhow!("create {}: {e}", p.display()))?;
+                    Box::new(std::io::BufWriter::new(f))
+                }
+                None => Box::new(std::io::stdout().lock()),
+            })
+        };
+        let Some(set) = set else {
+            return Ok(CsvOut::Plain(plain(out)?));
+        };
+        let files: Rc<RefCell<Vec<PathBuf>>> = Rc::default();
+        let output = if split || set.splits() {
+            let Some(base) = out else {
+                bail!(
+                    "--split (or a split trigger) needs --out: the windows go to <out>-001.csv, …"
+                );
+            };
+            let base = base.to_path_buf();
+            let f2 = Rc::clone(&files);
+            TriggerOutput::PerWindow(Box::new(move |n: u32| -> std::io::Result<Box<dyn Write>> {
+                let p = window_path(&base, n);
+                let f = std::fs::File::create(&p).map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("create {}: {e}", p.display()))
+                })?;
+                f2.borrow_mut().push(p);
+                Ok(Box::new(std::io::BufWriter::new(f)))
+            }))
+        } else {
+            TriggerOutput::Single(plain(out)?)
+        };
+        let w = TriggerCsvWriter::new(set, output).map_err(|e| anyhow!("--trigger: {e}"))?;
+        Ok(CsvOut::Triggered {
+            w: Box::new(w),
+            files,
+        })
+    }
+
+    /// Flush; through triggers, evaluate the last round, close an open
+    /// window and report.
+    pub fn finish(self) -> Result<Option<TriggerOutcome>> {
+        match self {
+            CsvOut::Plain(mut w) => {
+                w.flush()?;
+                Ok(None)
+            }
+            CsvOut::Triggered { w, files } => {
+                let report = w.finish()?;
+                let files = files.borrow().clone();
+                Ok(Some(TriggerOutcome { report, files }))
+            }
+        }
+    }
+}
+
+impl Write for CsvOut {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            CsvOut::Plain(w) => w.write(buf),
+            CsvOut::Triggered { w, .. } => w.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            CsvOut::Plain(w) => w.flush(),
+            CsvOut::Triggered { w, .. } => w.flush(),
+        }
+    }
+}
+
+/// The stderr lines about the triggers: fires, windows (with durations and
+/// files), marks, dropped rows and warnings.
+pub fn trigger_summary(o: &TriggerOutcome) -> Vec<String> {
+    let r = &o.report;
+    let per: Vec<String> = r.fires.iter().map(|(n, k)| format!("{n} {k}")).collect();
+    let mut lines = vec![format!(
+        "trigger: {} fire(s) ({}); {} window(s); {} mark(s); {} row(s) outside windows dropped",
+        r.total_fires(),
+        per.join(", "),
+        r.windows.len(),
+        r.marks,
+        r.dropped_rows
+    )];
+    for (i, w) in r.windows.iter().enumerate() {
+        let mut l = format!(
+            "  window {}: {:.3} s, {} row(s), {}",
+            w.index,
+            w.duration_ms() as f64 / 1000.0,
+            w.rows,
+            w.triggers.join("+")
+        );
+        if w.cut_by_end {
+            l.push_str(", cut by the end of the log");
+        }
+        if let Some(f) = o.files.get(i) {
+            l.push_str(&format!(" -> {}", f.display()));
+        }
+        lines.push(l);
+    }
+    for w in &r.warnings {
+        lines.push(format!("trigger: warning: {w}"));
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,6 +313,18 @@ mod tests {
     struct T {
         #[command(flatten)]
         run: RunArgs,
+    }
+
+    #[test]
+    fn window_files_are_numbered_next_to_out() {
+        assert_eq!(
+            window_path(Path::new("/tmp/x/pulls.csv"), 7),
+            PathBuf::from("/tmp/x/pulls-007.csv")
+        );
+        assert_eq!(
+            window_path(Path::new("run"), 12),
+            PathBuf::from("run-012.csv")
+        );
     }
 
     #[test]

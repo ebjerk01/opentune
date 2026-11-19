@@ -306,7 +306,7 @@ pub fn packs(dir: PathBuf) -> Result<()> {
             println!("  license: {}", m.license);
         }
         println!(
-            "  defs: {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list · {} controller  ({} loaded)",
+            "  defs: {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list · {} controller · {} trigger-set  ({} loaded)",
             p.ecudefs.len(),
             p.coding.len(),
             p.adaptation.len(),
@@ -314,6 +314,7 @@ pub fn packs(dir: PathBuf) -> Result<()> {
             p.loggers.len(),
             p.modules.len(),
             p.controllers.len(),
+            p.triggers.len(),
             p.report.loaded,
         );
         for n in &p.report.notes {
@@ -325,7 +326,7 @@ pub fn packs(dir: PathBuf) -> Result<()> {
     }
     let c = lib.counts();
     println!(
-        "TOTAL across {} pack(s): {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list · {} controller",
+        "TOTAL across {} pack(s): {} ecu · {} coding · {} adaptation · {} service · {} logger · {} module-list · {} controller · {} trigger-set",
         lib.packs.len(),
         c[0].1,
         c[1].1,
@@ -334,6 +335,7 @@ pub fn packs(dir: PathBuf) -> Result<()> {
         c[4].1,
         c[5].1,
         c[6].1,
+        c[7].1,
     );
     Ok(())
 }

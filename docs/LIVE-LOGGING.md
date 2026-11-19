@@ -304,6 +304,128 @@ error: …)`); the ECU log carries on. With `--reconnect`, `--gps <port>` also
 re-opens the port with the same backoff (`opentune_gps::ReopenFeed`); a
 recorded NMEA file is never re-opened.
 
+## Triggers
+
+A **trigger** watches the logged channels and acts on a condition: record
+only the wide-open-throttle pulls of a drive, split them into one file each,
+or drop a marker row into the log when the coolant passes 105 °C. Triggers
+are data: a JSON file (`"format": "opentune-triggers"`), loose or shipped in
+a definition pack's `triggers/` folder
+([DEFINITION-PACKS.md](DEFINITION-PACKS.md)). The generic-obd2 pack ships
+[`triggers/wot-pull.json`](../packs/generic-obd2/triggers/wot-pull.json).
+
+```sh
+# Only the pulls, 3 s before to 5 s after, one file each: pulls-001.csv, pulls-002.csv
+opentune obd read --driver elm327obd --rounds 0 --interval-ms 100 --reconnect \
+  --out pulls.csv --trigger packs/generic-obd2/triggers/wot-pull.json --split 0C 11 05
+opentune log --def logger.xml --driver <id> --fast --rounds 0 \
+  --out drive.csv --trigger my-triggers.json
+```
+
+| Flag | Meaning |
+|---|---|
+| `--trigger FILE` | apply the trigger file to the CSV (`log`: file or stdout; `obd read`: needs `--out`) |
+| `--split` | with `--out run.csv`: one file per recording window, `run-001.csv`, `run-002.csv` and so on (`run.csv` itself is not written) |
+
+```json
+{
+  "format": "opentune-triggers",
+  "version": 1,
+  "id": "wot-pull",
+  "max_pre_rows": 20000,
+  "triggers": [
+    {
+      "name": "wot-pull",
+      "action": "record",
+      "when": { "all": [
+        { "channel": ["obd01_0c_rpm", "rpm"], "op": ">", "value": 3000, "units": "rpm" },
+        { "channel": ["obd01_11_throttle", "throttle_pos"], "op": ">", "value": 90, "units": "%" }
+      ] },
+      "arm_ms": 300, "release_ms": 1000, "pre_ms": 3000, "post_ms": 5000
+    },
+    {
+      "name": "coolant-hot",
+      "action": "mark",
+      "when": { "channel": ["obd01_05_coolant_temp", "coolant_temp"], "op": ">", "value": 105, "units": "°C" },
+      "arm_ms": 1000, "release_ms": 5000
+    }
+  ]
+}
+```
+
+**Conditions.** A comparison is `channel op value [units]` with `op` one of
+`>`, `>=`, `<`, `<=`, `==`, `!=`; `{"all": [...]}` and `{"any": [...]}`
+combine them (nesting up to 8 levels). `channel` is the row's `param_id`, or
+a list of alternatives of which the first one present in the round is used,
+so one file works with a logger definition's ids and `obd read`'s keys
+(`rpm`, `throttle_pos`, `coolant_temp`; `opentune obd pids` lists them all).
+With `units`, a channel logged in other units is converted when the
+conversion is known (°C/°F/K, km/h/mph/m/s, kPa/hPa/mbar/bar/psi/Pa) and
+spellings of the same unit are folded (`1/min` = `rpm`, `° BTDC` = `deg`); a
+channel logged without units is taken to be in the comparison's units.
+
+**Unknown is not false.** A comparison whose channel is missing from the
+round, has no value (a failed read, a dead round, a text channel) or is
+logged in units that cannot be converted is *unknown*. `all` is false if any
+member is false, else unknown if any member is; `any` is true if any member
+is true, else unknown if any member is. A link-event round (the `link`
+marker rows above) makes everything unknown. Unknown never fires a trigger,
+never releases one, and breaks a running hold time: a pull that loses the
+link for a few seconds stays one window, and a channel that comes back after
+a gap has to be true for the whole `arm_ms` again. A unit mismatch is
+reported once on stderr; a channel the log does not carry at all is warned
+about before logging starts.
+
+**Hold times (hysteresis).** A trigger *fires* when its condition has been
+true for `arm_ms` (observed continuously; 0 = the first true round) and
+*releases* when it has been false for `release_ms`. In between it does not
+fire again, so a `mark` trigger writes one marker per episode and a noisy
+threshold does not chop a pull into pieces.
+
+**Actions.**
+
+- `record` gates the log: only **windows** are written. A window opens when
+  a record trigger fires, with up to `pre_ms` of history before the fire
+  (from a ring buffer bounded to `max_pre_rows` CSV rows; older history is
+  dropped even if `pre_ms` reaches further), and stays open until the
+  trigger releases plus `post_ms`. A trigger that fires again inside the
+  post window extends the same window. All record/split triggers share one
+  gate, so windows never overlap: a window opened by one trigger and
+  extended by another is still one window, and each row is written at most
+  once.
+- `split` does the same and writes every window to its own file (as
+  `--split` does for `record`).
+- `mark` writes a marker row when it fires and gates nothing (`pre_ms` and
+  `post_ms` are not allowed on it). In a gated log a mark row is written
+  only if a window covers it, like any other row.
+
+**Marker rows.** Like the link rows, trigger rows carry no value:
+`param_id` `trigger`, the trigger name in `name`, the detail in `note`, and
+`start`, `end` or `mark` in `text`. Every window begins with a `start` row
+(timestamped with the window's first row; the note says which trigger fired
+and how far into the window) and ends with an `end` row (duration, row
+count, and `log ended` if the log stopped while the window was open). Both
+CSV layouts keep their columns; the Log viewer opens a gated file like any
+Live log and lists the trigger rows as a text channel.
+
+**Summary.** stderr reports the fires per trigger, each window's duration,
+row count and file, the marks and the rows dropped outside windows:
+
+```text
+trigger: 2 fire(s) (wot-pull 2, coolant-hot 0); 2 window(s); 0 mark(s); 3412 row(s) outside windows dropped
+  window 1: 11.840 s, 312 row(s), wot-pull -> pulls-001.csv
+  window 2: 9.705 s, 258 row(s), wot-pull -> pulls-002.csv
+```
+
+**Library.** `opentune_logdef::trigger`: `TriggerSet` (the file, with
+`validate`), `TriggerEngine` (one round at a time: `push(ts, samples, rows)`
+returns rows, markers and window open/close events; pure, no clock, no I/O)
+and `TriggerCsvWriter`, a `std::io::Write` layer that runs the engine over
+either Live-log CSV layout and writes one stream or one stream per window.
+The CLI puts it in front of the file; `run_csv_resilient` and the `obd read`
+loop are unchanged. A round is evaluated when the next one starts, so the
+writer's `finish` must be called at the end.
+
 ## GPS channels
 
 An optional GPS/GNSS receiver adds position and true ground speed to a log
