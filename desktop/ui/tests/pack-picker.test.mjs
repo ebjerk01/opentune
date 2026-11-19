@@ -252,7 +252,7 @@ test("each pack-consuming panel mounts one picker and follows its choice", async
   }
   window.OTNav = { register() {} };
   window.OT = { gate() {}, onCaps() {}, has: () => true, connArgs: () => ({ driver: "vcar" }) };
-  for (const s of ["util.js", "pack-picker.js", "feat_coding.js", "feat_scan.js", "feat_adaptation.js", "feat_service.js", "feat_logging.js"]) load(ctx, s);
+  for (const s of ["util.js", "pack-picker.js", "feat_coding.js", "feat_scan.js", "feat_adaptation.js", "feat_service.js", "livelog-core.js", "feat_logging.js"]) load(ctx, s);
   const kinds = { coding: "coding", scan: "modules", adaptation: "adaptation", service: "services", logging: "loggers" };
   for (const [panel, kind] of Object.entries(kinds)) {
     const sec = document.getElementById("panel-" + panel);

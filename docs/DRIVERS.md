@@ -734,8 +734,9 @@ shape as an ISO-TP transport carrying SSM over CAN. See
 For tests and demos, `opentune log --driver ssmsim --transport ssm|ssm-can`
 runs against `opentune_core::protocol::ssmsim::SsmSim`, a synthetic module
 that is both a `KLineRaw` bus (with an optional echo) and a CAN payload
-transport. `ssmsim` is handled by the `log` command, not the registry, like
-`obdsim` for `opentune obd`.
+transport. `ssmsim` is handled by the `log` command and the desktop's
+adapter opener (Live log, SSM transports), not the registry, like `obdsim`
+for `opentune obd`; `SsmSim` implements `Interface` for that.
 
 ## 4. Registration
 

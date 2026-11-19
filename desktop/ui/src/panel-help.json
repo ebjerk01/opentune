@@ -141,7 +141,7 @@
   },
   "logging": {
     "title": "Live log",
-    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven; identification DIDs marked as text/BCD/hex show their decoded text. Fast (0x2C) mode packs the channels into dynamically defined DIDs (one request per sample) and falls back to polling with the reason. Optional GPS card: an NMEA receiver (or recorded file) adds gps_* channels and the vehicle-vs-GPS speed error to the CSV.",
+    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven; identification DIDs marked as text/BCD/hex show their decoded text. Fast (0x2C) mode packs the channels into dynamically defined DIDs (one request per sample) and falls back to polling with the reason. Subaru SSM over K-line or CAN (ECU or TCU, or a simulated module offline) identifies the module and lists the parameters it leaves out. Reconnect (opt-in) re-opens the adapter after a dropped link; link events go into the CSV. Optional GPS card: an NMEA receiver (or recorded file) adds gps_* channels and the vehicle-vs-GPS speed error to the CSV.",
     "needs": ["Adapter: CAN", "logger.xml", "Ignition on"],
     "risk": "read-only",
     "guide": "25-live-log"

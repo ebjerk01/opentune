@@ -14,7 +14,8 @@
 //! With no car connected every live value comes back `null`; the battery
 //! voltage still reads because `ATRV` works with no bus.
 
-use crate::adapter::{AdapterHub, Addr, ConnKey};
+use crate::adapter::{AdapterHub, Addr, ConnKey, PollLink};
+use opentune_core::resilient::Liveness;
 use opentune_core::{Interface, RawDiag};
 use serde_json::{json, Value};
 
@@ -61,8 +62,14 @@ pub async fn obd_live(
     let (rpm, coolant_c, speed_kph, battery_mv) = hub.run("OBD live", move |s| {
         // Opening runs the adapter handshake; a failure here (no adapter, bad
         // port) is a real error worth surfacing to the panel.
-        let pids = s.with_diag(&key, PID_TIMEOUT_MS, |d| {
-            Ok((read_pid(d, 0x0C), read_pid(d, 0x05), read_pid(d, 0x0D)))
+        let (pids, link) = s.with_diag(&key, PID_TIMEOUT_MS, |d| {
+            let mut lv = Liveness::new(d);
+            let pids = (
+                read_pid(&mut lv, 0x0C),
+                read_pid(&mut lv, 0x05),
+                read_pid(&mut lv, 0x0D),
+            );
+            Ok((pids, PollLink::of(&lv)))
         })?;
         let battery_mv = s
             .interface(&key)
@@ -71,9 +78,11 @@ pub async fn obd_live(
         let rpm = pids.0.as_deref().and_then(rpm);
         let coolant = pids.1.and_then(|d| d.first().map(|a| i16::from(*a) - 40));
         let speed = pids.2.and_then(|d| d.first().copied());
-        if rpm.is_none() && coolant.is_none() && speed.is_none() && battery_mv.is_none() {
-            // Nothing answered at all: drop the cached adapter so the next tick
-            // re-opens it (recovers from an unplugged / reset adapter).
+        // Nothing answered at the transport (negative responses are answers)
+        // and no battery reading, or the adapter reset: drop the cached
+        // adapter so the next tick re-opens it (recovers from an unplugged /
+        // reset adapter).
+        if link.state == "lost" || (link.state == "silent" && battery_mv.is_none()) {
             s.invalidate();
         }
         Ok((rpm, coolant, speed, battery_mv))

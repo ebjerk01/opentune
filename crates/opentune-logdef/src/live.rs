@@ -62,7 +62,14 @@ pub struct Sample {
 }
 
 impl Sample {
-    /// The channel answered: a number or a text came back.
+    /// The channel has a reading: a number or a text came back.
+    ///
+    /// This is **not** link liveness: a negative response (`7F …`) leaves no
+    /// reading but proves the link is alive, so a tick in which every channel
+    /// got an NRC is alive. To tell a dead link from a refusing ECU, count
+    /// transport answers with
+    /// [`resilient::Liveness`](opentune_core::resilient::Liveness), as
+    /// [`run_resilient`](opentune_core::resilient::run_resilient) does.
     pub fn answered(&self) -> bool {
         self.raw.is_some() || self.value.is_some() || self.text.is_some()
     }

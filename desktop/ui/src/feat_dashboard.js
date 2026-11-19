@@ -366,8 +366,13 @@
         const sp = r && r.values ? r.values.speed : null;
         gps.setVehicleKmh(typeof sp === "number" ? sp : null);
       }
-      // Publish the poll for the Drive view (same data, no second adapter path).
-      if (window.OTDrive) {
+      // Publish the poll for the Drive view (same data, no second adapter
+      // path); a poll nothing answered (or an adapter reset) is an error
+      // there, so a dead link never shows as live.
+      const link = r && r.link && r.link.state !== "up" ? r.link : null;
+      if (window.OTDrive && link) {
+        window.OTDrive.feed.emit({ type: "error", source: "dashboard", message: (link.state === "lost" ? "adapter reset" : "no answer") + (link.error ? ": " + link.error : ""), busy: false });
+      } else if (window.OTDrive) {
         const vals = window.OTDrive.dashFrame(r && r.values, byKey).concat(gps ? window.OTDrive.samplesFrame(gps.samples()) : []);
         window.OTDrive.feed.emit({ type: "frame", source: "dashboard", tMs: (r && r.t_ms) || Date.now(), values: vals });
       }
@@ -379,7 +384,8 @@
         if (gps) rec.buf.push(...gps.samples().map((g) => liveLogRow(ts, g)));
         rec.samples += 1;
       }
-      status("ok", "live");
+      if (link) status("bad", link.state === "lost" ? "adapter reset — re-opening" : "no answer from the ECU");
+      else status("ok", "live");
     } catch (e) {
       const m = typeof e === "string" ? e : (e && e.message) || "error";
       const busy = /busy/i.test(m);

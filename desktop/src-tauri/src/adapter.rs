@@ -291,6 +291,44 @@ impl Session {
     }
 }
 
+/// The link's liveness after one stateless poll (Live log polling, the
+/// Dashboard, the OBD panel), counted at the transport with
+/// [`Liveness`](opentune_core::resilient::Liveness) the way the resilient
+/// loop counts it: a negative response is an answer, so a poll in which the
+/// ECU refused every channel is alive and keeps the opened adapter.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PollLink {
+    /// `up` (something answered, or nothing was sent), `silent` (requests
+    /// were sent and none got any response) or `lost` (the adapter reset or
+    /// could not be reached: an error behind
+    /// [`LINK_LOST_PREFIX`](opentune_core::resilient::LINK_LOST_PREFIX)).
+    pub state: &'static str,
+    /// The last transport error when not `up`.
+    pub error: Option<String>,
+}
+
+impl PollLink {
+    /// Classify the requests counted by `lv`.
+    pub fn of(lv: &opentune_core::resilient::Liveness<'_>) -> Self {
+        let state = if lv.link_lost {
+            "lost"
+        } else if lv.dead() {
+            "silent"
+        } else {
+            "up"
+        };
+        PollLink {
+            state,
+            error: (state != "up").then(|| lv.last_error.clone()).flatten(),
+        }
+    }
+
+    /// Drop the opened adapter so the next poll re-opens it.
+    pub fn reopen(&self) -> bool {
+        self.state != "up"
+    }
+}
+
 // ---------------------------------------------------------------------------
 // UDS session helpers for mutating operations
 // ---------------------------------------------------------------------------
@@ -479,9 +517,27 @@ pub(crate) mod testkit {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
     use std::rc::Rc;
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::sync::Arc;
 
     /// One logged request: `(tx_id, bytes)`.
     pub type Frame = (u32, Vec<u8>);
+
+    /// Faults to inject, shared with the test thread (the bus itself lives on
+    /// the adapter worker).
+    #[derive(Debug, Default)]
+    pub struct SimFault {
+        /// Every request fails with an I/O error (adapter unplugged) until a
+        /// driver open succeeds again.
+        pub dead_until_reopen: AtomicBool,
+        /// The next request fails with `Error::AdapterReset` (the adapter
+        /// power-cycled and printed its banner).
+        pub reset_next: AtomicBool,
+        /// Refuse this many driver opens (the device is not back yet).
+        pub refuse_opens: AtomicU32,
+        /// Driver opens that succeeded.
+        pub opened: AtomicU32,
+    }
 
     /// Simulated vehicle: one UDS server per (tx, rx) address, a wire log of
     /// `(tx_id, request)` and a log of every driver open's address.
@@ -491,6 +547,7 @@ pub(crate) mod testkit {
         pub wire: Rc<RefCell<Vec<Frame>>>,
         pub opens: Rc<RefCell<Vec<Addr>>>,
         pub cleared: Rc<RefCell<Vec<(u32, u32)>>>,
+        pub fault: Arc<SimFault>,
     }
 
     impl SimBus {
@@ -502,6 +559,13 @@ pub(crate) mod testkit {
             let bus = self.clone();
             Box::new(move |k: &ConnKey| {
                 let cfg = k.config()?;
+                let f = &bus.fault;
+                if f.refuse_opens.load(Ordering::SeqCst) > 0 {
+                    f.refuse_opens.fetch_sub(1, Ordering::SeqCst);
+                    return Err("open sim: no such device".into());
+                }
+                f.dead_until_reopen.store(false, Ordering::SeqCst);
+                f.opened.fetch_add(1, Ordering::SeqCst);
                 bus.opens.borrow_mut().push(Addr {
                     tx_id: cfg.tx_id,
                     rx_id: cfg.rx_id,
@@ -539,6 +603,13 @@ pub(crate) mod testkit {
 
     impl DiagTransport for SimRoute {
         fn request(&mut self, req: &[u8], timeout_ms: u64) -> opentune_core::Result<Vec<u8>> {
+            let f = &self.bus.fault;
+            if f.reset_next.swap(false, Ordering::SeqCst) {
+                return Err(Error::AdapterReset("sim banner".into()));
+            }
+            if f.dead_until_reopen.load(Ordering::SeqCst) {
+                return Err(Error::Io(std::io::Error::other("sim: unplugged")));
+            }
             self.bus.wire.borrow_mut().push((self.tx, req.to_vec()));
             let mut ecus = self.bus.ecus.borrow_mut();
             match ecus.get_mut(&(self.tx, self.rx)) {

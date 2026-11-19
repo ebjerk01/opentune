@@ -283,6 +283,73 @@ impl DiagTransport for SsmSim {
     }
 }
 
+/// The simulator as a whole driver (the `ssmsim` pseudo-driver of the CLI
+/// and the desktop): its raw [`kline`](crate::Interface::kline) and its
+/// [`diag`](crate::Interface::diag) transport are both the module.
+/// [`open`](crate::Interface::open) takes the module address from the
+/// config: `tx_id` [`TCU`](crate::protocol::ssm::TCU) or `0x7E1` selects the
+/// TCU, anything else the engine ECU. Memory read/write are unsupported.
+impl crate::Interface for SsmSim {
+    fn info(&self) -> crate::InterfaceInfo {
+        crate::InterfaceInfo {
+            id: "ssmsim".into(),
+            display_name: "Simulated SSM module (synthetic)".into(),
+            firmware: None,
+            serial: None,
+        }
+    }
+
+    fn capabilities(&self) -> crate::Capabilities {
+        crate::Capabilities {
+            can: true,
+            kline: true,
+            ..crate::Capabilities::default()
+        }
+    }
+
+    fn open(&mut self, cfg: &crate::ConnectConfig) -> Result<()> {
+        self.cfg.address = match cfg.tx_id {
+            0x18 | 0x7E1 => crate::protocol::ssm::TCU,
+            _ => ECU,
+        };
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        self.rx.clear();
+        Ok(())
+    }
+
+    fn read_ecu_id(&mut self) -> Result<crate::EcuId> {
+        Err(Error::Unsupported("ssmsim: use SSM BF".into()))
+    }
+
+    fn read_memory(
+        &mut self,
+        _region: crate::MemoryRegion,
+        _progress: &mut dyn FnMut(crate::Progress),
+    ) -> Result<Vec<u8>> {
+        Err(Error::Unsupported("ssmsim".into()))
+    }
+
+    fn write_memory(
+        &mut self,
+        _region: crate::MemoryRegion,
+        _data: &[u8],
+        _progress: &mut dyn FnMut(crate::Progress),
+    ) -> Result<()> {
+        Err(Error::Unsupported("ssmsim".into()))
+    }
+
+    fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
+        Some(self)
+    }
+
+    fn kline(&mut self) -> Option<&mut dyn KLineRaw> {
+        Some(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

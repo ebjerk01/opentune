@@ -386,9 +386,174 @@ pub(crate) fn tick(diag: &mut dyn RawDiag, plan: &SsmPlan, params: &[LogParam]) 
         .collect()
 }
 
+// ---------------------------------------------------------------------------
+// Setting a log up over a driver (shared by the CLI and the desktop)
+// ---------------------------------------------------------------------------
+
+impl std::str::FromStr for SsmTarget {
+    type Err = String;
+
+    /// `ecu`/`engine` or `tcu`/`transmission`, any case.
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "ecu" | "engine" => Ok(SsmTarget::Ecu),
+            "tcu" | "transmission" => Ok(SsmTarget::Tcu),
+            other => Err(format!("SSM target '{other}': expected ecu or tcu")),
+        }
+    }
+}
+
+/// What carries SSM to the module.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SsmWire {
+    /// SSM2 packets on the driver's raw K-line
+    /// ([`Interface::kline`](opentune_core::Interface::kline)), 4800 baud,
+    /// no wake-up.
+    #[default]
+    KLine,
+    /// SSM payloads over the driver's ISO-TP transport on `7E0`/`7E8`
+    /// (`7E1`/`7E9` for the TCU).
+    Can,
+}
+
+impl SsmWire {
+    /// Bind a driver's [`ConnectConfig`](opentune_core::ConnectConfig) to
+    /// `target` over this wire: on K-line the module address in `tx_id`,
+    /// 4800 baud and `init=none` (SSM2 has no wake-up); on CAN the module's
+    /// ISO-TP ids.
+    pub fn configure(self, cfg: &mut opentune_core::ConnectConfig, target: SsmTarget) {
+        match self {
+            SsmWire::KLine => {
+                cfg.bitrate = wire::BAUD;
+                cfg.tx_id = u32::from(target.address());
+                cfg.options.insert("init".into(), "none".into());
+                cfg.options.insert("baud".into(), wire::BAUD.to_string());
+            }
+            SsmWire::Can => (cfg.tx_id, cfg.rx_id) = target.can_ids(),
+        }
+    }
+
+    /// Get an opened driver ready: on K-line it must offer a raw K-line,
+    /// which is set to 4800 baud with stale input dropped; on CAN it must
+    /// expose a diagnostic transport.
+    pub fn prepare(self, drv: &mut dyn opentune_core::Interface) -> Result<(), String> {
+        let id = drv.info().id;
+        match self {
+            SsmWire::KLine => {
+                let link = drv.kline().ok_or_else(|| {
+                    format!(
+                        "driver '{id}' offers no raw K-line; SSM over K-line needs kkl or \
+                         kline-bridge (or the ssmsim simulator)"
+                    )
+                })?;
+                link.set_baud(wire::BAUD)
+                    .and_then(|()| link.clear_input())
+                    .map_err(|e| format!("prepare the K-line for SSM: {e}"))
+            }
+            SsmWire::Can => drv.diag().map(|_| ()).ok_or_else(|| {
+                format!("driver '{id}' does not expose a diagnostic transport for SSM over CAN")
+            }),
+        }
+    }
+
+    /// Run `f` over the SSM payload transport of an opened driver: an
+    /// [`SsmKLine`](wire::SsmKLine) to `target` on its raw K-line, or its
+    /// diagnostic transport on CAN. `Err` when the driver has neither (it was
+    /// closed, or [`prepare`](Self::prepare) would have refused it).
+    pub fn with_transport<R>(
+        self,
+        drv: &mut dyn opentune_core::Interface,
+        target: SsmTarget,
+        f: impl FnOnce(&mut dyn opentune_core::protocol::DiagTransport) -> R,
+    ) -> Result<R, String> {
+        match self {
+            SsmWire::KLine => {
+                let link = drv.kline().ok_or("the K-line is closed")?;
+                Ok(f(&mut wire::SsmKLine::new(link, target.address())))
+            }
+            SsmWire::Can => Ok(f(drv.diag().ok_or("the transport is closed")?)),
+        }
+    }
+}
+
+/// An SSM log set up for one module ([`prepare`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SsmPrepared {
+    /// The module's `BF` identification.
+    pub init: SsmInit,
+    /// The definition reduced to what the module supports.
+    pub def: LogDef,
+    /// The session config, switched to batched `A8` reads.
+    pub cfg: crate::FastLogConfig,
+    /// What was left out and why ([`SsmSelection::notes`]).
+    pub notes: Vec<String>,
+    /// Requested parameter ids that are not logged (no supported SSM
+    /// parameter by that id).
+    pub not_logged: Vec<String>,
+}
+
+/// Identify the module (`BF`), keep the definition's parameters it supports
+/// ([`select`]) and switch `cfg` to batched `A8` reads under
+/// `max_packet_len`. `ids` are the requested parameter ids (empty: all);
+/// those that end up not logged are listed in
+/// [`SsmPrepared::not_logged`]. `cfg.enabled` (UDS `0x2C`) is ignored: SSM
+/// always batches. Errors when the module does not answer `BF`, nothing can
+/// be logged or the packet limit is too small.
+pub fn prepare(
+    diag: &mut dyn RawDiag,
+    def: &LogDef,
+    mut cfg: crate::FastLogConfig,
+    target: SsmTarget,
+    max_packet_len: usize,
+    ids: &[&str],
+) -> Result<SsmPrepared, String> {
+    let init =
+        identify(diag).map_err(|e| format!("SSM init (BF) to the {target:?} failed: {e}"))?;
+    let sel = select(def, &init, target);
+    let not_logged = ids
+        .iter()
+        .filter(|id| !sel.def.params().any(|(_, _, p)| p.id == **id))
+        .map(|id| id.to_string())
+        .collect();
+    if sel.is_empty() {
+        return Err(format!(
+            "no SSM parameter in the definition is supported by this module (ROM ID {})",
+            init.rom_id_hex()
+        ));
+    }
+    cfg.enabled = false;
+    cfg.ssm = Some(SsmPollConfig { max_packet_len });
+    cfg.validate()?;
+    Ok(SsmPrepared {
+        init,
+        def: sel.def,
+        cfg,
+        notes: sel.notes,
+        not_logged,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn targets_parse_and_wires_configure() {
+        assert_eq!("ECU".parse::<SsmTarget>(), Ok(SsmTarget::Ecu));
+        assert_eq!(" transmission ".parse::<SsmTarget>(), Ok(SsmTarget::Tcu));
+        assert!("abs"
+            .parse::<SsmTarget>()
+            .unwrap_err()
+            .contains("ecu or tcu"));
+        let mut k = opentune_core::ConnectConfig::default();
+        SsmWire::KLine.configure(&mut k, SsmTarget::Tcu);
+        assert_eq!((k.tx_id, k.bitrate), (0x18, 4800));
+        assert_eq!(k.options.get("init").map(String::as_str), Some("none"));
+        let mut c = opentune_core::ConnectConfig::default();
+        SsmWire::Can.configure(&mut c, SsmTarget::Tcu);
+        assert_eq!((c.tx_id, c.rx_id), (0x7E1, 0x7E9));
+    }
 
     #[test]
     fn rom_ids_match_case_insensitively_and_in_lists() {
