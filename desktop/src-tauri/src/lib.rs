@@ -54,6 +54,7 @@ mod feat_ts;
 pub mod seedkeys;
 // Startup trace (`OPENTUNE_TRACE_STARTUP=1`), WebKitGTK env defaults and the
 // parsed-data cache. Public so an embedder can add its own trace marks.
+pub mod dmabuf;
 pub mod startup;
 #[cfg(test)]
 mod vcar_e2e;

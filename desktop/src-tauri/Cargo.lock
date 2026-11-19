@@ -2657,6 +2657,7 @@ dependencies = [
 name = "opentune-desktop"
 version = "0.7.0"
 dependencies = [
+ "libc",
  "opentune-a2l",
  "opentune-adaptation",
  "opentune-autoscan",

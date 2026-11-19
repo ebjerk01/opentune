@@ -136,6 +136,23 @@ test("the banner shows once, and Dismiss remembers it", async () => {
   assert.equal(cb.parentElement, null);
 });
 
+test("the DMA-BUF self-heal notice is shown on the start that reports it", async () => {
+  const notice = "The last start did not draw a frame with the DMA-BUF renderer on: this start uses the fallback (DMA-BUF off).";
+  const env = { ...ENV, vars: { ...ENV.vars, WEBKIT_DISABLE_COMPOSITING_MODE: null },
+    dmabuf: { enabled: false, rule: "self_heal", reason: "self-heal: last start did not draw (0/2 clean starts before one retry)", drivers: ["amdgpu"], notice } };
+  const a = app({ render_env: () => env });
+  await tick();
+  const n = a.document.querySelector(".rc-notice");
+  assert.ok(n, "notice shown");
+  assert.equal(a.document.querySelector("#rcWarn"), null, "no compositing warning");
+  n.querySelector("button").click();
+  assert.equal(n.parentElement, null);
+  assert.ok(R.envLines(env).includes("DMA-BUF renderer: off — self-heal: last start did not draw (0/2 clean starts before one retry) (render-node driver: amdgpu)"));
+  const quiet = app({ render_env: () => ({ ...env, dmabuf: { ...env.dmabuf, notice: null } }) });
+  await tick();
+  assert.equal(quiet.document.querySelector(".rc-notice"), null);
+});
+
 test("OPENTUNE_PERF=1 logs the environment at startup", async () => {
   const notes = [];
   app({ render_env: () => ({ ...ENV, perf: true }), render_note: ({ line }) => { notes.push(line); return null; } });

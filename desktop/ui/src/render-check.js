@@ -142,10 +142,10 @@
   function showWarning(env) {
     const msg = compositingWarning(env, dismissed());
     const main = byId("main");
-    if (!msg || !main || doc.querySelector(".rc-warn")) return;
+    if (!msg || !main || doc.querySelector(".rc-compwarn")) return;
     const b = doc.createElement("div");
     b.id = "rcWarn";
-    b.className = "banner info rc-warn";
+    b.className = "banner info rc-warn rc-compwarn";
     b.setAttribute("role", "alert");
     b.innerHTML = '<span class="rc-warn-text"></span><button type="button" class="btn sm" id="rcWarnDismiss">Dismiss</button>';
     b.querySelector(".rc-warn-text").textContent = msg;
@@ -154,6 +154,21 @@
       try { root.localStorage.setItem(DISMISS_KEY, "1"); } catch (e) { /* shows again next start */ }
       b.remove();
     });
+  }
+
+  // The DMA-BUF self-heal's one-shot notice ("the last start did not draw"):
+  // the backend reports it on the one start that detected it.
+  function showNotice(env) {
+    const n = env && env.dmabuf && env.dmabuf.notice;
+    const main = byId("main");
+    if (!n || !main || doc.querySelector(".rc-notice")) return;
+    const b = doc.createElement("div");
+    b.className = "banner info rc-warn rc-notice";
+    b.setAttribute("role", "status");
+    b.innerHTML = '<span class="rc-warn-text"></span><button type="button" class="btn sm">OK</button>';
+    b.querySelector(".rc-warn-text").textContent = n + " Details: Debug → Render check.";
+    main.insertBefore(b, main.firstChild);
+    b.querySelector("button").addEventListener("click", () => b.remove());
   }
 
   // ---- frame sampler ----------------------------------------------------------
@@ -292,6 +307,7 @@
     const env = await loadEnv();
     if (!env) return;
     showWarning(env);
+    showNotice(env);
     if (env.perf) {
       S.armed = true;
       note("env: " + envLines(env).join("; "));
@@ -301,7 +317,7 @@
 
   const OTRender = {
     percentile, deltas, frameStats, verdict, statsLine, compositingDisabled, compositingWarning, envLines, dmabufLine,
-    panelSwitched, measure, showWarning, boot, _state: S,
+    panelSwitched, measure, showWarning, showNotice, boot, _state: S,
   };
   root.OTRender = OTRender;
   if (typeof module !== "undefined" && module.exports) module.exports = OTRender;

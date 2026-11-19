@@ -62,6 +62,10 @@
       dri_render_nodes: ["renderD128"],
       set_by_opentune: [],
       perf: false,
+      dmabuf: {
+        enabled: true, rule: "none", reason: "none, DMA-BUF on", set_env: false, drivers: ["amdgpu"],
+        knob: "auto", heal: "on", notice: null,
+      },
     }),
     render_note: ({ line }) => { log("render: " + line); return null; },
     checksum_algos: () => [

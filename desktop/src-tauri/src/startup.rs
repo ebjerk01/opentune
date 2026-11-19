@@ -10,9 +10,16 @@
 //!   command held the UI thread), the data loads and the frontend's own marks
 //!   (`startup_mark`). Off by default; when off every hook is a relaxed atomic
 //!   load.
-//! * **Platform environment** — [`apply_platform_env`] sets WebKitGTK's
-//!   `WEBKIT_DISABLE_DMABUF_RENDERER=1` on Linux before GTK/WebKit initialise
-//!   (unless the user set it, or opted out with `OPENTUNE_KEEP_WEBKIT_ENV=1`).
+//! * **Platform environment** — [`apply_platform_env`] decides the WebKitGTK
+//!   DMA-BUF renderer on Linux before GTK/WebKit initialise: GPU rendering
+//!   stays on, and `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set only on a
+//!   detected known-bad setup (no usable render node, NVIDIA proprietary
+//!   driver, virtual GPU, forced software GL, remote X) or after a start that
+//!   never drew (self-heal). User overrides always win; see [`crate::dmabuf`].
+//!   `WEBKIT_DISABLE_COMPOSITING_MODE` is never set.
+//! * **Render environment** — [`render_env`] reports the whitelisted
+//!   WebKit/GTK variables and the DMA-BUF decision for the Debug panel's
+//!   Render check; [`render_note`] logs its results (`OPENTUNE_PERF=1`).
 //! * **Data cache** — the ECU definitions (the MS4x defs alone carry ~2,900
 //!   maps) and the vehicle catalog are parsed once, kept behind an `Arc`, and
 //!   re-parsed only when a file in the directory changes (name, size or mtime),
@@ -153,44 +160,101 @@ pub fn window_event(what: &str) {
     }
 }
 
-/// Frontend milestone (`invoke("startup_mark", { label })`). A no-op unless
-/// the trace is on; async so it never queues behind the UI thread.
+/// Frontend milestone (`invoke("startup_mark", { label })`). Printed only
+/// when the trace is on; async so it never queues behind the UI thread. The
+/// "first frame painted" mark also clears the DMA-BUF self-heal marker (the
+/// start drew, see [`crate::dmabuf`]).
 #[tauri::command]
 pub async fn startup_mark(label: String) {
+    if label.starts_with("first frame painted") {
+        frame_painted();
+    }
     mark(&format!("ui: {label}"));
+}
+
+static PAINTED: AtomicBool = AtomicBool::new(false);
+
+/// The first frame was painted: record a clean start for the self-heal (once).
+pub fn frame_painted() {
+    if PAINTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    if let Some(dir) = HEAL_DIR.get() {
+        if let Err(e) = crate::dmabuf::painted(dir) {
+            mark(&format!(
+                "dmabuf self-heal: could not clear the marker: {e}"
+            ));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Platform environment
 // ---------------------------------------------------------------------------
 
-/// Apply safe WebKitGTK defaults before GTK/WebKit initialise. Must run before
-/// the Tauri app is built (no webview exists yet, and no other thread is
-/// reading the environment). Returns what was set, for the trace.
+/// The DMA-BUF decision of this process (for [`render_env`] and the trace).
+static DECISION: OnceLock<crate::dmabuf::Decision> = OnceLock::new();
+/// The self-heal directory, when this start uses it (auto mode).
+static HEAL_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Decide the WebKitGTK environment before GTK/WebKit initialise. Must run
+/// before the Tauri app is built (no webview exists yet, and no other thread
+/// is reading the environment). Returns what was set, for the trace.
 ///
-/// `WEBKIT_DISABLE_DMABUF_RENDERER=1`: WebKitGTK ≥ 2.42 renders through
-/// DMA-BUF/GBM buffers by default. With some GPU drivers (and in an AppImage,
-/// where a bundled WebKit meets the host's Mesa/libgbm) that path stalls,
-/// draws a blank window or falls back slowly. The shared-memory path is
-/// plenty fast for this UI. A value the user already set is never touched,
-/// and `OPENTUNE_KEEP_WEBKIT_ENV=1` skips this entirely.
+/// WebKitGTK ≥ 2.42 renders through DMA-BUF/GBM buffers by default; that is
+/// the fast path and stays on. On setups where it is known to stall or draw a
+/// blank window (see [`crate::dmabuf`] for the rules and the self-heal),
+/// `WEBKIT_DISABLE_DMABUF_RENDERER=1` selects the shared-memory path. A value
+/// the user set is never touched, `OPENTUNE_DMABUF=on|off` forces it, and
+/// `OPENTUNE_KEEP_WEBKIT_ENV=1` skips this entirely.
 pub fn apply_platform_env() -> Vec<String> {
+    use crate::dmabuf;
     let mut set = Vec::new();
     if !cfg!(target_os = "linux") {
+        let _ = DECISION.set(dmabuf::Decision::not_linux());
         return set;
     }
-    if std::env::var(KEEP_ENV).map(|v| truthy(&v)).unwrap_or(false) {
-        mark(&format!(
-            "{KEEP_ENV}=1: WebKit environment left as inherited"
-        ));
-        return set;
+    let get = |k: &str| std::env::var(k).ok();
+    let o = dmabuf::Overrides::from_env(&get);
+    let probe = dmabuf::probe_system(&get);
+    let auto = !o.keep_env && o.user_var.is_none() && o.knob == dmabuf::Knob::Auto;
+    let dir = if auto { dmabuf::state_dir(&get) } else { None };
+    let (persisted, marker) = match dir.as_deref() {
+        Some(d) => (dmabuf::read_state(d), dmabuf::read_marker(d)),
+        None => (dmabuf::Persist::default(), None),
+    };
+    let plan = dmabuf::decide(&o, &probe, persisted, marker);
+    if plan.decision.set_env {
+        std::env::set_var(dmabuf::DMABUF_ENV, "1");
+        std::env::set_var(dmabuf::SET_BY_US_ENV, "1");
+        set.push(format!("{}=1", dmabuf::DMABUF_ENV));
+    } else if !o.keep_env && o.user_var.is_none() {
+        // Inherited from an OpenTune parent that set it: this start decided on.
+        std::env::remove_var(dmabuf::DMABUF_ENV);
+        std::env::remove_var(dmabuf::SET_BY_US_ENV);
     }
-    const DMABUF: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
-    if std::env::var_os(DMABUF).is_none() {
-        std::env::set_var(DMABUF, "1");
-        set.push(format!("{DMABUF}=1"));
+    if let (Some(d), Some(st), Some(m)) = (dir, plan.persist, plan.marker) {
+        match dmabuf::write_start(&d, st, m) {
+            Ok(()) => {
+                let _ = HEAL_DIR.set(d);
+            }
+            Err(e) => mark(&format!(
+                "dmabuf self-heal off: cannot write {}: {e}",
+                d.display()
+            )),
+        }
     }
     let _ = SET_BY_US.set(set.clone());
+    let d = &plan.decision;
+    if let Some(n) = &d.notice {
+        mark(&format!("dmabuf self-heal: {n}"));
+    }
+    if let Some(k) = &o.knob_unknown {
+        mark(&format!(
+            "{}={k} not understood (auto|on|off): using auto",
+            dmabuf::KNOB_ENV
+        ));
+    }
     if enabled() {
         let shown = [
             "WEBKIT_DISABLE_DMABUF_RENDERER",
@@ -203,11 +267,20 @@ pub fn apply_platform_env() -> Vec<String> {
         .map(|k| format!("{k}={}", std::env::var(k).unwrap_or_else(|_| "-".into())))
         .collect::<Vec<_>>()
         .join(" ");
+        let drivers = if d.drivers.is_empty() {
+            "none".to_string()
+        } else {
+            d.drivers.join(", ")
+        };
         mark(&format!(
-            "platform env: set [{}]; now {shown}",
+            "platform env: DMA-BUF {} — {} [{:?}]; render-node driver(s): {drivers}; set [{}]; now {shown}",
+            if d.enabled { "on" } else { "off" },
+            d.reason,
+            d.rule,
             set.join(", ")
         ));
     }
+    let _ = DECISION.set(plan.decision);
     set
 }
 
@@ -260,6 +333,9 @@ pub struct RenderEnv {
     pub set_by_opentune: Vec<String>,
     /// `OPENTUNE_PERF` is on.
     pub perf: bool,
+    /// The DMA-BUF renderer decision: on/off, the rule that fired, the
+    /// render-node driver(s) and a one-shot self-heal notice.
+    pub dmabuf: Option<crate::dmabuf::Decision>,
 }
 
 fn clean_value(v: &str) -> String {
@@ -272,6 +348,7 @@ pub fn render_env_from(
     get: impl Fn(&str) -> Option<String>,
     dri_dir: &Path,
     set_by_opentune: Vec<String>,
+    dmabuf: Option<crate::dmabuf::Decision>,
 ) -> RenderEnv {
     let vars = RENDER_VALUE_KEYS
         .iter()
@@ -297,6 +374,7 @@ pub fn render_env_from(
         dri_render_nodes,
         set_by_opentune,
         perf: get(PERF_ENV).map(|v| truthy(&v)).unwrap_or(false),
+        dmabuf,
     }
 }
 
@@ -309,6 +387,7 @@ pub async fn render_env() -> RenderEnv {
         |k| std::env::var(k).ok(),
         Path::new("/dev/dri"),
         SET_BY_US.get().cloned().unwrap_or_default(),
+        DECISION.get().cloned(),
     )
 }
 
@@ -477,7 +556,12 @@ mod tests {
                 other => format!("value-of-{other}"),
             })
         };
-        let env = render_env_from(get, &dri, vec!["WEBKIT_DISABLE_DMABUF_RENDERER=1".into()]);
+        let env = render_env_from(
+            get,
+            &dri,
+            vec!["WEBKIT_DISABLE_DMABUF_RENDERER=1".into()],
+            Some(crate::dmabuf::Decision::not_linux()),
+        );
         let keys: Vec<&str> = env.vars.keys().copied().collect();
         let mut want = RENDER_VALUE_KEYS.to_vec();
         want.sort_unstable();
@@ -504,7 +588,7 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&dri);
 
-        let none = render_env_from(|_| None, Path::new("/nonexistent/ot-dri"), Vec::new());
+        let none = render_env_from(|_| None, Path::new("/nonexistent/ot-dri"), Vec::new(), None);
         assert!(none.vars.values().all(Option::is_none));
         assert!(none.present.values().all(|&p| !p));
         assert!(none.dri_render_nodes.is_empty() && !none.perf);

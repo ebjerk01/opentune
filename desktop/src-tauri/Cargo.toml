@@ -19,6 +19,10 @@ path = "src/lib.rs"
 name = "opentune-desktop"
 path = "src/main.rs"
 
+# access(2) for the DMA-BUF render-node check (src/dmabuf.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

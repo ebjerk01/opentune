@@ -121,6 +121,16 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Desktop (Linux): **GPU rendering on by default; DMA-BUF disabled only on
+  detected known-bad setups.** OpenTune no longer sets
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` unconditionally: it does so only when
+  there is no usable render node, with the NVIDIA proprietary driver, on a
+  virtual GPU, with forced software GL, on remote X, or when the last start
+  never drew a frame (self-heal: fallback, one retry after 2 clean starts,
+  then off for good). Overrides: `OPENTUNE_KEEP_WEBKIT_ENV=1`, a user-set
+  `WEBKIT_DISABLE_DMABUF_RENDERER`, and the new `OPENTUNE_DMABUF=auto|on|off`.
+  The startup trace, `render_env` and the Render check show the decision and
+  the rule. See docs/TROUBLESHOOTING-STARTUP.md.
 - Desktop repaint costs: Drive view tiles and the map heat grids use
   `contain: content` (a tile's update repaints only that tile); paused Drive
   view tiles are dimmed with opacity and muted colours instead of a

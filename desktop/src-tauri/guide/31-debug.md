@@ -46,8 +46,9 @@ scroll. Use it when the app feels laggy.
 - **Read environment** lists the rendering-related environment variables the
   app sees (`WEBKIT_DISABLE_COMPOSITING_MODE`, `WEBKIT_DISABLE_DMABUF_RENDERER`,
   `GDK_BACKEND`, `XDG_SESSION_TYPE`; whether a Wayland / X11 display and an
-  AppImage are in use), the GPU render nodes, what OpenTune set itself, and the
-  WebGL renderer (`llvmpipe` means software rendering).
+  AppImage are in use), the GPU render nodes and their driver, whether the
+  DMA-BUF renderer is on and which rule turned it off (if any), what OpenTune
+  set itself, and the WebGL renderer (`llvmpipe` means software rendering).
 - **Measure scrolling**: pick a panel and press the button. The app switches
   to that panel; scroll it up and down for about 5 seconds. It then returns
   here with the frame rate, the median and 95th-percentile frame time and the
