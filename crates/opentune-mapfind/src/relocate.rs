@@ -1022,6 +1022,22 @@ pub fn derive_def(def: &EcuDef, rel: &Relocation, id: &str, source: &str, target
         },
         def.notes
     );
+    // The derived maps were found in one real read and nothing more: record the
+    // derivation as a source and cap the evidence at real-image-tested.
+    if let Some(p) = out.provenance.as_mut() {
+        p.sources.push(format!(
+            "derived by `opentune ecudefs relocate` from definition '{}' onto read {target}",
+            def.id
+        ));
+        let rank = |e: &str| {
+            opentune_core::provenance::EVIDENCE_LEVELS
+                .iter()
+                .position(|l| *l == e)
+        };
+        if rank(&p.evidence) > rank("real-image-tested") {
+            p.evidence = "real-image-tested".into();
+        }
+    }
     out.maps = def
         .maps
         .iter()

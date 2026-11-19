@@ -13,5 +13,6 @@
   "sources": [
     "ISO 14229-1:2013 Annex C.1",
     "commaai/opendbc opendbc/car/uds.py DATA_IDENTIFIER_TYPE (MIT) — name cross-check"
-  ]
+  ],
+  "evidence": "synthetic-tested"
 }

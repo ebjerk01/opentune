@@ -3,6 +3,15 @@
   "id": "example-family",
   "name": "Example ECU (template - rename me)",
   "maker": "ExampleMaker",
+  "_notes_provenance": "provenance is required: sources = one citation per source (a standard by name; an open project with path/commit and its licence; or 'own read' / 'own capture' - your own data is never committed). license = SPDX id the data is shipped under (normally GPL-3.0-or-later; no proprietary / non-commercial / unknown). evidence = implemented | synthetic-tested | real-image-tested | bench-tested | vehicle-tested (docs/DEVELOPMENT.md section 7) - never claim more than you have done.",
+  "provenance": {
+    "sources": [
+      "ISO 15765-4 / ISO 14229 (public standards)",
+      "own stock read of the ECU (never committed): checksum round-trip and map decode"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "implemented"
+  },
   "family": "ExampleFamily",
   "notes": "Describe the ECU with PUBLIC family-level facts only. State clearly that addresses/flash_size are placeholders to be confirmed per software variant, and cite how you validated the checksum (e.g. 'opentune checksum verify --algo <id> reports all blocks OK on my own stock read'). Never ship proprietary firmware, A2L/DAMOS, seed/key secrets, real VINs or plates.",
   "_notes_protocol": "protocol: iso_tp | vwtp20 | iso14230_kline | iso9141 | raw_can. diag_layer: uds | kwp2000. full_read: obd | bench_boot.",

@@ -63,14 +63,28 @@ of every pack loaded from disk, each marked with its pack and validation state.
   "vehicles": ["Golf 7", "A3 8V"],
   "author": "…",
   "license": "GPL-3.0-or-later",
-  "description": "Provenance / coverage notes."
+  "description": "Provenance / coverage notes.",
+  "sources": ["opendbc opendbc/car/volkswagen/values.py @ <commit> (MIT)"],
+  "evidence": "synthetic-tested"
 }
 ```
 
-Only `id` and `name` are required; unknown fields are ignored for forward
-compatibility. **Record the license and provenance** of the definition data —
-packs built from community/open sources keep their license; proprietary or
-vendor-derived data does not belong in a public/community pack.
+To **load**, only `id` and `name` are required; unknown fields are ignored for
+forward compatibility. To be **accepted** (`opentune packs validate`, the CI
+gate), a manifest also needs:
+
+- `id` equal to the pack's folder name (lowercase, digits, `-`), a `name` and a
+  `version` (`MAJOR.MINOR.PATCH`);
+- `sources` — one citation per source: a standard by name, an open project with
+  path/commit and licence, or "own capture" for your own data. No output of
+  commercial / OEM tools;
+- `license` — the SPDX id of the pack's data (normally `GPL-3.0-or-later`).
+  Packs built from community/open sources keep their license; proprietary,
+  non-commercial or vendor-derived data does not belong in a pack;
+- `evidence` — the validation state the pack's data as a whole has reached:
+  `implemented`, `synthetic-tested`, `real-image-tested`, `bench-tested` or
+  `vehicle-tested` ([`DEVELOPMENT.md`](DEVELOPMENT.md) §7). If only part of it
+  was exercised, use the lower state and say what was tested in `description`.
 
 ## Loading behaviour (honest, never silent)
 
@@ -102,11 +116,25 @@ prints each pack's identity, license and per-kind definition counts, plus any
 per-file load notes, and a total across all discovered packs. The default `<dir>`
 is `packs`, so `opentune packs` from the repository root lists the shipped packs.
 
+```
+opentune packs validate <dir> [--warnings] [--allow <file>]
+```
+
+is the contributor gate (CI runs `opentune packs validate packs`). For the pack
+at `<dir>`, or every pack under it, it reports as errors: an incomplete
+manifest (above), every file that fails to parse or validate, and every
+privacy-scan finding (VIN-like identifiers, e-mail addresses outside the
+reserved `example.*` / `.test` domains, serial-number-like values) in the
+pack's `*.json` / `*.md` / `*.txt` / `*.csv` files, printed redacted. A
+sub-directory the loader does not know (e.g. a misspelt `service/`) is a
+warning. It exits non-zero on any error. `--allow` names a file of exact values
+to ignore, one per line, for deliberate synthetic data the heuristics flag.
+
 ## Writing a pack
 
 1. **Copy the scaffold.** `cp -r packs/_template packs/<your-id>` and set `id`
-   (= the folder name), `name`, `version`, `license` and `sources` in
-   `pack.json`. Delete the sub-folders you do not need.
+   (= the folder name), `name`, `version`, `license`, `sources` and `evidence`
+   in `pack.json`. Delete the sub-folders you do not need.
 2. **Decide where each fact comes from before writing it.** Standards (ISO
    14229, SAE J1979 / ISO 15031, ISO 15765-4) may be used by their published
    identifiers. Anything else needs an open, license-compatible source, recorded
@@ -155,8 +183,9 @@ is `packs`, so `opentune packs` from the repository root lists the shipped packs
      `opentune-adaptation` and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
      ships them yet: open, license-compatible coding data is rare, and vendor
      label files are off-limits.
-4. **Check it loads cleanly.** `opentune packs packs/<your-id>` must show no
-   load notes, and `cargo test -p opentune-packs` (the `repo_packs` test loads
-   every pack under `packs/` and requires zero errors).
+4. **Check it.** `opentune packs validate packs/<your-id>` must report 0
+   errors (it also runs on a fork: point it at any pack folder), and
+   `cargo test -p opentune-packs` (the `repo_packs` tests load and validate
+   every pack under `packs/`).
 5. **Document it.** Add a row to `packs/README.md` with contents, license and
    sources.

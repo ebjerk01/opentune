@@ -2,6 +2,14 @@
   "id": "borgwarner-haldex-gen4",
   "name": "BorgWarner Haldex Gen4 AWD controller (VAG PQ, 0AY 907 554)",
   "maker": "BorgWarner",
+  "provenance": {
+    "sources": [
+      "Forbes-Automotive/OpenHaldex-C6 documents/vehicle-logs/vw-pq (MIT): public real capture of an 0AY 907 554 C - TP2.0 address, session and identification; decode checked against it, see docs/HALDEX.md",
+      "public part listings for the 0BS907554 controller number (community, to be confirmed by a real read)"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "family": "Haldex Gen4",
   "notes": "Fourth-generation Haldex coupling controller (J492) on PQ35/PQ46 4Motion/quattro cars, e.g. VW Passat CC 4Motion, Tiguan, Golf Mk6 R. Identification and diagnostics only: KWP2000 over VW TP2.0, logical address 0x0A (0x200 setup, answer on 0x20A), session 0x89, identification 0x1A 0x9B - seen in the public OpenHaldex-C6 capture of an 0AY 907 554 C reporting 'Haldex 4Motion' (MIT, Forbes-Automotive/OpenHaldex-C6 documents/vehicle-logs/vw-pq). tx_id holds the TP2.0 logical address (10) and rx_id the CAN id the tester asks the unit to answer on (768 = 0x300). Identify keys: 0AY907554C (seen in that capture) and 0BS907554 (controller number in public part listings for the Passat / Passat CC 4Motion - community, to be confirmed by the first real read); other 0AY 907 554 suffixes are not listed until a public source or a real read confirms them, and 0AY 907 554 F is a different unit that OpenHaldex treats as Gen5 (PQ). NO flash layout, flash size, MCU or checksum is publicly known and no Gen4 dump was available: flash_size 0 (unknown), no regions, checksum null, and full_read is only the schema default - no OBD or bench read procedure is known, so OpenTune does not read or write this unit's flash. No maps. Read-only engine: `opentune haldex gen4` (docs/HALDEX.md).",
   "protocol": "vwtp20",

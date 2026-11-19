@@ -9,5 +9,9 @@
   ],
   "author": "OpenTune contributors",
   "license": "GPL-3.0-or-later",
-  "description": "Definitions for the 'vcar' virtual-car driver's built-in demo profile (crates/drivers/vcar/profiles/demo.json): module list for auto-scan, coding, adaptation and service scripts for its six simulated modules. Every address, DID and value is the virtual car's own and makes no claim about any real vehicle. See docs/VIRTUAL-CAR.md."
+  "description": "Definitions for the 'vcar' virtual-car driver's built-in demo profile (crates/drivers/vcar/profiles/demo.json): module list for auto-scan, coding, adaptation and service scripts for its six simulated modules. Every address, DID and value is the virtual car's own and makes no claim about any real vehicle. See docs/VIRTUAL-CAR.md.",
+  "sources": [
+    "OpenTune virtual car demo profile crates/drivers/vcar/profiles/demo.json (GPL-3.0-or-later): every address, DID and value is synthetic"
+  ],
+  "evidence": "synthetic-tested"
 }

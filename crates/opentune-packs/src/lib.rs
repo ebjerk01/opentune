@@ -51,6 +51,9 @@ use opentune_ctrldef::ControllerDef;
 use opentune_logdef::LogDef;
 use opentune_servicefn::ServiceScript;
 
+mod validate;
+pub use validate::{validate_all, validate_pack, PackValidation};
+
 /// The pack manifest (`pack.json`): identity + provenance metadata. Definitions
 /// themselves live in the conventional sub-directories (see the crate docs);
 /// unknown fields are ignored for forward compatibility.
@@ -81,6 +84,16 @@ pub struct PackManifest {
     /// Free-text description / provenance note.
     #[serde(default)]
     pub description: String,
+    /// Where the pack's facts come from: one citation per source (a standard,
+    /// an open project with path/commit and licence, or the contributor's own
+    /// read/capture). Required by [`validate_pack`].
+    #[serde(default)]
+    pub sources: Vec<String>,
+    /// Validation state of the pack's data, one of
+    /// [`opentune_core::provenance::EVIDENCE_LEVELS`]. Required by
+    /// [`validate_pack`].
+    #[serde(default)]
+    pub evidence: String,
 }
 
 impl PackManifest {

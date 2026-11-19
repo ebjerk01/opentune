@@ -13,5 +13,6 @@
   "sources": [
     "SAE J1979 / ISO 15031-5",
     "ISO 15765-4 (11-bit OBD-on-CAN identifiers)"
-  ]
+  ],
+  "evidence": "implemented"
 }

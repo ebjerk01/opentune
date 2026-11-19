@@ -21,6 +21,25 @@
     "maker": { "type": "string", "minLength": 1, "description": "ECU manufacturer, e.g. Bosch, Continental." },
     "family": { "type": "string", "minLength": 1, "description": "ECU family, e.g. EDC16, Simos PCR2.1, ME7, DQ381." },
     "notes": { "type": "string", "description": "Free text; flag placeholder addresses and cite checksum validation." },
+    "provenance": {
+      "type": "object",
+      "description": "Where the facts come from, the data licence and the validation state. Required for contributions (`opentune ecudefs validate --require-provenance`, the CI gate).",
+      "additionalProperties": false,
+      "required": ["sources", "license", "evidence"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "One citation per source: a standard, an open project with path/commit and licence, or 'own read' / 'own capture' (never committed). No commercial / OEM tool output."
+        },
+        "license": { "type": "string", "minLength": 1, "description": "SPDX licence expression of the data, normally GPL-3.0-or-later." },
+        "evidence": {
+          "enum": ["implemented", "synthetic-tested", "real-image-tested", "bench-tested", "vehicle-tested"],
+          "description": "Validation state reached (docs/DEVELOPMENT.md section 7)."
+        }
+      }
+    },
     "protocol": {
       "enum": ["iso_tp", "vwtp20", "iso14230_kline", "iso9141", "raw_can"],
       "description": "Transport the ECU speaks."

@@ -10,6 +10,7 @@ use anyhow::Result;
 
 pub mod checksum;
 pub mod container;
+pub mod contrib;
 pub mod defs;
 pub mod device;
 pub mod engines;
@@ -118,7 +119,15 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             version,
             into,
         } => formats::import_ols(file, version, into),
-        Command::Packs { dir } => defs::packs(dir),
+        Command::Packs { dir, action } => match action {
+            Some(a) => contrib::packs_action(a),
+            None => defs::packs(dir),
+        },
+        Command::PrivacyScan {
+            paths,
+            allow,
+            github,
+        } => contrib::privacy_scan(paths, allow, github),
         Command::ImportA2l { file, into, base } => formats::import_a2l(file, into, base),
         Command::Vault { dir, verify } => device::vault(dir, verify),
         Command::A2l2Xdf {

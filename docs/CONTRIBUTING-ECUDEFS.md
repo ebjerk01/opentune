@@ -45,6 +45,11 @@ See [`ECU-DEFS.md`](ECU-DEFS.md) for every field and enum; the skeleton is:
   "name": "Bosch EDC16U34",
   "maker": "Bosch",
   "family": "EDC16",
+  "provenance": {
+    "sources": ["public family facts (ISO 15765-4)", "own stock read (not committed): maps diff-derived"],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "notes": "Public family facts. Addresses are placeholders until confirmed per software variant.",
   "protocol": "iso_tp",
   "diag_layer": "kwp2000",
@@ -76,6 +81,28 @@ Rules that trip people up:
   and region offsets are offsets into that 2 MiB.
 - Every named region must fit inside the declared `flash_size`; the parse test
   (section 6) enforces it.
+- **`provenance`** is required for every new or changed definition (CI runs
+  `ecudefs validate --require-provenance`):
+  - `sources` — one citation per source: a standard by name; an open project
+    with its path/commit **and licence**; or "own read" / "own capture" for
+    your own data (the data itself is never committed). Output of commercial
+    or OEM tools (their map packs, label/coding files, DAMOS/A2L) is not a
+    source and is rejected.
+  - `license` — the SPDX id the definition data is shipped under, normally
+    `GPL-3.0-or-later` (or the stricter upstream licence of imported
+    definitions, e.g. `GPL-3.0-only`). Proprietary, non-commercial or
+    "unknown" is an error; an id outside the known GPL-compatible list is a
+    warning for the reviewer.
+  - `evidence` — the validation state the definition as a whole has reached,
+    using the project vocabulary ([`DEVELOPMENT.md`](DEVELOPMENT.md) §7):
+    `implemented`, `synthetic-tested`, `real-image-tested`, `bench-tested`,
+    `vehicle-tested`. When parts differ, pick the lower state and explain in
+    `notes`; per-map confidence stays in each map's `CONFIDENCE:` label.
+
+  Older definitions without the block still load everywhere and only get a
+  `provenance.missing` warning; every shipped file carries one. To migrate a
+  local file, add the block after `maker` and re-run the validator with
+  `--require-provenance`.
 
 ## 3. Identify keys — how matching works
 
@@ -153,7 +180,10 @@ OpenTune's credibility is that its numbers are real. An entry must clear all of:
 1. **Public + personal data only.** No manufacturer firmware, DAMOS/A2L dumps,
    seed/key secrets, or other proprietary content. No real VINs, plates, or
    personal data. Build definitions from public family facts and your **own** ECU
-   reads. (This is enforced socially and in review — see `CONTRIBUTING.md`.)
+   reads. (Enforced in review — see `CONTRIBUTING.md` — and partly by machine:
+   the validator rejects commercial-tool sources and non-open licences in
+   `provenance`, and runs the privacy scan for VIN-like ids, e-mail addresses
+   and serial numbers over the file.)
 2. **Label every map's confidence** in its `notes`, with its source. Use the tags
    already in the shipped library:
    - `CONFIDENCE: HIGH` — diff-confirmed against a real stock/tune pair **and**
@@ -184,9 +214,13 @@ Run the same checks CI runs:
 # Validate your file against the format, honesty and scope rules (the machine
 # half of this guide). Exits non-zero on any error; add --warnings to see
 # advisories, and --image <stock.bin> to decode the maps against a real dump.
-# A directory validates every ecudefs/*.json (this is the CI gate).
-opentune ecudefs validate ecudefs/<your-id>.json
+# A directory validates every ecudefs/*.json; --require-provenance makes a
+# missing provenance block an error (this is the CI gate).
+opentune ecudefs validate ecudefs/<your-id>.json --require-provenance
 opentune ecudefs validate ecudefs/<your-id>.json --image stock.bin --warnings
+
+# The same privacy scan CI runs over every data directory:
+opentune privacy-scan ecudefs/<your-id>.json
 
 # The ecudef parse/consistency test loads every ecudefs/*.json and fails the
 # build if one does not parse or a region runs past the flash image.

@@ -2,6 +2,13 @@
   "id": "bmw-ms4x-ms42",
   "name": "BMW Siemens MS42 (M52TU) — ms4x-net 0110C6",
   "maker": "BMW",
+  "provenance": {
+    "sources": [
+      "ms4x-net/ms42 definitions/Siemens_MS42_0110C6_ENG_512K_v1.3.xdf @ 4b3f591 (GPL-3.0, upstream LICENSE GNU GPL v3); definitions only, no ROM - see docs/BMW-MS4X-IMPORT.md"
+    ],
+    "license": "GPL-3.0-only",
+    "evidence": "implemented"
+  },
   "family": "Siemens MS42",
   "notes": "BMW petrol DME, Siemens MS42 (Siemens C167-family 16-bit MCU), as fitted to M52TU inline-6 (E39/E46/Z3). Map and identity definitions imported from the GPL-3 ms4x-net project (see docs/BMW-MS4X-IMPORT.md); only the DEFINITIONS were taken — no ROM/firmware binaries. Addresses are for software 0110C6 indexed in the FULL 512 KiB image (calibration region based at 0x48000); the 32 KiB calibration read uses base 0x0 (do NOT mix the two bases). flash_size, regions and all map addresses are valid for this exact software at this base — confirm per software variant before any read or write. Only software 0110C6 is covered; update older software (0110AB/0110AD) first. protocol/diag_layer/bitrate/tx_id/rx_id are PLACEHOLDERS (confirm per unit): BMW MS4x diagnose over K-line (BMW DS2 / KWP2000); a complete original (full read) and any write need a bench/boot (BDM) tool — stock MS4x is not OBD-flashable. Checksum support is intentionally out of scope here (checksum=null).",
   "protocol": "iso9141",

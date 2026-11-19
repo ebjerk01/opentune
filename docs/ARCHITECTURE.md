@@ -63,7 +63,7 @@ a top-level command is added without a row here.
 | `opentune dump` | Full read via a driver, archived to the backup vault with ECU id |
 | `opentune findmaps` | Find candidate calibration maps in one image (scored, with evidence), or from the diff of two images |
 | `opentune recipe` | Portable tune recipes: `create` from a stock/tuned pair, `apply` only to a matching image (checksum-fixed + attested), `show` |
-| `opentune ecudefs` | List / validate ECU-definition files; `relocate` moves a definition's maps onto a sibling software's read by content signature |
+| `opentune ecudefs` | List / validate ECU-definition files (`validate --require-provenance` is the CI gate; includes the privacy scan); `relocate` moves a definition's maps onto a sibling software's read by content signature |
 | `opentune identify` | Read the connected ECU's identity and match it to a definition |
 | `opentune db` | Control-unit reference database: list, show, validate |
 | `opentune dtc` | Look up a diagnostic trouble code |
@@ -78,7 +78,8 @@ a top-level command is added without a row here.
 | `opentune a2l2xdf` | Convert an A2L straight into a TunerPro XDF |
 | `opentune export-xdf` | Export an ECU definition's maps as a TunerPro XDF |
 | `opentune export-a2l` | Export an ECU definition's maps as an ASAM A2L |
-| `opentune packs` | Load definition packs and report their contents |
+| `opentune packs` | Load definition packs and report their contents; `packs validate <dir>` is the contributor gate (manifest provenance, every file loads, privacy scan) |
+| `opentune privacy-scan` | Scan data files for VIN-like identifiers, e-mail addresses and serial-number-like values (redacted output, `--allow` list, `--github` annotations) ([`CONTRIBUTING.md`](../CONTRIBUTING.md)) |
 | `opentune vault` | List archived reads in a backup vault directory |
 | `opentune scan` | Scan a directory of ECU dumps offline, emit identification JSON |
 | `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO); lists the SA2 seed/key scripts it declares |
@@ -113,6 +114,10 @@ The abstraction every app talks to and every driver implements.
   service / auto-scan / logging engines run over any driver.
 - `catalog` — the vehicle → ECU identification catalog behind `identify`.
 - `validate` — machine review of ECU definitions (`ecudefs validate`).
+- `provenance` — the `sources` / `license` / `evidence` block of contributed
+  data (ECU definitions, pack manifests) and its checks.
+- `privacy` — the heuristic personal-data scan behind `privacy-scan` and the
+  validators (VIN-like ids, e-mail addresses, serial-number-like values).
 - `registry` — `Registry`/`DriverEntry`: enumerate and construct drivers by id,
   so apps don't hard-code which drivers exist.
 - `capabilities` — `Capabilities`: what a driver supports (CAN/CAN-FD, K-line,

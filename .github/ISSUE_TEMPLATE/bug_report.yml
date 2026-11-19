@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in OpenTune does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please **do not paste personal data**: no VINs,
+        registration plates, ECU/vehicle serial numbers, e-mail addresses, and no
+        ECU images (firmware dumps). Redact them (e.g. `WVWZZZ00000000000`).
+  - type: input
+    id: version
+    attributes:
+      label: OpenTune version
+      description: "`opentune --version`, or the desktop app's About box."
+      placeholder: 0.5.0
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - CLI
+        - Desktop app
+        - Android app
+        - Interface driver / adapter
+        - ECU definition / map library
+        - Definition pack
+        - Checksum
+        - Firmware / hardware
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and interface
+      description: Operating system, and the adapter/driver if one was involved.
+      placeholder: Ubuntu 24.04, slcan (CANable)
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands run, options, the definition or pack used.
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / logs
+      description: Redact identifiers before pasting.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed VINs, plates, serial numbers, e-mail addresses and other personal data from this report, and attached no ECU image.
+          required: true
+        - label: This is not a request for immobiliser, odometer or emissions-control defeat (out of scope).
+          required: true

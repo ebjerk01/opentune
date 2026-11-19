@@ -171,3 +171,20 @@ fn obd_clear_is_the_only_shipped_write() {
     let clear = lib.service_by_id("obd2-clear-dtcs").unwrap();
     assert!(clear.name.contains("WRITE"));
 }
+
+/// The contributor gate (`opentune packs validate packs`, run in CI): every
+/// shipped pack has a complete manifest with provenance, loads cleanly, and
+/// passes the privacy scan.
+#[test]
+fn every_shipped_pack_passes_contribution_validation() {
+    let results = opentune_packs::validate_all(&packs_root(), &[]);
+    assert!(results.len() >= 4, "found only {} packs", results.len());
+    for v in &results {
+        let errs: Vec<_> = v
+            .issues
+            .iter()
+            .filter(|i| i.severity == opentune_core::Severity::Error)
+            .collect();
+        assert!(errs.is_empty(), "pack {} fails validation: {errs:#?}", v.id);
+    }
+}

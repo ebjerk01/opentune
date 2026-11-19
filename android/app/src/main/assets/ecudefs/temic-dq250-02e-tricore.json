@@ -2,6 +2,13 @@
   "id": "temic-dq250-02e-tricore",
   "name": "VAG DQ250 / 02E 6-speed DSG TCU (Temic, TriCore generation)",
   "maker": "Temic",
+  "provenance": {
+    "sources": [
+      "own 02E TriCore reads (not committed): layout and maps located from structure - see docs/DSG.md and docs/MAP-LIBRARY.md"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "family": "DQ250",
   "notes": "Later 02E (DQ250, PQ35/PQ46) software built for a little-endian Infineon TriCore (the code decodes as TriCore; e.g. 02E300013N, Golf VI GTI / R). Read as 0xB0000 bytes: a 64 KiB calibration block at 0x0-0xFFFF (ident record '<nn>02E300013N  GSG DSG AG6 ... DCT' near 0x3668, version tag 'v0697...__getriebe_DSG_...' at 0xFFC0) followed by the code from 0x10000. No checksum is claimed: neither the 02E CRC-16 sector table nor the DQ250-MQB JAMCRC holds on the available reads, so checksum is null and edited images cannot be corrected. Diagnostics as for temic-dq250-02e (transport/layer unconfirmed; set to match the car); no OBD full-read path is documented. Maps: the two shift-speed schedule groups and the drive-off engine-speed table, located by the structure shared with the PowerPC generation (raw, MEDIUM, roles inferred). Calibration only.",
   "protocol": "iso_tp",

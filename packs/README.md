@@ -24,6 +24,10 @@ desktop app bundles this folder and opens its file pickers here.
 - Nothing from commercial / OEM tools (their label and coding data is
   copyrighted or encrypted), no seed/key algorithms, no VINs or other personal
   data.
+- Every `pack.json` records `sources`, `license` and `evidence` (the
+  validation state, see [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) §7).
+  `opentune packs validate packs` checks all of this plus a privacy scan; CI
+  runs it on every pull request.
 
 ## Notes on the shipped data
 

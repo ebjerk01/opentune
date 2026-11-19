@@ -2,6 +2,14 @@
   "id": "bosch-edc17cp14",
   "name": "Bosch EDC17CP14",
   "maker": "Bosch",
+  "provenance": {
+    "sources": [
+      "EDC17 CRC directory walk checked on own Hyundai/Kia CP14 reads (not committed) - see docs/BOSCH-CHECKSUM.md",
+      "public family facts (ISO 15765-4, UDS)"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "family": "EDC17",
   "notes": "Infineon TriCore common-rail diesel ECU. Diagnostics over CAN (ISO 15765-4, UDS); a complete original typically needs a bench/boot read, while calibration flashing can be done over OBD. The EDC17 checksum is directory-walked; a per-block target constant is shipped for the validated Hyundai/Kia CP14 variants, but VAG and other variants are firmware-specific, so correct those with 'checksum fix --reference <your-own-stock-dump>' (the constant is recovered from your valid read, never guessed). Addresses and flash_size are family placeholders and must be confirmed per software variant before any read or write.",
   "protocol": "iso_tp",

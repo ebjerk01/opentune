@@ -2,6 +2,14 @@
   "id": "bosch-me7",
   "name": "Bosch Motronic ME7.x (VAG petrol)",
   "maker": "Bosch",
+  "provenance": {
+    "sources": [
+      "360trev/ME7Sum write-up of the ME7 multipoint checksums (BSD-style) - see docs/PRIOR-ART.md",
+      "own VW Passat 1.8T ME7.5 stock read (not committed): all 33 checksum blocks verified"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "family": "ME7",
   "notes": "Bosch Motronic ME7.x petrol (VAG and related C16x/ST10-based ECUs), e.g. ME7.5 (1.8T / 1.6 / 2.0), ME7.1 / ME7.1.1 (V6/V8/VR). Diagnostics over K-line or CAN depending on the car - set protocol/diag_layer and the CAN ids to match the vehicle (the pair below is the common ISO 15765-4 0x7E0/0x7E8). flash_size 524288 is the 512 KiB ME7.5 image; larger ME7.1 images are 1 MiB - confirm per variant. The image maps into the C16x space at base 0x800000, so file offset = address - 0x800000. The 'map' calibration page is the 64 KiB window at ROM 0x810000..0x81FFFF (file offset 0x10000..0x1FFFF); the main ROMSYS checksum deliberately skips that window and the multipoint table covers it. checksum 'me7' is validated byte-for-byte: 'opentune checksum verify --algo me7' reports all 33 blocks OK on a real VW Passat 1.8T ME7.5 stock read (HW 0261206317 / SW 1037352801, in-image id string '42/1/ME7.5/3/4015.00//F22g9/Dst05g/230999/'). Addresses are family-level placeholders and must be confirmed per software variant before any read or write. No calibration maps are shipped yet - diff-confirmed maps will be added per variant in follow-up PRs (see docs/CONTRIBUTING-ECUDEFS.md).",
   "protocol": "iso_tp",
