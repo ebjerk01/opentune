@@ -141,7 +141,9 @@ if [ "$fast" = 0 ]; then
     fi
     step "privacy scan of data dirs" privacy_scan_data
     if [ -d "$ROOT/database" ] && opentune db --help >/dev/null 2>&1; then
-        step "db validate" opentune db validate
+        # --require-access: units listed in database/units/.access-pending
+        # warn, any other unit without an access profile fails.
+        step "db validate" opentune db validate --require-access
     fi
     # The Android app bundles a copy of ecudefs/; it must match the root set.
     if [ -x "$ROOT/android/sync-ecudefs.sh" ]; then

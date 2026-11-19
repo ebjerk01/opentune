@@ -261,17 +261,37 @@ pub fn db(action: DbAction) -> Result<()> {
             let v = db.get(&id).ok_or_else(|| anyhow!("unknown unit '{id}'"))?;
             println!("{}", serde_json::to_string_pretty(v)?);
         }
-        DbAction::Validate { dir, ecudefs } => {
+        DbAction::Validate {
+            dir,
+            ecudefs,
+            require_access,
+        } => {
             let db = opentune_db::Database::load_dir(&dir).map_err(|e| anyhow!("{e}"))?;
             let ids = opentune_db::ecudef_ids(&ecudefs).map_err(|e| anyhow!("{e}"))?;
-            let issues = db.validate(Some(&ids));
+            let mut issues = db.validate(Some(&ids));
+            if require_access {
+                let pending = opentune_db::load_access_pending(&dir).map_err(|e| anyhow!("{e}"))?;
+                let gate = db.access_gate(&pending);
+                for w in &gate.warnings {
+                    println!("  warning: {w}");
+                }
+                issues.extend(gate.errors);
+            }
             for i in &issues {
                 println!("  {i}");
             }
             if !issues.is_empty() {
                 return Err(anyhow!("{} issue(s)", issues.len()));
             }
-            println!("{} unit(s) OK", db.entries().len());
+            let filled = db
+                .entries()
+                .iter()
+                .filter(|e| e.unit.access.is_some())
+                .count();
+            println!(
+                "{} unit(s) OK ({filled} with an access profile)",
+                db.entries().len()
+            );
         }
     }
     Ok(())

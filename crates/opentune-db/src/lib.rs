@@ -15,6 +15,16 @@
 //! wiring actually uses, unverified pins can never be part of the bench wiring,
 //! and a unit without a pinout must say so in its notes.
 //!
+//! Each unit can also carry an **access profile** ([`Access`]): how it is
+//! reached over OBD, on the bench, in a processor boot mode (entry, strap
+//! points, whether the case must be opened) and what security access the
+//! diagnostic read and the flash write need. Every part cites sources and
+//! states a confidence; [`Database::validate`] checks it against
+//! `read_methods`, and [`Database::access_gate`] keeps new units from being
+//! added without one (`database/units/.access-pending` lists the older units
+//! that are not filled yet; the list only shrinks). See
+//! `docs/UNIT-ACCESS-PROFILE.md`.
+//!
 //! The crate is data-only: no I/O beyond reading the JSON directory, no
 //! seed/key material, no firmware.
 
@@ -75,6 +85,9 @@ pub enum ObdAccess {
     /// Full read and write over OBD.
     #[serde(rename = "read+write")]
     ReadWrite,
+    /// A complete read over OBD, but no programming.
+    #[serde(rename = "read")]
+    Read,
     /// Calibration/firmware can be written over OBD, but a complete original
     /// read needs the bench or boot mode.
     #[serde(rename = "write-only")]
@@ -127,6 +140,19 @@ impl Signal {
     ];
 }
 
+impl ObdAccess {
+    /// The stable JSON token.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ObdAccess::ReadWrite => "read+write",
+            ObdAccess::Read => "read",
+            ObdAccess::WriteOnly => "write-only",
+            ObdAccess::None => "none",
+            ObdAccess::Unknown => "unknown",
+        }
+    }
+}
+
 /// How well a pin assignment is supported by public sources.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -164,6 +190,170 @@ pub struct Pin {
     #[serde(default)]
     pub confidence: Option<Confidence>,
     /// Indices into the unit's `sources` that state this assignment.
+    pub sources: Vec<usize>,
+    /// How a `signal: boot` pin is strapped to enter the boot mode. Only
+    /// allowed on boot pins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strap: Option<Strap>,
+}
+
+/// What to do with a boot strap point or pin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StrapAction {
+    /// Pull the net to ground (usually through a resistor).
+    #[serde(rename = "pull-to-gnd")]
+    PullToGnd,
+    /// Pull the net to the logic supply.
+    #[serde(rename = "pull-to-vcc")]
+    PullToVcc,
+    /// Bridge two points.
+    #[serde(rename = "bridge")]
+    Bridge,
+}
+
+/// The strap of a `signal: boot` connector pin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Strap {
+    pub action: StrapAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resistor_ohms: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
+// Access profile (docs/UNIT-ACCESS-PROFILE.md)
+// ---------------------------------------------------------------------------
+
+/// The phrase every `access.security.notes` must contain. OpenTune never
+/// ships OEM seed/key material, and the schema has no field that could hold
+/// any.
+pub const NO_KEY_PHRASE: &str = "OpenTune ships no OEM key";
+
+/// File in `database/units/` listing the ids of units whose access profile
+/// is not filled yet. Any unit not listed must carry `access`.
+pub const ACCESS_PENDING_FILE: &str = ".access-pending";
+
+/// How a unit can be reached: OBD, bench, boot mode, and the security access
+/// in the way. Every part cites sources (indices into the unit's `sources`)
+/// and states a confidence with the same vocabulary as pins.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Access {
+    pub obd: AccessObd,
+    pub bench: AccessBench,
+    pub boot: AccessBoot,
+    pub security: AccessSecurity,
+}
+
+/// Access through the vehicle's diagnostic socket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccessObd {
+    /// Must equal `read_methods.obd`.
+    pub mode: ObdAccess,
+    /// Bus and protocol in plain words, or null when not known.
+    #[serde(default)]
+    pub protocol: Option<String>,
+    pub notes: String,
+    pub confidence: Confidence,
+    pub sources: Vec<usize>,
+}
+
+/// Access on the bench through the unit's own connector, case closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccessBench {
+    /// Must equal `read_methods.bench`.
+    pub possible: bool,
+    pub how: String,
+    pub confidence: Confidence,
+    pub sources: Vec<usize>,
+}
+
+/// Where a boot mode is entered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BootEntry {
+    /// A pin on the unit's own connector.
+    ConnectorPin,
+    /// A pad, component pin or test point on the board.
+    BoardPad,
+    /// A BDM / JTAG / debug header.
+    BdmJtag,
+    /// A source says there is no usable boot entry.
+    None,
+    /// No public source either way.
+    Unknown,
+}
+
+/// Whether the boot points can be reached without opening the unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reachable {
+    ExternalConnector,
+    OpenCase,
+    Unknown,
+}
+
+/// One boot strap point.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BootPoint {
+    pub name: String,
+    /// `connector:<connector>-<pin>` (resolves to a pin of this unit) or
+    /// `pcb:<label>` (a board pad, component pin or test point).
+    pub location: String,
+    pub action: StrapAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resistor_ohms: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub confidence: Confidence,
+}
+
+/// A processor boot / service mode.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccessBoot {
+    /// Must equal `read_methods.boot`. `false` means no cited source
+    /// documents a usable boot path (not that one is proven impossible;
+    /// `entry` says which).
+    pub possible: bool,
+    pub entry: BootEntry,
+    /// The processor's boot mode in plain words (loader, serial settings).
+    #[serde(default)]
+    pub mcu_mode: Option<String>,
+    #[serde(default)]
+    pub points: Vec<BootPoint>,
+    #[serde(default)]
+    pub reset_timing: Option<String>,
+    pub reachable: Reachable,
+    pub notes: String,
+    pub confidence: Confidence,
+    pub sources: Vec<usize>,
+}
+
+/// Whether security access is needed for an operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecurityNeed {
+    Required,
+    NotRequired,
+    Unknown,
+}
+
+/// The security access in the way of a read or write. Facts only: there is
+/// deliberately no field for keys, seeds or algorithms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccessSecurity {
+    /// A complete read over the diagnostic protocol (OBD or bench).
+    pub diag_read: SecurityNeed,
+    /// Programming over the diagnostic protocol.
+    pub flash_write: SecurityNeed,
+    /// Must contain [`NO_KEY_PHRASE`].
+    pub notes: String,
+    pub confidence: Confidence,
     pub sources: Vec<usize>,
 }
 
@@ -234,6 +424,9 @@ pub struct Unit {
     pub aliases: Vec<String>,
     pub cpu: Option<String>,
     pub flash_kib: Option<u32>,
+    /// A caveat on the flash size, e.g. that it differs by hardware revision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_note: Option<String>,
     pub eeprom: Option<String>,
     pub bus: Vec<Bus>,
     pub protocols: Vec<Protocol>,
@@ -250,6 +443,10 @@ pub struct Unit {
     pub pinout_confidence: Option<Confidence>,
     pub safety_note: Option<String>,
     pub sources: Vec<Source>,
+    /// The access profile; required for every unit not listed in
+    /// `.access-pending` (see [`Database::access_gate`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Access>,
 }
 
 impl Unit {
@@ -321,6 +518,7 @@ impl Unit {
             vehicle_count: self.vehicles.len(),
             has_pinout: self.has_pinout(),
             pinout_confidence: self.pinout_confidence,
+            has_access: self.access.is_some(),
         }
     }
 }
@@ -342,6 +540,8 @@ pub struct UnitSummary {
     pub vehicle_count: usize,
     pub has_pinout: bool,
     pub pinout_confidence: Option<Confidence>,
+    /// The unit carries an access profile.
+    pub has_access: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +665,103 @@ impl Database {
         }
         out
     }
+
+    /// The `--require-access` gate. Every unit must carry an `access`
+    /// profile unless it is listed in `pending` (`.access-pending`), which
+    /// only holds units that predate the profile:
+    ///
+    /// * listed and not filled: warning;
+    /// * not listed and not filled (a new unit): error;
+    /// * listed but filled: error (remove it from the list, which only shrinks);
+    /// * listed id with no unit file: error (stale entry).
+    pub fn access_gate(&self, pending: &AccessPending) -> AccessGate {
+        let mut gate = AccessGate::default();
+        let issue = |e: &Entry, msg: String| Issue {
+            unit: e.unit.id.clone(),
+            path: e.path.clone(),
+            msg,
+        };
+        for e in &self.entries {
+            let listed = pending.ids.contains(&e.unit.id);
+            match (e.unit.access.is_some(), listed) {
+                (true, false) => {}
+                (true, true) => gate.errors.push(issue(
+                    e,
+                    format!(
+                        "has an access profile: remove it from {} (the list only shrinks)",
+                        ACCESS_PENDING_FILE
+                    ),
+                )),
+                (false, true) => gate.warnings.push(issue(
+                    e,
+                    format!("access profile not filled yet (listed in {ACCESS_PENDING_FILE})"),
+                )),
+                (false, false) => gate.errors.push(issue(
+                    e,
+                    format!(
+                        "no access profile: a new unit must carry `access` \
+                         (docs/UNIT-ACCESS-PROFILE.md); {ACCESS_PENDING_FILE} only lists older units"
+                    ),
+                )),
+            }
+        }
+        for id in &pending.ids {
+            if self.unit(id).is_none() {
+                gate.errors.push(Issue {
+                    unit: id.clone(),
+                    path: pending.path.clone(),
+                    msg: format!("stale {ACCESS_PENDING_FILE} entry: no unit has this id"),
+                });
+            }
+        }
+        gate
+    }
+}
+
+/// The parsed `.access-pending` list.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AccessPending {
+    pub path: PathBuf,
+    pub ids: BTreeSet<String>,
+}
+
+/// Result of [`Database::access_gate`].
+#[derive(Debug, Clone, Default)]
+pub struct AccessGate {
+    pub errors: Vec<Issue>,
+    pub warnings: Vec<Issue>,
+}
+
+/// Read `.access-pending` from the `database` directory (or the
+/// `database/units` directory itself): one unit id per line, `#` starts a
+/// comment. A missing file is an empty list.
+pub fn load_access_pending(dir: &Path) -> Result<AccessPending, DbError> {
+    let units = dir.join("units");
+    let dir = if units.is_dir() {
+        units
+    } else {
+        dir.to_path_buf()
+    };
+    let path = dir.join(ACCESS_PENDING_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(source) => return Err(DbError::Io { path, source }),
+    };
+    let mut ids = BTreeSet::new();
+    for (n, line) in text.lines().enumerate() {
+        let id = line.split('#').next().unwrap_or("").trim();
+        if id.is_empty() {
+            continue;
+        }
+        if !ids.insert(id.to_string()) {
+            return Err(DbError::Parse {
+                path,
+                msg: format!("line {}: duplicate id '{id}'", n + 1),
+            });
+        }
+    }
+    Ok(AccessPending { path, ids })
 }
 
 /// Parse one unit file's text.
@@ -522,6 +819,137 @@ pub struct Issue {
 impl fmt::Display for Issue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} ({}): {}", self.unit, self.path.display(), self.msg)
+    }
+}
+
+/// The access-profile rules (docs/UNIT-ACCESS-PROFILE.md).
+fn validate_access(u: &Unit, a: &Access, err: &mut dyn FnMut(String)) {
+    let rm = &u.read_methods;
+    // Agreement with read_methods.
+    if a.obd.mode != rm.obd {
+        err(format!(
+            "access.obd.mode '{}' disagrees with read_methods.obd '{}'",
+            a.obd.mode.as_str(),
+            rm.obd.as_str()
+        ));
+    }
+    if a.bench.possible != rm.bench {
+        err(format!(
+            "access.bench.possible ({}) disagrees with read_methods.bench ({})",
+            a.bench.possible, rm.bench
+        ));
+    }
+    if a.boot.possible != rm.boot {
+        err(format!(
+            "access.boot.possible ({}) disagrees with read_methods.boot ({})",
+            a.boot.possible, rm.boot
+        ));
+    }
+
+    // Sources and confidence of every part.
+    let parts: [(&str, &[usize], Confidence, &str); 4] = [
+        ("obd", &a.obd.sources, a.obd.confidence, &a.obd.notes),
+        ("bench", &a.bench.sources, a.bench.confidence, &a.bench.how),
+        ("boot", &a.boot.sources, a.boot.confidence, &a.boot.notes),
+        (
+            "security",
+            &a.security.sources,
+            a.security.confidence,
+            &a.security.notes,
+        ),
+    ];
+    for (part, sources, conf, text) in parts {
+        if sources.is_empty() {
+            err(format!("access.{part}: must cite at least one source"));
+        }
+        if let Some(bad) = sources.iter().find(|&&i| i >= u.sources.len()) {
+            err(format!("access.{part}: source index {bad} out of range"));
+        }
+        let distinct: BTreeSet<usize> = sources.iter().copied().collect();
+        if conf == Confidence::Verified && distinct.len() < 2 {
+            err(format!(
+                "access.{part}: 'verified' needs 2+ independent sources"
+            ));
+        }
+        if text.trim().is_empty() {
+            let field = if part == "bench" { "how" } else { "notes" };
+            err(format!("access.{part}.{field} must not be empty"));
+        }
+    }
+
+    // Boot.
+    let b = &a.boot;
+    if b.possible {
+        if b.points.is_empty() {
+            err("access.boot: possible=true needs at least one boot point".into());
+        }
+        if b.reachable == Reachable::Unknown {
+            err(
+                "access.boot: possible=true needs 'reachable' (external-connector or open-case)"
+                    .into(),
+            );
+        }
+        if matches!(b.entry, BootEntry::None | BootEntry::Unknown) {
+            err("access.boot: possible=true needs a known 'entry'".into());
+        }
+    } else if b.entry == BootEntry::None && !b.points.is_empty() {
+        err("access.boot: entry 'none' cannot list boot points".into());
+    }
+    let boot_sources: BTreeSet<usize> = b.sources.iter().copied().collect();
+    for (i, p) in b.points.iter().enumerate() {
+        let at = format!("access.boot.points[{i}]");
+        if p.name.trim().is_empty() {
+            err(format!("{at}: name is empty"));
+        }
+        if p.resistor_ohms == Some(0) {
+            err(format!("{at}: resistor_ohms must be > 0"));
+        }
+        if p.confidence == Confidence::Verified && boot_sources.len() < 2 {
+            err(format!(
+                "{at}: 'verified' needs 2+ independent boot sources"
+            ));
+        }
+        if p.confidence > b.confidence {
+            err(format!(
+                "{at}: confidence '{}' is higher than access.boot's '{}'",
+                p.confidence.as_str(),
+                b.confidence.as_str()
+            ));
+        }
+        if let Some(r) = p.location.strip_prefix("connector:") {
+            match u.resolve_pin(r) {
+                None => err(format!("{at}: '{}' does not resolve to a pin", p.location)),
+                Some(pin) if pin.signal != Signal::Boot => {
+                    err(format!("{at}: '{}' is not a 'boot' pin", p.location))
+                }
+                Some(_) => {}
+            }
+        } else if let Some(label) = p.location.strip_prefix("pcb:") {
+            if label.trim().is_empty() {
+                err(format!("{at}: 'pcb:' needs a label"));
+            }
+            if b.reachable == Reachable::ExternalConnector {
+                err(format!(
+                    "{at}: a board point cannot be reachable from the external connector"
+                ));
+            }
+        } else {
+            err(format!(
+                "{at}: location must be 'connector:<connector>-<pin>' or 'pcb:<label>'"
+            ));
+        }
+    }
+
+    // Security: facts only, and say that no key is shipped.
+    if !a
+        .security
+        .notes
+        .to_lowercase()
+        .contains(&NO_KEY_PHRASE.to_lowercase())
+    {
+        err(format!(
+            "access.security.notes must state \"{NO_KEY_PHRASE}\""
+        ));
     }
 }
 
@@ -591,6 +1019,34 @@ fn validate_unit(u: &Unit, path: &Path, ecudefs: Option<&BTreeSet<String>>, out:
         if v.make.trim().is_empty() || v.model.trim().is_empty() {
             err("vehicle make/model must not be empty".into());
         }
+    }
+    if u.flash_note.as_deref().is_some_and(|s| s.trim().is_empty()) {
+        err("flash_note must not be empty when present".into());
+    }
+
+    // Boot straps belong on boot pins only.
+    for c in &u.connectors {
+        for p in &c.pins {
+            if let Some(s) = &p.strap {
+                if p.signal != Signal::Boot {
+                    err(format!(
+                        "{}-{}: strap is only allowed on a 'boot' pin",
+                        c.name, p.pin
+                    ));
+                }
+                if s.resistor_ohms == Some(0) {
+                    err(format!(
+                        "{}-{}: strap.resistor_ohms must be > 0",
+                        c.name, p.pin
+                    ));
+                }
+            }
+        }
+    }
+
+    // Access profile.
+    if let Some(a) = &u.access {
+        validate_access(u, a, &mut err);
     }
 
     // Pinout honesty rules.

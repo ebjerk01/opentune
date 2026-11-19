@@ -19,6 +19,7 @@
     "aliases": { "type": "array", "items": { "type": "string" } },
     "cpu": { "type": ["string", "null"], "description": "Processor, e.g. MPC562, TC1796, C167CR. null when no source states it." },
     "flash_kib": { "type": ["integer", "null"], "minimum": 1 },
+    "flash_note": { "type": "string", "minLength": 1, "description": "Optional caveat on the flash size, e.g. '29F400 (512 KiB) or 29F800 (1 MiB) by revision - confirm from the chip'." },
     "eeprom": { "type": ["string", "null"] },
     "bus": { "type": "array", "minItems": 1, "items": { "enum": ["can", "kline"] } },
     "protocols": { "type": "array", "items": { "enum": ["kwp2000", "uds", "tp20", "kwp1281"] } },
@@ -27,7 +28,7 @@
       "additionalProperties": false,
       "required": ["obd", "bench", "boot", "notes"],
       "properties": {
-        "obd": { "enum": ["read+write", "write-only", "none", "unknown"], "description": "'unknown' = no public source either way (never guessed)." },
+        "obd": { "enum": ["read+write", "read", "write-only", "none", "unknown"], "description": "'read' = complete read over OBD, no programming. 'unknown' = no public source either way (never guessed). Must equal access.obd.mode." },
         "bench": { "type": "boolean" },
         "boot": { "type": "boolean" },
         "notes": { "type": "string", "minLength": 1 }
@@ -42,7 +43,8 @@
     "bench": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/bench" }] },
     "pinout_confidence": { "enum": ["verified", "community", "unverified", null] },
     "safety_note": { "type": ["string", "null"], "description": "Required whenever a pinout is given." },
-    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } }
+    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+    "access": { "$ref": "#/$defs/access", "description": "Access profile (docs/UNIT-ACCESS-PROFILE.md). Required for every unit not listed in database/units/.access-pending." }
   },
   "$defs": {
     "vehicle": {
@@ -75,7 +77,92 @@
         "signal": { "enum": ["12v_perm", "12v_ign", "gnd", "can_h", "can_l", "kline", "boot", "other"] },
         "note": { "type": ["string", "null"] },
         "confidence": { "enum": ["verified", "community", "unverified", null], "description": "Defaults to the unit's pinout_confidence. 'verified' needs 2+ distinct sources." },
-        "sources": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 }, "description": "Indices into the unit's sources." }
+        "sources": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 }, "description": "Indices into the unit's sources." },
+        "strap": { "$ref": "#/$defs/strap", "description": "Only on signal 'boot' pins." }
+      }
+    },
+    "strap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "$ref": "#/$defs/strap_action" },
+        "resistor_ohms": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "strap_action": { "enum": ["pull-to-gnd", "pull-to-vcc", "bridge"] },
+    "confidence": { "enum": ["verified", "community", "unverified"], "description": "As for pins: 'verified' needs 2+ distinct sources." },
+    "source_refs": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 }, "description": "Indices into the unit's sources." },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the unit is reached. There is deliberately no field for key, seed or algorithm material.",
+      "required": ["obd", "bench", "boot", "security"],
+      "properties": {
+        "obd": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "notes", "confidence", "sources"],
+          "properties": {
+            "mode": { "enum": ["read+write", "read", "write-only", "none", "unknown"], "description": "Must equal read_methods.obd." },
+            "protocol": { "type": ["string", "null"] },
+            "notes": { "type": "string", "minLength": 1 },
+            "confidence": { "$ref": "#/$defs/confidence" },
+            "sources": { "$ref": "#/$defs/source_refs" }
+          }
+        },
+        "bench": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["possible", "how", "confidence", "sources"],
+          "properties": {
+            "possible": { "type": "boolean", "description": "Must equal read_methods.bench." },
+            "how": { "type": "string", "minLength": 1 },
+            "confidence": { "$ref": "#/$defs/confidence" },
+            "sources": { "$ref": "#/$defs/source_refs" }
+          }
+        },
+        "boot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["possible", "entry", "reachable", "notes", "confidence", "sources"],
+          "properties": {
+            "possible": { "type": "boolean", "description": "Must equal read_methods.boot. true needs 1+ point, a known entry and reachable other than unknown." },
+            "entry": { "enum": ["connector-pin", "board-pad", "bdm-jtag", "none", "unknown"] },
+            "mcu_mode": { "type": ["string", "null"] },
+            "points": { "type": "array", "items": { "$ref": "#/$defs/boot_point" } },
+            "reset_timing": { "type": ["string", "null"] },
+            "reachable": { "enum": ["external-connector", "open-case", "unknown"] },
+            "notes": { "type": "string", "minLength": 1 },
+            "confidence": { "$ref": "#/$defs/confidence" },
+            "sources": { "$ref": "#/$defs/source_refs" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["diag_read", "flash_write", "notes", "confidence", "sources"],
+          "properties": {
+            "diag_read": { "enum": ["required", "not-required", "unknown"] },
+            "flash_write": { "enum": ["required", "not-required", "unknown"] },
+            "notes": { "type": "string", "minLength": 1, "description": "Must contain 'OpenTune ships no OEM key'." },
+            "confidence": { "$ref": "#/$defs/confidence" },
+            "sources": { "$ref": "#/$defs/source_refs" }
+          }
+        }
+      }
+    },
+    "boot_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "location", "action", "confidence"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "location": { "type": "string", "pattern": "^(connector:.+-.+|pcb:.+)$", "description": "'connector:<connector>-<pin>' (a boot pin of this unit) or 'pcb:<label>'." },
+        "action": { "$ref": "#/$defs/strap_action" },
+        "resistor_ohms": { "type": "integer", "minimum": 1 },
+        "note": { "type": ["string", "null"] },
+        "confidence": { "$ref": "#/$defs/confidence", "description": "Not higher than access.boot.confidence." }
       }
     },
     "connector": {

@@ -152,8 +152,10 @@ jobs:
       - name: Validate controller definitions
         run: target/debug/opentune controller validate ctrldefs
 
-      - name: Validate the control-unit database
-        run: target/debug/opentune db validate
+      # Units listed in database/units/.access-pending only warn; a unit that
+      # is not listed (e.g. a new one) must carry an access profile.
+      - name: Validate the control-unit database (access profile required)
+        run: target/debug/opentune db validate --require-access
 
       - name: Privacy scan of the data directories
         run: |

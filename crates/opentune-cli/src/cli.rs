@@ -1020,12 +1020,17 @@ pub enum DbAction {
         dir: PathBuf,
     },
     /// Validate every unit (schema, unique ids, checksum/ecudef refs, pinout
-    /// honesty rules). Exits non-zero on any issue.
+    /// honesty rules, access-profile rules). Exits non-zero on any issue.
     Validate {
         #[arg(long, default_value = "database")]
         dir: PathBuf,
         #[arg(long, default_value = "ecudefs")]
         ecudefs: PathBuf,
+        /// Also require an `access` profile on every unit not listed in
+        /// database/units/.access-pending (listed units only warn; see
+        /// docs/UNIT-ACCESS-PROFILE.md). CI runs with this flag.
+        #[arg(long)]
+        require_access: bool,
     },
 }
 
