@@ -226,7 +226,7 @@ fn parse_hex_digits(s: &str) -> std::result::Result<Vec<u8>, String> {
         .chars()
         .filter(|c| !c.is_whitespace() && *c != ':')
         .collect();
-    if digits.is_empty() || !digits.len().is_multiple_of(2) {
+    if digits.is_empty() || digits.len() % 2 != 0 {
         return Err(format!("`{s}` is not whole hex bytes"));
     }
     (0..digits.len())
