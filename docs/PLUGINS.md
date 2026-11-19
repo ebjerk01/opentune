@@ -136,11 +136,12 @@ order by id. The core manages them as `SeedKeys` and uses them in three places:
 - **Your own read/flash commands**: attach a handler to the hub-opened driver
   with `adapter::apply_seed_key` so the driver's unlock step uses it.
 
-After your resolvers, `SeedKeys` answers two ids itself with the SA2
+After your resolvers, `SeedKeys` answers these ids itself with the SA2
 interpreter (`opentune-sa2`) over a script the *user* supplies: `sa2` = the
 script armed in the SA2 script panel (Bench tier, held in memory for the run;
-`SeedKeys::arm_sa2` / `armed_sa2`, shared by every clone), and `sa2:<hex>` =
-the script inline in the id. The calculator labels those results
+`SeedKeys::arm_sa2` / `armed_sa2`, shared by every clone), `sa2:<hex>` =
+the script inline in the id, and `sa2:@<file>` = a script file (size-capped;
+`require` says why a file could not be used). The calculator labels those results
 `source: "sa2"`, not `"plugin"`. A resolver of yours that answers `sa2` wins;
 `SeedKeys::plugin(id)` asks only your resolvers and `is_builtin_sa2(id)` tells
 the two apart.

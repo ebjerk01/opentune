@@ -29,7 +29,7 @@ pub mod codec;
 pub mod ffi;
 
 use codec::PassThruMsg;
-use opentune_core::protocol::diag::{check_response, DiagTransport};
+use opentune_core::protocol::diag::{check_response, is_response_pending, DiagTransport};
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
@@ -87,8 +87,8 @@ impl DiagTransport for PassThruDiag<'_> {
             if id != self.rx_id || payload.is_empty() {
                 continue; // another ECU / empty frame
             }
-            if payload.len() >= 3 && payload[0] == 0x7F && payload[2] == 0x78 {
-                continue; // requestCorrectlyReceived-ResponsePending
+            if is_response_pending(req, &payload) {
+                continue; // requestCorrectlyReceived-ResponsePending (this service)
             }
             return Ok(payload);
         }
@@ -590,6 +590,34 @@ mod tests {
         drv.open(&ConnectConfig::default()).unwrap();
         let id = drv.read_ecu_id().unwrap();
         assert_eq!(id.vin.as_deref(), Some("VF1ABC"));
+    }
+
+    #[test]
+    fn response_pending_is_echo_checked() {
+        let mut dev = MockPassThru::new();
+        dev.push_iso15765(0x7E8, &[0x7F, 0x22, 0x78]);
+        dev.push_iso15765(0x7E8, &[0x62, 0xF1, 0x90, 0x41]);
+        let mut t = PassThruDiag {
+            dev: &mut dev,
+            tx_id: 0x7E0,
+            rx_id: 0x7E8,
+        };
+        assert_eq!(
+            t.request(&[0x22, 0xF1, 0x90], 100).unwrap(),
+            vec![0x62, 0xF1, 0x90, 0x41]
+        );
+        // A 0x78 for another service (0x10) is not treated as pending.
+        dev.push_iso15765(0x7E8, &[0x7F, 0x10, 0x78]);
+        dev.push_iso15765(0x7E8, &[0x62, 0xF1, 0x90, 0x41]);
+        let mut t = PassThruDiag {
+            dev: &mut dev,
+            tx_id: 0x7E0,
+            rx_id: 0x7E8,
+        };
+        assert_eq!(
+            t.request(&[0x22, 0xF1, 0x90], 100).unwrap(),
+            vec![0x7F, 0x10, 0x78]
+        );
     }
 
     #[test]

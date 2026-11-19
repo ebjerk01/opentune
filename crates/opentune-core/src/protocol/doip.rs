@@ -14,7 +14,7 @@
 //! Implemented from the ISO 13400-2 message catalogue (header, routing
 //! activation, diagnostic message + ack); reimplemented, not derived from any
 //! GPL source.
-use crate::protocol::diag::DiagTransport;
+use crate::protocol::diag::{is_response_pending, DiagTransport};
 use crate::{Error, Result};
 use std::time::{Duration, Instant};
 
@@ -39,8 +39,16 @@ pub const P2_STAR_MS: u64 = 5000;
 /// **Absolute cap on one diagnostic exchange.** Captured from a monotonic clock
 /// when the request is sent, it bounds the *total* time spent waiting across all
 /// interleaved acks, alive-checks and `responsePending` replies, so a chatty or
-/// hostile entity cannot reset the wait indefinitely by trickling traffic.
+/// hostile entity cannot reset the wait indefinitely by trickling traffic. It
+/// is a ceiling only: an ECU that never answers fails after the caller's
+/// per-request timeout (see [`DoIpTransport`]'s `request`).
 pub const TOTAL_DIAG_TIMEOUT_MS: u64 = 60_000;
+
+/// **A_DoIP_Diagnostic_Message** (ISO 13400-2): how long the tester waits for
+/// the entity's diagnostic-message acknowledgement (`0x8002` / `0x8003`). Until
+/// the ack arrives the response wait is at least this long, so a short
+/// per-request timeout does not fail a conformant gateway that acks slowly.
+pub const DIAG_ACK_TIMEOUT_MS: u64 = 2000;
 
 /// The IANA-registered DoIP port for both the TCP data socket and the UDP
 /// discovery socket (ISO 13400-2 §5.1).
@@ -670,13 +678,17 @@ impl<S: DoIpStream> DoIpTransport<S> {
     }
 
     /// Read DoIP messages until a diagnostic message (the UDS response) arrives,
-    /// validating and skipping any interleaved diagnostic-message acks. All
-    /// reads share the one absolute `deadline`, so interleaved acks / alive-checks
-    /// cannot reset the wait.
-    fn read_uds_response(&mut self, deadline: Instant) -> Result<Vec<u8>> {
+    /// validating and skipping any interleaved diagnostic-message acks. Reads
+    /// run under `wait`'s current deadline; a positive ack moves that deadline
+    /// to one response window after the ack (never past the hard cap), while
+    /// alive-checks do not move it.
+    fn read_uds_response(&mut self, wait: &mut ResponseWait) -> Result<Vec<u8>> {
         loop {
-            let budget = remaining_ms(deadline).ok_or(Error::Timeout(TOTAL_DIAG_TIMEOUT_MS))?;
-            let msg = self.read_message(budget)?;
+            let budget = remaining_ms(wait.deadline).ok_or(Error::Timeout(wait.window_ms))?;
+            let msg = match self.read_message(budget) {
+                Err(Error::Timeout(_)) => return Err(Error::Timeout(wait.window_ms)),
+                other => other?,
+            };
             match msg.payload_type {
                 payload_type::DIAGNOSTIC_MESSAGE => {
                     // source(2) + target(2) + UDS data.
@@ -702,6 +714,8 @@ impl<S: DoIpStream> DoIpTransport<S> {
                             msg.payload[4]
                         )));
                     }
+                    // The message reached the target: P2 runs from here.
+                    wait.extend(wait.response_ms);
                 }
                 payload_type::DIAGNOSTIC_MESSAGE_NEG_ACK => {
                     if msg.payload.len() < 5 {
@@ -750,25 +764,59 @@ impl<S: DoIpStream> DiagTransport for DoIpTransport<S> {
         // Send the request exactly once. On responsePending we keep *receiving*;
         // the request is never re-sent, so a write is never duplicated.
         self.send_diagnostic(req)?;
-
-        // One absolute monotonic deadline bounds the whole exchange. The ECU may
-        // extend each response under P2* by answering UDS NRC 0x78, but the total
-        // wait is capped: trickled 0x78/ack/alive-check traffic cannot reset it.
-        let first_budget = timeout_ms.max(1);
-        let total = first_budget.max(P2_STAR_MS).max(TOTAL_DIAG_TIMEOUT_MS);
-        let deadline = Instant::now() + Duration::from_millis(total);
+        let mut wait = ResponseWait::new(Instant::now(), timeout_ms);
         loop {
-            if remaining_ms(deadline).is_none() {
-                return Err(Error::Timeout(total));
-            }
-            let resp = self.read_uds_response(deadline)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
-                // responsePending: wait for the next message under the same
-                // deadline (no re-send, no per-message reset).
+            let resp = self.read_uds_response(&mut wait)?;
+            if is_response_pending(req, &resp) {
+                // responsePending for this request: the ECU extends the
+                // response window to P2* (no re-send), never past the hard cap.
+                wait.extend(wait.response_ms.max(P2_STAR_MS));
                 continue;
             }
             return Ok(resp);
         }
+    }
+}
+
+/// The deadlines of one diagnostic exchange (ISO 13400-2 + ISO 14229-2).
+///
+/// * Until the entity acknowledges the diagnostic message, the wait is the
+///   caller's timeout but at least [`DIAG_ACK_TIMEOUT_MS`].
+/// * A positive ack restarts the window at the caller's timeout (P2).
+/// * A `responsePending` for this request restarts it at P2\* (at least
+///   [`P2_STAR_MS`]).
+/// * Nothing moves it past `hard`, [`TOTAL_DIAG_TIMEOUT_MS`] (or the caller's
+///   timeout, if longer) after the request was sent; alive-checks and acks
+///   never extend it beyond that.
+///
+/// So an ECU that never answers fails after its window, not after the cap.
+#[derive(Debug, Clone, Copy)]
+struct ResponseWait {
+    /// The caller's per-response budget (P2 for this request).
+    response_ms: u64,
+    /// The window the current deadline was set from (reported on timeout).
+    window_ms: u64,
+    deadline: Instant,
+    hard: Instant,
+}
+
+impl ResponseWait {
+    fn new(sent: Instant, timeout_ms: u64) -> Self {
+        let response_ms = timeout_ms.max(1);
+        let hard = sent + Duration::from_millis(response_ms.max(TOTAL_DIAG_TIMEOUT_MS));
+        let window_ms = response_ms.max(DIAG_ACK_TIMEOUT_MS);
+        ResponseWait {
+            response_ms,
+            window_ms,
+            deadline: (sent + Duration::from_millis(window_ms)).min(hard),
+            hard,
+        }
+    }
+
+    /// Restart the window at `ms` from now, capped at the hard deadline.
+    fn extend(&mut self, ms: u64) {
+        self.window_ms = ms;
+        self.deadline = (Instant::now() + Duration::from_millis(ms)).min(self.hard);
     }
 }
 
@@ -1249,6 +1297,97 @@ mod tests {
             diag_requests, 1,
             "the UDS request must be sent exactly once despite the responsePending replies"
         );
+    }
+
+    #[test]
+    fn response_pending_for_another_service_is_not_waited_on() {
+        // A 0x78 echoing service 0x10 is not this RDBI's pending: it is handed
+        // back at once (the client reports it as mis-correlated) instead of
+        // the transport waiting on it.
+        let tester = 0x0E00;
+        let ecu = 0x1000;
+        let msgs = vec![
+            routing_ok(tester, ecu),
+            diag_pos_ack(ecu, tester),
+            diag_msg(ecu, tester, &[0x7F, 0x10, 0x78]),
+        ];
+        let mut tp = DoIpTransport::with_stream(MockStream::new(msgs), tester, ecu);
+        tp.activate(1000).unwrap();
+        assert_eq!(
+            tp.request(&[0x22, 0xF1, 0x90], 500).unwrap(),
+            vec![0x7F, 0x10, 0x78]
+        );
+    }
+
+    #[test]
+    fn response_window_rules() {
+        let t0 = Instant::now();
+        let ms = |d: Instant| d.duration_since(t0).as_millis() as u64;
+        // Before the ack: at least the A_DoIP_Diagnostic_Message window.
+        let w = ResponseWait::new(t0, 300);
+        assert_eq!(ms(w.deadline), DIAG_ACK_TIMEOUT_MS);
+        assert_eq!(w.window_ms, DIAG_ACK_TIMEOUT_MS);
+        assert_eq!(ms(w.hard), TOTAL_DIAG_TIMEOUT_MS);
+        let w = ResponseWait::new(t0, 5000);
+        assert_eq!(ms(w.deadline), 5000);
+        // A caller budget above the cap raises the cap with it.
+        let w = ResponseWait::new(t0, 90_000);
+        assert_eq!(ms(w.hard), 90_000);
+        // Extensions restart the window but never pass the cap.
+        let mut w = ResponseWait::new(t0, 300);
+        w.extend(300);
+        assert!(ms(w.deadline) >= 300 && ms(w.deadline) < 1000);
+        assert_eq!(w.window_ms, 300);
+        w.hard = t0 + Duration::from_millis(100);
+        w.extend(P2_STAR_MS);
+        assert_eq!(ms(w.deadline), 100, "capped at the hard deadline");
+    }
+
+    /// A responsePending moves the wait to P2*: a reply that arrives after the
+    /// caller's (P2) timeout but within P2* of the 0x78 is still received.
+    #[test]
+    fn response_pending_extends_the_window_to_p2_star() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let read_msg = |sock: &mut TcpStream| -> DoIpMessage {
+                let mut hdr = [0u8; HEADER_LEN];
+                Read::read_exact(sock, &mut hdr).unwrap();
+                let (ptype, plen) = DoIpMessage::parse_header(&hdr).unwrap();
+                let mut payload = vec![0u8; plen];
+                Read::read_exact(sock, &mut payload).unwrap();
+                DoIpMessage::new(ptype, payload)
+            };
+            let req = read_msg(&mut sock);
+            let tester = u16::from_be_bytes([req.payload[0], req.payload[1]]);
+            Write::write_all(&mut sock, &routing_ok(tester, 0x1000).encode()).unwrap();
+            read_msg(&mut sock);
+            Write::write_all(&mut sock, &diag_pos_ack(0x1000, tester).encode()).unwrap();
+            Write::write_all(
+                &mut sock,
+                &diag_msg(0x1000, tester, &[0x7F, 0x31, 0x78]).encode(),
+            )
+            .unwrap();
+            std::thread::sleep(Duration::from_millis(700));
+            Write::write_all(
+                &mut sock,
+                &diag_msg(0x1000, tester, &[0x71, 0x01, 0xFF, 0x00]).encode(),
+            )
+            .unwrap();
+        });
+
+        let stream = TcpStream::connect(addr).unwrap();
+        let mut tp = DoIpTransport::with_stream(stream, 0x0E00, 0x1000);
+        tp.activate(2000).unwrap();
+        let t0 = Instant::now();
+        let resp = tp.request(&[0x31, 0x01, 0xFF, 0x00], 300).unwrap();
+        assert_eq!(resp, vec![0x71, 0x01, 0xFF, 0x00]);
+        assert!(t0.elapsed() >= Duration::from_millis(650));
+        server.join().unwrap();
     }
 
     /// Offline UDP discovery: a loopback "entity" answers one vehicle

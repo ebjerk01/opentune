@@ -70,6 +70,13 @@ pub(crate) fn registry() -> Registry {
         opentune_driver_doip::DRIVER_NAME,
         || Box::new(opentune_driver_doip::DoipDriver::new()),
     );
+    // Bench tier: OpenTune's ESP32-S3 interface, firmware compile-only so far.
+    #[cfg(feature = "alpha")]
+    r.register(
+        opentune_driver_esp32::DRIVER_ID,
+        opentune_driver_esp32::DRIVER_NAME,
+        || Box::new(opentune_driver_esp32::Esp32Driver::new()),
+    );
     r
 }
 
@@ -186,4 +193,27 @@ pub fn list_drivers() -> Vec<DriverInfo> {
             name: e.display_name.to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids() -> Vec<String> {
+        list_drivers().into_iter().map(|d| d.id).collect()
+    }
+
+    /// The Bench-tier drivers appear in alpha builds only.
+    #[test]
+    fn bench_tier_drivers_follow_the_alpha_feature() {
+        let ids = ids();
+        assert!(ids.iter().any(|i| i == "mock"));
+        for bench in ["isotp-ble", "doip", "esp32-opentune"] {
+            assert_eq!(
+                ids.iter().any(|i| i == bench),
+                cfg!(feature = "alpha"),
+                "{bench} must be listed exactly when the alpha feature is on"
+            );
+        }
+    }
 }

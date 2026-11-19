@@ -24,7 +24,7 @@ pub mod proto;
 
 pub use device::{CanFrame, Device, PingInfo};
 
-use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
 use opentune_core::protocol::isotp::CanLink;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
@@ -36,6 +36,12 @@ use opentune_core::{
 use std::time::Duration;
 
 type Serial = Box<dyn serialport::SerialPort>;
+
+/// Registry id of this driver (`opentune drivers`).
+pub const DRIVER_ID: &str = "esp32-opentune";
+/// Display name. The ESP32-S3 firmware is compile-only so far (never flashed),
+/// so the driver is unverified against a real device.
+pub const DRIVER_NAME: &str = "OpenTune ESP32-S3 interface (unverified)";
 
 /// Which transport the current session uses.
 #[derive(Clone, Copy)]
@@ -145,21 +151,26 @@ impl DiagTransport for KlineDiag<'_> {
         let raw = self
             .dev
             .kline_transceive(clamp_timeout(timeout_ms), &frame)?;
-        // The device may return one message or several (e.g. a responsePending
-        // then the real answer) concatenated; walk the KWP stream and return the
-        // first non-pending service payload.
-        let mut last_err = Error::Protocol("no KWP frame in K-line reply".into());
-        for payload in parse_kwp_stream(&raw) {
-            if payload.len() >= 3 && payload[0] == 0x7F && payload[2] == 0x78 {
-                continue; // responsePending
-            }
-            return Ok(payload);
-        }
-        // If everything was pending (or nothing parsed), surface a timeout.
-        if raw.is_empty() {
-            last_err = Error::Timeout(timeout_ms);
-        }
-        Err(last_err)
+        first_final_kwp(req, &raw, timeout_ms)
+    }
+}
+
+/// The device may return one message or several (e.g. a responsePending then
+/// the real answer) concatenated: walk the KWP stream and return the first
+/// payload that is not a responsePending for `req`'s service. A 0x78 echoing
+/// another service is returned (the client reports it as mis-correlated).
+fn first_final_kwp(req: &[u8], raw: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+    if let Some(p) = parse_kwp_stream(raw)
+        .into_iter()
+        .find(|p| !is_response_pending(req, p))
+    {
+        return Ok(p);
+    }
+    // Everything was pending, or nothing parsed / arrived.
+    if raw.is_empty() {
+        Err(Error::Timeout(timeout_ms))
+    } else {
+        Err(Error::Protocol("no KWP frame in K-line reply".into()))
     }
 }
 
@@ -247,8 +258,8 @@ impl Interface for Esp32Driver {
 
     fn info(&self) -> InterfaceInfo {
         InterfaceInfo {
-            id: "esp32-opentune".into(),
-            display_name: "OpenTune ESP32-S3 interface".into(),
+            id: DRIVER_ID.into(),
+            display_name: DRIVER_NAME.into(),
             firmware: self.firmware.clone(),
             serial: self.serial.clone(),
         }
@@ -401,27 +412,7 @@ impl Interface for Esp32Driver {
             Some(Mode::IsoTp) => {
                 let dev = self.device.as_mut().ok_or(Error::NotConnected)?;
                 let mut t = IsoTpDiag { dev };
-                let mut uds = UdsClient::new(&mut t);
-                let max = uds.request_upload(0x00, region.address, region.length)?;
-                let block = max.clamp(1, 4095);
-                let mut out = Vec::with_capacity(region.length as usize);
-                let mut seq = 1u8;
-                while (out.len() as u32) < region.length {
-                    let data = uds.transfer_data(seq, &[])?;
-                    if data.len() <= 1 {
-                        break;
-                    }
-                    out.extend_from_slice(&data[1..]);
-                    seq = seq.wrapping_add(1);
-                    progress(Progress {
-                        phase: Phase::Read,
-                        done: out.len() as u64,
-                        total: region.length as u64,
-                    });
-                    let _ = block;
-                }
-                uds.transfer_exit().ok();
-                out.truncate(region.length as usize);
+                let out = uds_upload(&mut t, region, progress)?;
                 self.mode = Some(Mode::IsoTp);
                 Ok(out)
             }
@@ -471,12 +462,14 @@ impl Interface for Esp32Driver {
                 let max = uds.request_download(0x00, region.address, data.len() as u32)?;
                 let block = max.clamp(2, 4095) - 1;
                 let mut seq = 1u8;
+                let mut done = 0usize;
                 for chunk in data.chunks(block) {
                     uds.transfer_data(seq, chunk)?;
                     seq = seq.wrapping_add(1);
+                    done += chunk.len();
                     progress(Progress {
                         phase: Phase::Write,
-                        done: 0,
+                        done: done as u64,
                         total: data.len() as u64,
                     });
                 }
@@ -510,6 +503,41 @@ impl Interface for Esp32Driver {
             None => Err(Error::NotConnected),
         }
     }
+}
+
+/// RequestUpload + TransferData loop for `region` over a UDS transport. Fails
+/// (rather than returning a short image) when the ECU stops sending data
+/// before `region.length` bytes have arrived.
+fn uds_upload(
+    t: &mut dyn DiagTransport,
+    region: MemoryRegion,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Vec<u8>> {
+    let mut uds = UdsClient::new(t);
+    uds.request_upload(0x00, region.address, region.length)?;
+    let mut out = Vec::with_capacity(region.length as usize);
+    let mut seq = 1u8;
+    while (out.len() as u32) < region.length {
+        let data = uds.transfer_data(seq, &[])?;
+        if data.len() <= 1 {
+            uds.transfer_exit().ok();
+            return Err(Error::Protocol(format!(
+                "upload ended after {} of {} bytes (empty TransferData block {seq})",
+                out.len(),
+                region.length
+            )));
+        }
+        out.extend_from_slice(&data[1..]);
+        seq = seq.wrapping_add(1);
+        progress(Progress {
+            phase: Phase::Read,
+            done: (out.len() as u64).min(region.length as u64),
+            total: region.length as u64,
+        });
+    }
+    uds.transfer_exit().ok();
+    out.truncate(region.length as usize);
+    Ok(out)
 }
 
 fn hex(b: &[u8]) -> String {
@@ -716,6 +744,50 @@ mod seedkey_hook_tests {
         assert!(t.requests.is_empty());
     }
 
+    fn upload_script(blocks: &[&[u8]]) -> ScriptedTransport {
+        let mut replies = vec![vec![0x75, 0x20, 0x01, 0x02]];
+        for (i, b) in blocks.iter().enumerate() {
+            let mut r = vec![0x76, (i + 1) as u8];
+            r.extend_from_slice(b);
+            replies.push(r);
+        }
+        replies.push(vec![0x77]);
+        ScriptedTransport {
+            replies: VecDeque::from(replies),
+            requests: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn upload_reads_the_whole_region() {
+        let mut t = upload_script(&[&[1, 2, 3], &[4, 5, 6]]);
+        let mut last = 0;
+        let out = uds_upload(&mut t, MemoryRegion::new(0x1000, 5), &mut |p| last = p.done).unwrap();
+        assert_eq!(out, vec![1, 2, 3, 4, 5]);
+        assert_eq!(last, 5, "progress stops at the region length");
+        assert_eq!(t.requests[0][0], 0x35);
+        assert_eq!(t.requests.last().unwrap(), &vec![0x37]);
+    }
+
+    #[test]
+    fn upload_refuses_a_short_image() {
+        // The second TransferData carries no data: the old loop returned the 3
+        // bytes it had as if they were the whole region.
+        let mut t = upload_script(&[&[1, 2, 3], &[]]);
+        let e = uds_upload(&mut t, MemoryRegion::new(0x1000, 6), &mut |_| {}).unwrap_err();
+        assert!(e.to_string().contains("3 of 6"), "{e}");
+    }
+
+    #[test]
+    fn registry_identity_is_unverified() {
+        let d = Esp32Driver::new();
+        assert_eq!(d.info().id, DRIVER_ID);
+        assert!(DRIVER_NAME.contains("unverified"));
+        let c = d.capabilities();
+        assert!(c.can && c.kline && c.read_memory && c.write_memory);
+        assert!(!c.bench_boot && !c.can_fd && !c.doip && !c.vwtp20);
+    }
+
     #[test]
     fn config_helpers_parse_options() {
         let mut cfg = ConnectConfig::default();
@@ -804,6 +876,36 @@ mod tests {
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0], vec![0x7F, 0x10, 0x78]);
         assert_eq!(msgs[1], vec![0x50, 0x01]);
+    }
+
+    #[test]
+    fn kline_reply_skips_only_this_services_pending() {
+        let frame = |d: &[u8]| {
+            let mut f = vec![0x80 | d.len() as u8, 0xF1, 0x10];
+            f.extend_from_slice(d);
+            f.push(f.iter().fold(0u8, |a, &b| a.wrapping_add(b)));
+            f
+        };
+        let real = [0x5A, 0x9B, 0x01];
+        let mut raw = frame(&[0x7F, 0x1A, 0x78]);
+        raw.extend(frame(&real));
+        assert_eq!(first_final_kwp(&[0x1A, 0x9B], &raw, 100).unwrap(), real);
+        // A 0x78 for another service (0x10) is not treated as pending.
+        let mut raw = frame(&[0x7F, 0x10, 0x78]);
+        raw.extend(frame(&real));
+        assert_eq!(
+            first_final_kwp(&[0x1A, 0x9B], &raw, 100).unwrap(),
+            vec![0x7F, 0x10, 0x78]
+        );
+        // Only pending, or nothing at all.
+        assert!(matches!(
+            first_final_kwp(&[0x1A, 0x9B], &frame(&[0x7F, 0x1A, 0x78]), 100),
+            Err(Error::Protocol(_))
+        ));
+        assert!(matches!(
+            first_final_kwp(&[0x1A], &[], 100),
+            Err(Error::Timeout(100))
+        ));
     }
 
     #[test]

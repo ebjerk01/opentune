@@ -9,7 +9,7 @@
 //! nothing here masks it), and malformed frames are rejected instead of
 //! panicking or reading out of bounds.
 use crate::protocol::canfd::CanFrame;
-use crate::protocol::diag::DiagTransport;
+use crate::protocol::diag::{is_response_pending, DiagTransport};
 use crate::{Error, Result};
 
 /// ISO-TP PCI (protocol control information) type, in the high nibble of byte 0.
@@ -331,10 +331,12 @@ impl IsoTp {
 impl DiagTransport for IsoTp {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
         self.send(req, timeout_ms)?;
-        // Handle responsePending (0x78): the ECU asks us to keep waiting.
+        // Handle responsePending (0x78) for this request's service: the ECU
+        // asks us to keep waiting. A 0x78 echoing another service is returned
+        // (the client reports it as mis-correlated), not waited on.
         for _ in 0..self.max_response_pending {
             let resp = self.recv(timeout_ms)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
+            if is_response_pending(req, &resp) {
                 continue;
             }
             return Ok(resp);
@@ -392,6 +394,36 @@ mod tests {
     /// The tester-transmitted frames' data payloads, in order.
     fn sent_frames(log: &Rc<RefCell<Vec<(u32, Vec<u8>)>>>) -> Vec<Vec<u8>> {
         log.borrow().iter().map(|(_, d)| d.clone()).collect()
+    }
+
+    #[test]
+    fn response_pending_is_echo_checked() {
+        // 0x78 for this RDBI is waited out ...
+        let (ecu, _log) = FakeEcu::new(
+            0x7E8,
+            vec![
+                (0x7E8, vec![0x03, 0x7F, 0x22, 0x78]),
+                (0x7E8, vec![0x03, 0x62, 0x12, 0x34]),
+            ],
+        );
+        let mut tp = IsoTp::new(Box::new(ecu), 0x7E0, 0x7E8);
+        assert_eq!(
+            tp.request(&[0x22, 0x12, 0x34], 100).unwrap(),
+            vec![0x62, 0x12, 0x34]
+        );
+        // ... but a 0x78 for another service (0x10) is not treated as pending.
+        let (ecu, _log) = FakeEcu::new(
+            0x7E8,
+            vec![
+                (0x7E8, vec![0x03, 0x7F, 0x10, 0x78]),
+                (0x7E8, vec![0x03, 0x62, 0x12, 0x34]),
+            ],
+        );
+        let mut tp = IsoTp::new(Box::new(ecu), 0x7E0, 0x7E8);
+        assert_eq!(
+            tp.request(&[0x22, 0x12, 0x34], 100).unwrap(),
+            vec![0x7F, 0x10, 0x78]
+        );
     }
 
     #[test]

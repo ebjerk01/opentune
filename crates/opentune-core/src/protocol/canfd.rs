@@ -23,7 +23,7 @@
 //! and sequence-number validation are the same rules as the classic transport;
 //! the shared constants and the STmin decoder are reused from
 //! [`crate::protocol::isotp`].
-use crate::protocol::diag::DiagTransport;
+use crate::protocol::diag::{is_response_pending, DiagTransport};
 use crate::protocol::isotp::{flow_status, pci, stmin_to_micros, CanLink};
 use crate::{Error, Result};
 
@@ -438,7 +438,8 @@ impl DiagTransport for IsoTpFd {
         self.send(req, timeout_ms)?;
         for _ in 0..self.max_response_pending {
             let resp = self.recv(timeout_ms)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
+            // Only a 0x78 echoing this request's service means "keep waiting".
+            if is_response_pending(req, &resp) {
                 continue;
             }
             return Ok(resp);
@@ -682,5 +683,15 @@ mod tests {
         let mut tp = IsoTpFd::new_fd(Box::new(ecu), 0x7E0, 0x7E8);
         let resp = tp.request(&[0x22, 0x12, 0x34], 100).unwrap();
         assert_eq!(resp, vec![0x62, 0x12, 0x34]);
+    }
+
+    #[test]
+    fn response_pending_for_another_service_is_not_waited_on() {
+        let pending = cf_fd(vec![0x03, 0x7F, 0x10, 0x78]);
+        let real = cf_fd(vec![0x03, 0x62, 0x12, 0x34]);
+        let (ecu, _log) = FakeFdEcu::new(0x7E8, vec![pending, real]);
+        let mut tp = IsoTpFd::new_fd(Box::new(ecu), 0x7E0, 0x7E8);
+        let resp = tp.request(&[0x22, 0x12, 0x34], 100).unwrap();
+        assert_eq!(resp, vec![0x7F, 0x10, 0x78]);
     }
 }

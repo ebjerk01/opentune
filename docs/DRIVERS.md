@@ -631,14 +631,36 @@ vehicle: broadcast discovery, real gateway routing to ECUs behind it, activation
 lines, central-security activation and entity inactivity timeouts (the
 desktop re-opens after an error).
 
+## 3j. `esp32-opentune`: OpenTune's own ESP32-S3 interface (unverified)
+
+The `esp32-opentune` driver (`crates/drivers/esp32-opentune`, crate
+`opentune-driver-esp32`) speaks the framed USB-CDC protocol of the reference
+firmware in `hardware/firmware/esp32-s3` (protocol and layers:
+[`hardware.md`](hardware.md#host-driver)). Like `isotp-ble` the device runs
+ISO-TP itself, so the CAN path is a `DiagTransport` for `UdsClient`; the K-line
+path frames ISO-14230 for `Kwp2000Client`. `diag()` exposes whichever path
+`open` selected. Options: `port` (required), `init=5baud` for a 5-baud K-line
+wake-up, and the `seedkey` / `security` / `seedkey_level` keys of the
+SecurityAccess hook.
+
+**Capabilities.** `can`, `kline`, `read_memory`, `write_memory` and
+`battery_voltage` (the board's ADC divider): the protocol carries all of them.
+No TP2.0 (refused at `open`), no CAN-FD, no bench boot. A block upload that
+stops before the requested length is an error, never a short image.
+
+**Validation state: unverified (Bench tier).** The firmware is compile-only
+(CI builds it on a pinned ESP-IDF) and has never been flashed, so the driver
+is tested against a mocked serial link only. The desktop lists it in alpha
+builds.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
 are listed in [`ARCHITECTURE.md`](ARCHITECTURE.md#drivers--cratesdrivers)):
 `mock`, `openport2`, `socketcan`, `elm327`, `kkl`, `kline-bridge`, `slcan`,
 `j2534`, `gsusb`, `elm327net`, `elm327obd`, `efp02c`, `vcar`, `udssim`,
-`isotp-ble`, `doip`. The desktop registers `isotp-ble` and `doip` in alpha
-builds only (Bench tier). A doc-drift test fails when a new id
+`isotp-ble`, `doip`, `esp32-opentune`. The desktop registers `isotp-ble`,
+`doip` and `esp32-opentune` in alpha builds only (Bench tier). A doc-drift test fails when a new id
 is registered without being added here.
 
 Drivers are constructed through a `Registry`, so an app can enumerate and build

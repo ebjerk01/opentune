@@ -29,7 +29,7 @@ use std::path::Path;
 /// Longest script the panel accepts. Real SA2 scripts are tens of bytes.
 pub(crate) const MAX_SCRIPT: usize = 4096;
 /// Largest script file read (raw bytes, hex text or assembler source).
-const MAX_SCRIPT_FILE: u64 = 1 << 20;
+pub(crate) const MAX_SCRIPT_FILE: u64 = 1 << 20;
 /// Largest container read.
 const MAX_CONTAINER: u64 = 512 << 20;
 /// Largest FRF key file read.
@@ -79,7 +79,7 @@ fn script_from_text(text: &str) -> Result<(Vec<u8>, &'static str), String> {
 }
 
 /// Decode a script file: raw bytes when it is not text, else hex or assembler.
-fn script_from_file_bytes(raw: Vec<u8>) -> Result<(Vec<u8>, &'static str), String> {
+pub(crate) fn script_from_file_bytes(raw: Vec<u8>) -> Result<(Vec<u8>, &'static str), String> {
     let text = std::str::from_utf8(&raw)
         .ok()
         .filter(|t| t.chars().all(|c| !c.is_control() || c.is_whitespace()));
@@ -90,7 +90,7 @@ fn script_from_file_bytes(raw: Vec<u8>) -> Result<(Vec<u8>, &'static str), Strin
 }
 
 /// Read at most `cap` bytes of `path`, refusing larger files.
-fn read_capped(path: &str, cap: u64, what: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn read_capped(path: &str, cap: u64, what: &str) -> Result<Vec<u8>, String> {
     let p = Path::new(path.trim());
     let len = std::fs::metadata(p)
         .map_err(|e| format!("{what} {}: {e}", p.display()))?
@@ -104,7 +104,7 @@ fn read_capped(path: &str, cap: u64, what: &str) -> Result<Vec<u8>, String> {
     std::fs::read(p).map_err(|e| format!("{what} {}: {e}", p.display()))
 }
 
-fn check_len(bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn check_len(bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() {
         return Err("the script is empty".into());
     }

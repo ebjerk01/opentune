@@ -50,6 +50,7 @@ pub struct DoIpSimStream {
     inbound: Vec<u8>,
     outbound: VecDeque<u8>,
     send_pos_ack: bool,
+    silent: bool,
     request_count: usize,
     /// The tester address routing activation registered on this socket.
     routed_source: Option<u16>,
@@ -68,6 +69,7 @@ impl DoIpSimStream {
             inbound: Vec::new(),
             outbound: VecDeque::new(),
             send_pos_ack: true,
+            silent: false,
             request_count: 0,
             routed_source: None,
             alive_check_responses: Vec::new(),
@@ -125,6 +127,14 @@ impl DoIpSimStream {
     /// On by default.
     pub fn set_pos_ack(&mut self, on: bool) {
         self.send_pos_ack = on;
+    }
+
+    /// A silent target: the entity still acknowledges each diagnostic message
+    /// (when [`set_pos_ack`](Self::set_pos_ack) is on) but the ECU never
+    /// answers, like a module that is asleep or absent behind a gateway. Off by
+    /// default.
+    pub fn set_silent(&mut self, on: bool) {
+        self.silent = on;
     }
 
     /// The fault plan, to schedule misbehaviours.
@@ -250,6 +260,9 @@ impl DoIpSimStream {
                     ack.push(0x00);
                     let msg = DoIpMessage::new(payload_type::DIAGNOSTIC_MESSAGE_POS_ACK, ack);
                     self.enqueue(&msg);
+                }
+                if self.silent {
+                    return;
                 }
 
                 let sid = uds.first().copied().unwrap_or(0);

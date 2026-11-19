@@ -7,7 +7,11 @@
 //!   parameter per tick and `ts` in Unix milliseconds. Rows sharing a `ts`
 //!   become one sample; each `param_id` becomes a channel. The optional
 //!   trailing `text` column carries text channels (identification DIDs, whose
-//!   `value` is empty): they are listed in the notes, not plotted.
+//!   `value` is empty): they are listed in the notes, not plotted. The CLI's
+//!   `opentune log` writes the same columns with a leading `round` and a
+//!   trailing `ts` (`round,param_id,name,raw,value,units,note,text,ts`); its
+//!   older files have `round` and no `ts`, and are read with the round number
+//!   as the time axis.
 //! - **Wide CSV**: one column per channel, optionally a time column. Channel
 //!   units come from a trailing `[unit]` / `(unit)` in the header name or from
 //!   a units row directly under the header.
@@ -256,9 +260,16 @@ pub fn parse(text: &str, opts: &ParseOptions) -> Result<Log> {
         .map(|c| c.trim().to_ascii_lowercase())
         .collect();
     let has = |n: &str| lower.iter().position(|c| c == n);
-    let long = match (has("ts"), has("param_id"), has("value")) {
+    // `ts` (desktop Live log, newer CLI logs) is Unix ms; an older CLI log has
+    // only the poll `round`, which then serves as a sample index.
+    let long = match (has("ts").or(has("round")), has("param_id"), has("value")) {
         (Some(ts), Some(pid), Some(val)) if header => Some((ts, pid, val)),
         _ => None,
+    };
+    let long_unit = if has("ts").is_some() {
+        TimeUnit::Milliseconds
+    } else {
+        TimeUnit::Index
     };
 
     // Units row: a mostly-text row right under the header, followed by data.
@@ -314,6 +325,7 @@ pub fn parse(text: &str, opts: &ParseOptions) -> Result<Log> {
         pivot_long(
             &cols,
             ts,
+            long_unit,
             pid,
             has("name"),
             val,
@@ -371,6 +383,7 @@ fn empty_log(format: LogFormat) -> Log {
 fn pivot_long(
     cols: &[Column],
     ts: usize,
+    default_unit: TimeUnit,
     pid: usize,
     name: Option<usize>,
     val: usize,
@@ -440,12 +453,18 @@ fn pivot_long(
     }
 
     let mut log = empty_log(LogFormat::OpentuneLong);
-    let unit = opts.time_unit.unwrap_or(TimeUnit::Milliseconds);
+    let unit = opts.time_unit.unwrap_or(default_unit);
     log.time_source = if opts.time_unit.is_some() {
         TimeSource::Override
     } else {
         TimeSource::Format
     };
+    if unit == TimeUnit::Index && opts.time_unit.is_none() {
+        notes.push(format!(
+            "no `ts` column (an older `opentune log` file): the time axis is the `{}` number",
+            cols[ts].raw_name
+        ));
+    }
     log.time_unit = unit;
     log.time_column = Some(cols[ts].raw_name.clone());
     log.t = times.iter().map(|v| v * unit.to_seconds()).collect();
@@ -1029,6 +1048,50 @@ mod tests {
         let c = log.channel("Coolant").unwrap();
         assert_eq!(c.values[0], 50.0);
         assert!(c.values[1].is_nan());
+    }
+
+    #[test]
+    fn cli_log_with_round_and_ts_pivots_on_ts() {
+        // `opentune log` since the `ts` column: round first, ts last.
+        let csv = "round,param_id,name,raw,value,units,note,text,ts\n\
+            0,P1,Engine speed,3200,800,rpm,,,1700000000000\n\
+            0,P2,Coolant,90,50,C,,,1700000000000\n\
+            1,P1,Engine speed,3600,900,rpm,,,1700000000250\n\
+            1,P2,Coolant,91,51,C,,,1700000000250\n";
+        let log = p(csv);
+        assert_eq!(log.format, LogFormat::OpentuneLong);
+        assert_eq!(log.time_column.as_deref(), Some("ts"));
+        assert_eq!(log.time_unit, TimeUnit::Milliseconds);
+        assert_eq!(log.epoch_start, Some(1_700_000_000.0));
+        assert_eq!(log.t, vec![0.0, 0.25]);
+        assert_eq!(log.channel("Coolant").unwrap().values, vec![50.0, 51.0]);
+    }
+
+    #[test]
+    fn older_cli_log_without_ts_uses_the_round() {
+        let csv = "round,param_id,name,raw,value,units,note,text\n\
+            0,P1,Engine speed,3200,800,rpm,,\n\
+            0,P2,Coolant,90,50,C,,\n\
+            1,P1,Engine speed,3600,900,rpm,,\n\
+            1,P2,Coolant,,,C,no response,\n\
+            2,P1,Engine speed,4000,1000,rpm,,\n\
+            2,P2,Coolant,92,52,C,,\n";
+        let log = p(csv);
+        assert_eq!(log.format, LogFormat::OpentuneLong);
+        assert_eq!(log.time_column.as_deref(), Some("round"));
+        assert_eq!(log.time_unit, TimeUnit::Index);
+        assert_eq!(log.epoch_start, None);
+        assert_eq!(log.t, vec![0.0, 1.0, 2.0]);
+        assert_eq!(
+            log.channel("Engine speed").unwrap().values,
+            vec![800.0, 900.0, 1000.0]
+        );
+        assert!(log.channel("Coolant").unwrap().values[1].is_nan());
+        assert!(
+            log.notes.iter().any(|n| n.contains("older `opentune log`")),
+            "{:?}",
+            log.notes
+        );
     }
 
     #[test]
