@@ -199,7 +199,10 @@ fn parse_asc(line: &str, dec: bool) -> Result<Option<LogFrame>, ()> {
         }
     };
     let take = |from: usize, n: usize| -> Option<Vec<u8>> {
-        t.get(from..from + n)?.iter().map(|b| byte(b)).collect()
+        t.get(from..from.checked_add(n)?)?
+            .iter()
+            .map(|b| byte(b))
+            .collect()
     };
     // CANFD <ch> <dir> <id> [<name>] <brs> <esi> <dlc> <len> <data…> …
     if t.get(1).is_some_and(|s| s.eq_ignore_ascii_case("CANFD")) {
@@ -214,7 +217,12 @@ fn parse_asc(line: &str, dec: bool) -> Result<Option<LogFrame>, ()> {
         } else {
             6
         };
-        let len: usize = t.get(at + 3).and_then(|s| s.parse().ok()).ok_or(())?;
+        // A CAN FD payload is at most 64 bytes.
+        let len: usize = t
+            .get(at + 3)
+            .and_then(|s| s.parse().ok())
+            .filter(|&n| n <= 64)
+            .ok_or(())?;
         let data = take(at + 4, len).ok_or(())?;
         return Ok(Some(LogFrame {
             ts: Some(ts),
@@ -496,6 +504,19 @@ base dec  timestamps absolute
         assert_eq!((f[4].id, f[4].data.clone()), (0x457, vec![0x0A, 0x0B]));
         assert_eq!((f[5].id, f[5].data.clone()), (704, vec![255, 16]));
         assert_eq!(f[5].channel.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn asc_canfd_length_is_bounded() {
+        // Regression: the data length is a free number; `from + len` with a
+        // huge one overflowed (a panic in debug builds).
+        for len in ["18446744073709551615", "18446744073709551606", "65"] {
+            let line = format!("   2.5 CANFD 1 Rx 456 1 0 8 {len} 00 01");
+            let p = parse_log(&line);
+            assert_eq!((p.frames.len(), p.bad_lines), (0, 1), "{len}");
+        }
+        let p = parse_log("   2.5 CANFD 1 Rx 456 1 0 8 2 00 01");
+        assert_eq!(p.frames[0].data, vec![0, 1]);
     }
 
     #[test]
