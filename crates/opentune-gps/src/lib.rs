@@ -25,6 +25,7 @@
 mod fix;
 pub mod nmea;
 mod reader;
+mod reopen;
 mod replay;
 
 pub use fix::{
@@ -33,6 +34,7 @@ pub use fix::{
 };
 pub use nmea::{parse_sentence, NmeaError, Sentence};
 pub use reader::GpsReader;
+pub use reopen::{OpenFn, ReopenFeed};
 pub use replay::ReplayFeed;
 
 /// A source of GPS snapshots for the logger: call [`snapshot`](Self::snapshot)
@@ -64,6 +66,32 @@ pub fn open_source(spec: &str, baud: u32) -> Result<Box<dyn GpsFeed>, String> {
         return Ok(Box::new(r));
     }
     Ok(Box::new(GpsReader::open_serial(spec, baud)?))
+}
+
+/// [`open_source`], but a **serial** source re-opens itself with backoff
+/// (`initial_ms` doubling up to `max_ms`) after it ends, e.g. when the USB
+/// receiver is unplugged and plugged back in ([`ReopenFeed`]). A recorded
+/// file is replayed once and never re-opened.
+#[cfg(feature = "serial")]
+pub fn open_source_reopening(
+    spec: &str,
+    baud: u32,
+    initial_ms: u64,
+    max_ms: u64,
+) -> Result<Box<dyn GpsFeed>, String> {
+    if std::path::Path::new(spec).is_file() {
+        return open_source(spec, baud);
+    }
+    let port = spec.to_string();
+    let open: OpenFn = Box::new(move || {
+        GpsReader::open_serial(&port, baud).map(|r| Box::new(r) as Box<dyn GpsFeed>)
+    });
+    Ok(Box::new(ReopenFeed::new(
+        format!("serial {spec} (auto-reopen)"),
+        open,
+        initial_ms,
+        max_ms,
+    )?))
 }
 
 /// One serial port that might be a GNSS receiver.

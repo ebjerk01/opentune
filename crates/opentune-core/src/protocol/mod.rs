@@ -6,6 +6,8 @@
 //! - [`tp20channel`]: ISO-TP / TP2.0 transport selection for raw-CAN drivers,
 //!   with the TP2.0 keep-alive.
 //! - [`tp20sim`]: a simulated TP2.0 module + in-memory CAN link (tests).
+//! - [`faultlink`]: a simulated ISO-TP bus with fault injection (quiet bus,
+//!   foreign traffic, several responders, 0x78, dropped / re-opened links).
 //! - [`doip`]: ISO 13400 Diagnostics-over-IP transport (UDS over TCP).
 //! - [`doip_discovery`]: DoIP vehicle discovery, entity status and power mode
 //!   over UDP, and discovered entity → activated [`DoIpTransport`].
@@ -23,6 +25,7 @@ pub mod diag;
 pub mod doip;
 pub mod doip_discovery;
 pub mod elm;
+pub mod faultlink;
 pub mod isotp;
 pub mod kline;
 pub mod kwp2000;

@@ -33,3 +33,5 @@ opentune-gps = { path = "../opentune-gps", default-features = false }
 # like 100/255 that are otherwise off by one ULP on parse.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 opentune-udssim = { path = "../opentune-udssim" }
+# The resilient-log tests open their CSV with the Log viewer's parser.
+opentune-logview = { path = "../opentune-logview" }

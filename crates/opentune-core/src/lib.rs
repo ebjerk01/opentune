@@ -16,11 +16,12 @@ pub mod privacy;
 pub mod protocol;
 pub mod provenance;
 pub mod registry;
+pub mod resilient;
 pub mod types;
 pub mod validate;
 
 pub use capabilities::Capabilities;
-pub use diag::{CoreDiag, RawDiag};
+pub use diag::{CoreDiag, InterfaceDiag, OwnedDiag, RawDiag};
 pub use error::{Error, Result};
 pub use interface::{Interface, InterfaceInfo};
 pub use monitor::{CanMonitor, ListenOnly, MonitorOpts, TimedFrame};

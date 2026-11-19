@@ -227,6 +227,75 @@ against a Subaru, and the K-line bridge's 60 ms reply gap is not verified
 against SSM reply latency. The ELM327 drivers are not wired for SSM (see
 [DRIVERS.md](DRIVERS.md#3k-optional-raw-k-line-kline-for-ssm2)).
 
+## Long runs, dropped links and reconnect
+
+`opentune log` and `opentune obd read` run on the same loop
+(`opentune_core::resilient::run_resilient`) and share these flags:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--rounds N` | 1 | rounds to log; `0` = until Ctrl-C or `--duration` |
+| `--interval-ms MS` | 0 | pause between live rounds |
+| `--duration SECONDS` | none | stop after this long |
+| `--reconnect` | off | when the link is lost, close the driver, re-open it with the same settings and resume |
+| `--dead-after N` | 3 | rounds in a row with no response at all before the link counts as lost |
+| `--reconnect-backoff-ms MS` | 500 | first backoff; doubles per attempt |
+| `--reconnect-max-backoff-ms MS` | 10000 | backoff ceiling |
+| `--reconnect-max-attempts N` | never | give up after N failed re-opens |
+| `--reconnect-give-up SECONDS` | never | give up once the link has been down this long |
+
+```sh
+opentune log --def logger.xml --driver <id> --fast --rounds 0 --interval-ms 100 \
+  --reconnect --out drive.csv            # until Ctrl-C, surviving an unplug
+opentune obd read --driver elm327obd --rounds 0 --duration 600 --interval-ms 250 \
+  --reconnect --out drive.csv 0C 0D 05 0B   # Live-log CSV, as the desktop Dashboard records
+```
+
+**Dead rounds and lost links.** A round in which requests were sent and
+*none* got any response is *dead* (a negative response is an answer: the link
+is alive). Its rows are still written, with empty values and the transport
+error in `note` — never a repeated or invented value. After `--dead-after`
+dead rounds in a row the link is **lost**; an error that says so outright
+(`Error::AdapterReset`, e.g. an adapter that power-cycled and printed its
+banner, or `Error::NotConnected`) counts as lost at once. Then:
+
+- with `--reconnect` the driver is closed and re-opened after a backoff
+  (500 ms, 1 s, 2 s, … up to 10 s), until it opens or a give-up limit is hit.
+  After a re-open the session starts again: `--fast` re-defines its dynamic
+  DIDs, `obd read` forgets what the old connection taught it (multi-PID
+  support, PIDs that never answered) and re-reads the support bitmaps;
+- without it the same link keeps being polled, with the same growing pause
+  between dead rounds, in case it comes back on its own.
+
+The loop never spins: every dead round and every re-open attempt is preceded
+by a sleep, even when the transport fails instantly. A clean end (rounds,
+`--duration`, Ctrl-C) still clears the dynamic DIDs while the link is alive;
+while it is lost nothing could answer, so nothing is sent.
+
+**Marker rows.** Each link event is one row with `param_id` `link` (name
+`Link status`), an empty `value`, the event in `note` and its state in `text`:
+`lost`, `reopen-failed`, `reconnected`, `recovered` (answered again without a
+re-open) or `gave-up`. The Log viewer lists `Link status` as a text channel
+and shows the outage as a gap. stderr gets a summary:
+
+```text
+link: 4 dead round(s), 1 drop(s), 1 reconnect(s) in 3 attempt(s), 0 recovered without reopen, 6.2 s down
+```
+
+**OBD-II recording.** `obd read --out FILE.csv` writes the desktop
+Dashboard's Live-log layout, `ts,param_id,name,raw,value,units,note,text`
+(one row per channel per poll; a multi-sensor PID becomes `key#i` rows named
+`… S1`, `… S2`; a channel without a value keeps its error in `note`). Without
+`--out` it prints as before (`--json` for one readout per line). A poll in
+which nothing answered teaches `ObdSession` nothing, so an unplugged adapter
+cannot mark every PID "not supported by ECU" for the rest of the run.
+
+**GPS.** A serial receiver that ends mid-log (USB unplug) leaves the GPS
+channels empty with a note (`stale: no NMEA for 3.0 s (source ended: read
+error: …)`); the ECU log carries on. With `--reconnect`, `--gps <port>` also
+re-opens the port with the same backoff (`opentune_gps::ReopenFeed`); a
+recorded NMEA file is never re-opened.
+
 ## GPS channels
 
 An optional GPS/GNSS receiver adds position and true ground speed to a log
@@ -317,6 +386,88 @@ checksums, partial / overlong / noise lines, fix loss and recovery), a
 chunked serial-like reader, and replay into `LiveSession` against the UDS
 simulator and through `opentune log --gps`. Not yet tested with a real
 receiver or in a car.
+
+## Running over your own transport
+
+The logging engines need only one request/response seam,
+`opentune_core::RawDiag` (`request(&[u8]) -> Result<Vec<u8>, String>`,
+returning negative responses as raw `7F` bytes). An application that brings
+its own adapter has two ways in:
+
+- **Raw CAN frames** — implement `opentune_core::protocol::CanLink`
+  (`send_frame(id, data)`, `recv_frame(timeout_ms)` returning
+  `Error::Timeout` when nothing arrives) and let core `IsoTp` do ISO 15765-2:
+
+  ```rust
+  let mut tp = IsoTp::new(Box::new(my_link), 0x7E0, 0x7E8); // tx, rx
+  let diag = OwnedDiag::new(Box::new(tp), 1000);            // owning RawDiag
+  ```
+
+  For OBD-II functional requests use `tx` `0x7DF` and set
+  `tp.fc_tx_id = Some(0x7E0)`: a multi-frame reply needs its flow control
+  sent physically (ISO 15765-4); an ECU ignores one on `0x7DF`.
+- **A whole driver** — implement `opentune_core::Interface` and return your
+  transport from `diag()`; `InterfaceDiag::new(Box::new(driver), timeout_ms)`
+  owns it and closes it when dropped.
+
+Then drive any engine over it. A resilient log takes the first link and a
+re-open hook that builds a fresh one:
+
+```rust
+use opentune_core::resilient::{ReconnectPolicy, RunLimits, RunOptions, SystemClock};
+
+let mut session = LiveSession::new(&def, &ids, FastLogConfig::fast())?;
+let mut link: Box<dyn RawDiag> = Box::new(open_my_link()?);
+session.start(link.as_mut());
+let clock = SystemClock::new();
+let opts = RunOptions {
+    limits: RunLimits { rounds: None, duration_ms: Some(600_000), interval_ms: 100 },
+    policy: ReconnectPolicy::reconnecting(),     // dead_after 3, 500 ms .. 10 s, never give up
+    stop: Some(&stop_flag),                      // an AtomicBool, e.g. set by Ctrl-C
+    clock: &clock,
+};
+let mut reopen = || open_my_link().map(|l| Box::new(l) as Box<dyn RawDiag>).map_err(|e| e.to_string());
+let report = session.run_csv_resilient(link, &mut reopen, &opts, None, &mut csv_file)?;
+```
+
+`report` (`RunReport`) counts rounds, dead rounds, drops, reconnects, attempts
+and downtime. For a different output, implement `opentune_core::resilient::LogJob`
+(`round`, `event`, `reopened`, `stop`) and call `run_resilient` directly — the
+CLI's OBD-II recorder does that around `ObdSession`. A transport error that
+means the session is certainly gone should be returned as
+`Error::AdapterReset` (the owning wrappers then prefix it with
+`resilient::LINK_LOST_PREFIX`, and the loop re-opens without waiting for
+more dead rounds); `resilient::is_link_lost` is the classification.
+
+**What to expect on a quiet bus.** The diagnostic CAN behind a gateway is
+silent until queried: no broadcast frames, nothing between requests. That is
+normal — `recv_frame` timing out while idle is not an error until a request
+was sent and its reply timed out, and the loop only counts a round as dead
+when *every* request in it got no response. On a busy bus `IsoTp` skips
+frames with other ids while waiting for `rx_id`, and the request timeout
+bounds the whole wait (foreign traffic does not restart it). Several ECUs may
+answer a functional request; each `IsoTp` takes the reply on its `rx_id` and
+ignores the rest. An unsupported OBD-II PID on CAN is simply silent, which
+looks like a timeout; `ObdSession` learns and skips such PIDs, and a silent
+*tick* (nothing answered at all) teaches it nothing. Keep `timeout_ms` above
+the ECU's P2 time (50 ms is typical; slow ECUs reply `7F <sid> 78`, which
+`IsoTp` waits out up to `max_response_pending` times).
+
+**Testing your integration.** `opentune_core::protocol::faultlink` is a
+simulated ISO-TP bus to run all of this against without hardware: `SimNode`s
+answer through any closure (or a `RawDiag` simulator via `raw_responder`),
+and `FaultBus` injects foreign-id noise, several `0x7DF` responders,
+`0x78` delays, and faults — dead for the next N calls or until re-opened,
+failing as I/O errors, timeouts or silently, plus refused re-opens. With
+`VirtualClock` the loop's sleeps and the link's timeouts take no wall-clock
+time and can be counted. `crates/opentune-logdef/tests/resilient.rs` is a
+worked example.
+
+**Validation state:** synthetic-tested only — the loop, `IsoTp` and
+`ObdSession` over the fault-injecting bus with the UDS and OBD simulators
+(drop → reconnect → re-define → resume, recovery without reopen, give-up,
+no hot spin, CSVs opened by the Log viewer). Not yet tested by unplugging a
+real adapter mid-drive.
 
 ## Backend API for the desktop panel
 

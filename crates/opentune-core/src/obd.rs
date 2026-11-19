@@ -377,8 +377,18 @@ fn nrc_text(resp: &[u8]) -> String {
 
 /// Send `01 pid` and return the PID's data bytes.
 fn read_single<D: RawDiag + ?Sized>(diag: &mut D, pid: u8) -> Result<Vec<u8>, String> {
+    read_single_seen(diag, pid, &mut false)
+}
+
+/// [`read_single`], setting `answered` when the ECU sent any response.
+fn read_single_seen<D: RawDiag + ?Sized>(
+    diag: &mut D,
+    pid: u8,
+    answered: &mut bool,
+) -> Result<Vec<u8>, String> {
     let len = pid_len(pid).ok_or_else(|| format!("unknown PID {pid:02X}"))?;
     let resp = diag.request(&[0x01, pid])?;
+    *answered = true;
     match resp.as_slice() {
         [0x41, p, data @ ..] if *p == pid => {
             if data.len() < len {
@@ -435,6 +445,19 @@ impl ObdSession {
         self.multi
     }
 
+    /// PIDs learned as never answering (skipped by later reads).
+    pub fn absent(&self) -> &BTreeSet<u8> {
+        &self.absent
+    }
+
+    /// Forget the learned quirks (multi-PID support, never-answering PIDs),
+    /// keeping the discovered support set: call it after re-opening the
+    /// adapter, so a link that died mid-learning starts clean.
+    pub fn forget_learned(&mut self) {
+        self.multi = None;
+        self.absent.clear();
+    }
+
     /// Walk the `0100`, `0120`, `0140`, … support bitmaps (following each
     /// range's "next range supported" bit, up to `01E0`) and cache the result.
     /// Range markers (`0x20`, `0x40`, …) are not included. A later range that
@@ -462,10 +485,32 @@ impl ObdSession {
 
     /// Fetch raw data for `pids` (deduplicated), batching up to
     /// [`MAX_PIDS_PER_REQUEST`] per request when the ECU allows it.
+    ///
+    /// A call in which requests were sent but **nothing** answered (an
+    /// unplugged adapter, a dead bus) learns nothing: the multi-PID verdict
+    /// and the never-answering set are left as they were, so a dropped link
+    /// cannot mark every PID "not supported" for the rest of the session.
     pub fn read_pids<D: RawDiag + ?Sized>(
         &mut self,
         diag: &mut D,
         pids: &[u8],
+    ) -> BTreeMap<u8, Result<Vec<u8>, String>> {
+        let learned = (self.multi, self.absent.clone());
+        let mut answered = false;
+        let mut sent = false;
+        let out = self.read_pids_inner(diag, pids, &mut answered, &mut sent);
+        if sent && !answered {
+            (self.multi, self.absent) = learned;
+        }
+        out
+    }
+
+    fn read_pids_inner<D: RawDiag + ?Sized>(
+        &mut self,
+        diag: &mut D,
+        pids: &[u8],
+        answered: &mut bool,
+        sent: &mut bool,
     ) -> BTreeMap<u8, Result<Vec<u8>, String>> {
         let mut out = BTreeMap::new();
         let mut want = Vec::new();
@@ -498,7 +543,10 @@ impl ObdSession {
                 }
                 let mut req = vec![0x01];
                 req.extend_from_slice(chunk);
-                match diag.request(&req) {
+                let resp = diag.request(&req);
+                *sent = true;
+                *answered |= resp.is_ok();
+                match resp {
                     Ok(resp) if resp.first() == Some(&0x41) => {
                         let (parsed, _err) = parse_multi_response(&resp[1..]);
                         let got = chunk.iter().filter(|p| parsed.contains_key(p)).count();
@@ -531,7 +579,8 @@ impl ObdSession {
         }
 
         for p in singles {
-            let r = read_single(diag, p);
+            *sent |= pid_len(p).is_some();
+            let r = read_single_seen(diag, p, answered);
             if suspect.contains(&p) {
                 if r.is_ok() {
                     self.multi = Some(false);
@@ -605,6 +654,69 @@ impl ObdSession {
         }
         ro
     }
+}
+
+/// Header of the **Live-log CSV** the desktop Dashboard recording and
+/// `opentune obd read --out` write, and the Log viewer opens as an OpenTune
+/// Live log: one row per channel per poll, `ts` in Unix milliseconds.
+pub const LIVE_LOG_HEADER: &str = "ts,param_id,name,raw,value,units,note,text";
+
+/// One CSV field, quoted when it holds a comma, quote or line break.
+pub fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+/// One Live-log CSV line (no newline) from its eight fields.
+#[allow(clippy::too_many_arguments)]
+pub fn live_log_line(
+    ts_ms: u64,
+    param_id: &str,
+    name: &str,
+    raw: &str,
+    value: &str,
+    units: &str,
+    note: &str,
+    text: &str,
+) -> String {
+    let f = [param_id, name, raw, value, units, note, text].map(csv_field);
+    format!("{ts_ms},{}", f.join(","))
+}
+
+/// The Live-log CSV lines for one [`Readout`], exactly as the desktop
+/// Dashboard records a poll: keys in order; a multi-sensor channel becomes
+/// one `key#i` row (name `… S<i+1>`) per sensor that answered; a channel
+/// without a value gets an empty `value` and its error in `note` (never a
+/// made-up number).
+pub fn live_log_lines(ts_ms: u64, ro: &Readout) -> Vec<String> {
+    let mut out = Vec::new();
+    for (key, v) in &ro.values {
+        let (name, unit) = channel(key).map_or((key.as_str(), ""), |c| (c.name, c.unit));
+        let err = ro.errors.get(key).map_or("no value", String::as_str);
+        let row = |id: &str, nm: &str, x: Option<f64>| match x.filter(|x| x.is_finite()) {
+            Some(x) => live_log_line(ts_ms, id, nm, "", &x.to_string(), unit, "", ""),
+            None => live_log_line(ts_ms, id, nm, "", "", unit, err, ""),
+        };
+        match v {
+            Some(ObdValue::Array(a)) => {
+                for (i, x) in a.iter().enumerate() {
+                    if x.is_some() {
+                        out.push(row(
+                            &format!("{key}#{i}"),
+                            &format!("{name} S{}", i + 1),
+                            *x,
+                        ));
+                    }
+                }
+            }
+            Some(ObdValue::Scalar(x)) => out.push(row(key, name, Some(*x))),
+            None => out.push(row(key, name, None)),
+        }
+    }
+    out
 }
 
 /// Read the VIN via OBD mode `09` PID `02`, falling back to UDS `22 F190`.
@@ -1452,5 +1564,22 @@ mod tests {
         assert!(j["values"]["egt_b1"][2].is_null());
         assert!(j["values"]["egt_b2"].is_null());
         assert!(j["errors"]["egt_b2"].is_string());
+    }
+
+    #[test]
+    fn live_log_lines_match_the_dashboard_recording() {
+        let mut ecu = SimEcu::demo(0);
+        let ro = ObdSession::new().read(&mut ecu, &[0x78, 0x0C, 0x79]);
+        let lines = live_log_lines(1_700_000_000_000, &ro);
+        assert_eq!(
+            lines,
+            [
+                "1700000000000,egt_b1#0,Exhaust gas temperature bank 1 S1,,450,°C,,",
+                "1700000000000,egt_b1#1,Exhaust gas temperature bank 1 S2,,380,°C,,",
+                "1700000000000,egt_b2,Exhaust gas temperature bank 2,,,°C,not supported by ECU,",
+                "1700000000000,rpm,Engine speed,,1800,rpm,,",
+            ]
+        );
+        assert_eq!(csv_field("a,b \"c\""), "\"a,b \"\"c\"\"\"");
     }
 }

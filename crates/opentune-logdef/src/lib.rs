@@ -8,7 +8,11 @@
 //! reads) and applies their linear conversions. The [`fast`] module's
 //! [`LiveSession`] packs UDS DID and memory channels into dynamically defined
 //! DIDs (UDS `0x2C`) and reads them with one request per record, falling back
-//! to per-channel polling when the ECU refuses.
+//! to per-channel polling when the ECU refuses. The [`resilient`] module's
+//! [`LiveSession::run_csv_resilient`] keeps a log going over a transport that
+//! drops out (dead rounds noted, link events as marker rows, reopen with
+//! backoff and re-define), over any `RawDiag` — e.g. an embedder's own
+//! `CanLink` wrapped in core `IsoTp`.
 //!
 //! ## Formats
 //!
@@ -103,6 +107,12 @@ pub use fast::{
     DynamicDidInfo, FastLogConfig, LiveSession, LiveStatus, LogMode, DEFAULT_DYNAMIC_DID,
     DYNAMIC_DID_RANGE,
 };
+
+pub mod resilient;
+pub use opentune_core::resilient::{
+    EndReason, LinkEvent, ReconnectPolicy, RunLimits, RunOptions, RunReport, SystemClock,
+};
+pub use resilient::{link_event_sample, LINK_PARAM_ID};
 
 /// Error parsing a RomRaider-style logger document.
 #[derive(Debug)]

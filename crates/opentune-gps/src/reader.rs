@@ -121,9 +121,11 @@ impl GpsReader {
         let g = lock(&self.shared);
         let mut s = g.tracker.snapshot(now);
         s.ended.clone_from(&g.ended);
+        // Say why a source that went quiet stopped (end of stream, a read
+        // error after a USB unplug), not only that it is stale.
         if let Some(e) = &g.ended {
-            if !s.good && s.silent_ms.is_none() {
-                s.note = format!("{} ({e})", s.note);
+            if !s.good && (s.silent_ms.is_none() || s.stale) {
+                s.note = format!("{} (source ended: {e})", s.note);
             }
         }
         s

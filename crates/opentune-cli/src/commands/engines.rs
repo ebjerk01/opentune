@@ -170,7 +170,10 @@ pub struct LogGps {
 /// Dispatch the `log` subcommand: parse a logger.xml and log live data to CSV,
 /// per-channel polling or (with `fast.enabled`) over UDS 0x2C dynamic DIDs.
 /// The achieved rate and the mode (with the fallback reason) go to stderr.
-/// With `gps`, each round also gets the GPS channels.
+/// With `gps`, each round also gets the GPS channels. The log runs on the
+/// resilient loop: `--rounds 0` until Ctrl-C / `--duration`, and with
+/// `--reconnect` a lost adapter is closed, re-opened with the same settings
+/// (backing off) and the session restarted.
 #[allow(clippy::too_many_arguments)]
 pub fn run_log(
     reg: &Registry,
@@ -178,14 +181,15 @@ pub fn run_log(
     driver: &str,
     store: Option<&std::path::Path>,
     timeout_ms: u64,
-    rounds: usize,
-    interval_ms: u64,
+    run: &crate::livelog::RunArgs,
     out: Option<&std::path::Path>,
     params: &[String],
     fast: opentune_logdef::FastLogConfig,
     gps: Option<LogGps>,
     ssm: &crate::ssm_log::SsmLogArgs,
 ) -> Result<()> {
+    use opentune_core::resilient::{RunOptions, SystemClock};
+    use opentune_core::{InterfaceDiag, RawDiag};
     use opentune_logdef::{LiveSession, LogMode};
 
     let raw = std::fs::read(def_path)
@@ -195,33 +199,38 @@ pub fn run_log(
         .map_err(|e| anyhow!("parse logger def {}: {e:?}", def_path.display()))?;
 
     let ids: Vec<&str> = params.iter().map(String::as_str).collect();
+    let limits = run.limits()?;
+    let policy = run.policy()?;
 
-    let mut link: Box<dyn opentune_core::RawDiag> =
-        match crate::ssm_log::open(reg, driver, store, timeout_ms, ssm)? {
-            Some(ssm_diag) => ssm_diag,
-            None => {
-                let mut drv = open_diag_driver(reg, driver, store)?;
-                if drv.diag().is_none() {
-                    return Err(anyhow!(
-                        "driver '{driver}' does not expose a diagnostic transport"
-                    ));
-                }
-                Box::new(move |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
-                    drv.diag()
-                        .ok_or("the transport is closed")?
-                        .request(req, timeout_ms)
-                        .map_err(|e| e.to_string())
-                })
-            }
-        };
-    let diag: &mut dyn opentune_core::RawDiag = &mut *link;
-    let (def, fast) = crate::ssm_log::prepare(diag, def, fast, ssm, &ids)?;
+    // The same driver + config every (re)open: an owning transport that
+    // closes the driver when a lost link is dropped. `--transport ssm|ssm-can`
+    // opens the SSM transport instead.
+    let open_link = || -> Result<Box<dyn RawDiag>> {
+        if let Some(d) = crate::ssm_log::open(reg, driver, store, timeout_ms, ssm)? {
+            return Ok(d);
+        }
+        let drv = open_diag_driver(reg, driver, store)?;
+        let d = InterfaceDiag::new(drv, timeout_ms)
+            .map_err(|_| anyhow!("driver '{driver}' does not expose a diagnostic transport"))?;
+        Ok(Box::new(d))
+    };
+    let mut link = open_link()?;
+    let (def, fast) = crate::ssm_log::prepare(link.as_mut(), def, fast, ssm, &ids)?;
 
     let mut session = LiveSession::new(&def, &ids, fast).map_err(|e| anyhow!("{e}"))?;
     let mut gps = match gps {
         Some(g) => {
-            let mut feed =
-                opentune_gps::open_source(&g.source, g.baud).map_err(|e| anyhow!("{e}"))?;
+            let mut feed = if run.reconnect {
+                opentune_gps::open_source_reopening(
+                    &g.source,
+                    g.baud,
+                    policy.initial_backoff_ms,
+                    policy.max_backoff_ms,
+                )
+            } else {
+                opentune_gps::open_source(&g.source, g.baud)
+            }
+            .map_err(|e| anyhow!("{e}"))?;
             feed.wait_ready(std::time::Duration::from_millis(2500));
             let logger =
                 opentune_logdef::GpsLogger::new(feed, session.params(), g.speed_param.as_deref())
@@ -238,7 +247,7 @@ pub fn run_log(
         }
         None => None,
     };
-    let started = session.start(diag).clone();
+    let started = session.start(link.as_mut()).clone();
     match started.mode {
         LogMode::Fast2c => {
             let dids: Vec<String> = started
@@ -273,23 +282,35 @@ pub fn run_log(
             }
         }
     }
+    if run.open_ended() {
+        eprintln!("logging until Ctrl-C");
+    }
 
-    let t0 = std::time::Instant::now();
-    let result = match out {
+    let stop = crate::livelog::ctrlc_flag();
+    let clock = SystemClock::new();
+    let opts = RunOptions {
+        limits,
+        policy,
+        stop: Some(&stop),
+        clock: &clock,
+    };
+    let mut reopen = || -> std::result::Result<Box<dyn RawDiag>, String> {
+        eprintln!("link: re-opening driver '{driver}'");
+        open_link().map_err(|e| format!("{e:#}"))
+    };
+    let report = match out {
         Some(path) => {
-            let mut f = std::fs::File::create(path)
+            let f = std::fs::File::create(path)
                 .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
-            session.run_csv_gps(diag, rounds, interval_ms, gps.as_mut(), &mut f)
+            let mut w = std::io::BufWriter::new(f);
+            session.run_csv_resilient(link, &mut reopen, &opts, gps.as_mut(), &mut w)
         }
         None => {
             let mut stdout = std::io::stdout().lock();
-            session.run_csv_gps(diag, rounds, interval_ms, gps.as_mut(), &mut stdout)
+            session.run_csv_resilient(link, &mut reopen, &opts, gps.as_mut(), &mut stdout)
         }
-    };
-    let elapsed = t0.elapsed().as_secs_f64();
-    // Always clear the dynamic DIDs, even if writing the CSV failed.
-    let st = session.stop(diag).clone();
-    result?;
+    }?;
+    let st = session.status().clone();
 
     if st.mode == LogMode::Polling && started.mode == LogMode::Fast2c {
         eprintln!(
@@ -298,6 +319,8 @@ pub fn run_log(
         );
     }
     let channels = session.params().len();
+    let rounds = report.rounds;
+    let elapsed = report.elapsed_ms as f64 / 1000.0;
     let rate = if elapsed > 0.0 {
         rounds as f64 / elapsed
     } else {
@@ -311,6 +334,9 @@ pub fn run_log(
         st.setup_requests,
         st.redefines
     );
+    if let Some(line) = crate::livelog::link_summary(&report) {
+        eprintln!("{line}");
+    }
     if let Some(g) = &gps {
         let (good, ticks) = g.good_ticks();
         eprintln!(

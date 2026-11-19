@@ -435,6 +435,8 @@ pub enum Command {
     /// default `mock` driver it runs offline. `--transport ssm` / `ssm-can`
     /// logs Subaru SSM parameters instead (batched A8 reads, chosen by the
     /// module's capability bitmap and ROM ID; `--driver ssmsim` simulates).
+    /// `--rounds 0` runs until Ctrl-C or `--duration`; `--reconnect` re-opens a
+    /// dropped adapter and resumes.
     Log {
         /// RomRaider-style `logger.xml` definition file.
         #[arg(long)]
@@ -448,12 +450,9 @@ pub enum Command {
         /// Per-request UDS timeout, milliseconds.
         #[arg(long, default_value_t = 1000)]
         timeout_ms: u64,
-        /// Number of polling rounds.
-        #[arg(long, default_value_t = 1)]
-        rounds: usize,
-        /// Sleep between rounds, milliseconds (0 = as fast as possible).
-        #[arg(long, default_value_t = 0)]
-        interval_ms: u64,
+        /// Rounds, duration, Ctrl-C and reconnect behaviour.
+        #[command(flatten)]
+        run: crate::livelog::RunArgs,
         /// Write the CSV here (otherwise to stdout).
         #[arg(long)]
         out: Option<PathBuf>,

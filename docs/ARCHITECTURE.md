@@ -111,7 +111,12 @@ The abstraction every app talks to and every driver implements.
   uses.
 - `diag` — `RawDiag` (one `request(&[u8]) -> Vec<u8>`) and `CoreDiag`, the
   adapter that wraps a driver's `DiagTransport` so the coding / adaptation /
-  service / auto-scan / logging engines run over any driver.
+  service / auto-scan / logging engines run over any driver; `OwnedDiag` /
+  `InterfaceDiag` own the transport (or driver) instead of borrowing it.
+- `resilient` — `run_resilient`: the live-log loop behind `log` and
+  `obd read` that survives a dropped link (dead-round detection, reopen hook
+  with backoff, give-up policy, marker events, injectable `Clock`). See
+  [`LIVE-LOGGING.md`](LIVE-LOGGING.md#running-over-your-own-transport).
 - `catalog` — the vehicle → ECU identification catalog behind `identify`.
 - `validate` — machine review of ECU definitions (`ecudefs validate`).
 - `provenance` — the `sources` / `license` / `evidence` block of contributed
@@ -148,6 +153,10 @@ The abstraction every app talks to and every driver implements.
   - `ssm` — Subaru SSM2: packets, echo check, init/capability decoding,
     batched `A8` reads; `SsmKLine` over a `KLineRaw`, `SsmClient` (writes
     refused unless armed). `ssmsim` — a simulated SSM module.
+  - `faultlink` — a simulated ISO-TP bus with fault injection (quiet bus,
+    foreign ids, several functional responders, `0x78`, dropped / re-opened
+    links) for testing anything over a `CanLink`; `tp20sim` is its TP2.0
+    counterpart.
 - `ecudef` — `EcuDef` and `load_dir`: data describing a known ECU (protocol,
   memory map, checksum id, seed/key id), loaded from JSON in
   [`ecudefs/`](../ecudefs/). See [`ECU-DEFS.md`](ECU-DEFS.md).
