@@ -6,6 +6,8 @@
 //!   return its channels, per-channel statistics and every detection note.
 //! - [`log_series`] — min/max-decimated plot data for a time window.
 //! - [`log_sample_at`] — exact values of every channel at one time (cursor).
+//! - [`log_replay`] — every row of the chosen channels on one time axis, for
+//!   playing the log back through the Drive view.
 //! - [`log_def_maps`] — the maps of a definition with their axis names/units,
 //!   so the panel can label and pre-select the X/Y channels.
 //! - [`log_map_hits`] — bin the log over a map's breakpoints: per-cell hits,
@@ -176,6 +178,40 @@ pub async fn log_sample_at(path: String, t: f64) -> Result<Value, String> {
             "name": c.name, "unit": c.unit, "value": v,
         })).collect::<Vec<_>>(),
     }))
+}
+
+/// Default row cap of [`log_replay`]: an hour at 50 Hz.
+const REPLAY_ROWS: usize = 180_000;
+
+/// Frames for replaying the log at `path` through the Drive view: one shared
+/// time axis and each of `channels` (every channel when empty or absent) per
+/// row, at most `max_rows` rows (longer logs keep the latest valid value of
+/// each block, see [`opentune_logview::series::replay`]). Offline.
+#[tauri::command]
+pub async fn log_replay(
+    path: String,
+    channels: Option<Vec<String>>,
+    max_rows: Option<usize>,
+) -> Result<Value, String> {
+    let log = load(&path, None)?;
+    replay_value(&path, &log, &channels.unwrap_or_default(), max_rows)
+}
+
+fn replay_value(
+    path: &str,
+    log: &Log,
+    channels: &[String],
+    max_rows: Option<usize>,
+) -> Result<Value, String> {
+    let names: Vec<&str> = channels.iter().map(String::as_str).collect();
+    let r =
+        series::replay(log, &names, max_rows.unwrap_or(REPLAY_ROWS)).map_err(|e| e.to_string())?;
+    let mut v = serde_json::to_value(&r).map_err(|e| e.to_string())?;
+    v["path"] = json!(path);
+    v["time_label"] = json!(time_label(log));
+    v["median_dt"] = json!(log.median_dt() * r.stride as f64);
+    v["epoch_start"] = json!(log.epoch_start);
+    Ok(v)
 }
 
 fn find_def(
@@ -576,6 +612,25 @@ mod tests {
         0.2,54,1260,30\n\
         0.3,130,4500,50\n\
         0.4,200,5000,52\n";
+
+    #[test]
+    fn replay_frames_share_one_time_axis() {
+        let log = log_of(LOG);
+        let v = replay_value("x.csv", &log, &["iq".into()], None).unwrap();
+        assert_eq!(v["path"], "x.csv");
+        assert_eq!(v["rows"], 5);
+        assert_eq!(v["stride"], 1);
+        assert_eq!(v["time_label"], "s");
+        assert_eq!(v["t"], json!([0.0, 0.1, 0.2, 0.3, 0.4]));
+        assert_eq!(v["series"][0]["name"], "iq");
+        assert_eq!(v["series"][0]["unit"], "mg/stroke");
+        assert_eq!(v["series"][0]["v"], json!([5.0, 6.0, 30.0, 50.0, 52.0]));
+        let all = replay_value("x.csv", &log, &[], Some(2)).unwrap();
+        assert_eq!(all["series"].as_array().unwrap().len(), 3);
+        assert_eq!(all["stride"], 3);
+        assert_eq!(all["t"], json!([0.2, 0.4]));
+        assert!(replay_value("x.csv", &log, &["nope".into()], None).is_err());
+    }
 
     #[test]
     fn edc16u34_smoke_limiter_overlay() {

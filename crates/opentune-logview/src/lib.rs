@@ -9,7 +9,8 @@
 //!   detection that was *inferred* rather than read from the file is reported
 //!   in [`Log::notes`].
 //! - [`series`] — per-channel statistics and min/max **decimation** so a long
-//!   log plots in a fixed number of pixel buckets without losing peaks.
+//!   log plots in a fixed number of pixel buckets without losing peaks, and
+//!   [`series::replay`] frames for playing a log back through a live view.
 //! - [`overlay`] — bin the log over a calibration map's breakpoints (nearest
 //!   cell or bilinear weights) into per-cell hit counts, time-in-cell and the
 //!   value range of a chosen channel.
@@ -27,7 +28,7 @@ pub mod units;
 
 pub use csv::{parse, parse_file, Channel, Log, LogFormat, ParseOptions, TimeSource, TimeUnit};
 pub use overlay::{map_hits, BinMode, MapHits, OverlayInput};
-pub use series::{sample_at, series, stats, ChannelStats, Series, SeriesSet};
+pub use series::{replay, sample_at, series, stats, ChannelStats, Replay, Series, SeriesSet};
 pub use units::{check as check_units, UnitCheck};
 
 /// Errors from opening or querying a log.

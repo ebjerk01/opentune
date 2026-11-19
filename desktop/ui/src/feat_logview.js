@@ -58,6 +58,7 @@
       <div class="row">
         <button class="btn primary" id="lvOpen" type="button">Open log…</button>
         <span class="muted small mono" id="lvPathHint">no log opened</span>
+        <button class="btn sm" id="lvDrive" type="button" disabled title="Play this log back in the Drive view">▶ Drive view</button>
         <label for="lvUnit">Time unit</label>
         <select class="inp sm" id="lvUnit" title="Override the detected time unit">
           <option value="auto">auto</option><option value="s">seconds</option><option value="ms">milliseconds</option>
@@ -188,6 +189,7 @@
       $("lvPlotCard").hidden = false;
       $("lvStatsCard").hidden = false;
       $("lvOvCard").hidden = false;
+      $("lvDrive").disabled = !window.OTDriveView;
       V.hits = null;
       $("lvOvResult").innerHTML = "";
       if (!V.defs.length) loadDefs();
@@ -639,6 +641,7 @@
     if (seg) seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.m === v));
   }
   $("lvOpen").addEventListener("click", pickLog);
+  $("lvDrive").addEventListener("click", () => { if (V.path && window.OTDriveView) window.OTDriveView.openLog(V.path); });
   $("lvUnit").addEventListener("change", () => openLog(false));
   const layoutSeg = sec.querySelector('#lvPlotCard .seg');
   segOn(layoutSeg, V.mode);

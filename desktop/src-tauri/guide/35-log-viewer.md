@@ -1,5 +1,8 @@
 # Log viewer
 
+> **▶ Drive view** next to the file name plays the opened log back through the
+> Drive view's large tiles (1×–8×, scrub bar), offline.
+
 Open a CSV datalog, plot its channels against time, and overlay it on a
 calibration map to see which cells the engine actually used. This closes the
 tune loop: **log → see the cells that were used → edit them in Maps → compare**.

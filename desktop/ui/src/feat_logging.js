@@ -239,6 +239,7 @@
         applySamples(res);
       } catch (e) {
         status("poll error: " + msg(e), true);
+        if (window.OTDrive) window.OTDrive.feed.emit({ type: "error", source: "livelog", message: msg(e), busy: /busy/i.test(msg(e)) });
       } finally {
         inFlight = false;
       }
@@ -291,6 +292,7 @@
         showMode(r.status, r.rate);
       } catch (e) {
         const m = msg(e);
+        if (window.OTDrive) window.OTDrive.feed.emit({ type: "error", source: "livelog", message: m, busy: /busy/i.test(m) });
         if (/ended|no live log session/.test(m)) stop(null, m);
         else status("tick error: " + m, true);
       } finally {
@@ -304,6 +306,7 @@
 
   async function stop(why, endedMsg) {
     const wasFast = S.fast;
+    if (S.timer && window.OTDrive) window.OTDrive.feed.emit({ type: "stop", source: "livelog" });
     if (S.timer) {
       clearInterval(S.timer);
       S.timer = null;
@@ -389,9 +392,14 @@
       S.rows.push(liveLogRow(ts, s));
     });
     // GPS card open: hand it the vehicle speed and log its latest channels.
+    const gps = window.OTGps && window.OTGps.isOpen() ? window.OTGps.samples() : [];
     if (window.OTGps && window.OTGps.isOpen()) {
       window.OTGps.setVehicleKmh(vehicleSpeedKmh(samples));
-      window.OTGps.samples().forEach((g) => S.rows.push(liveLogRow(ts, g)));
+      gps.forEach((g) => S.rows.push(liveLogRow(ts, g)));
+    }
+    // Publish the tick for the Drive view (no second adapter path).
+    if (window.OTDrive) {
+      window.OTDrive.feed.emit({ type: "frame", source: "livelog", tMs: ts, values: window.OTDrive.samplesFrame(samples.concat(gps)) });
     }
     status(`live — ${S.started} tick(s), ${S.rows.length} row(s)`);
   }
