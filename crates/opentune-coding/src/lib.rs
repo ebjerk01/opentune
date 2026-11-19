@@ -38,6 +38,8 @@
 #![warn(missing_docs)]
 
 use serde::{Deserialize, Serialize};
+pub mod asbuilt;
+pub mod ccf;
 pub mod egs52;
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,9 @@ pub enum CodingError {
         /// Block (DID) that failed to verify.
         did: u16,
     },
+    /// An imported coding file (Ford As-Built line or `.ab` XML, CCF/CCC
+    /// descriptor XML) is malformed or fails its own integrity check.
+    Format(String),
 }
 
 impl std::fmt::Display for CodingError {
@@ -127,6 +132,7 @@ impl std::fmt::Display for CodingError {
             CodingError::VerifyMismatch { did } => {
                 write!(f, "read-back verify mismatch for block 0x{did:04X}")
             }
+            CodingError::Format(s) => write!(f, "coding file format: {s}"),
         }
     }
 }
@@ -394,6 +400,22 @@ pub fn write_field(data: &mut [u8], byte: usize, bit: u8, len: u8, val: u64) -> 
         }
     }
     Ok(())
+}
+
+/// Convert a contiguous bit `mask` (as label sources write fields, e.g. `0x30`)
+/// into the engine's `(bit, len)`: `bit` = the mask's lowest set bit, `len` = its
+/// width. `None` for a zero or non-contiguous mask (e.g. `0x05`), which the
+/// bit-field engine cannot express as one field.
+pub fn mask_field(mask: u64) -> Option<(u8, u8)> {
+    if mask == 0 {
+        return None;
+    }
+    let bit = mask.trailing_zeros();
+    let shifted = mask >> bit;
+    if shifted & shifted.wrapping_add(1) != 0 {
+        return None; // a hole in the mask
+    }
+    Some((bit as u8, shifted.count_ones() as u8))
 }
 
 /// A decoded parameter: its raw value and, when it maps to an option, its label.
@@ -934,6 +956,17 @@ mod tests {
             write_field(&mut d, 0, 0, 2, 4),
             Err(CodingError::InvalidValue { .. })
         ));
+    }
+
+    #[test]
+    fn mask_field_contiguous_only() {
+        assert_eq!(mask_field(0x01), Some((0, 1)));
+        assert_eq!(mask_field(0x30), Some((4, 2)));
+        assert_eq!(mask_field(0xF0), Some((4, 4)));
+        assert_eq!(mask_field(0xFF), Some((0, 8)));
+        assert_eq!(mask_field(u64::MAX), Some((0, 64)));
+        assert_eq!(mask_field(0), None);
+        assert_eq!(mask_field(0x05), None); // hole
     }
 
     #[test]
