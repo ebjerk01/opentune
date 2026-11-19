@@ -1,7 +1,9 @@
 // OpenTune — ECU / TCU database.
 // Searchable reference of control units: CPU, flash, how to read them (OBD /
 // bench / boot), checksum family, vehicles, and bench pinouts with a confidence
-// level. Offline. Backend: db_list, db_get.
+// level, and each unit's access profile (OBD / bench / boot / security, each
+// with its own confidence; docs/UNIT-ACCESS-PROFILE.md). Offline. Backend:
+// db_list, db_get.
 "use strict";
 (function () {
   const invoke = (c, a) => window.__TAURI__.core.invoke(c, a);
@@ -76,6 +78,45 @@
 
   function kv(k, v) { return v == null || v === "" || (Array.isArray(v) && !v.length) ? "" : `<div class="k">${k}</div><div class="v">${esc(Array.isArray(v) ? v.join(", ") : v)}</div>`; }
 
+  // --- Access profile -------------------------------------------------------
+  const ENTRY = { "connector-pin": "connector pin", "board-pad": "board pad", "bdm-jtag": "BDM / JTAG header", none: "none", unknown: "unknown" };
+  const ACTION = { "pull-to-gnd": "pull to ground", "pull-to-vcc": "pull to Vcc", bridge: "bridge" };
+  const NEED = { required: "required", "not-required": "not required", unknown: "unknown" };
+  const confPill = (c) => { const x = CONF[c] || CONF.unverified; return `<span class="pill ${x[0]}" title="${esc(x[1])}">${esc(c || "unverified")}</span>`; };
+  // Source refs are indices into u.sources; the Sources card numbers from 1.
+  const refs = (s) => (s && s.length ? `<p class="small muted">Sources: ${s.map((i) => `[${Number(i) + 1}]`).join(" ")}</p>` : "");
+  const where = (loc) => {
+    const s = String(loc || "");
+    if (s.startsWith("connector:")) return `Connector pin ${esc(s.slice(10))}`;
+    if (s.startsWith("pcb:")) return `Board: ${esc(s.slice(4))}`;
+    return esc(s);
+  };
+  function part(title, conf, body) {
+    return `<div class="db-access-part"><div class="card-title-row"><h3 class="db-conn">${title}</h3>${confPill(conf)}</div>${body}</div>`;
+  }
+  function accessHtml(u) {
+    const a = u && u.access;
+    if (!a) return `<div class="card"><h2>Access</h2><p class="muted small">No access profile for this unit yet (OBD / bench / boot / security). See docs/UNIT-ACCESS-PROFILE.md.</p></div>`;
+    const o = a.obd || {}, be = a.bench || {}, bo = a.boot || {}, se = a.security || {};
+    const reach = bo.reachable === "open-case" ? '<span class="pill bad">open case</span>'
+      : bo.reachable === "external-connector" ? '<span class="pill ok">external connector</span>' : '<span class="pill neutral">reach unknown</span>';
+    const points = (bo.points || []).map((p) => `<tr${p.confidence === "unverified" ? ' class="pin-unv"' : ""}>
+        <td>${esc(p.name)}</td><td>${where(p.location)}</td>
+        <td>${esc(ACTION[p.action] || p.action)}${p.resistor_ohms ? ` (${esc(p.resistor_ohms)} Ω)` : ""}</td>
+        <td>${confPill(p.confidence)}${p.confidence === "unverified" ? ' <span class="small">confirm by continuity</span>' : ""}</td>
+        <td class="small muted">${esc(p.note || "")}</td></tr>`).join("");
+    return `<div class="card db-access"><h2>Access</h2>
+      ${part("OBD port", o.confidence, `<div class="meta-grid">${kv("Mode", o.mode)}${kv("Protocol", o.protocol)}</div>${o.notes ? `<p class="small">${esc(o.notes)}</p>` : ""}${refs(o.sources)}`)}
+      ${part("Bench", be.confidence, `<div class="meta-grid">${kv("Possible", be.possible ? "yes" : "no")}</div>${be.how ? `<p class="small">${esc(be.how)}</p>` : ""}${refs(be.sources)}`)}
+      ${part("Boot mode", bo.confidence, `<div class="meta-grid">${kv("Possible", bo.possible ? "yes" : "no")}${kv("Entry", ENTRY[bo.entry] || bo.entry)}<div class="k">Reach</div><div class="v">${reach}</div>${kv("Boot mode", bo.mcu_mode)}${kv("Reset timing", bo.reset_timing)}</div>
+        ${bo.reachable === "open-case" ? '<div class="banner bad">The boot points are on the board: the case has to be opened. Take ESD precautions, and confirm every point by continuity before strapping it.</div>' : ""}
+        ${points ? `<div class="db-tw"><table class="tbl db-boot-points"><thead><tr><th>Point</th><th>Where</th><th>Action</th><th>Confidence</th><th>Note</th></tr></thead><tbody>${points}</tbody></table></div>` : ""}
+        ${bo.notes ? `<p class="small">${esc(bo.notes)}</p>` : ""}${refs(bo.sources)}`)}
+      ${part("Security", se.confidence, `<div class="meta-grid">${kv("Full read over diagnostics", NEED[se.diag_read] || se.diag_read)}${kv("Flash write", NEED[se.flash_write] || se.flash_write)}</div>${se.notes ? `<p class="small">${esc(se.notes)}</p>` : ""}${refs(se.sources)}`)}
+    </div>`;
+  }
+  window.OTDbAccess = { html: accessHtml };
+
   function pinout(u) {
     const conns = (u.connectors || []).filter((c) => c.pins && c.pins.length);
     const conf = CONF[u.pinout_confidence] || CONF.unverified;
@@ -105,12 +146,12 @@
     try { u = await invoke("db_get", { id }); } catch (e) { $("dbDetail").innerHTML = `<div class="banner bad">${esc(e)}</div>`; return; }
     const m = u.read_methods || {};
     const vehicles = (u.vehicles || []).map((v) => `<span class="ph-need">${esc(typeof v === "string" ? v : [v.make, v.model, v.engine, v.years ? "(" + v.years + ")" : ""].filter(Boolean).join(" "))}</span>`).join("");
-    const sources = (u.sources || []).map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("");
+    const sources = (u.sources || []).map((s, i) => `<li value="${i + 1}"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("");
     $("dbDetail").innerHTML = `
       <div class="card">
         <div class="card-title-row"><h2 class="db-title">${esc(u.name)}</h2><span class="pill neutral">${esc(KIND[u.kind] || u.kind)}</span></div>
         <div class="meta-grid">
-          ${kv("Maker", u.maker)}${kv("Family", u.family)}${kv("CPU", u.cpu)}${kv("Flash", u.flash_kib ? u.flash_kib + " KiB" : null)}${kv("EEPROM", u.eeprom)}
+          ${kv("Maker", u.maker)}${kv("Family", u.family)}${kv("CPU", u.cpu)}${kv("Flash", u.flash_kib ? u.flash_kib + " KiB" : null)}${kv("Flash note", u.flash_note)}${kv("EEPROM", u.eeprom)}
           ${kv("Bus", u.bus)}${kv("Protocols", u.protocols)}${kv("Part numbers", u.part_number_examples)}
           ${u.checksum ? `<div class="k">Checksum</div><div class="v">${esc(u.checksum)} <span class="pill ok">supported</span></div>` : kv("Checksum", "not supported in OpenTune yet")}
           ${u.ecudef ? `<div class="k">Definition</div><div class="v">${esc(u.ecudef)}</div>` : ""}
@@ -124,9 +165,10 @@
         </div>
         ${m.notes ? `<p class="small muted">${esc(m.notes)}</p>` : ""}
       </div>
+      ${accessHtml(u)}
       ${vehicles ? `<div class="card"><h2>Vehicles</h2><div class="ph-needs">${vehicles}</div></div>` : ""}
       ${pinout(u)}
-      ${sources ? `<div class="card"><h2>Sources</h2><ul class="db-src small">${sources}</ul></div>` : ""}`;
+      ${sources ? `<div class="card"><h2>Sources</h2><ol class="db-src small">${sources}</ol></div>` : ""}`;
   }
 
   let t = null;

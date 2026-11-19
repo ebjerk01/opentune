@@ -6,9 +6,11 @@
 //!
 //! * [`db_list`] — `{kind?, q?}` → compact rows (`id, kind, maker, family,
 //!   name, cpu, flash_kib, bus, read_methods, checksum, ecudef, vehicle_count,
-//!   has_pinout, pinout_confidence`). `q` matches name / family / maker / part
-//!   numbers / vehicles, case-insensitively.
-//! * [`db_get`] — `{id}` → the unit JSON exactly as stored.
+//!   has_pinout, pinout_confidence, has_access`). `q` matches name / family /
+//!   maker / part numbers / vehicles, case-insensitively.
+//! * [`db_get`] — `{id}` → the unit JSON exactly as stored, including the
+//!   optional `access` profile the panel's Access card renders
+//!   (docs/UNIT-ACCESS-PROFILE.md).
 //!
 //! The directory is small (tens of files), so it is re-read per call: edits to
 //! the JSON show up without restarting the app.
@@ -88,6 +90,7 @@ mod tests {
             "vehicle_count",
             "has_pinout",
             "pinout_confidence",
+            "has_access",
         ] {
             assert!(v.get(k).is_some(), "db_list row lacks '{k}'");
         }
@@ -111,5 +114,8 @@ mod tests {
         assert_eq!(u["id"], "bosch-edc17cp14-vag");
         assert!(u["connectors"].is_array());
         assert!(get_impl(&db, "nope").is_err());
+        let a = get_impl(&db, "bosch-edc15c6-mercedes").unwrap();
+        assert_eq!(a["access"]["boot"]["reachable"], "open-case");
+        assert!(a["access"]["boot"]["points"].is_array());
     }
 }
