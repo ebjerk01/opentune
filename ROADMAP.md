@@ -164,6 +164,7 @@ All `[ ]` = planned.
 ### Flash-container decode
 - [x] **FRF / ODX / ODX-F / SGO** unpack (`opentune-container`): FRF rolling-XOR → ZIP → ODX/SGO; LZSS10 / LZSS-DQ / ZF-8HP LZZ decompress; AES-CBC / repeating-XOR / SGO family-cipher block crypto — **caller supplies every key, none bundled** (`frf.key` legal caution respected). Refs: **lsdlsd88/TCU-FRF-SGO-UNPACKER** (MIT), **vag-tcu-tools** (MIT), **bri3d/VW_Flash** (BSD).
 - [x] **VBF (Ford / Volvo / Mazda Versatile Binary Format)** (`opentune-container::vbf`) — plaintext module-flash container: comment-aware header parse + typed fields, binary blocks, **per-block CRC-16/CCITT-FALSE + CRC-32 `file_checksum` verify** (const tables, standard check-vectors). Validated against **33 real Ford module VBFs** (1–6 blocks each). Pairs with the ELM327/Ford suite work. Key-free.
+- [~] **BMW PSdZData SWE containers** (`opentune-container::bmw`, read-only, *synthetic-tested*) — BTLD/SWFL/SWFK/IBAD `.bin` + `.xml` pairs: segment table, stored / UCL NRV2B (clean-room) / gzip segments, flat image (`container unpack --flat`), `container identify`. Signature + CRC16 reported, not verified; CAFD refused; module flashing refuses BMW segments. Needs a real SWE pair to move to real-image-tested. See `docs/BMW-CONTAINERS.md`.
 - [x] **a2l2xdf** converter path (A2L→XDF, with a loss report). Ref: VW_Flash.
 - [x] **WinOLS `.ols`** import (`opentune-ols`: ROM + maps; CLI `import-ols`). Refs: ZedSuite, **TheFlashBold/tune-editor** (GPL-3).
 
@@ -258,6 +259,9 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 4. ✅ **Desktop reconnect** — the desktop fast-logging session reconnects through the adapter hub, and an all-NRC tick counts as alive.
 5. ✅ **Desktop UI** — sidebar and content scroll independently, collapsible sidebar groups, 60 fps scrolling in WebKitGTK (blur-free card shadows).
 6. **EGS52 (Mercedes 722.6) checksums** — groundwork landed: coding-record CRC-16 (unconfirmed), `egs52` bootstrap-read preset (bus registers unknown, read refused until supplied) and an offline checksum-search tool (`tools/checksum-search/`). The flash checksum needs own raw EGS52 reads (see *Waiting on data*).
+7. ✅ **Evidence review** — new `example` level (placeholder definitions never identify a real unit; fixes the EDC16 example shadowing EDC16U34), Haldex Gen4 ecudef `synthetic-tested`, the 1.6 TDI identity definition renamed `siemens-pcr21-vag16tdi-ident`.
+8. ✅ **KWP basic settings without login** — tried without login first; login only on NRC 0x33 (untested on a car).
+9. ✅ **BMW SWE container decoder** (read-only, public sources, synthetic-tested) — next: a real SWE pair; CRC16/signature parameters are not public.
 
 **Waiting on data**
 - **DQ250 02E measuring-group meanings** — need a real capture (raw groups + what the car was doing); `opentune dsg groups` already reads them raw.
