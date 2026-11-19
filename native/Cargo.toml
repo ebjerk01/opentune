@@ -1,0 +1,26 @@
+[package]
+name = "opentune-native"
+# The native frontend has its own version line until it replaces the webview
+# app (planned as 1.0.0-beta); do not tie it to the Tauri app's version yet.
+version = "0.1.0"
+description = "OpenTune native desktop frontend (egui/eframe on wgpu) - prototype"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+# Not part of the root workspace (like desktop/src-tauri): its GUI dependency
+# tree and lockfile stay out of the core workspace and its CI.
+[workspace]
+
+[[bin]]
+name = "opentune-native"
+path = "src/main.rs"
+
+[dependencies]
+# The OpenTune core, called in-process (no IPC bridge).
+opentune-core = { path = "../crates/opentune-core" }
+opentune-checksum = { path = "../crates/opentune-checksum" }
+opentune-scan = { path = "../crates/opentune-scan" }
+
+# GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
+rfd = "0.18"
