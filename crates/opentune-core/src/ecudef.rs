@@ -12,6 +12,11 @@ pub struct EcuDef {
     pub family: String,
     #[serde(default)]
     pub notes: String,
+    /// Where the definition's facts come from, the licence of its data and its
+    /// validation state. Optional for older files (a validation warning);
+    /// required for contributions (`ecudefs validate --require-provenance`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<crate::provenance::Provenance>,
     pub protocol: Protocol,
     pub diag_layer: DiagLayer,
     pub bitrate: u32,

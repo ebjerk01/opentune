@@ -52,7 +52,12 @@ pub struct ValidationIssue {
 }
 
 impl ValidationIssue {
-    fn error(code: &'static str, location: impl Into<String>, message: impl Into<String>) -> Self {
+    /// A [`Severity::Error`] issue.
+    pub fn error(
+        code: &'static str,
+        location: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             severity: Severity::Error,
             code,
@@ -61,7 +66,12 @@ impl ValidationIssue {
         }
     }
 
-    fn warn(code: &'static str, location: impl Into<String>, message: impl Into<String>) -> Self {
+    /// A [`Severity::Warn`] issue.
+    pub fn warn(
+        code: &'static str,
+        location: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             severity: Severity::Warn,
             code,
@@ -342,7 +352,20 @@ impl EcuDef {
         self.check_maps(&mut out);
         self.check_scope(&mut out);
         self.check_blobs(&mut out);
+        self.check_provenance(&mut out);
         out
+    }
+
+    fn check_provenance(&self, out: &mut Vec<ValidationIssue>) {
+        match &self.provenance {
+            None => out.push(ValidationIssue::warn(
+                "provenance.missing",
+                "provenance",
+                "no provenance block: add \"provenance\" with sources, license (SPDX) and evidence \
+                 (validation state); required for new contributions, see docs/CONTRIBUTING-ECUDEFS.md",
+            )),
+            Some(p) => out.extend(p.check("provenance")),
+        }
     }
 
     fn check_required(&self, out: &mut Vec<ValidationIssue>) {
@@ -922,6 +945,43 @@ mod tests {
             !has_errors(&issues),
             "clean def should have no errors, got {issues:?}"
         );
+    }
+
+    #[test]
+    fn missing_provenance_warns_until_required() {
+        let d = base_def();
+        let mut issues = d.validate();
+        let miss = issues
+            .iter()
+            .find(|i| i.code == "provenance.missing")
+            .expect("missing provenance is reported");
+        assert_eq!(miss.severity, Severity::Warn);
+        crate::provenance::require(&mut issues);
+        assert!(has_errors(&issues));
+    }
+
+    #[test]
+    fn provenance_block_is_checked() {
+        let mut d = base_def();
+        d.provenance = Some(crate::provenance::Provenance {
+            sources: vec!["own stock read".into()],
+            license: "GPL-3.0-or-later".into(),
+            evidence: "real-image-tested".into(),
+        });
+        let issues = d.validate();
+        assert!(!codes(&issues).iter().any(|c| c.starts_with("provenance.")));
+        d.provenance.as_mut().unwrap().evidence = "tested a bit".into();
+        d.provenance.as_mut().unwrap().license = "proprietary".into();
+        let issues = d.validate();
+        let c = codes(&issues);
+        assert!(c.contains(&"provenance.evidence_unknown"));
+        assert!(c.contains(&"provenance.license_forbidden"));
+        // The block round-trips through JSON and is omitted when absent.
+        let json = serde_json::to_string(&d).unwrap();
+        assert!(json.contains("\"provenance\""));
+        assert!(!serde_json::to_string(&base_def())
+            .unwrap()
+            .contains("provenance"));
     }
 
     #[test]
