@@ -21,7 +21,7 @@ test("EDC15C6: both disputes are dashed, agreed pins show 2 sources", () => {
   assert.equal((s.match(/<path class="pd-w s-[a-z0-9_]+ pd-dash"/g) || []).length, 4);
   for (const lab of ["1-5", "1-6", "1-7", "1-8"]) assert.ok(s.includes(`<title>${lab} — disputed, confirm by continuity</title>`), lab);
   // KL30 2-13, KL15 1-1 and K-line 3-28 agree across two sources.
-  assert.equal((s.match(/2 src ✓/g) || []).length, 3);
+  assert.equal((s.match(/sources agree<\/title>2 src ✓/g) || []).length, 3);
   for (const t of ["+12 V permanent (KL30)", "+12 V ignition (KL15)", "Ground (−)", "K-line"]) assert.ok(s.includes(t), t);
   assert.ok(s.includes("confirm by continuity before wiring"));
   assert.ok(s.includes("not that this unit was measured"));
