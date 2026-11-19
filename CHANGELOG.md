@@ -12,6 +12,22 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
+  BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
+  `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and
+  the Ident / SignatureTable / Checksum metadata. Signature and CRC16 are reported
+  **unverified**; CAFD `.caf`, undocumented compression states and ambiguous
+  segment lengths are refused, not guessed. New `container identify` and
+  `container unpack --flat` (flat image for any container format). Built from
+  public sources only ([BMW-CONTAINERS.md](docs/BMW-CONTAINERS.md)); tested on
+  synthetic fixtures only, not yet on a real BMW file.
+- Clean-room UCL NRV2B decompressor (`opentune_container::nrv2b`), checked
+  against the public `uclcli` test vector.
+- Evidence level **`example`** (below `implemented`) for placeholder definitions:
+  never used to identify a real unit, labelled "Example — placeholder data".
+- Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
+  `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
+  `implemented` evidence.
 - **First community definition pack, `community-drivetrain`**: three drivetrain
   controller definitions not in `ctrldefs/`, transcribed from opendbc (MIT) DBCs
   and firmware-query fingerprints: Hyundai / Kia TCU (`TCU11`-`TCU13`, UDS
@@ -35,41 +51,6 @@ section (alpha/bench builds) until they are vehicle-tested.
   No Ford labels ship: no openly licensed Ford label source was found.
   Synthetic-tested only (udssim, vcar and mock-store round trips with invented
   coding bytes); never run against a real module.
-- **Seed/key definitions loader (UnlockECU format), off by default**: new crate
-  `opentune-seedkey-loader` reads the *user's own* UnlockECU-format definitions
-  file and answers `--seedkey unlockecu:<EcuName or alias>` through the existing
-  `SeedKey` hook, choosing the definition by the requested access level. Loads
-  only when both a file and a provider are configured (CLI global flags
-  `--seedkey-defs` + `--seedkey-provider`, `CliConfig::seedkey_loader`, or
-  `DesktopConfig::seedkey_loader` on alpha / bench channels only). Providers:
-  the user's **external provider program** (absolute path, no shell, one JSON
-  request on stdin / one JSON response on stdout, 5 s timeout, 64 KiB output
-  cap) or `builtin:sa2` (`VolkswagenSA2` entries on the SA2 VM over their own
-  `InstructionTape`). Strict validation (file size, lengths, level range,
-  parameter types; bad entries rejected and reported), and a hard
-  **immobiliser / anti-theft refuse-list** (EZS, ESL, ELV, WFS, immo/immobili*,
-  keyless/KESSY, entriegeln, unlock, Wegfahrsperre, theft) applied even to
-  user-supplied files. Keys and parameter values are never printed. New
-  `opentune seedkey defs <FILE>` checks a file without running anything.
-  OpenTune ships **no** provider and **no** definition
-  ([SEEDKEY-LOADER.md](docs/SEEDKEY-LOADER.md)); synthetic-tested only (a
-  synthetic provider program and the UDS simulator's SecurityAccess).
-- **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
-  BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
-  `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and
-  the Ident / SignatureTable / Checksum metadata. Signature and CRC16 are reported
-  **unverified**; CAFD `.caf`, undocumented compression states and ambiguous
-  segment lengths are refused, not guessed. New `container identify` and
-  `container unpack --flat` (flat image for any container format). Built from
-  public sources only ([BMW-CONTAINERS.md](docs/BMW-CONTAINERS.md)); tested on
-  synthetic fixtures only, not yet on a real BMW file.
-- Clean-room UCL NRV2B decompressor (`opentune_container::nrv2b`), checked
-  against the public `uclcli` test vector.
-- Evidence level **`example`** (below `implemented`) for placeholder definitions:
-  never used to identify a real unit, labelled "Example — placeholder data".
-- Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
-  `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
-  `implemented` evidence.
 - **RomRaider logger definitions import / export**: `import-romraider-logger
   <logger.xml> [--protocol SSM|OBD] [--ecu <ROM id>] -o <logdef.json>` turns a
   RomRaider `logger.xml` into an OpenTune JSON logger definition with a
@@ -91,11 +72,27 @@ section (alpha/bench builds) until they are vehicle-tested.
 - `LogDef::validate` (duplicate ids, protocol/addressing mismatches, bits outside
   the read, unresolved or cyclic references); `packs validate` now runs it on
   pack loggers. `opentune log --def` reads JSON logger definitions as well as XML.
+- **Seed/key definitions loader (UnlockECU format), off by default**: new crate
+  `opentune-seedkey-loader` reads the *user's own* UnlockECU-format definitions
+  file and answers `--seedkey unlockecu:<EcuName or alias>` through the existing
+  `SeedKey` hook, choosing the definition by the requested access level. Loads
+  only when both a file and a provider are configured (CLI global flags
+  `--seedkey-defs` + `--seedkey-provider`, `CliConfig::seedkey_loader`, or
+  `DesktopConfig::seedkey_loader` on alpha / bench channels only). Providers:
+  the user's **external provider program** (absolute path, no shell, one JSON
+  request on stdin / one JSON response on stdout, 5 s timeout, 64 KiB output
+  cap) or `builtin:sa2` (`VolkswagenSA2` entries on the SA2 VM over their own
+  `InstructionTape`). Strict validation (file size, lengths, level range,
+  parameter types; bad entries rejected and reported), and a hard
+  **immobiliser / anti-theft refuse-list** (EZS, ESL, ELV, WFS, immo/immobili*,
+  keyless/KESSY, entriegeln, unlock, Wegfahrsperre, theft) applied even to
+  user-supplied files. Keys and parameter values are never printed. New
+  `opentune seedkey defs <FILE>` checks a file without running anything.
+  OpenTune ships **no** provider and **no** definition
+  ([SEEDKEY-LOADER.md](docs/SEEDKEY-LOADER.md)); synthetic-tested only (a
+  synthetic provider program and the UDS simulator's SecurityAccess).
 
 ### Changed
-- **Host API: `CliConfig` and `DesktopConfig` gained a `seedkey_loader` field**
-  (default `None`). Embedders that build either with a full struct literal
-  must add `seedkey_loader: None` (or use `..Default::default()`).
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
   part number stays a match key); anything referencing the old id (scripts, packs,
@@ -113,8 +110,14 @@ section (alpha/bench builds) until they are vehicle-tested.
   needs a login for basic settings" and starts nothing. NRC 0x22 is not treated as
   a login request. The confirmation gate and Bench tier are unchanged, and
   adaptation test / save still need a login. **Untested on a real car.**
+- **Host API: `CliConfig` and `DesktopConfig` gained a `seedkey_loader` field**
+  (default `None`). Embedders that build either with a full struct literal
+  must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
+  EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
+  Example definitions are now skipped by identification.
 - Logger definitions: a real RomRaider `logger.xml` (with its `<!DOCTYPE>`
   header) failed to parse; an `x` inside a function name or parameter id was
   upper-cased by the equation normalizer; a bit on an OBD PID / UDS DID was
@@ -122,9 +125,6 @@ section (alpha/bench builds) until they are vehicle-tested.
   length>` is now the value width, so one byte of a two-value PID is no longer
   read as both; `<ecuparam>` addresses now honour `bit` and one-address-per-byte
   fragments; DS2 / Consult parameters are no longer read as plain memory.
-- The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
-  EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
-  Example definitions are now skipped by identification.
 
 ## [0.7.0] - 2026-11-19
 

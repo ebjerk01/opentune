@@ -43,7 +43,9 @@ are treated as scaffolding and skipped, and so are pack *directories* starting w
 
 The repository ships starter packs in [`packs/`](../packs/) (listed with their
 sources in [`packs/README.md`](../packs/README.md)): `generic-obd2`,
-`iso14229-identification` and `vag-modules`. The desktop app bundles that folder
+`iso14229-identification`, `vag-modules`, `vcar-demo` (definitions for the
+`vcar` virtual car's demo profile), the first community pack
+`community-drivetrain` and the coding-label pack `vag-mib2-coding`. The desktop app bundles that folder
 as a resource.
 
 In the desktop app, the Coding, Adaptation, Service fn, Auto-scan and Live log
