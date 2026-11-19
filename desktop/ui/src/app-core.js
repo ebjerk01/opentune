@@ -98,9 +98,19 @@ function onPanelFirstShow(name, fn) {
   (panelFirstShow[name] = panelFirstShow[name] || []).push(fn);
 }
 window.onPanelFirstShow = onPanelFirstShow;
+// #main is the content pane's own scroll container (the sidebar scrolls on its
+// own): each panel keeps its scroll position across switches.
+const panelScroll = {};
+let currentPanel = null;
 function showPanel(name) {
+  const main = document.getElementById("main");
+  const switching = currentPanel !== name;
+  if (main && switching && currentPanel) panelScroll[currentPanel] = main.scrollTop;
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
   document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.panel === name));
+  if (main && switching) main.scrollTop = panelScroll[name] || 0;
+  currentPanel = name;
+  if (window.OTNav && window.OTNav.activated) window.OTNav.activated(name);
   if (!panelShown.has(name)) {
     panelShown.add(name);
     (panelFirstShow[name] || []).splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
