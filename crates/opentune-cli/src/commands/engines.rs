@@ -187,10 +187,19 @@ pub fn run_log(
     fast: opentune_logdef::FastLogConfig,
     gps: Option<LogGps>,
     ssm: &crate::ssm_log::SsmLogArgs,
+    trigger: &crate::livelog::TriggerArgs,
 ) -> Result<()> {
     use opentune_core::resilient::{RunOptions, SystemClock};
     use opentune_core::{InterfaceDiag, RawDiag};
     use opentune_logdef::{LiveSession, LogMode};
+
+    let triggers = trigger.load()?;
+    let split = trigger.split || triggers.as_ref().is_some_and(|t| t.splits());
+    if split && out.is_none() {
+        return Err(anyhow!(
+            "--split (or a split trigger) needs --out: the windows go to <out>-001.csv, …"
+        ));
+    }
 
     let raw = std::fs::read(def_path)
         .with_context(|| format!("read logger def {}", def_path.display()))?;
@@ -247,6 +256,13 @@ pub fn run_log(
         }
         None => None,
     };
+    if let Some(set) = &triggers {
+        let mut ids: Vec<&str> = session.params().iter().map(|p| p.id.as_str()).collect();
+        if let Some(g) = &gps {
+            ids.extend(g.channel_ids());
+        }
+        crate::livelog::warn_missing_channels(set, &ids);
+    }
     let started = session.start(link.as_mut()).clone();
     match started.mode {
         LogMode::Fast2c => {
@@ -298,18 +314,10 @@ pub fn run_log(
         eprintln!("link: re-opening driver '{driver}'");
         open_link().map_err(|e| format!("{e:#}"))
     };
-    let report = match out {
-        Some(path) => {
-            let f = std::fs::File::create(path)
-                .map_err(|e| anyhow!("create {}: {e}", path.display()))?;
-            let mut w = std::io::BufWriter::new(f);
-            session.run_csv_resilient(link, &mut reopen, &opts, gps.as_mut(), &mut w)
-        }
-        None => {
-            let mut stdout = std::io::stdout().lock();
-            session.run_csv_resilient(link, &mut reopen, &opts, gps.as_mut(), &mut stdout)
-        }
-    }?;
+    // The file / stdout, behind the trigger layer with --trigger.
+    let mut sink = crate::livelog::CsvOut::open(out, triggers, split)?;
+    let report = session.run_csv_resilient(link, &mut reopen, &opts, gps.as_mut(), &mut sink)?;
+    let triggered = sink.finish()?;
     let st = session.status().clone();
 
     if st.mode == LogMode::Polling && started.mode == LogMode::Fast2c {
@@ -344,8 +352,20 @@ pub fn run_log(
             g.stats()
         );
     }
+    if let Some(o) = &triggered {
+        for line in crate::livelog::trigger_summary(o) {
+            eprintln!("{line}");
+        }
+    }
     if let Some(path) = out {
-        println!("Logged {rounds} round(s) to {}", path.display());
+        match &triggered {
+            Some(o) if split => println!(
+                "Logged {rounds} round(s); {} window file(s) next to {}",
+                o.files.len(),
+                path.display()
+            ),
+            _ => println!("Logged {rounds} round(s) to {}", path.display()),
+        }
     }
     Ok(())
 }

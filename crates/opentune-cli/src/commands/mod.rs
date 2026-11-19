@@ -219,6 +219,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             gps_baud,
             gps_speed_param,
             ssm,
+            trigger,
             params,
         } => {
             let fast =
@@ -240,6 +241,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
                 fast,
                 gps,
                 &ssm,
+                &trigger,
             )
         }
         Command::Candump(args) => candump::run(reg, args),

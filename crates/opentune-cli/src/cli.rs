@@ -488,6 +488,9 @@ pub enum Command {
         gps_speed_param: Option<String>,
         #[command(flatten)]
         ssm: crate::ssm_log::SsmLogArgs,
+        /// Datalogging triggers (`--trigger`, `--split`).
+        #[command(flatten)]
+        trigger: crate::livelog::TriggerArgs,
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
     },
