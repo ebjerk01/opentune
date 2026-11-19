@@ -44,9 +44,12 @@ fn plan(d: &AdaptationDef, ch: &str, option: IoControl, value: Option<u64>, ms: 
 
 /// A module: the udssim server (0x2F allowed in the extended session only),
 /// an optional fault hook, and the IO state seen at each tester present.
+/// Answers a request instead of the module (`None`: let the module answer).
+type Fault = Box<dyn FnMut(&[u8]) -> Option<Result<Vec<u8>, String>>>;
+
 struct Ecu {
     server: UdsServer,
-    fault: Box<dyn FnMut(&[u8]) -> Option<Result<Vec<u8>, String>>>,
+    fault: Fault,
     held: Vec<bool>,
     sent: Vec<Vec<u8>>,
 }
