@@ -59,12 +59,18 @@ impl RawDiag for CoreDiag<'_> {
 
 /// Map a core transport result to the [`RawDiag`] contract: a negative
 /// response a transport surfaced as [`Error::NegativeResponse`](crate::Error)
-/// comes back as its raw `7F <sid> <nrc>` bytes (the ECU *answered*), every
-/// other error as its message.
+/// comes back as its raw `7F <sid> <nrc>` bytes (the ECU *answered*), an
+/// error that means the link is gone ([`is_link_lost`](crate::resilient::is_link_lost),
+/// e.g. an adapter reset) as its message behind
+/// [`LINK_LOST_PREFIX`](crate::resilient::LINK_LOST_PREFIX), every other
+/// error as its message.
 fn raw_result(r: crate::Result<Vec<u8>>) -> std::result::Result<Vec<u8>, String> {
     match r {
         Ok(v) => Ok(v),
         Err(crate::Error::NegativeResponse { service, code, .. }) => Ok(vec![0x7F, service, code]),
+        Err(e) if crate::resilient::is_link_lost(&e) => {
+            Err(format!("{}{e}", crate::resilient::LINK_LOST_PREFIX))
+        }
         Err(e) => Err(e.to_string()),
     }
 }

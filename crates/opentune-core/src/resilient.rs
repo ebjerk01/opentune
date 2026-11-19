@@ -46,6 +46,25 @@ use std::time::{Duration, Instant};
 /// Longest single sleep, so a stop flag is noticed within this many ms.
 pub const SLEEP_SLICE_MS: u64 = 200;
 
+/// Prefix of a [`RawDiag`] error that means the link is certainly gone
+/// ([`is_link_lost`]): the loop treats it as lost at once instead of waiting
+/// for [`ReconnectPolicy::dead_after`] dead rounds. The owning wrappers
+/// ([`OwnedDiag`](crate::OwnedDiag), [`InterfaceDiag`](crate::InterfaceDiag))
+/// add it; an embedder's own `RawDiag` may too.
+pub const LINK_LOST_PREFIX: &str = "link lost: ";
+
+/// Whether a transport error means the session is certainly gone and only a
+/// reopen can help: the adapter reset mid-session (e.g. an ELM327 printed its
+/// power-on banner) or the driver is no longer connected. Timeouts and I/O
+/// errors are *not* here: those count as dead rounds, since the link may
+/// come back on its own.
+pub fn is_link_lost(e: &crate::Error) -> bool {
+    matches!(
+        e,
+        crate::Error::AdapterReset(_) | crate::Error::NotConnected
+    )
+}
+
 /// Time source for [`run_resilient`].
 pub trait Clock {
     /// Monotonic milliseconds since an arbitrary origin.
@@ -385,6 +404,8 @@ pub struct Liveness<'a> {
     pub failed: u64,
     /// The last transport error.
     pub last_error: Option<String>,
+    /// An error carried [`LINK_LOST_PREFIX`]: the link is certainly gone.
+    pub link_lost: bool,
 }
 
 impl<'a> Liveness<'a> {
@@ -395,6 +416,7 @@ impl<'a> Liveness<'a> {
             answered: 0,
             failed: 0,
             last_error: None,
+            link_lost: false,
         }
     }
 
@@ -411,6 +433,7 @@ impl RawDiag for Liveness<'_> {
             Ok(_) => self.answered += 1,
             Err(e) => {
                 self.failed += 1;
+                self.link_lost |= e.starts_with(LINK_LOST_PREFIX);
                 self.last_error = Some(e.clone());
             }
         }
@@ -479,13 +502,14 @@ pub fn run_resilient<'l>(
                 let mut live = Liveness::new(diag.as_mut());
                 let res = job.round(&mut live, round, ts);
                 let dead = live.dead();
+                let gone = live.link_lost;
                 if let Some(e) = live.last_error.take() {
                     last_error = e;
                 }
                 round += 1;
                 report.rounds += 1;
                 if let Err(e) = res {
-                    if streak < policy.dead_after && !dead {
+                    if lost_at.is_none() && !dead && !gone {
                         job.stop(diag.as_mut());
                     }
                     return Err(e);
@@ -502,7 +526,9 @@ pub fn run_resilient<'l>(
                     }
                     streak = 0;
                 }
-                if streak == policy.dead_after && lost_at.is_none() {
+                // Lost: enough dead rounds, or an error that says so outright
+                // (adapter reset) — then without waiting for more rounds.
+                if (streak >= policy.dead_after || gone) && lost_at.is_none() {
                     lost_at = Some(clock.now_ms());
                     report.drops += 1;
                     let ev = LinkEvent::Lost {
@@ -597,7 +623,7 @@ pub fn run_resilient<'l>(
         }
     }
     if let Link::Up(diag) = &mut link {
-        if streak < policy.dead_after {
+        if lost_at.is_none() {
             job.stop(diag.as_mut());
             report.stopped_cleanly = true;
         }
@@ -901,6 +927,33 @@ mod tests {
         )
         .unwrap();
         assert_eq!((r.ended, r.rounds), (EndReason::Stopped, 0));
+        assert!(r.stopped_cleanly);
+    }
+
+    #[test]
+    fn adapter_reset_is_lost_at_once() {
+        assert!(is_link_lost(&crate::Error::AdapterReset("ELM327 v1.5".into())));
+        assert!(!is_link_lost(&crate::Error::Timeout(5)));
+        let clock = VirtualClock::new(0);
+        let reset = |_: &[u8]| -> Result<Vec<u8>, String> {
+            Err(format!("{LINK_LOST_PREFIX}interface adapter reset: banner"))
+        };
+        let mut job = Job::default();
+        let mut open = || -> Result<Box<dyn RawDiag>, String> {
+            Ok(Box::new(Switch {
+                dead: Rc::new(RefCell::new(false)),
+            }))
+        };
+        let r = run_resilient(
+            &mut job,
+            Box::new(reset),
+            &mut open,
+            &opts(&clock, Some(3), ReconnectPolicy::reconnecting()),
+        )
+        .unwrap();
+        // dead_after is 3, but one reset round is enough to reopen.
+        assert_eq!(job.events, ["lost", "reconnected"]);
+        assert_eq!((r.dead_rounds, r.reconnects, r.rounds), (1, 1, 3));
         assert!(r.stopped_cleanly);
     }
 
