@@ -10,6 +10,17 @@ use crate::GpsFeed;
 
 const DAY_MS: u64 = 86_400_000;
 
+/// How far the replay clock moves from NMEA time of day `cur` to `t` (ms).
+/// Going backwards is the midnight rollover; a day that ended in a leap
+/// second (`23:59:60.x`, at or past [`DAY_MS`]) is one second longer.
+fn advance_ms(cur: u64, t: u64) -> u64 {
+    if t >= cur {
+        return t - cur;
+    }
+    let day = if cur >= DAY_MS { DAY_MS + 1000 } else { DAY_MS };
+    (t + day).saturating_sub(cur)
+}
+
 /// Replays recorded NMEA, one epoch at a time.
 #[derive(Debug, Clone)]
 pub struct ReplayFeed {
@@ -97,7 +108,7 @@ impl ReplayFeed {
                         Some(cur) if cur == t => {}
                         Some(_) if consumed => break, // next epoch starts here
                         Some(cur) => {
-                            self.clock_ms += if t >= cur { t - cur } else { t + DAY_MS - cur };
+                            self.clock_ms += advance_ms(cur, t);
                             self.epoch_time = Some(t);
                         }
                         None => self.epoch_time = Some(t),
@@ -141,5 +152,35 @@ impl Iterator for ReplayFeed {
     /// One snapshot per epoch (never ends while looping).
     fn next(&mut self) -> Option<GpsSnapshot> {
         self.next_epoch()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nmea::checksum;
+
+    fn gga(time: &str, quality: u8) -> String {
+        let body = format!("GPGGA,{time},4807.038,N,01131.000,E,{quality},08,0.9,545.4,M,46.9,M,,");
+        format!("${body}*{:02X}\r\n", checksum(&body))
+    }
+
+    fn ages(lines: &[String]) -> Vec<Option<u64>> {
+        ReplayFeed::from_bytes("t", lines.concat().as_bytes())
+            .with_stale_after(u64::MAX)
+            .map(|s| s.age_ms)
+            .collect()
+    }
+
+    #[test]
+    fn midnight_rollover_after_a_fractional_leap_second() {
+        // Regression: 23:59:60.500 is 86_400_500 ms of day, so the rollover
+        // `t + DAY_MS - cur` underflowed (a panic in debug builds, a clock
+        // jump of ~2^64 ms in release).
+        let lines = [gga("235959.500", 1), gga("235960.500", 0), gga("000000.000", 0)];
+        assert_eq!(ages(&lines), vec![Some(0), Some(1000), Some(1500)]);
+        // An ordinary midnight.
+        let lines = [gga("235959.000", 1), gga("000001.000", 0)];
+        assert_eq!(ages(&lines), vec![Some(0), Some(2000)]);
     }
 }
