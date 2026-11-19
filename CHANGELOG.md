@@ -12,6 +12,15 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **"Check my car" guided wizard** (desktop, Bench): a read-only walk through
+  identify → scan → fault codes → live data, tested end to end on the virtual
+  car and an OBD simulator.
+- **Logging triggers**: start, stop and mark conditions for datalogging
+  (`log --trigger`, `--split`, also on `obd read --out`), a `triggers/` pack kind
+  and a generic-OBD2 wide-open-throttle pull trigger set.
+- **Desktop Live log**: reconnect through the adapter hub with link-lost markers,
+  Subaru SSM transports (K-line / CAN) and an offline SSM simulator; a negative
+  response now counts as a live link in polling and on the Dashboard.
 - Offline EGS52 coding CRC verification and opt-in recomputation. CRC-16/ARC
   is implemented and remains unconfirmed on a real EGS.
 - EGS52 C167 flash read preset for the 512 KiB emulator window at `0x80000`.
