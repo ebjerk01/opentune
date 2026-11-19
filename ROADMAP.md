@@ -1,16 +1,18 @@
 # OpenTune Roadmap
 
-> ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the apps are
-> pre-release alpha builds and the hardware path is unproven on a car. Don't flash
-> a real vehicle yet. Expect breaking changes.
+> ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the desktop app is a
+> public alpha (v0.5.0, signed auto-update) and the Android app is unreleased. Only a first
+> read-only identity read has been done on a real car — don't flash a real vehicle yet.
+> Expect breaking changes.
 
 **Where it stands:** the **offline toolkit** — identify, checksums, map viewing/editing,
-calibration-definition import/export, diffing, and the CLI + desktop apps — works today on a
-flash image and is largely feature-complete. The **frontier now is getting it onto a real car**:
-the interface drivers are written but unproven on hardware, and the live read/flash path waits on
-an adapter. Android and open hardware are the reach goals. **Phase 4** then broadens coverage —
-more checksum families (ME7, TCU), flash-container decode, real DoIP, and transmission/AWD control
-units — most of it buildable offline; see the **build order** at the end.
+calibration-definition import/export, diffing, flash containers, controller definitions and the
+CLI + desktop apps — works today on a flash image and is largely feature-complete. The service
+engines (coding, adaptation incl. VAG KWP2000, service functions, auto-scan, logging with GPS,
+read-only DSG/Haldex diagnostics) run against simulators over every transport (CAN, K-line,
+TP2.0, DoIP). The **frontier is on-car validation**: the ELM327 driver has done its first real
+read-only identity read (2026-11-18); everything else live is still unproven on a vehicle.
+Android and open hardware are the reach goals; see the **build order** at the end.
 
 **Suite direction (Phase 5):** OpenTune is growing from a tuning toolkit into a full **diagnostic
 & service suite** — one local app that does, over any interface: identify → auto-scan → fault codes
@@ -97,13 +99,13 @@ from proprietary tools is re-derived and validated independently before it ships
 ---
 
 ## Phase 2 — On the car 🔒 (hardware-gated — the frontier)
-The code is written; **nothing here is proven on hardware yet.** Unblocks when an interface +
-bench ECU are available.
+The code is written; only a **first read-only identity read** (ELM327, 2026-11-18) is proven on a
+car so far. The rest unblocks with car sessions, an interface and a bench ECU.
 
 - [x] Protocol layer: ISO-TP (BS/STmin/wait/overflow hardened), UDS, KWP2000, **VW TP2.0**
 - [~] **Interface drivers implemented, awaiting on-car test** — OpenPort 2.0 (J2534/CDC-ACM), SocketCAN, slcan, ELM327, KKL 409.1 (raw K-line), Arduino K-line bridge, ESP32-S3, **generic J2534 PassThru** (Mongoose/VNCI/SVCI; Windows FFI gated), **gs_usb/candleLight USB-CAN**, **ELM327-over-WiFi/Bluetooth**, **EFI EFP02C USB-CAN** (`efp02c`: 1 Mbit/s, 11-bit, writes disabled; built from captures of the owner's own unit, to be re-confirmed against a vendor-software capture), **ESP32 ISO-TP BLE bridge** (`isotp-ble`: host driver for the open Switchleg1 firmware; BLE backend behind an optional feature)
 - [ ] Verify cheap/clone adapters on real hardware (OpenPort/ELM327 clones, CANable) — `docs/CHEAP-INTERFACES.md`
-- [~] **ELM327 OBD read driver** (`opentune-driver-elm327-obd`, CLI `elm327obd`) — serial ELM init (HS-CAN `SP6` / MS-CAN `SPB` + physical switch), ISO-TP, and a UDS read client: live identify (VIN 0xF190 + part/HW/SW/supplier DIDs), DTC read (0x19 sub 0x02) + decode, clear (0x14), OBD mode-01 live PIDs (RPM/coolant/speed) + mode-03 fallback, battery (`ATRV`). 15 tests vs scripted ELM responses; **read-only** (no ECU writes). *First on-car session 2026-11-17 (auto-debug wizard): handshake, 13.2 V battery, live RPM + coolant PIDs **pass**; the transport-backed reads (supported PIDs, VIN, DTCs) failed with "no diagnostic transport" — a missing `Interface::diag()` override, fixed in `b0b7273`. **Re-tested 2026-11-18 on a VW 1.6 TDI CR (EA189; hardware 03L907425C, public sources say Simos PCR2.1 — unconfirmed until an image is read), HS-CAN 7E0/7E8: `info`/`identify` read battery voltage, ECU name, part number and VIN over the transport-backed UDS path — first real-ECU identity read, passes.** DTC read/clear, mode-01 over the transport and block reads still need a car session.*
+- [~] **ELM327 OBD read driver** (`opentune-driver-elm327-obd`, CLI `elm327obd`) — serial ELM init (HS-CAN `SP6` / MS-CAN `SPB` + physical switch), ISO-TP, and a UDS read client: live identify (VIN 0xF190 + part/HW/SW/supplier DIDs), DTC read (0x19 sub 0x02) + decode, clear (0x14), OBD mode-01 live PIDs (RPM/coolant/speed) + mode-03 fallback, battery (`ATRV`). 15 tests vs scripted ELM responses; **read-only** (no ECU writes). *First on-car session 2026-11-17 (auto-debug wizard): handshake, 13.2 V battery, live RPM + coolant PIDs **pass**; the transport-backed reads (supported PIDs, VIN, DTCs) failed with "no diagnostic transport" — a missing `Interface::diag()` override, fixed in `b0b7273`. **Re-tested 2026-11-18 on a VW 1.6 TDI CR (EA189; public sources put its hardware in Simos PCR2.1 — unconfirmed until an image is read), HS-CAN 7E0/7E8: `info`/`identify` read battery voltage, ECU name, part number and VIN over the transport-backed UDS path — first real-ECU identity read, passes.** DTC read/clear, mode-01 over the transport and block reads still need a car session.*
 - [x] **Live-path hardening (2026-11-17, offline-tested)** — one shared ELM327 reply parser (`opentune_core::protocol::elm`: responsePending 0x78 in both adapter behaviours, truncated multi-frame rejected, `BUS BUSY`/`LV RESET`/`ERRxx`/`?` errors, adapter-reset detection, >7-byte CAN requests refused before sending); `Interface::diag()` on every driver; desktop **AdapterHub** (one adapter owner, app-wide busy lock, connection reuse); **per-module addressing** (scan/clear re-bind per module; writes, routines, actuators and service runs refuse an unknown target); writes run `10 03` → op → `10 01` in one connection with an explicit ack.
 - [~] **Live identify + full OBD read** (EDC16 first) — live identify verified on a real VAG 1.6 TDI CR engine ECU (2026-11-18, `elm327obd`; matched by an identification-only def); full OBD read (DTCs, readiness, freeze frame) still needs on-car verification
 - [~] **Live DTC read/clear** (OBD mode 0x03/0x07, UDS 0x19) — decoder + driver read path done, needs a live bus
@@ -115,9 +117,9 @@ bench ECU are available.
 
 ## Phase 3 — Reach & ecosystem
 - [~] **Android app on a phone** — APK built + verified running on a real device (above); USB-OTG / BLE adapter support still needs hardware
-- [~] **Open hardware interface** — ESP32-S3 **firmware written** (`hardware/firmware/esp32-s3`: TWAI/CAN + ISO-TP + K-line + framed USB-CDC protocol; compile-only CI job on pinned ESP-IDF v5.3.2, never flashed) **and its Rust host driver** (`crates/drivers/esp32-opentune`, 27 tests; not yet in the CLI registry); Arduino K-line bridge firmware also written (compile-only CI). Remaining: flash + a KiCad board + on-bench test.
+- [~] **Open hardware interface** — ESP32-S3 **firmware written** (`hardware/firmware/esp32-s3`: TWAI/CAN + ISO-TP + K-line + framed USB-CDC protocol; compile-only CI job on pinned ESP-IDF v5.3.2, never flashed) **and its Rust host driver** (`crates/drivers/esp32-opentune`; registered in the CLI and, Bench tier, in alpha desktop builds — unverified); Arduino K-line bridge firmware also written (compile-only CI). Remaining: flash + a KiCad board + on-bench test.
 - [x] **CAN-FD** (+ ISO-TP-FD) **and DoIP** transport (`opentune-core`; ISO 15765-2:2016 FD + ISO 13400) — offline/mock-tested (incl. a localhost TCP DoIP round-trip); untested on real CAN-FD/DoIP silicon
-- [ ] **More ECU families** + a growing **community ECU-definition & map library** (contribution format + review)
+- [~] **More ECU families** + a growing **community ECU-definition & map library** — contribution workflow landed: `CONTRIBUTING.md`, issue/PR templates, provenance (`sources`, `license`, `evidence`) on every def and pack, a privacy scanner (`opentune privacy-scan`), `opentune packs validate` / `ecudefs validate --require-provenance`, and a CI data gate that also scans changed files on PRs. Open: the library itself (contributions).
 
 ---
 
@@ -201,7 +203,7 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 
 ### Coding & adaptation
 - [~] **Module coding engine** (`opentune-coding`) — data-defined coding-label sets (byte/bit→label with a documented LSB-first convention), `decode` / `get` / `set` (range + enum-option validated) / before-after **param & byte diff**, and a **safe write-back** over UDS 0x22/0x2E: read-first backup → write only changed blocks → **read-back verify**, plus **dry-run** plans and a `requires_security` flag. Engine runs over core's `RawDiag`/`CoreDiag`, tested against `opentune-udssim`; CLI `coding` + desktop panel. Next: live test, and **brand label packs** (VAG long-coding, Ford As-Built/CCC via `ccc_descr.xml`).
-- [~] *(engine + CLI `adaptation` + desktop panel, udssim-tested; live 🔒)* **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer.
+- [~] *(engine + CLI `adaptation` + desktop panel, udssim-tested; live 🔒)* **Adaptation / basic settings** — adaptation channels, `RoutineControl` (0x31), guided functions; data-defined channel maps; the 0x27 login gate reuses the existing `SeedKey` layer. **VAG KWP2000 path** (TP2.0 and K-line): measuring blocks, basic settings, adaptation read/test/save with read-back (`adaptation kwp-read|kwp-basic|kwp-test|kwp-save`, desktop KWP card, `docs/ADAPTATION.md`); writes gated (session + caller-supplied login + confirmation, Bench tier); routine ids/selectors from one public source, unconfirmed beyond it.
 - [~] **Actuator / output tests** — `InputOutputControlByIdentifier` (0x2F) — available as a service-script step in `opentune-servicefn`; no dedicated actuator UI yet.
 
 ### Service & diagnostics
@@ -227,6 +229,7 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
   - [x] `Interface::set_seed_key` — any registry-opened driver takes a caller-supplied `SeedKey` (10 drivers with an unlock step accept it; the rest return `false`).
   - [x] `DesktopConfig.seedkeys` resolver — plugin read/flash panels (`adapter::apply_seed_key`), service scripts (optional `seedkey` id) and the seed/key calculator (`source: "plugin"`) unlock through it.
   - [x] **CLI host API** — `opentune-cli` is a library (`opentune_cli`) + thin binary: `run_with(CliConfig { seedkeys, checksums, drivers, extra commands })`, a `CliContext` for extra commands, `--seedkey <id>` on `info/read/flash/dump/identify/service`, collisions refused at startup. See `docs/PLUGINS.md`.
+- [x] **Batch-5 desktop panels** — **Controllers** (browse controller defs incl. packs, offline CAN-log decode, Vector ASC too), **SA2 script** (script/file/own container → disassembly + key preview; arm for live sessions on Bench builds), shared **pack picker** in the engine panels, **DoIP Discover** in the adapter box and a **GPS** card on Live log/Dashboard (both Bench tier).
 - [x] **Desktop code split** — `lib.rs` (2,900 → 460 lines) and `app.js` into modules, `node --test` UI tests (11th gate), a compile-time plugin-API test that pins every path plugins use.
 - [x] **Sidebar groups + tiers** — Calibration · Vehicle · Reference · Help · Bench. Car-facing tools start in the Bench section (alpha/bench builds only) and move up once tested on a real car.
 - [x] **In-app help** — a guide page per panel plus a help strip on every panel (risk, what you need, three steps, open full guide). Guide renderer handles wrapped lists and links.
@@ -237,7 +240,7 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 - [~] *(desktop: adapter capability bar + capability-gated car-facing panels — coding/adaptation/autoscan/service/logging/OBD/dashboard/inspection/CAN capture — in the Bench tier until vehicle-tested; Debug console alpha-only)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
-- [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs, CLI `packs`). Shipped starter packs: `generic-obd2` (J1979 module lists, 34-PID logger, readiness/DTC/VIN scripts, mode-04 clear as the only write), `iso14229-identification`, `vag-modules` (7 UDS modules, each sourced from MIT/BSD projects), `vcar-demo`. Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
+- [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs incl. `controllers/`, provenance metadata, CLI `packs` + `packs validate`). Shipped starter packs: `generic-obd2` (J1979 module lists, 34-PID logger, readiness/DTC/VIN scripts, mode-04 clear as the only write), `iso14229-identification`, `vag-modules` (7 UDS modules, each sourced from MIT/BSD projects), `vcar-demo`. Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
 - [~] **EcuFlash / RomRaider XML definition importer** (`opentune-ecuflash`, CLI `import-ecuflash`) — parses `<rom>` identity + reusable `<scaling>` + 1D/2D/3D `<table>` with axes → OpenTune `MapDef`s, `toexpr` fitted to a linear factor/offset via the XDF math (non-linear flagged + imported pre-scaled, never a silent wrong scale); fidelity warnings for unmerged `<include>` base defs, unknown `storagetype`, missing scaling refs. `<include>` / `<rom base>` base-def merging in the library (`parse_ecuflash_with_bases`; the CLI does not resolve bases yet). 26 tests + fixture-gated real-def test. **Next:** base resolution in the CLI, RomRaider attribute variants, `logger.xml` params (feeds the logging engine). Unlocks the community **Subaru/Mitsubishi** map library. Parse the open **format** + community-licensed defs; don't lift EcuFlash code. Refs: **RomRaider** (GPL-2), **FastECU** (GPL-3).
 - [ ] **Subaru / Mitsubishi seed-key** tables as an optional, user-enabled plugin (published tables), same stance as the Ford/Daimler entries above.
 
@@ -248,30 +251,30 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 **🔒** items wait on an interface + bench ECU.
 
 **Offline — buildable now**
-*(Done since the last revision: opentune-dsg (read-only DQ250), TP2.0 hardening + fuzzer, DoIP driver, desktop SA2 panel, GPS source, 1.6 TDI CR identification def; earlier: controller defs + 722.6, real SA2, DoIP discovery, EFP02C + ISO-TP BLE drivers, C167 bootstrap planner, pack picker; earlier: ME7 checksum, FRF/ODX/SGO decode, TCU checksums, definition-format breadth, DoIP over a loopback entity, EDC15C6 checksum, map finder, tune recipes, log viewer, OBD inspection, virtual car, starter packs.)*
-1. **ELM327 CAN memory read — follow-ups**: block read landed (`elm327obd`: 0x23 or 0x35–0x37 upload, session + plugin seed-key, dry-run `plan_read_memory` + CLI `read --plan`, mock-tested; writes bench-only single-frame). Next: first real read on the car, and the compact address format for `kline-elm327` on CAN. Clone quirks in `docs/DRIVERS.md`.
-2. **Fast logging via UDS 0x2C — desktop wiring**: the engine landed (`opentune_logdef::LiveSession`: channels by DID and memory address packed into dynamic DIDs 0xF200+, one 0x22 per record, automatic fallback to polling with the reason reported; udssim implements 0x2C/0x23; CLI `log --fast`; 8 channels → 1 request per sample instead of 8; `docs/LIVE-LOGGING.md`). Desktop wiring landed (Live log "Fast (0x2C)" toggle, mode badge + fallback reason, samples/s). Next: a real-ECU test. Approach credit: VW_Flash (batched reads).
-3. **Open aftermarket ECUs — desktop panel + hardware test**: library + CLI landed (`opentune-tsini`: TunerStudio INI + `.msq`, all 82 public Speeduino/rusEFI/MegaSquirt INIs parse; `opentune-tsproto`: CRC32-envelope and plain serial framing, chunked page read/write, verified write → burn only after read-back, realtime channels; CLI `opentune ts`; simulator-tested only; `docs/AFTERMARKET-ECUS.md`). Desktop **Aftermarket ECU** panel landed (Bench tier: INI + msq load/save/diff, table/curve/settings editors with limit checks, online read → plan → confirmed write with backup + read-back verify + optional burn, live tiles). Next: a first test on real Speeduino/rusEFI hardware.
-4. **Recipes on EDC17** — fixed: verify/attest against the stock reference, no nested-block writes, check words carved out of patches → 13/15 EDC17 pairs byte-identical (42/45 overall). Open: the CP42 nested block at 0x3005A8 (rule unknown; refused unless `--allow-unverified`, which still leaves the attestation unsatisfied).
-5. ✅ **Relocate maps across sibling software** — `opentune ecudefs relocate --def … --source A.bin --image B.bin`: axes/headers must match byte-for-byte, ambiguous or low-confidence matches refused; PCR2.1 CASM2K30 → owner's CASM2L95 47/47 (precision 1.00), DQ250 041N → 042F/G 11/11 truth tables; no wrong placement in any case.
-6. ✅ **Logger text/BCD/hex values** — `value_kind` on logger channels (pack JSON + `logger.xml` storagetype), CSV `text` column, Live log + Dashboard show text (VIN tile).
-7. ✅ **Cross-validated EDC15/EDC16 vs ZedSuite** — 77 dumps: full agreement where both find blocks (EDC16 132/132 regions, byte-identical corrections); OpenTune finds more (boot/program/nested, Mercedes CR, Vito, BMW 320d). Gap: ZedSuite's `tdi41_2002` classic layout verifies a dump we refuse (no tuned pair to validate correction).
-8. ✅ **UDS/DoIP conformance vs python-udsoncan + doipclient** — `tools/conformance/` (25 cases, 12 → 25 passing after udssim fixes; 13th gate + CI job).
-9. ✅ **Controller-def schema → drivetrain defs** — `opentune-ctrldef` + 8 shipped defs incl. Mercedes 722.6 (EGS51). Next: pack kind + desktop panel; flashing is 🔒.
-10. ✅ **SA2 runs real scripts** — real VAG instruction set, script extraction from the user's own ODX/SGO, `opentune seedkey sa2`. Per-brand plugin sets stay user-supplied, never auto-applied.
-11. **New checksum `simos-crc`** (Continental block-CRC headers, real-image-tested 776/778 headers across Kia/Hyundai, Ford, Lada; VAG Simos 8–18 + ECM3 not claimed — no reads). **Small UI follow-ups** — ✅ Dashboard "Record", ✅ "Open in Maps" from the log overlay; ✅ pack picker in the Coding/Adaptation/Service/Auto-scan/Live-log panels (`packs_list`/`packs_open`), ✅ preview fixtures for every panel (a test fails when a command has none).
+*(Recently done: read-only DQ250 diagnostics (`opentune dsg`), TP2.0/KWP hardening + fuzzer, DoIP driver + discovery, desktop SA2 + Controllers panels, GPS source, VAG KWP2000 adaptation, controllers pack kind, community contribution workflow, ESP32 driver registered, CLI logs readable in the Log viewer; earlier: controller defs + 722.6, real SA2, EFP02C + ISO-TP BLE drivers, C167 bootstrap planner, pack picker, map relocation, EDC15/16 cross-validation, conformance vs python-udsoncan.)*
+1. **Datalogging** — Subaru SSM transport, dashboards and triggers.
+2. **Actuator tests UI** — a dedicated panel over the `0x2F` step that already exists in service scripts.
+3. **Guided wizards** — desktop/Android flows over the engines (identify → scan → DTCs → live data).
+4. **`kline-elm327` on CAN** — the compact address format; and the echo-checked `0x78` in the ELM reply parser (the other drivers have it).
+5. **First community packs** — e.g. a pack that ships controller definitions, through the new contribution workflow.
 
 **Waiting on data**
+- **DQ250 02E measuring-group meanings** — need a real capture (raw groups + what the car was doing); `opentune dsg groups` already reads them raw.
+- **SA2 script location in ODX** — confirm the field on one of the owner's own decrypted ODX files.
+- **Mercedes 722.6 EGS52 frame set** — needs a listen-only capture of the owner's W210 (EGS51 ships).
 - **EDC17CP14 maps** (Passat CC) — need a VAG CP14 stock read, ideally with a tune of it.
-- **PCR2.1 CASM2L95 maps** — need a tune of that software (or the relocation helper above).
+- **PCR2.1 CASM2L95 maps** — need a tune of that software (or the relocation helper).
+- **EDC17 CP42 nested block** — the check rule is unknown; needs a stock/tuned pair.
 - **Slow start on one laptop (30–40 s)** — not reproducible on a desktop (~1.3 s); needs an `OPENTUNE_TRACE_STARTUP=1` log from the affected machine (`docs/TROUBLESHOOTING-STARTUP.md`).
 
 **🔒 Hardware-gated — later**
-- **First car session, read-only** (`docs/FIRST-CAR-TEST.md`) — then live identify + full OBD read (EDC16 first) · live DTC read/clear
+- **Car sessions, read-only** (`docs/FIRST-CAR-TEST.md`) — live identify ✅ (2026-11-18); next: full OBD read (DTCs, readiness, freeze frame), live DTC read/clear, DSG/Haldex reads over TP2.0, GPS on a drive
 - Vehicle-test each live panel (dashboard, inspection, CAN capture, auto-scan, coding, adaptation, service) so it can leave the Bench tier
 - Flash path end-to-end on the bench, then in-car (EDC16 first)
 - Verify cheap/clone adapters on real hardware
 - DSG / Haldex / 722.6 **bench flashing**
-- ESP32-S3 compile/flash + KiCad board; flash the Switchleg firmware
+- ESP32-S3 compile/flash + KiCad board; flash the Switchleg BLE firmware (classic ESP32) and test `isotp-ble`
+- EFP02C on the bench, then a vendor-software capture to re-confirm its protocol
+- DoIP against a real gateway; C167 bootstrap read on a bench EDC15
 - EDC15C6 programming access (seed/key, bootstrap read)
 - Android USB-OTG / BLE adapter support
