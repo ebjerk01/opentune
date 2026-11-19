@@ -12,6 +12,23 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
+  BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
+  `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and
+  the Ident / SignatureTable / Checksum metadata. Signature and CRC16 are reported
+  **unverified**; CAFD `.caf`, undocumented compression states and ambiguous
+  segment lengths are refused, not guessed. New `container identify` and
+  `container unpack --flat` (flat image for any container format). Built from
+  public sources only ([BMW-CONTAINERS.md](docs/BMW-CONTAINERS.md)); tested on
+  synthetic fixtures only, not yet on a real BMW file.
+- Clean-room UCL NRV2B decompressor (`opentune_container::nrv2b`), checked
+  against the public `uclcli` test vector.
+- Evidence level **`example`** (below `implemented`) for placeholder definitions:
+  never used to identify a real unit, labelled "Example — placeholder data".
+- Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
+  `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
+  `implemented` evidence.
+
 ### Changed
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
@@ -35,7 +52,6 @@ section (alpha/bench builds) until they are vehicle-tested.
 - The placeholder `bosch-edc16-toyota` definition could identify a real Bosch
   EDC16U34: its keys (`0281011…`, software `1037…`) overlap and it sorted first.
   Example definitions are now skipped by identification.
-
 
 ## [0.7.0] - 2026-11-19
 
