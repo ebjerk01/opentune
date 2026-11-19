@@ -51,10 +51,14 @@ test("diag is CAN or DoIP; CAN capture still needs can", () => {
 
 test("the diagnostic panels gate on diag, CAN capture on can", () => {
   const src = (f) => fs.readFileSync(path.join(UI, "src", f), "utf8");
-  for (const f of ["feat_coding.js", "feat_adaptation.js", "feat_scan.js", "feat_service.js", "feat_logging.js", "feat_obd.js", "feat_obdinfo.js", "feat_dashboard.js"]) {
+  for (const f of ["feat_coding.js", "feat_adaptation.js", "feat_scan.js", "feat_service.js", "feat_obd.js", "feat_obdinfo.js", "feat_dashboard.js"]) {
     assert.match(src(f), /gate\([^)]*\["diag"\]/, f);
     assert.doesNotMatch(src(f), /\["can"\]/, f);
   }
+  // The Live log gates on the transport's capability: diag for UDS and SSM
+  // over CAN, a raw K-line for SSM over K-line (livelog-core.js needsFor).
+  assert.match(src("feat_logging.js"), /const needs = \["diag"\][\s\S]*gate\(sec, needs,/);
+  assert.doesNotMatch(src("feat_logging.js"), /\["can"\]/);
   assert.match(src("feat_candump.js"), /gate\(panel, \["can"\]/);
 });
 

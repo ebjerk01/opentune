@@ -5,7 +5,7 @@ watch them in a live table, and save the samples as CSV.
 
 ## What you need
 
-- **Adapter: CAN**, connected and detected.
+- **Adapter: CAN**, connected and detected (a raw K-line adapter for Subaru SSM over K-line).
 - A `logger.xml` definition for your ECU, or a definition pack's logger JSON. The
   bundled `generic-obd2/loggers/obd2-mode01.json` works on any OBD-II car on CAN.
 - **Ignition on**; engine running for most values.
@@ -48,18 +48,69 @@ sample; 1.00 means one request read every channel).
 
 A fast session holds the adapter for as long as it runs, so other panels report
 *adapter busy*. It stops, and clears the dynamic DIDs on the ECU, when you press
-**Stop**, switch to another panel, the adapter disconnects, or no channel answers
-for five ticks in a row. If the app stops ticking for 15 s the session also
-stops itself.
+**Stop**, switch to another panel or the adapter disconnects. If the app stops
+ticking for 15 s the session also stops itself. When the link drops, see
+**Dropped links and Reconnect** below.
 
 With the toggle off, the panel polls exactly as before.
+
+## Dropped links and Reconnect
+
+A tick in which nothing answered at all is **dead** (an ECU that refuses a
+channel with a negative response still answered: that tick is alive). The
+**link pill** next to the options shows *no answer 3/5* while ticks die, then
+*link lost* after five dead ticks in a row — or at once when the adapter
+resets (an ELM327 that power-cycled and printed its banner).
+
+- **Reconnect if the link drops** off (the default): the session stops on a
+  lost link, as before, and frees the adapter.
+- On: the adapter is closed and re-opened with a growing pause (0.5 s, 1 s,
+  2 s … up to 10 s; the pill says *reconnecting (attempt 2)* and why the last
+  try failed). Once it opens, the session starts again — fast mode re-defines
+  its dynamic DIDs — and the pill shows *reconnected*. It gives up after five
+  minutes down, or after three re-opens in a row in which nothing answered
+  (ignition off). Reconnect alone also opens a session (it holds the adapter),
+  even without Fast.
+
+Reconnect is off by default because a dropped link is often the ignition
+being switched off: re-opening keeps talking to a bus that is going to sleep.
+
+Every link event is a row in the CSV with parameter id `link` (*Link status*):
+the event in `note` and `lost`, `reopen-failed`, `reconnected` or `gave-up` in
+`text`. No value is invented for the time the link was down. The **Drive
+view** shows the link as lost while it is down.
+
+Validation state: **synthetic-tested** (simulated bus with an unplugged
+adapter, refused re-opens and an adapter reset). Not yet tested by unplugging
+a real adapter mid-drive.
+
+## Subaru SSM
+
+**Transport** chooses what Start speaks: *UDS / OBD-II* (the default),
+*Subaru SSM (K-line)* or *Subaru SSM (CAN)*. With SSM:
+
+- **Module** — *ECU (engine)* or *TCU (transmission)*.
+- Use a RomRaider `logger.xml` with an SSM protocol. Over K-line you need a
+  raw K-line adapter (`kkl` cable or the OpenTune K-line bridge; an ELM327
+  cannot do SSM); over CAN any CAN adapter.
+- **Simulated module** runs against a synthetic SSM module, no adapter needed.
+
+On Start the module is identified (`BF`): the panel shows its SSM ID, ROM ID
+and how many parameters are logged. Only parameters whose capability bit is
+set (and per-ROM parameters for this ROM ID) are logged; **Left out** lists the
+others with the reason (other module, capability bit clear, derived, …) and
+any ticked parameter that is not logged. Values are read in batched `A8`
+requests. Fast (0x2C) does not apply. Nothing is written to the module.
+
+Validation state: **synthetic-tested** (SSM simulator). Not yet run against a
+Subaru.
 
 Validation state: **synthetic-tested** (UDS simulator). Not yet tested on a car.
 
 ## Reading the results
 
 - **Value** and **Units** per parameter. **Note** explains a missing value.
-- UDS parameters (service `0x22`, read by identifier), OBD-II mode-01 PIDs and UDS `0x23` memory reads are read. SSM and other protocols come back with a note instead of a value.
+- UDS parameters (service `0x22`, read by identifier), OBD-II mode-01 PIDs and UDS `0x23` memory reads are read; SSM parameters with an SSM **Transport**. Other protocols come back with a note instead of a value.
 - **Text channels** — identification data such as the VIN (`F190`), part and
   serial numbers (`F187`, `F18C`) or programming dates (`F199`) is not a number.
   A definition marks such a channel as text, BCD or hex (`value_kind` in a pack's

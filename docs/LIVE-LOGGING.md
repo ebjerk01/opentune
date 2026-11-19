@@ -219,6 +219,12 @@ The session is a `LiveSession` in mode `ssm-a8`, set by
 `FastLogConfig { ssm: Some(SsmPollConfig { max_packet_len }), .. }`, so the CSV
 is the same as for every other path.
 
+**Shared setup.** The wire setup and the identify/select step live in
+`opentune_logdef::ssm` (`SsmWire::configure` / `prepare` / `with_transport`,
+`ssm::prepare` → `SsmPrepared { init, def, cfg, notes, not_logged }`), so the
+CLI and the desktop **Live log** panel (*Transport* SSM K-line / SSM CAN,
+*Module* ECU / TCU, *Simulated module*) run the same code.
+
 **Validation state: synthetic-tested.** The SSM simulator
 (`opentune_core::protocol::ssmsim`: synthetic ROM ID, capability bitmap and
 RAM addresses that change on every read, optional echo, fault injection) and
@@ -230,7 +236,9 @@ against SSM reply latency. The ELM327 drivers are not wired for SSM (see
 ## Long runs, dropped links and reconnect
 
 `opentune log` and `opentune obd read` run on the same loop
-(`opentune_core::resilient::run_resilient`) and share these flags:
+(`opentune_core::resilient::run_resilient`) and share these flags (the
+desktop Live log session runs on it too, with a *Reconnect* box: see
+[Backend API for the desktop panel](#backend-api-for-the-desktop-panel)):
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -471,10 +479,11 @@ real adapter mid-drive.
 
 ## Backend API for the desktop panel
 
-The desktop **Live log** panel's *Fast (0x2C)* toggle uses this API
-(`desktop/src-tauri/src/feat_logging.rs`: `log_start` / `log_tick` /
-`log_stop`, synthetic-tested). It drives
-`opentune_logdef::LiveSession` over the driver's `CoreDiag`:
+The desktop **Live log** panel's sessions (*Fast (0x2C)*, an SSM transport, or
+*Reconnect*) use this API (`desktop/src-tauri/src/feat_logging.rs`:
+`log_start` / `log_tick` / `log_stop`, synthetic-tested). It drives
+`opentune_logdef::LiveSession` as one long adapter operation on the app's
+adapter hub, every request through that operation's own hub `Session`:
 
 ```rust
 let cfg = FastLogConfig { enabled: fast, first_did, max_record_len, session, ..Default::default() };
@@ -490,8 +499,41 @@ commands can return them directly. `LiveStatus` carries `mode`
 (`"fast-2c"` | `"polling"` | `"ssm-a8"`), `reason` (why polling), `dynamic_dids`
 (`{did, record_len, channels}`), `polled`, `notes`, `redefines`, `ticks`,
 `setup_requests` and `tick_requests` (`requests_per_tick()` for display).
-Suggested commands: `log_start` → `LiveStatus`, `log_tick` →
-`{ samples, status }` (show the mode badge and fallback reason from `status`),
-`log_stop` → `LiveStatus`. Keep the session in managed state, make the
-commands `async` (serial I/O), never let ticks overlap, and call `stop` when
-the panel closes or the connection drops.
+
+**Same link semantics as the CLI.** The session job is a
+`resilient::LogJob` on `run_resilient`, one round per `log_tick` (the panel
+paces the loop; a clock that serves the command channel while the loop backs
+off answers ticks, Stop and the idle check meanwhile). Dead ticks are counted
+at the transport (`resilient::Liveness`): a tick of negative responses is
+alive. Five dead ticks in a row (`DEAD_TICKS`), or an adapter reset (the error
+carries `LINK_LOST_PREFIX`; `CoreDiag` now adds it like the owning wrappers),
+lose the link. `reconnect` (opt-in, `live_policy`) then closes and re-opens the
+adapter through the hub with the core backoff, runs `LiveSession::start` again
+(dynamic DIDs re-defined) and gives up after 5 minutes down or after three
+re-opens in a row in which nothing answered; without it the session stops,
+as before. Each link event is a marker sample (`link_event_sample`) in the
+next reply — the tick that lost the link carries its `lost` marker — and
+every reply has a `link` view: `{ state: up|silent|lost|reconnecting|
+reconnected|gave-up, reconnect, dead_ticks, dead_after, attempt, retry_in_ms,
+error, drops, reconnects, downtime_ms, last_event }`. While the link is down,
+ticks get the link view and the markers so far, no samples. The idle stop
+(15 s without a tick) is unchanged.
+
+**SSM.** `log_start` takes `transport` (`uds` | `ssm` | `ssm-can`),
+`ssm_target` (`ecu` | `tcu`) and `ssm_max_packet`: the key gets the CLI's
+driver config (`ssm::SsmWire::configure`: K-line address, 4800 baud,
+`init=none`; or the module's ISO-TP ids), and on the worker
+`opentune_logdef::ssm::prepare` identifies the module and selects the
+parameters — the same code `opentune log --transport ssm|ssm-can` runs. The
+reply's `ssm` is `{ target, wire, ssm_id, rom_id, capability_bytes, logged,
+notes, not_logged }` and `params` the channels actually logged. The
+`ssmsim` pseudo-driver (the synthetic module, `SsmSim` as an `Interface`) is
+opened by the desktop's adapter opener without hardware.
+
+**Commands.** `log_start` → `{ status, channels, params, ssm, target, link }`;
+`log_tick` → `{ ts, samples, status, rate, running, ended, target, link }`;
+`log_stop` → `{ running, status, ended, rate, target, link, events, ssm }`
+(`events`: markers no tick picked up). The stateless `log_poll_once` returns
+`link: { state: up|silent|lost, error }` and re-opens the adapter on the next
+poll when nothing answered or the adapter reset; the Dashboard's `obd_read`
+does the same (plus `errors.link` on a reset).

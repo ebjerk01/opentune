@@ -6,12 +6,17 @@
 // command `log_poll_once` every N ms (the hub reuses the opened adapter), and
 // the table updates in place. Rows are accumulated for CSV export.
 //
-// Fast (0x2C) toggle: Start opens a live session instead (`log_start`), which
-// packs the channels into dynamically defined DIDs where the ECU allows it and
-// otherwise polls (the badge shows which, and why). Ticks go to `log_tick`
-// (never overlapping) and Stop calls `log_stop`, which clears the DIDs. The
-// session holds the adapter, so it is stopped when the panel is hidden, the
-// adapter disappears or the window closes.
+// Fast (0x2C), an SSM transport or Reconnect: Start opens a live session
+// instead (`log_start`). Fast packs the channels into dynamically defined DIDs
+// where the ECU allows it and otherwise polls (the badge shows which, and
+// why); SSM (K-line or CAN, ECU or TCU) identifies the module with BF, logs
+// the parameters its capability bits allow and lists what was left out and
+// why; Reconnect re-opens the adapter after a dropped link. Ticks go to
+// `log_tick` (never overlapping) and Stop calls `log_stop`, which clears the
+// DIDs. The session holds the adapter, so it is stopped when the panel is
+// hidden, the adapter disappears or the window closes. Link events (lost,
+// reconnecting, reconnected) arrive as marker rows (param_id "link"): they go
+// into the CSV, the link pill and the Drive view. Pure logic: livelog-core.js.
 "use strict";
 (function () {
   const T = () => window.__TAURI__ || {};
@@ -32,6 +37,12 @@
     fast: false, // the running stream is a log_start session
   };
   const { logModeBadge, fmtLogRate, liveLogRow, liveLogCsv, liveShown, vehicleSpeedKmh } = window.OTUtil;
+  const L = window.OTLiveLog;
+  const $ = (id) => document.getElementById(id);
+  // The capability the panel needs; regate() swaps the contents per transport
+  // (the gate reads it on every refresh).
+  const needs = ["diag"];
+  let gate = null;
 
   // ---- build the nav item + panel -----------------------------------------
   function mount() {
@@ -79,6 +90,25 @@
           <span class="pill" id="logStatus">idle</span>
         </div>
         <div class="row">
+          <label class="small muted" for="logTransport">Transport</label>
+          <select class="inp sm" id="logTransport" title="What Start speaks to the module">
+            ${L.TRANSPORTS.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join("")}
+          </select>
+          <span id="logSsmOpts" hidden>
+            <label class="small muted" for="logSsmTarget">Module</label>
+            <select class="inp sm" id="logSsmTarget">
+              <option value="ecu">ECU (engine)</option>
+              <option value="tcu">TCU (transmission)</option>
+            </select>
+            <label class="confirm" title="A synthetic SSM module, no adapter needed (ssmsim)">
+              <input type="checkbox" id="logSsmSim" /> Simulated module</label>
+          </span>
+          <label class="confirm" title="Hold one session on the adapter; when nothing answers for 5 ticks (or the adapter resets) close and re-open it with a growing pause (0.5–10 s), re-define the dynamic DIDs and carry on. Gives up after 5 minutes down, or after 3 re-opens in a row with no answer. Off: the session stops when the link is lost.">
+            <input type="checkbox" id="logReconnect" /> Reconnect if the link drops</label>
+          <span class="pill" id="logLink" hidden>—</span>
+        </div>
+        <div id="logSsmInfo" class="small" hidden></div>
+        <div class="row">
           <label class="confirm" title="UDS 0x2C DynamicallyDefineDataIdentifier: one request per record instead of one per channel">
             <input type="checkbox" id="logFast" /> Fast (0x2C)</label>
           <label class="small muted" for="logDdid">Dynamic DID</label>
@@ -94,8 +124,9 @@
         <p class="muted small">
           Polling speed depends on the adapter — an ELM327 is slow, so expect only
           ~1–3 parameters/sec. The dongle's HS/MS-CAN switch must match the module's
-          bus. Only UDS (service 0x22 / DID) parameters are driven today; others are
-          read back with a note.
+          bus. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven; Subaru
+          SSM needs a K-line cable (kkl, kline-bridge) or a CAN adapter. Other parameters
+          are read back with a note.
         </p>
         <div id="logResult" class="result">
           <span class="muted small">Load a definition, select parameters, then press Start.</span>
@@ -126,6 +157,7 @@
     sec.querySelector("#logStop").addEventListener("click", () => stop());
     sec.querySelector("#logSaveCsv").addEventListener("click", saveCsv);
     sec.querySelector("#logFast").addEventListener("change", fastOpts);
+    ["logTransport", "logSsmSim"].forEach((id) => sec.querySelector("#" + id).addEventListener("change", transportOpts));
     fastOpts();
 
     // A fast session holds the adapter: stop it when the panel is hidden, the
@@ -139,10 +171,76 @@
     }
     window.addEventListener("beforeunload", () => { if (S.fast && S.timer) invoke("log_stop").catch(() => {}); });
 
-    // Gate the panel on CAN capability (live datalogging needs a bus adapter).
+    // Gate the panel on the transport's capability (a diagnostic link, or a
+    // raw K-line for SSM); the SSM simulator needs no adapter.
     if (window.OT && typeof window.OT.gate === "function") {
-      window.OT.gate(sec, ["diag"], "live datalogging", { disable: ["#logLoad", "#logStart"] });
+      gate = window.OT.gate(sec, needs, "live datalogging", {}) || null;
+      if (typeof window.OT.onCaps === "function") window.OT.onCaps(() => regate());
     }
+    transportOpts();
+  }
+
+  // ---- transport / options ----------------------------------------------------
+  function opts() {
+    return {
+      transport: $("logTransport").value || "uds",
+      target: $("logSsmTarget").value,
+      sim: $("logSsmSim").checked,
+      reconnect: $("logReconnect").checked,
+      fast: $("logFast").checked,
+    };
+  }
+
+  function transportOpts() {
+    const o = opts();
+    const ssm = L.isSsm(o.transport);
+    $("logSsmOpts").hidden = !ssm;
+    // SSM always batches its reads: Fast (0x2C) is UDS only.
+    if (ssm) $("logFast").checked = false;
+    $("logFast").disabled = ssm || !!S.timer;
+    fastOpts();
+    regate();
+  }
+
+  // Start (and Load) are allowed when the adapter can do the transport, or
+  // the SSM simulator is chosen (offline).
+  function regate() {
+    const o = opts();
+    needs.splice(0, needs.length, ...L.needsFor(o.transport, o.sim));
+    if (gate && typeof gate.refresh === "function") gate.refresh();
+    const sim = L.isSsm(o.transport) && o.sim;
+    const banner = document.querySelector("#panel-logging .cap-banner");
+    if (sim && banner) banner.hidden = true;
+    const ok = sim || !window.OT || typeof window.OT.has !== "function" || window.OT.has(needs);
+    for (const id of ["logLoad", "logStart"]) {
+      const b = $(id);
+      if (!b) continue;
+      b.disabled = !ok || (id === "logStart" && !!S.timer);
+      b.classList.toggle("cap-disabled", !ok);
+    }
+    ["logTransport", "logSsmTarget", "logSsmSim", "logReconnect"].forEach((id) => { if ($(id)) $(id).disabled = !!S.timer; });
+  }
+
+  // The link pill: lost / reconnecting attempt k / reconnected (and why).
+  function showLink(link, markers) {
+    const pill = $("logLink");
+    if (!pill) return;
+    const b = L.linkBadge(link, markers);
+    pill.hidden = !b;
+    if (b) { pill.className = "pill " + b.cls; pill.textContent = b.text; pill.title = b.title || ""; }
+  }
+
+  // SSM: the module's identification and what was left out, with reasons.
+  function showSsm(ssm) {
+    const box = $("logSsmInfo");
+    const s = L.ssmSummary(ssm);
+    box.hidden = !s;
+    if (!s) { box.innerHTML = ""; return; }
+    const notes = s.notes.length
+      ? `<details><summary>Left out (${s.notes.length} reason(s))</summary><ul>${s.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>`
+      : "";
+    box.innerHTML = `<div><b>SSM</b> ${esc(s.head)} · ${esc(s.logged)}</div>` +
+      (s.notLogged ? `<div class="muted">${esc(s.notLogged)}</div>` : "") + notes;
   }
 
   // ---- definition loading ---------------------------------------------------
@@ -213,12 +311,14 @@
     if (S.timer) return; // already live
     const ids = selectedIds();
     if (!S.defPath) return status("choose a logger.xml first", true);
-    if (document.getElementById("logFast").checked) return startFast(ids);
+    if (L.usesSession(opts())) return startFast(ids);
 
     const intMs = Math.max(50, parseInt(document.getElementById("logInterval").value, 10) || 500);
     S.rows = [];
     S.started = 0;
-    buildTable(ids);
+    buildTable(L.tableParams(null, S.params, ids));
+    showSsm(null);
+    showLink(null, []);
 
     document.getElementById("logStart").disabled = true;
     document.getElementById("logStop").disabled = false;
@@ -245,16 +345,20 @@
       }
     };
     S.timer = setInterval(tick, intMs);
+    regate();
     tick(); // fire immediately, don't wait a full interval
     status(`live @ ${intMs} ms`);
   }
 
-  // Fast mode: one live session on the adapter, ticked without overlap.
+  // A live session on the adapter (Fast, SSM or Reconnect), ticked without
+  // overlap.
   async function startFast(ids) {
     const intMs = Math.max(20, parseInt(document.getElementById("logInterval").value, 10) || 500);
     const maxRec = parseInt(document.getElementById("logMaxRec").value, 10);
+    const o = opts();
     document.getElementById("logStart").disabled = true;
-    status("starting fast session (probing DIDs, defining 0x2C records)…");
+    status(L.isSsm(o.transport) ? "starting SSM session (BF identification)…"
+      : o.fast ? "starting fast session (probing DIDs, defining 0x2C records)…" : "starting live session…");
     let res;
     try {
       res = await invoke("log_start", {
@@ -262,20 +366,23 @@
         defPath: S.defPath,
         ids,
         timeoutMs: 1000,
-        fast: true,
+        fast: o.fast,
         dynamicDid: document.getElementById("logDdid").value || null,
         maxRecord: isFinite(maxRec) ? maxRec : null,
         fastSession: document.getElementById("logSess").value || null,
+        ...L.startArgs(o),
       });
     } catch (e) {
-      document.getElementById("logStart").disabled = false;
+      regate();
       return status("start failed: " + msg(e), true);
     }
     S.rows = [];
     S.started = 0;
     S.fast = true;
-    buildTable(ids);
+    buildTable(L.tableParams(res.params, S.params, ids));
     showMode(res.status, null);
+    showSsm(res.ssm);
+    showLink(res.link, []);
     document.getElementById("logStop").disabled = false;
     document.getElementById("logSaveCsv").disabled = true;
     document.getElementById("logInterval").disabled = true;
@@ -290,6 +397,7 @@
         const r = await invoke("log_tick");
         applySamples(r);
         showMode(r.status, r.rate);
+        if (r.ended && !r.running) stop(null, r.ended);
       } catch (e) {
         const m = msg(e);
         if (window.OTDrive) window.OTDrive.feed.emit({ type: "error", source: "livelog", message: m, busy: /busy/i.test(m) });
@@ -301,6 +409,7 @@
     };
     S.timer = setInterval(tick, intMs);
     tick();
+    regate();
     status(`live (session) @ ${intMs} ms`);
   }
 
@@ -312,30 +421,34 @@
       S.timer = null;
     }
     S.fast = false;
-    document.getElementById("logStart").disabled = false;
     document.getElementById("logStop").disabled = true;
-    document.getElementById("logSaveCsv").disabled = S.rows.length === 0;
     document.getElementById("logInterval").disabled = false;
-    document.getElementById("logFast").disabled = false;
-    fastOpts();
+    transportOpts();
     if (wasFast) {
       try {
         const r = await invoke("log_stop");
         if (r && r.status) showMode(r.status, r.rate);
+        // Link markers no tick picked up (e.g. the one that ended it).
+        const events = (r && r.events) || [];
+        const ts = Date.now();
+        events.forEach((s) => S.rows.push(liveLogRow(ts, s)));
+        if (r && r.link) showLink(r.link, events);
         const ended = endedMsg || (r && r.ended);
+        document.getElementById("logSaveCsv").disabled = S.rows.length === 0;
         if (ended) return status(`stopped — ${ended}`, true);
       } catch (e) {
         if (endedMsg) return status(`stopped — ${endedMsg}`, true);
       }
     }
+    document.getElementById("logSaveCsv").disabled = S.rows.length === 0;
     status(`stopped${typeof why === "string" && why ? " (" + why + ")" : ""} — ${S.rows.length} row(s) captured`);
   }
 
   // Build the live table once per Start; cells are then updated in place.
-  function buildTable(ids) {
+  // `show`: the channels to list ({ id, name, units }).
+  function buildTable(show) {
     S.liveCells = {};
     const res = document.getElementById("logResult");
-    const show = ids.length ? S.params.filter((p) => ids.includes(p.id)) : S.params;
     if (!show.length) {
       res.innerHTML = '<span class="muted small">No parameters selected — nothing to stream.</span>';
       return;
@@ -397,11 +510,16 @@
       window.OTGps.setVehicleKmh(vehicleSpeedKmh(samples));
       gps.forEach((g) => S.rows.push(liveLogRow(ts, g)));
     }
-    // Publish the tick for the Drive view (no second adapter path).
+    // The link: pill, and the Drive view gets a frame only while it answers
+    // (an error with the link state otherwise), never a dead link as live.
+    const markers = L.linkMarkers(samples);
+    showLink(res && res.link, markers);
     if (window.OTDrive) {
-      window.OTDrive.feed.emit({ type: "frame", source: "livelog", tMs: ts, values: window.OTDrive.samplesFrame(samples.concat(gps)) });
+      const D = window.OTDrive;
+      window.OTDrive.feed.emit(L.driveEvent({ ...res, ts, samples: samples.concat(gps) }, (ch) => D.samplesFrame(ch)));
     }
-    status(`live — ${S.started} tick(s), ${S.rows.length} row(s)`);
+    const down = L.linkText(res && res.link, markers);
+    status(`live — ${S.started} tick(s), ${S.rows.length} row(s)` + (down ? " · " + down : ""), !!down);
   }
 
   function fmtNum(v) {
