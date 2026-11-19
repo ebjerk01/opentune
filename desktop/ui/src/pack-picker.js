@@ -1,8 +1,8 @@
 // OpenTune — definition-pack picker shared by the vehicle panels.
 // Loaded after app-boot.js and before every feat_*.js script.
 //
-// The coding / adaptation / service / auto-scan / live-log engines each run on
-// one definition file. A panel mounts one picker for the kind it needs:
+// The coding / adaptation / service / auto-scan / live-log engines and the
+// Controllers panel each run on one definition file. A panel mounts one picker for the kind it needs:
 //
 //   const pp = OTPacks.picker({ panel: "coding", kind: "coding",
 //     filter: { name: "Coding def", extensions: ["json"] },
@@ -26,6 +26,7 @@
   const KIND_LABEL = {
     coding: "coding definition", adaptation: "adaptation definition", services: "service script",
     loggers: "logger definition", modules: "module list", ecudefs: "ECU definition",
+    controllers: "controller definition",
   };
   const T = () => window.__TAURI__ || {};
   const invoke = (c, a) => T().core.invoke(c, a);

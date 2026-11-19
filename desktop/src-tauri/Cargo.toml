@@ -79,6 +79,8 @@ opentune-candump = { path = "../../crates/opentune-candump" }
 opentune-logview = { path = "../../crates/opentune-logview" }
 # Haldex AWD: OpenHaldex UDS client, Gen4 read, CAN-log decode (Haldex panel).
 opentune-haldex = { path = "../../crates/opentune-haldex" }
+# Drivetrain controller definitions: list / show / offline CAN-log decode (Controllers panel).
+opentune-ctrldef = { path = "../../crates/opentune-ctrldef" }
 # TunerStudio-compatible aftermarket ECUs: INI + .msq, serial protocol (TS panel).
 opentune-tsini = { path = "../../crates/opentune-tsini" }
 opentune-tsproto = { path = "../../crates/opentune-tsproto" }

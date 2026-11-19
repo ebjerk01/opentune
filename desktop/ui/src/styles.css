@@ -448,6 +448,10 @@ tr.pin-unv td { color: var(--muted); }
 tr.pin-unv .pill { margin-left: 4px; }
 .db-src { margin: 0; padding-left: 18px; line-height: 1.7; word-break: break-all; }
 .db-src a { color: var(--accent); }
+/* Controllers panel: one collapsible block per CAN frame */
+.ct-frame { border-top: 1px solid var(--line); padding: 6px 0; }
+.ct-frame > summary { cursor: pointer; font-size: 13px; }
+.ct-frame .db-tw { margin-top: 6px; }
 
 /* ---- Log viewer (feat_logview.js) -------------------------------------- */
 /* Channel palette: built from the theme tokens where they fit, plus three
