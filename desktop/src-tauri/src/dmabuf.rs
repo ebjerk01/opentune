@@ -544,10 +544,37 @@ pub fn read_state(dir: &Path) -> Persist {
         .unwrap_or_default()
 }
 
+/// `pid: N` — the process that wrote the marker.
+pub fn parse_marker_pid(text: &str) -> Option<u32> {
+    text.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        if k.trim() == "pid" {
+            v.trim().parse().ok()
+        } else {
+            None
+        }
+    })
+}
+
+/// A marker left by an earlier start, as the next start reads it: ignored
+/// while the process that wrote it is still running (a second instance
+/// starting next to the first is not a failed start).
+pub fn stale_marker(text: &str, self_pid: u32, alive: &dyn Fn(u32) -> bool) -> Option<bool> {
+    match parse_marker_pid(text) {
+        Some(pid) if pid != self_pid && alive(pid) => None,
+        _ => parse_marker(text),
+    }
+}
+
+fn pid_alive(pid: u32) -> bool {
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// The marker a previous start left behind (see [`stale_marker`]).
 pub fn read_marker(dir: &Path) -> Option<bool> {
     std::fs::read_to_string(marker_path(dir))
         .ok()
-        .and_then(|t| parse_marker(&t))
+        .and_then(|t| stale_marker(&t, std::process::id(), &pid_alive))
 }
 
 /// Write the state and this start's marker (best effort: a read-only home
@@ -557,13 +584,24 @@ pub fn write_start(dir: &Path, st: Persist, marker: bool) -> std::io::Result<()>
     std::fs::write(state_path(dir), format_state(st))?;
     std::fs::write(
         marker_path(dir),
-        format!("dmabuf: {}\n", if marker { "on" } else { "off" }),
+        format!(
+            "dmabuf: {}\npid: {}\n",
+            if marker { "on" } else { "off" },
+            std::process::id()
+        ),
     )
 }
 
 /// First frame painted: clear the marker and record the clean start.
 pub fn painted(dir: &Path) -> std::io::Result<()> {
-    let marker = read_marker(dir);
+    let Ok(text) = std::fs::read_to_string(marker_path(dir)) else {
+        return Ok(());
+    };
+    // Only this process's own marker (another instance may have written it).
+    if parse_marker_pid(&text).is_some_and(|pid| pid != std::process::id()) {
+        return Ok(());
+    }
+    let marker = parse_marker(&text);
     if marker.is_none() {
         return Ok(());
     }
@@ -1009,6 +1047,21 @@ mod tests {
         assert_eq!(parse_marker("dmabuf: on\n"), Some(true));
         assert_eq!(parse_marker("dmabuf: off\n"), Some(false));
         assert_eq!(parse_marker(""), None);
+        // Another instance still running: its marker is not a failed start.
+        let m = "dmabuf: on\npid: 4242\n";
+        assert_eq!(parse_marker_pid(m), Some(4242));
+        assert_eq!(stale_marker(m, 1, &|p| p == 4242), None);
+        assert_eq!(
+            stale_marker(m, 1, &|_| false),
+            Some(true),
+            "writer gone: it never drew"
+        );
+        assert_eq!(stale_marker(m, 4242, &|_| true), Some(true));
+        assert_eq!(
+            stale_marker("dmabuf: off\n", 1, &|_| true),
+            Some(false),
+            "no pid recorded"
+        );
 
         let dir = std::env::temp_dir().join(format!("ot-dmabuf-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

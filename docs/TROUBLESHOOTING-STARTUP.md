@@ -52,7 +52,9 @@ when the window has painted its first frame. If the marker is still there at
 the next start and that start had DMA-BUF on, the window never drew: OpenTune
 says so once (in the window and in the startup trace) and uses the fallback.
 After 2 clean starts with the fallback it retries DMA-BUF once. If that start
-fails too, DMA-BUF stays off for good on this machine. The state is in
+fails too, DMA-BUF stays off for good on this machine. (A marker left by an
+instance that is still running is not counted, so starting a second window
+does not trip it.) The state is in
 `~/.cache/opentune/render-state` (`state: on | fallback | retry | off`);
 delete that file to start over.
 
