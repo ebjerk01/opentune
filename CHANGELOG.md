@@ -11,6 +11,22 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Changed
+- **Desktop: the sidebar and the content pane scroll separately.** The window is
+  a fixed-height shell; scrolling a long panel no longer moves the sidebar and
+  vice versa, and each panel keeps its own scroll position. Sidebar groups
+  (Calibration, Vehicle, Reference, Help, Bench) collapse from their header
+  button; the choice is remembered, and the open panel's entry stays visible.
+
+### Fixed
+- **Desktop: smooth scrolling in WebKitGTK.** Long panels (Maps, Log viewer,
+  Inspection, Haldex, Controllers, ECU database) scrolled at 30–48 fps because
+  every card's blurred shadow was repainted per frame; they now hold 60 fps.
+  On alpha/bench builds the whole page scrolled as one (the sidebar stretched
+  the layout to ~1800 px). The panel fade is opacity-only, the dashboard
+  paints only while visible, and the dashboard no longer touches the GPS
+  card's tiles.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added

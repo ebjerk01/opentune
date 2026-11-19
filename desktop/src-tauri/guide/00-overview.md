@@ -38,6 +38,18 @@ Live, through an adapter:
 - **Auto Debug** — a guided self-test of adapter and car (alpha).
 - **Debug** — raw requests and a UDS simulator (alpha builds only).
 
+## The sidebar
+
+The sidebar and the panel on the right scroll separately: scrolling a long
+panel never moves the sidebar, and scrolling the sidebar never moves the panel.
+Each panel keeps its own scroll position when you switch away and back.
+
+Click a group header (**Calibration**, **Vehicle**, **Reference**, **Help**,
+**Bench**) to collapse or expand it. The headers are buttons, so Tab and
+Enter/Space work too. OpenTune remembers which groups you collapsed. A collapsed
+group still shows the panel you have open, and opening a panel from inside
+another one (a link or a button) expands its group again.
+
 ## Connecting an adapter
 
 The **Adapter** box at the bottom of the sidebar sets the connection for every

@@ -178,7 +178,30 @@ The AppImage's `AppRun` hook also asks the desktop portal for the colour
 scheme with `dbus-send ... --reply-timeout=1000`. It costs at most 1 s, even
 when the portal hangs.
 
-## 5. What to send with a bug report
+## 5. Slow scrolling or a low frame rate
+
+Scrolling a long panel should run at the display's refresh rate. WebKitGTK
+paints scrolled content on the CPU, so expensive CSS shows up directly as a
+low frame rate. The UI avoids the known costs: card shadows have no blur (a
+blurred shadow on every card held long panels at 30–45 fps in WebKitGTK 2.52),
+the panel fade animates opacity only, and the document itself never scrolls
+(the sidebar and the content pane are separate scroll areas).
+
+If scrolling is still slow on a machine with a working GPU driver, try the
+DMA-BUF renderer, which OpenTune turns off by default (section 2):
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=0 ./OpenTune.AppImage
+```
+
+With DMA-BUF on, WebKit hands finished frames to the compositor without a
+CPU copy. The default stays off because on some driver stacks this path
+shows a blank window or stalls at startup. If the window comes up and
+scrolls better, keep the variable in a wrapper script or the `.desktop`
+file. `WEBKIT_DISABLE_COMPOSITING_MODE=1` does the opposite (all CPU) and
+is only a workaround for GPU faults.
+
+## 6. What to send with a bug report
 
 - `startup.log` from section 1, from a slow run (and from a second run).
 - The section 2 timing table.

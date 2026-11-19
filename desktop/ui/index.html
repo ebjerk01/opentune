@@ -26,7 +26,7 @@
           <!-- Groups are filled by index.html (calibration/help) and by panels
                registering through window.OTNav (nav.js). Empty groups hide. -->
           <div class="nav-group" data-group="calibration">
-            <div class="nav-group-label">Calibration</div>
+            <button type="button" class="nav-group-label" aria-expanded="true">Calibration<span class="ng-chev" aria-hidden="true"></span></button>
             <button class="nav-item active" data-panel="image" data-tier="public"><span class="ni-ico">▦</span> Image</button>
             <button class="nav-item" data-panel="analyze" data-tier="public"><span class="ni-ico">🔎</span> Analyze bin</button>
             <button class="nav-item" data-panel="identify" data-tier="public"><span class="ni-ico">⌖</span> Identify</button>
@@ -40,26 +40,26 @@
 
           <div class="nav-group" data-group="vehicle" hidden>
             <div class="nav-divider"></div>
-            <div class="nav-group-label">Vehicle</div>
+            <button type="button" class="nav-group-label" aria-expanded="true">Vehicle<span class="ng-chev" aria-hidden="true"></span></button>
           </div>
 
           <div class="nav-group" data-group="reference">
             <div class="nav-divider"></div>
-            <div class="nav-group-label">Reference</div>
+            <button type="button" class="nav-group-label" aria-expanded="true">Reference<span class="ng-chev" aria-hidden="true"></span></button>
             <button class="nav-item" data-panel="drivers" data-tier="public"><span class="ni-ico">⇄</span> Drivers</button>
             <button class="nav-item" data-panel="utils" data-tier="public"><span class="ni-ico">🧰</span> Utilities</button>
           </div>
 
           <div class="nav-group" data-group="help">
             <div class="nav-divider"></div>
-            <div class="nav-group-label">Help</div>
+            <button type="button" class="nav-group-label" aria-expanded="true">Help<span class="ng-chev" aria-hidden="true"></span></button>
             <button class="nav-item" data-panel="guide" data-tier="public"><span class="ni-ico">❔</span> Guide</button>
             <button class="nav-item" data-panel="about" data-tier="public"><span class="ni-ico">⟳</span> About &amp; updates</button>
           </div>
 
           <div class="nav-group bench" data-group="bench" hidden>
             <div class="nav-divider"></div>
-            <div class="nav-group-label bench">Bench <span class="bench-note">untested &amp; private tools</span></div>
+            <button type="button" class="nav-group-label bench" aria-expanded="true">Bench <span class="bench-note">untested &amp; private tools</span><span class="ng-chev" aria-hidden="true"></span></button>
             <button class="nav-item" id="debugNavBtn" data-panel="debug" data-tier="bench" hidden><span class="ni-ico">⚙</span> Debug</button>
           </div>
         </nav>

@@ -48,10 +48,11 @@ PREVIEW_CSS = """
   letter-spacing: .06em; text-transform: uppercase; padding: 6px 9px; border-radius: 6px;
   background: var(--accent); color: #fff; opacity: .9; pointer-events: none; }
 @media (max-width: 760px) {
-  #app { grid-template-rows: auto 1fr; }
-  #sidebar { display: flex; flex-direction: row; overflow-x: auto; padding: 8px max(12px, env(safe-area-inset-left, 0px)); }
+  #app { grid-template-rows: auto minmax(0, 1fr); }
+  #sidebar { display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px max(12px, env(safe-area-inset-left, 0px)); }
   #sidebar .brand-text, #sidebar .nav-group-label, #sidebar .sidebar-foot { display: none; }
-  #nav { display: flex; flex-direction: row; gap: 4px; }
+  #nav { display: flex; flex-direction: row; gap: 4px; flex: none; min-height: 0; overflow: visible; }
+  #nav .nav-group[data-collapsed] > .nav-item { display: flex; }
   #nav .nav-item { white-space: nowrap; }
   #main { padding: 18px max(16px, env(safe-area-inset-right, 0px)) 60px max(16px, env(safe-area-inset-left, 0px)); min-width: 0; }
 }
