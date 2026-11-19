@@ -351,11 +351,21 @@ fn opt_date(s: &str, sentence: &'static str) -> Result<Option<UtcDate>, NmeaErro
     let day = d(0) * 10 + d(1);
     let month = d(2) * 10 + d(3);
     let yy = u16::from(d(4) * 10 + d(5));
-    if !(1..=31).contains(&day) || !(1..=12).contains(&month) {
+    let year = if yy < 80 { 2000 + yy } else { 1900 + yy };
+    if !(1..=12).contains(&month) || !(1..=days_in_month(year, month)).contains(&day) {
         return Err(bad);
     }
-    let year = if yy < 80 { 2000 + yy } else { 1900 + yy };
     Ok(Some(UtcDate { year, month, day }))
+}
+
+/// Days in `month` (1..=12) of `year`, Gregorian leap years.
+fn days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
 }
 
 /// `ddmm.mmmm` / `dddmm.mmmm` + hemisphere to signed decimal degrees. Both
@@ -625,6 +635,11 @@ mod tests {
             "GPRMC,123519,A,4807.038,N,01131.000,E,inf,0,010120",
             "GPRMC,123519,A,4807.038,N,01131.000,E,-1,0,010120",
             "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,320120",
+            // Regression: a day the month does not have used to pass (and
+            // reach the log as an impossible date).
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,310420",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,300220",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,290221",
             "GPRMC,123519,A",
             "GPGGA,123519,4807.038,N,01131.000,E,9,08,0.9,545.4,M,46.9,M,,",
             "GPGGA,123519,4807.038,N,01131.000,E,1,x8,0.9,545.4,M,46.9,M,,",
@@ -639,6 +654,26 @@ mod tests {
                 "{body}"
             );
         }
+    }
+
+    #[test]
+    fn calendar_edges_of_the_date_field() {
+        let date = |d: &str| match parse_sentence(&s(&format!(
+            "GPRMC,000000,A,4807.038,N,01131.000,E,0,0,{d}"
+        ))) {
+            Ok(Sentence {
+                body: Body::Rmc(r), ..
+            }) => r.date.map(|x| x.to_string()),
+            _ => None,
+        };
+        assert_eq!(date("290220").as_deref(), Some("2020-02-29"));
+        assert_eq!(date("290200").as_deref(), Some("2000-02-29"));
+        assert_eq!(date("300420").as_deref(), Some("2020-04-30"));
+        assert_eq!(date("311279").as_deref(), Some("2079-12-31"));
+        assert_eq!(date("010180").as_deref(), Some("1980-01-01"));
+        assert_eq!(date("290221"), None);
+        assert_eq!(date("000120"), None);
+        assert_eq!(date("011320"), None);
     }
 
     #[test]
