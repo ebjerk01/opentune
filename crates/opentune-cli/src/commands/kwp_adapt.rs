@@ -12,6 +12,7 @@ use crate::context::CliContext;
 use anyhow::{anyhow, bail, Result};
 use opentune_adaptation::kwp::{
     self, AdaptMode, BasicSettingsOutcome, KwpLogin, KwpWriteOptions, KwpWriteOutcome,
+    KLINE_DRIVERS, TP20_DRIVERS,
 };
 use opentune_adaptation::sim::{open_sim_channel, sim_bus, SimKwpModule};
 use opentune_adaptation::{AdaptationDef, ChannelKind, RawDiag};
@@ -20,11 +21,6 @@ use opentune_core::protocol::tp20channel::DEFAULT_TESTER_RX_ID;
 use opentune_core::protocol::tp20sim::Tp20EcuConfig;
 use opentune_core::{ConnectConfig, CoreDiag, DiagLayer, Protocol};
 use std::sync::{Arc, Mutex};
-
-/// Raw-CAN drivers that open a VW TP2.0 channel.
-pub const TP20_DRIVERS: &[&str] = &["socketcan", "slcan", "gsusb"];
-/// K-line drivers that speak KWP2000.
-pub const KLINE_DRIVERS: &[&str] = &["kkl", "kline-bridge", "elm327"];
 
 fn parse_num(flag: &str, s: &str, max: u64) -> Result<u64> {
     let t = s.trim();

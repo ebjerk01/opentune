@@ -87,6 +87,11 @@ pub const SERVICES: [u8; 5] = [
     sid::STOP_ROUTINE_BY_LOCAL_ID,
 ];
 
+/// Driver ids that open a VW TP2.0 channel (raw-CAN adapters).
+pub const TP20_DRIVERS: &[&str] = &["socketcan", "slcan", "gsusb"];
+/// Driver ids that speak KWP2000 on the K-line.
+pub const KLINE_DRIVERS: &[&str] = &["kkl", "kline-bridge", "elm327"];
+
 /// VAG KWP2000 diagnostic session (community; the DSG and Haldex paths use it).
 pub const VAG_SESSION: u8 = 0x89;
 /// SecurityAccess level for the requestSeed (`27 03`; sendKey is `27 04`).
