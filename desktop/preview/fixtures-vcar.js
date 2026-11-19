@@ -282,12 +282,17 @@
     await wait(300);
     const ch = kwpChannel(args);
     const g = hx2(ch.group);
-    const plan = ["10 89  startDiagnosticSession", "27 03  securityAccess requestSeed", "27 04 <key>  securityAccess sendKey", "31 B8 00 00  enumerate", `31 B8 00 ${g}  start basic settings`, `31 BA 00 ${g}  read measuring block in basic settings (x${args.polls || 3})`, `32 B8 00 ${g}  stop basic settings`];
-    if (args.dryRun) return { channel: ch.name, group: ch.group, plan, login: null, started: false, stopped: false, samples: [], outcome: { outcome: "planned" }, target: { dry_run: true } };
+    const onLogin = args.seedkey
+      ? ["[on 0x33] 27 03  securityAccess requestSeed", "[on 0x33] 27 04 <key>  securityAccess sendKey", "[on 0x33] 31 B8 00 00  enumerate", `[on 0x33] 31 B8 00 ${g}  start basic settings again`]
+      : ["[on 0x33] stop: this module needs a login for basic settings (no seed/key handler given)"];
+    const plan = ["10 89  startDiagnosticSession", "31 B8 00 00  enumerate", `31 B8 00 ${g}  start basic settings (without login)`]
+      .concat(onLogin, [`31 BA 00 ${g}  read measuring block in basic settings (x${args.polls || 3})`, `32 B8 00 ${g}  stop basic settings`]);
+    if (args.dryRun) return { channel: ch.name, group: ch.group, plan, login: null, login_required: false, started: false, stopped: false, samples: [], outcome: { outcome: "planned" }, target: { dry_run: true } };
     kwpOnlySim(args);
-    if (!args.seedkey) throw "refused before sending anything: basic settings needs SecurityAccess with a seed/key handler; OpenTune ships no VAG KWP login algorithm, an embedding build (e.g. Bench) supplies one";
+    // The synthetic module wants a login for basic settings (NRC 0x33 without one).
+    if (!args.seedkey) throw `login required: this module needs a login for basic settings: it refused the start of \`${ch.name}\` with NRC 0x33 (securityAccessDenied). Give a seed/key handler for SecurityAccess (OpenTune ships no VAG KWP login algorithm; an embedding build such as Bench supplies one). Nothing was started.`;
     const samples = Array.from({ length: args.polls || 3 }, (_, i) => ({ index: i, status: 0, cells: [kwpCell(0, 0x21, 100, 10, 10, "%"), kwpCell(1, 0x1a, 0, 80, 80, "°C")], raw: [] }));
-    return { channel: ch.name, group: ch.group, plan, login: { session: 0x89, security_level: 3 }, started: true, stopped: true, samples, outcome: { outcome: "completed" }, target: { sim: true } };
+    return { channel: ch.name, group: ch.group, plan, login: { session: 0x89, security_level: 3 }, login_required: true, started: true, stopped: true, samples, outcome: { outcome: "completed" }, target: { sim: true } };
   };
   F.adaptation_kwp_adapt = async (args) => {
     if (!args.dryRun && args.ack !== true) throw "adaptation test/save refused: confirm you understand it changes the module (ack required)";

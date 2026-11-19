@@ -74,6 +74,10 @@ pub struct SimKwpModule {
     pub channels: BTreeMap<u8, u16>,
     /// The channel select (`B9 01 03 <ch>`) needs SecurityAccess too.
     pub select_needs_security: bool,
+    /// The basic-settings start (`B8 00 <group>`) needs SecurityAccess (NRC
+    /// 0x33 without it). Default `true`; `false` models a module that runs
+    /// basic settings without a login.
+    pub basic_settings_needs_security: bool,
     /// Refuse every save with this NRC (e.g. 0x22).
     pub refuse_save: Option<u8>,
     /// Store this instead of the requested value on save (a verify failure).
@@ -118,6 +122,7 @@ impl Default for SimKwpModule {
             basic_settings: BTreeMap::from([(60, vec![0x21, 0x64, 0x0A, 0x1A, 0x00, 0x50])]),
             channels: BTreeMap::from([(1, 0x0200), (5, 1000)]),
             select_needs_security: false,
+            basic_settings_needs_security: true,
             refuse_save: None,
             corrupt_save: None,
             seen: Vec::new(),
@@ -220,7 +225,7 @@ impl SimKwpModule {
                 vec![0x71, 0xB8, 0x01, 0x03]
             }
             (0x31, [0xB8, 0x00, g]) => {
-                if !self.unlocked {
+                if self.basic_settings_needs_security && !self.unlocked {
                     return neg(sid, 0x33);
                 }
                 if !self.basic_settings.contains_key(g) {

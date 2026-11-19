@@ -148,6 +148,10 @@ pub enum AdaptationError {
     /// A write was refused before any I/O: not confirmed, no session, or no
     /// seed/key handler for the required SecurityAccess.
     NotConfirmed(String),
+    /// The module refused an operation that was tried without a login
+    /// (SecurityAccess) with NRC 0x33 `securityAccessDenied`, and no seed/key
+    /// handler was given to log in with. Nothing was started.
+    LoginRequired(String),
 }
 
 impl std::fmt::Display for AdaptationError {
@@ -181,6 +185,7 @@ impl std::fmt::Display for AdaptationError {
             ),
             AdaptationError::SecurityDenied(s) => write!(f, "security access denied: {s}"),
             AdaptationError::NotConfirmed(s) => write!(f, "refused before sending anything: {s}"),
+            AdaptationError::LoginRequired(s) => write!(f, "login required: {s}"),
         }
     }
 }

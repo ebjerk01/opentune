@@ -603,8 +603,9 @@ fn basic_settings_over_kline_start_poll_stop() {
 
 #[test]
 fn basic_settings_session_lost_mid_poll_sends_no_stop() {
-    // 10, 27 03, 27 04, B8 00 00, B8 00 3C, BA (poll 0), BA (poll 1: break).
-    let mut b = bus(breaking(6));
+    // 10, B8 00 00, B8 00 3C (refused: 0x33), 27 03, 27 04, B8 00 00,
+    // B8 00 3C, BA (poll 0), BA (poll 1: break).
+    let mut b = bus(breaking(8));
     let sk = SimSeedKey;
     let rep = {
         let mut d = CoreDiag::new(&mut b.ch, 500);
@@ -628,7 +629,8 @@ fn basic_settings_session_lost_mid_poll_sends_no_stop() {
             ..
         }
     ));
-    assert_eq!(b.ecu.lock().unwrap().requests.len(), 7);
+    assert!(rep.login_required);
+    assert_eq!(b.ecu.lock().unwrap().requests.len(), 9);
     assert_eq!(b.ch.reopens(), 0);
 }
 
@@ -661,7 +663,11 @@ fn basic_settings_start_with_a_lost_answer_is_not_an_error() {
     // Regression: the module executed the start but its answer was lost (a
     // K-line timeout). That used to be `Err`, documented as "nothing was
     // started", while the module ran basic settings.
-    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let no_login = || SimKwpModule {
+        basic_settings_needs_security: false,
+        ..SimKwpModule::default()
+    };
+    let unit = Arc::new(Mutex::new(no_login()));
     let mut d = |req: &[u8]| -> Result<Vec<u8>, String> {
         let resp = lock(&unit).answer(req);
         if req == [0x31, 0xB8, 0x00, 60] {
@@ -695,7 +701,7 @@ fn basic_settings_start_with_a_lost_answer_is_not_an_error() {
 
     // A malformed (mis-echoed) answer: the session is still there, so a
     // best-effort stop is sent.
-    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let unit = Arc::new(Mutex::new(no_login()));
     let mut d = |req: &[u8]| -> Result<Vec<u8>, String> {
         let resp = lock(&unit).answer(req);
         if req == [0x31, 0xB8, 0x00, 60] {
@@ -722,6 +728,267 @@ fn basic_settings_start_with_a_lost_answer_is_not_an_error() {
         }
     ));
     assert_eq!(lock(&unit).basic_active, None, "stopped again");
+}
+
+// --- basic settings without login (untested on a real car) -------------------
+
+fn no_login_module() -> SimKwpModule {
+    SimKwpModule {
+        basic_settings_needs_security: false,
+        ..SimKwpModule::default()
+    }
+}
+
+fn sent_security(u: &SimKwpModule) -> bool {
+    u.services().contains(&0x27)
+}
+
+#[test]
+fn basic_settings_run_without_login_when_the_module_allows_it() {
+    // No seed/key handler at all: the module allows basic settings.
+    let unit = Arc::new(Mutex::new(no_login_module()));
+    let mut d = kline(&unit);
+    let rep = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        2,
+        0,
+        &KwpLogin::vag(),
+        &confirmed(),
+    )
+    .unwrap();
+    assert_eq!(rep.outcome, BasicSettingsOutcome::Completed);
+    assert!(rep.started && rep.stopped && !rep.login_required);
+    assert_eq!(rep.samples.len(), 2);
+    let login = rep.login.unwrap();
+    assert_eq!((login.session, login.security_level), (Some(0x89), None));
+    {
+        let u = lock(&unit);
+        assert!(!sent_security(&u), "no SecurityAccess was sent");
+        assert!(!u.unlocked && u.basic_active.is_none());
+    }
+
+    // A handler is given, but the module does not ask for a login: it is not
+    // used (no SecurityAccess on the wire).
+    let unit = Arc::new(Mutex::new(no_login_module()));
+    let mut d = kline(&unit);
+    let sk = SimSeedKey;
+    let rep = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &secured(&sk),
+        &confirmed(),
+    )
+    .unwrap();
+    assert_eq!(rep.outcome, BasicSettingsOutcome::Completed);
+    assert!(!rep.login_required);
+    assert_eq!(rep.login.unwrap().security_level, None);
+    assert!(!sent_security(&lock(&unit)));
+
+    // Over TP2.0 too.
+    let mut b = bus_with(no_login_module(), Tp20EcuConfig::default());
+    let rep = {
+        let mut d = CoreDiag::new(&mut b.ch, 500);
+        kwp::run_basic_settings(
+            &mut d,
+            &def(),
+            "Basic settings 60",
+            1,
+            0,
+            &KwpLogin::vag(),
+            &confirmed(),
+        )
+        .unwrap()
+    };
+    assert_eq!(rep.outcome, BasicSettingsOutcome::Completed);
+    assert!(!sent_security(&lock(&b.unit)));
+}
+
+#[test]
+fn basic_settings_log_in_only_after_the_module_refuses_with_0x33() {
+    // The default synthetic module refuses basic settings until unlocked.
+    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let mut d = kline(&unit);
+    let sk = SimSeedKey;
+    let rep = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &secured(&sk),
+        &confirmed(),
+    )
+    .unwrap();
+    assert_eq!(rep.outcome, BasicSettingsOutcome::Completed);
+    assert!(rep.login_required && rep.started && rep.stopped);
+    let login = rep.login.clone().unwrap();
+    assert_eq!(
+        (login.session, login.security_level),
+        (Some(0x89), Some(0x03))
+    );
+    let u = lock(&unit);
+    let seen: Vec<Vec<u8>> = u.seen.clone();
+    assert_eq!(
+        seen[..7].to_vec(),
+        vec![
+            vec![0x10, 0x89],
+            vec![0x31, 0xB8, 0x00, 0x00],
+            vec![0x31, 0xB8, 0x00, 60], // refused: 7F 31 33
+            vec![0x27, 0x03],
+            vec![0x27, 0x04, 0x48, 0xF7, 0x6A, 0xDD],
+            vec![0x31, 0xB8, 0x00, 0x00],
+            vec![0x31, 0xB8, 0x00, 60],
+        ]
+    );
+    assert_eq!(u.basic_active, None, "stopped");
+    drop(u);
+    // The plan shows the login as conditional.
+    assert!(rep
+        .plan
+        .iter()
+        .any(|l| l.starts_with("31 B8 00 3C") && l.contains("without login")));
+    assert!(rep.plan.iter().any(|l| l.starts_with("[on 0x33] 27 03")));
+}
+
+#[test]
+fn basic_settings_refused_without_a_login_and_no_handler_says_so() {
+    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let mut d = kline(&unit);
+    let e = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &KwpLogin::vag(),
+        &confirmed(),
+    )
+    .unwrap_err();
+    assert!(matches!(e, AdaptationError::LoginRequired(_)), "{e}");
+    assert!(
+        e.to_string()
+            .contains("this module needs a login for basic settings"),
+        "{e}"
+    );
+    let u = lock(&unit);
+    assert!(!sent_security(&u));
+    assert_eq!(u.basic_active, None, "nothing started");
+    assert_eq!(
+        u.seen.last().unwrap(),
+        &vec![0x31, 0xB8, 0x00, 60],
+        "nothing after the refused start"
+    );
+    drop(u);
+    // The dry-run plan says what happens on that refusal.
+    let plan = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &KwpLogin::vag(),
+        &KwpWriteOptions {
+            dry_run: true,
+            ..KwpWriteOptions::default()
+        },
+    )
+    .unwrap()
+    .plan;
+    assert!(plan
+        .iter()
+        .any(|l| l.starts_with("[on 0x33] stop") && l.contains("needs a login")));
+}
+
+#[test]
+fn basic_settings_0x22_is_not_taken_as_a_login_request() {
+    // conditionsNotCorrect (engine running, wrong order, ...) is reported as
+    // the module's refusal; no SecurityAccess is tried even with a handler.
+    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let mut d = |req: &[u8]| -> Result<Vec<u8>, String> {
+        if req == [0x31, 0xB8, 0x00, 60] {
+            lock(&unit).seen.push(req.to_vec());
+            return Ok(vec![0x7F, 0x31, 0x22]);
+        }
+        Ok(lock(&unit).answer(req))
+    };
+    let sk = SimSeedKey;
+    let e = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &secured(&sk),
+        &confirmed(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(e, AdaptationError::NegativeResponse { code: 0x22, .. }),
+        "{e}"
+    );
+    assert!(!kwp::needs_login(&e));
+    assert!(!sent_security(&lock(&unit)));
+}
+
+#[test]
+fn basic_settings_without_login_still_need_the_confirmation() {
+    let unit = Arc::new(Mutex::new(no_login_module()));
+    let mut d = kline(&unit);
+    let unconfirmed = KwpWriteOptions {
+        confirmed: false,
+        ..confirmed()
+    };
+    let e = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &KwpLogin::vag(),
+        &unconfirmed,
+    )
+    .unwrap_err();
+    assert!(matches!(e, AdaptationError::NotConfirmed(_)), "{e}");
+    // And an explicit session.
+    let e = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        1,
+        0,
+        &KwpLogin::none(),
+        &confirmed(),
+    )
+    .unwrap_err();
+    assert!(matches!(e, AdaptationError::NotConfirmed(_)), "{e}");
+    assert!(lock(&unit).seen.is_empty(), "nothing was sent");
+}
+
+#[test]
+fn adaptation_writes_still_need_a_login_up_front() {
+    // Relaxing basic settings does not relax adaptation test / save: even a
+    // module that would allow basic settings without login gets nothing.
+    let unit = Arc::new(Mutex::new(no_login_module()));
+    let mut d = kline(&unit);
+    for mode in [AdaptMode::Test, AdaptMode::Save] {
+        let e = kwp::write_adaptation(
+            &mut d,
+            &def(),
+            "Adaptation 1",
+            0x0300,
+            mode,
+            &KwpLogin::vag(),
+            &confirmed(),
+        )
+        .unwrap_err();
+        assert!(matches!(e, AdaptationError::NotConfirmed(_)), "{e}");
+    }
+    assert!(lock(&unit).seen.is_empty());
 }
 
 #[test]

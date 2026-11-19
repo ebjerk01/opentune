@@ -11,6 +11,21 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Changed
+- **KWP2000 basic settings try without a login first** (engine, `adaptation
+  kwp-basic`, desktop KWP card). Many VAG modules allow basic settings without a
+  login (as the public kw1281test tool does), so the seed/key handler is no longer
+  required up front. It is used only if the module refuses the start with NRC
+  0x33 (securityAccessDenied). Without a handler, that refusal reports "this module
+  needs a login for basic settings" and starts nothing. NRC 0x22 is not treated as
+  a login request. The confirmation gate and Bench tier are unchanged, and
+  adaptation test / save still need a login. **Untested on a real car.**
+
+### Added
+- Load/validate tests for the three imported BMW MS4x definitions (`bmw-ms4x-ms41`,
+  `-ms42`, `-ms43`): id, family, size, map count, GPL-3.0-only provenance and
+  `implemented` evidence.
+
 ## [0.7.0] - 2026-11-19
 
 ### Added

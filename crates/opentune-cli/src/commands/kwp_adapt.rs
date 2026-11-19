@@ -3,10 +3,12 @@
 //! a VW TP2.0 channel (raw-CAN drivers), a K-line driver, or the built-in
 //! synthetic module (`--sim`).
 //!
-//! Writes (basic settings, test, save) need `--ack` and a `--seedkey` handler
-//! for SecurityAccess; OpenTune ships no VAG KWP login algorithm, so in the
-//! public build only `--sim` (handler `kwpsim-test`) can run them. `--dry-run`
-//! prints the request plan and sends nothing.
+//! Writes (basic settings, test, save) need `--ack`. Adaptation test / save
+//! also need a `--seedkey` handler for SecurityAccess; OpenTune ships no VAG
+//! KWP login algorithm, so in the public build only `--sim` (handler
+//! `kwpsim-test`) can run them. Basic settings are tried without a login and
+//! use `--seedkey` only when the module refuses with NRC 0x33 (untested on a
+//! real car). `--dry-run` prints the request plan and sends nothing.
 use crate::cli::{AdaptAction, ConnectArgs, KwpConn, KwpGate};
 use crate::context::CliContext;
 use anyhow::{anyhow, bail, Result};
@@ -331,6 +333,13 @@ fn basic(
     for l in &r.plan {
         println!("  {l}");
     }
+    if r.login_required {
+        println!(
+            "this module needs a login for basic settings (it refused with NRC 0x{:02X}); \
+             logged in with the seed/key handler",
+            kwp::LOGIN_NEEDED_NRC
+        );
+    }
     for s in &r.samples {
         println!(
             "poll {}: status 0x{:02X} {}",
@@ -559,7 +568,8 @@ mod tests {
         )
         .unwrap_err();
         assert!(e.to_string().contains("confirmed"), "{e}");
-        // No --seedkey.
+        // No --seedkey: basic settings are tried without a login, and the
+        // synthetic module (which wants one) refuses: nothing started.
         let e = basic(
             &ctx,
             &def,
@@ -568,6 +578,39 @@ mod tests {
             "Basic settings 60",
             1,
             0,
+            &ack(),
+            &sim(None),
+        )
+        .unwrap_err();
+        assert!(
+            e.to_string()
+                .contains("this module needs a login for basic settings"),
+            "{e}"
+        );
+        // Still no basic settings without --ack, login or not.
+        let e = basic(
+            &ctx,
+            &def,
+            "mock",
+            500,
+            "Basic settings 60",
+            1,
+            0,
+            &KwpGate::default(),
+            &sim(None),
+        )
+        .unwrap_err();
+        assert!(e.to_string().contains("confirmed"), "{e}");
+        // An adaptation test without --seedkey is refused before any I/O.
+        let e = adapt(
+            &ctx,
+            &def,
+            "mock",
+            500,
+            "Adaptation 1",
+            "1",
+            None,
+            AdaptMode::Test,
             &ack(),
             &sim(None),
         )

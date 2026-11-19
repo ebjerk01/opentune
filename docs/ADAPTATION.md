@@ -180,7 +180,7 @@ for KWP2000. Nothing here has run on a car yet.
 ### Login and session loss
 
 Every KWP flow starts its own session and, when a handler is given,
-SecurityAccess. The key comes from a caller-supplied `SeedKey`: **OpenTune
+SecurityAccess (basic settings: only when the module asks for it, see below). The key comes from a caller-supplied `SeedKey`: **OpenTune
 ships no VAG KWP login algorithm.** An embedding build (Bench) supplies one
 through its seed/key resolvers; tests and `--sim` use the simulator's
 test-only `kwpsim-test` handler, which unlocks only the simulator.
@@ -196,12 +196,45 @@ the next request **without** the module's KWP session. So:
   session-loss symptom, and after a plain negative response only a
   best-effort exit is sent. The channel state is then unknown: read it again.
 
+### Basic settings without login
+
+> **Untested on a real car.** Only the synthetic module has run this.
+
+Many VAG modules run basic settings (and answer measuring blocks) without a
+login. The public kw1281test tool reflects that: `BasicSetting GROUP` and
+`GroupRead GROUP` take no login, while `AdaptationRead/Test/Save` take an
+optional one (see [PRIOR-ART.md](PRIOR-ART.md)). So basic settings are
+attempted **without SecurityAccess by default**, even when a seed/key handler
+is given:
+
+1. `10 89`, enumerate, `31 B8 00 <group>` with no login.
+2. If the module refuses that start with NRC **`0x33` securityAccessDenied**,
+   the run reports "this module needs a login for basic settings":
+   * with a seed/key handler it runs SecurityAccess (`27 03`, `27 04 <key>`)
+     in the still-open session, sends the enumerate and start again, and
+     carries on (`login_required: true` in the report);
+   * without one it stops with a `LoginRequired` error. Nothing was started.
+
+Only `0x33` counts as "login needed". It is the one ISO 14230-3 code that
+means the security condition is not met. `0x22`
+(conditionsNotCorrect / requestSequenceError) is reported as the module's
+refusal and **not** retried with a login: it covers engine state, speed,
+temperature and request order, and a pointless login would use up one of the
+module's limited key attempts. `0x35`/`0x36`/`0x37` answer SecurityAccess
+itself, and `0x80`/`0x7E`/`0x7F` are session loss.
+
+The confirmation gate is unchanged (`--ack` / the panel's tick and second
+confirmation, plus an explicit session), and the desktop panel stays in the
+Bench tier. Adaptation **test / save still require a seed/key handler up
+front**. Only basic settings changed.
+
 ### Safety gates
 
 Basic-settings start and adaptation test / save are refused **before any
-I/O** unless the operation is confirmed (`--ack` / the panel's confirmation),
-a session is given and a seed/key handler is given. A save also needs the
-module's 6-byte workshop code. Values are range-checked against the channel's
+I/O** unless the operation is confirmed (`--ack` / the panel's confirmation)
+and a session is given. Adaptation test / save also need a seed/key handler
+before anything is sent; basic settings need one only when the module asks
+for a login (above). A save also needs the module's 6-byte workshop code. Values are range-checked against the channel's
 `min`/`max`; a test or save is read back (`verified`, `tested` or
 `verify_failed`). A dry run returns the request plan and sends nothing.
 Basic settings are always stopped after the reads, unless the session was
@@ -220,7 +253,9 @@ opentune adaptation --def $D kwp-read "Adaptation 1" --sim
 opentune adaptation --def $D kwp-save "Adaptation 1" --value 0x300 \
     --wsc 000001234567 --ack --sim --seedkey kwpsim-test
 opentune adaptation --def $D kwp-basic "Basic settings 60" --polls 3 \
-    --ack --sim --seedkey kwpsim-test
+    --ack --sim --seedkey kwpsim-test   # the synthetic module wants a login
+opentune adaptation --def $D kwp-basic "Basic settings 60" --ack --sim
+#   -> "login required: this module needs a login for basic settings ..."
 opentune adaptation --def $D kwp-test "Adaptation 1" --value 7 --dry-run
 # real hardware: --driver slcan --port /dev/ttyACM0 --tp20-addr 0x01
 #                --driver kkl --port /dev/ttyUSB0 --kline-addr 0x01
@@ -254,4 +289,7 @@ synthetic module (`opentune_adaptation::sim`) over the core TP2.0 stack
 every channel setup) and over a K-line-style transport: reads, session loss
 after a re-open (read retried; write aborted with nothing more sent), negative
 responses, security refusal, the confirmation gate, dry runs, verify failure
-and basic settings.
+and basic settings, including basic settings without a login (a module that
+allows it, one that refuses with `0x33` until login, that refusal with no
+handler, `0x22` not taken as a login request, and the confirmation still
+required).

@@ -588,7 +588,9 @@ pub enum AdaptAction {
     },
     /// KWP2000 basic settings on a `kwp_basic_settings` channel: start, read
     /// the measuring block in basic-settings mode, stop. Commands the module:
-    /// needs `--ack` and `--seedkey` (or `--dry-run`).
+    /// needs `--ack` (or `--dry-run`). Tried without a login first;
+    /// `--seedkey` is used only if the module refuses with NRC 0x33
+    /// (untested on a real car).
     KwpBasic {
         /// Channel name (as in the definition).
         channel: String,
