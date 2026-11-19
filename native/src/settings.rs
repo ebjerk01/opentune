@@ -35,6 +35,9 @@ pub struct AdapterSettings {
     /// Request / response CAN ids (hex, blank = definition default).
     pub tx: String,
     pub rx: String,
+    /// Serial baud an ELM327 answered at during auto-detect / connect; tried
+    /// first on the next connect (0 = try the common bauds).
+    pub baud: u32,
 }
 
 /// Pane splits of the Flash dump view, as fractions of the available space.
