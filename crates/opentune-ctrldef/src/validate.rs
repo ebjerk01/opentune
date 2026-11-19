@@ -4,7 +4,7 @@
 //! [`ControllerDef::validate_links`] also checks the ids it points at (ecudefs,
 //! database units, checksum algorithms) against a [`LinkContext`] the caller
 //! fills from the repository (the CLI and the repository test do).
-use crate::signal::bytes_needed;
+use crate::signal::{bits, bytes_needed};
 use crate::{ControllerDef, DiagChannel, LiveSource, SignalKind, TableAxis, TableDef};
 use opentune_core::ecudef::EcuDef;
 use opentune_core::Protocol;
@@ -380,6 +380,30 @@ impl ControllerDef {
                     o.warn("frame.empty", &floc, "frame has no signals");
                 }
                 let mut snames = HashSet::new();
+                // Two signals sharing *some* bits decode the same payload two
+                // ways: a layout typo, or a multiplexed frame this format
+                // cannot express. Signals over exactly the same bits are an
+                // alternative view of one field (a DBC name and a decoded
+                // one) and are fine.
+                let laid: Vec<(&str, HashSet<u16>)> = f
+                    .signals
+                    .iter()
+                    .filter_map(|s| {
+                        let b = bits(s.start, s.len, s.byte_order)?;
+                        Some((s.name.as_str(), b.into_iter().collect()))
+                    })
+                    .collect();
+                for (i, (a, ab)) in laid.iter().enumerate() {
+                    for (b, bb) in &laid[i + 1..] {
+                        if ab != bb && !ab.is_disjoint(bb) {
+                            o.warn(
+                                "signal.overlap",
+                                &floc,
+                                format!("signals '{a}' and '{b}' share some payload bits"),
+                            );
+                        }
+                    }
+                }
                 for s in &f.signals {
                     let sloc = format!("{floc} signal '{}'", s.name);
                     if !snames.insert(s.name.clone()) {
@@ -476,6 +500,7 @@ impl ControllerDef {
 
         // --- live channels ----------------------------------------------------
         let mut live_names = HashSet::new();
+        let mut kwp_cells = HashSet::new();
         for ch in &self.live {
             let loc = format!("live '{}'", ch.name);
             // Names are unique per bus set (the same channel can come from
@@ -513,7 +538,17 @@ impl ControllerDef {
                         o.err("live.scaling", &loc, "factor must be finite and non-zero");
                     }
                 }
-                LiveSource::KwpMeasuringBlock { .. } => {}
+                LiveSource::KwpMeasuringBlock { group, cell } => {
+                    // One meaning per cell: a second entry would silently
+                    // replace the first when the engine attaches meanings.
+                    if !kwp_cells.insert((*group, *cell)) {
+                        o.err(
+                            "live.kwp_duplicate",
+                            &loc,
+                            format!("measuring block group {group} cell {cell} is named twice"),
+                        );
+                    }
+                }
             }
         }
 
@@ -767,6 +802,56 @@ mod tests {
         ] {
             assert!(c.contains(&want), "{want} not in {c:?}");
         }
+    }
+
+    #[test]
+    fn overlapping_signals_are_flagged() {
+        let mut v = minimal();
+        let frame = |sigs: serde_json::Value| {
+            serde_json::json!([{"name": "main", "bitrate": 500000,
+                "frames": [{"id": "0x100", "name": "F", "signals": sigs}]}])
+        };
+        // Adjacent little- and big-endian signals do not overlap.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "a", "start": 0, "len": 8},
+            {"name": "b", "start": 8, "len": 8},
+            {"name": "c", "start": 23, "len": 16, "byte_order": "big"}
+        ]));
+        assert!(!codes(&def(v.clone())).contains(&"signal.overlap"));
+        // The same bits under two names: an alternative view, not a clash.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "raw", "start": 8, "len": 8},
+            {"name": "decoded", "start": 8, "len": 8}
+        ]));
+        assert!(!codes(&def(v.clone())).contains(&"signal.overlap"));
+        // Bits 12..=15 are in both a 16-bit Intel and a 4-bit Motorola signal.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "a", "start": 0, "len": 16},
+            {"name": "b", "start": 15, "len": 4, "byte_order": "big"}
+        ]));
+        let issues = def(v).validate();
+        let o: Vec<_> = issues
+            .iter()
+            .filter(|i| i.code == "signal.overlap")
+            .collect();
+        assert_eq!(o.len(), 1, "{issues:?}");
+        assert_eq!(o[0].severity, Severity::Warn);
+        assert!(o[0].message.contains("'a' and 'b'"));
+    }
+
+    #[test]
+    fn a_measuring_block_cell_has_one_meaning() {
+        // Regression: two live entries for the same (group, cell) validated,
+        // and the DSG engine's label map then kept only the last one.
+        let mut v = minimal();
+        let kwp = |name: &str, group: u8, cell: u8| {
+            serde_json::json!({"name": name,
+                "source": {"kind": "kwp_measuring_block", "group": group, "cell": cell}})
+        };
+        v["live"] = serde_json::json!([kwp("a", 1, 0), kwp("b", 1, 1), kwp("c", 2, 0)]);
+        assert!(!codes(&def(v.clone())).contains(&"live.kwp_duplicate"));
+        v["live"] = serde_json::json!([kwp("a", 1, 0), kwp("b", 1, 0)]);
+        assert_eq!(codes(&def(v)), vec!["live.kwp_duplicate"]);
     }
 
     #[test]

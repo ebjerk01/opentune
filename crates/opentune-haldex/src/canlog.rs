@@ -73,18 +73,25 @@ fn parse_candump(line: &str) -> Option<LogFrame> {
     let channel = parts.next()?.to_string();
     let frame = parts.next()?;
     let (id_s, payload) = frame.split_once('#')?;
+    // can-utils writes 3 hex digits for an 11-bit id and 8 for a 29-bit one.
+    if id_s.is_empty() || id_s.len() > 8 || !id_s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     let extended = id_s.len() > 3;
     let id = u32::from_str_radix(id_s, 16).ok()?;
+    if id > if extended { 0x1FFF_FFFF } else { 0x7FF } {
+        return None;
+    }
     let data = if let Some(fd) = payload.strip_prefix('#') {
         // `##<flags nibble><data>`
-        hex_bytes(fd.get(1..)?)?
+        hex_bytes(fd.get(1..)?).filter(|d| d.len() <= 64)?
     } else if payload.starts_with('R') {
         Vec::new()
     } else {
-        hex_bytes(payload)?
+        hex_bytes(payload).filter(|d| d.len() <= 8)?
     };
     Some(LogFrame {
-        ts: ts.trim().parse().ok(),
+        ts: finite_ts(ts),
         channel: Some(channel),
         id,
         extended,
@@ -108,11 +115,11 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
         let extended = parse_bool(cols[2])?;
         let dlc: usize = cols[3].parse().ok()?;
         let data = hex_bytes(cols[4])?;
-        if data.len() != dlc {
+        if data.len() != dlc || dlc > 64 || (!extended && id > 0x7FF) {
             return None;
         }
         return Some(LogFrame {
-            ts: cols[0].parse().ok(),
+            ts: finite_ts(cols[0]),
             channel: None,
             id,
             extended,
@@ -123,7 +130,10 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
     if cols.len() >= 6 {
         let (id, _) = parse_id(cols[1])?;
         let extended = parse_bool(cols[2])?;
-        let len: usize = cols[5].parse().ok()?;
+        let len: usize = cols[5].parse().ok().filter(|&n| n <= 64)?;
+        if !extended && id > 0x7FF {
+            return None;
+        }
         let bytes: Vec<&str> = cols[6..]
             .iter()
             .copied()
@@ -138,7 +148,7 @@ fn parse_csv(line: &str) -> Option<LogFrame> {
             .collect::<Option<Vec<u8>>>()?;
         return Some(LogFrame {
             // SavvyCAN writes microseconds.
-            ts: cols[0].parse::<f64>().ok().map(|us| us / 1e6),
+            ts: finite_ts(cols[0]).map(|us| us / 1e6),
             channel: Some(format!("bus{}", cols[4])),
             id,
             extended,
@@ -164,13 +174,18 @@ fn is_header(line: &str) -> bool {
         || l.starts_with("end triggerblock")
 }
 
-/// An ASC line starts with a bare relative timestamp (no commas: that is CSV).
+/// An ASC line starts with a bare relative timestamp, plain decimal digits
+/// (no commas: that is CSV; `nan`, `inf` or `1e3` are not timestamps).
 fn is_asc(line: &str) -> bool {
     !line.contains(',')
-        && line
-            .split_whitespace()
-            .next()
-            .is_some_and(|t| t.parse::<f64>().is_ok())
+        && line.split_whitespace().next().is_some_and(|t| {
+            t.bytes().all(|b| b.is_ascii_digit() || b == b'.') && t.parse::<f64>().is_ok()
+        })
+}
+
+/// A log timestamp: a finite number, else none.
+fn finite_ts(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 /// One Vector ASC line. `Ok(None)` is an event line (no CAN frame: start of
@@ -199,7 +214,10 @@ fn parse_asc(line: &str, dec: bool) -> Result<Option<LogFrame>, ()> {
         }
     };
     let take = |from: usize, n: usize| -> Option<Vec<u8>> {
-        t.get(from..from + n)?.iter().map(|b| byte(b)).collect()
+        t.get(from..from.checked_add(n)?)?
+            .iter()
+            .map(|b| byte(b))
+            .collect()
     };
     // CANFD <ch> <dir> <id> [<name>] <brs> <esi> <dlc> <len> <data…> …
     if t.get(1).is_some_and(|s| s.eq_ignore_ascii_case("CANFD")) {
@@ -214,7 +232,12 @@ fn parse_asc(line: &str, dec: bool) -> Result<Option<LogFrame>, ()> {
         } else {
             6
         };
-        let len: usize = t.get(at + 3).and_then(|s| s.parse().ok()).ok_or(())?;
+        // A CAN FD payload is at most 64 bytes.
+        let len: usize = t
+            .get(at + 3)
+            .and_then(|s| s.parse().ok())
+            .filter(|&n| n <= 64)
+            .ok_or(())?;
         let data = take(at + 4, len).ok_or(())?;
         return Ok(Some(LogFrame {
             ts: Some(ts),
@@ -496,6 +519,69 @@ base dec  timestamps absolute
         assert_eq!((f[4].id, f[4].data.clone()), (0x457, vec![0x0A, 0x0B]));
         assert_eq!((f[5].id, f[5].data.clone()), (704, vec![255, 16]));
         assert_eq!(f[5].channel.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn ids_and_payloads_must_fit_the_frame_type() {
+        // Regression: an 11-bit id above 0x7FF, a 29-bit id above 0x1FFFFFFF
+        // (or a 32-bit one), a signed id, a classic payload over 8 bytes and
+        // a CSV frame whose id contradicts its 11-bit flag were all read as
+        // frames.
+        let text = "\
+(1.0) can0 FFF#00
+(1.0) can0 FFFFFFFF#00
+(1.0) can0 +7E8#00
+(1.0) can0 7E8#000102030405060708
+(1.0) can0 7E8##
+1.0,800,0,1,00
+1,00000800,false,Rx,1,1,00
+";
+        let p = parse_log(text);
+        assert_eq!(p.frames, vec![]);
+        assert_eq!(p.bad_lines, 7);
+        // The edges are kept.
+        let p =
+            parse_log("(1.0) can0 7FF#0001020304050607\n(1.0) can0 1FFFFFFF#00\n1.0,800,1,1,00\n");
+        assert_eq!(p.bad_lines, 0);
+        assert_eq!(
+            p.frames
+                .iter()
+                .map(|f| (f.id, f.extended))
+                .collect::<Vec<_>>(),
+            vec![(0x7FF, false), (0x1FFF_FFFF, true), (0x800, true)]
+        );
+    }
+
+    #[test]
+    fn timestamps_are_finite_or_absent() {
+        // Regression: `nan` / `inf` parse as f64, so such a line became an
+        // ASC frame with a NaN timestamp, and candump / CSV logs carried NaN
+        // or infinite times into the summary.
+        let text = "\
+nan 1 7E8 Rx d 1 00
+inf 1 7E8 Rx d 1 00
+(nan) can0 7E8#00
+(inf) can0 7E8#00
+inf,7E8,0,1,00
+NaN,000007E8,false,Rx,1,1,00
+";
+        let p = parse_log(text);
+        assert_eq!(p.bad_lines, 2, "the two ASC-looking lines");
+        assert_eq!(p.frames.len(), 4);
+        assert!(p.frames.iter().all(|f| f.ts.is_none()), "{:?}", p.frames);
+    }
+
+    #[test]
+    fn asc_canfd_length_is_bounded() {
+        // Regression: the data length is a free number; `from + len` with a
+        // huge one overflowed (a panic in debug builds).
+        for len in ["18446744073709551615", "18446744073709551606", "65"] {
+            let line = format!("   2.5 CANFD 1 Rx 456 1 0 8 {len} 00 01");
+            let p = parse_log(&line);
+            assert_eq!((p.frames.len(), p.bad_lines), (0, 1), "{len}");
+        }
+        let p = parse_log("   2.5 CANFD 1 Rx 456 1 0 8 2 00 01");
+        assert_eq!(p.frames[0].data, vec![0, 1]);
     }
 
     #[test]

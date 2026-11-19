@@ -472,11 +472,15 @@ pub struct KwpCell {
     pub unit: &'static str,
 }
 
-/// Split a record into cells (a partial tail cell is dropped; callers keep the
-/// raw record).
+/// Most cells [`cells`] decodes: [`KwpCell::index`] is a `u8`.
+pub const MAX_CELLS: usize = 256;
+
+/// Split a record into cells (a partial tail cell is dropped, and cells past
+/// [`MAX_CELLS`] are left undecoded; callers keep the raw record).
 pub fn cells(rec: &[u8]) -> Vec<KwpCell> {
     vagmeas::cells(rec)
         .into_iter()
+        .take(MAX_CELLS)
         .enumerate()
         .map(|(i, c)| KwpCell {
             index: i as u8,
@@ -569,6 +573,10 @@ pub struct GroupReading {
     /// The first attempt hit a session-loss symptom and the read was retried
     /// after re-establishing the session.
     pub reestablished: bool,
+    /// What the decode could not account for (a partial trailing cell, cells
+    /// past [`MAX_CELLS`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 /// Read a `kwp_group` channel (`21 <group>`) after starting `login`'s session
@@ -586,12 +594,34 @@ pub fn read_group(
     establish(diag, login)?;
     let (raw, reestablished) =
         with_reestablish(diag, login, &mut |d: &mut dyn RawDiag| read_local(d, group))?;
+    if raw.len() < 3 {
+        // An echo with not even one cell after it is a cut-off answer, not
+        // a reading.
+        return Err(AdaptationError::Protocol(format!(
+            "KWP2000 measuring block {group}: the answer carries no cells ({})",
+            hex(&raw)
+        )));
+    }
+    let mut notes = Vec::new();
+    if raw.len() % 3 != 0 {
+        notes.push(format!(
+            "{} trailing byte(s) do not form a whole cell (kept in raw)",
+            raw.len() % 3
+        ));
+    }
+    if raw.len() / 3 > MAX_CELLS {
+        notes.push(format!(
+            "record has {} cells; only the first {MAX_CELLS} are decoded",
+            raw.len() / 3
+        ));
+    }
     Ok(GroupReading {
         channel: channel.to_string(),
         group,
         cells: cells(&raw),
         raw,
         reestablished,
+        notes,
     })
 }
 
@@ -1070,9 +1100,10 @@ pub enum BasicSettingsOutcome {
         /// Why.
         message: String,
     },
-    /// A poll failed. With `session_lost` nothing more was sent (the module
-    /// leaves basic settings with the session); otherwise a stop was sent
-    /// ([`BasicSettingsReport::stopped`]).
+    /// A poll failed, or the start's answer was lost or malformed (step
+    /// `start`: the module may have started). With `session_lost` nothing
+    /// more was sent (the module leaves basic settings with the session);
+    /// otherwise a stop was sent ([`BasicSettingsReport::stopped`]).
     Aborted {
         /// The step that failed.
         step: String,
@@ -1111,7 +1142,10 @@ pub struct BasicSettingsReport {
 /// was lost.
 ///
 /// `Err` only when nothing was started (pre-flight, the gate, the login, the
-/// enumerate or the start itself failed).
+/// enumerate failed, or the module refused the start with a negative
+/// response). A start whose answer was lost or malformed may have started the
+/// module: that is `Ok` with [`BasicSettingsOutcome::Aborted`] at step
+/// `start` (and [`BasicSettingsReport::started`] false).
 pub fn run_basic_settings(
     diag: &mut dyn RawDiag,
     def: &AdaptationDef,
@@ -1168,7 +1202,24 @@ pub fn run_basic_settings(
             }
         }
     }
-    routine(diag, start, k.enter, &sel)?;
+    if let Err(e) = routine(diag, start, k.enter, &sel) {
+        // A negative response started nothing. A lost or malformed answer
+        // may belong to a start the module executed: its state is unknown,
+        // so this is reported like a failed poll, never as "nothing done".
+        if matches!(e, AdaptationError::NegativeResponse { .. }) {
+            return Err(e);
+        }
+        let session_lost = is_session_loss(&e);
+        if !session_lost {
+            rep.stopped = routine(diag, sid::STOP_ROUTINE_BY_LOCAL_ID, k.enter, &sel).is_ok();
+        }
+        rep.outcome = BasicSettingsOutcome::Aborted {
+            step: "start".into(),
+            message: e.to_string(),
+            session_lost,
+        };
+        return Ok(rep);
+    }
     rep.started = true;
 
     let mut failure: Option<(String, AdaptationError)> = None;
@@ -1180,12 +1231,17 @@ pub fn run_basic_settings(
             .and_then(|rest| expect_selector(rest, &sel, "basic settings read"));
         match r {
             Ok(rec) => {
+                // `status (formula a b)*`: a record without a single cell is
+                // a cut-off answer, not a sample.
                 let (status, body) = match rec.split_first() {
-                    Some((&s, body)) => (s, body),
-                    None => {
+                    Some((&s, body)) if body.len() >= 3 => (s, body),
+                    _ => {
                         failure = Some((
                             format!("poll {i}"),
-                            AdaptationError::Protocol("basic settings record is empty".into()),
+                            AdaptationError::Protocol(format!(
+                                "basic settings record {} carries no cells",
+                                hex(&rec)
+                            )),
                         ));
                         break;
                     }
@@ -1256,6 +1312,74 @@ mod tests {
             ..KwpAddressing::default()
         };
         assert!(empty.validate("x").is_err());
+    }
+
+    #[test]
+    fn a_cut_off_measuring_block_is_an_error_not_an_empty_reading() {
+        // Regression: `61 01` (the echo, then nothing) read as a successful
+        // group with no cells, and `71 BA 00 3C 00` (status only) as a
+        // basic-settings sample with no cells.
+        let def = AdaptationDef::from_json(
+            r#"{"id": "t", "name": "t", "module": "t", "channels": [
+                {"name": "G", "kind": "kwp_group", "group": 1},
+                {"name": "B", "kind": "kwp_basic_settings", "group": 60}]}"#,
+        )
+        .unwrap();
+        let mut d = |req: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            Ok(match req {
+                [0x21, g] => vec![0x61, *g],
+                [0x31, 0xBA, 0x00, g] => vec![0x71, 0xBA, 0x00, *g, 0x00],
+                [0x32, rest @ ..] => [&[0x72][..], &rest[..1]].concat(),
+                [0x27, l] => vec![0x67, *l, 0, 0],
+                [sid, rest @ ..] => [&[sid + 0x40][..], rest].concat(),
+                [] => vec![],
+            })
+        };
+        let e = read_group(&mut d, &def, "G", &KwpLogin::none()).unwrap_err();
+        assert!(e.to_string().contains("no cells"), "{e}");
+        let mut short =
+            |_: &[u8]| -> std::result::Result<Vec<u8>, String> { Ok(vec![0x61, 0x01, 0x1A]) };
+        assert!(read_group(&mut short, &def, "G", &KwpLogin::none()).is_err());
+        let mut ragged = |_: &[u8]| -> std::result::Result<Vec<u8>, String> {
+            Ok(vec![0x61, 0x01, 0x1A, 0, 50, 0x21])
+        };
+        let g = read_group(&mut ragged, &def, "G", &KwpLogin::none()).unwrap();
+        assert_eq!((g.cells.len(), g.raw.len()), (1, 4));
+        assert!(g.notes[0].contains("1 trailing byte"), "{:?}", g.notes);
+        struct Sk;
+        impl SeedKey for Sk {
+            fn id(&self) -> &str {
+                "t"
+            }
+            fn compute(&self, s: &[u8], _: u8) -> opentune_core::Result<Vec<u8>> {
+                Ok(s.to_vec())
+            }
+        }
+        let sk = Sk;
+        let opts = KwpWriteOptions {
+            confirmed: true,
+            ..KwpWriteOptions::default()
+        };
+        let login = KwpLogin::vag().with_security(VAG_SECURITY_LEVEL, &sk);
+        let rep = run_basic_settings(&mut d, &def, "B", 2, 0, &login, &opts).unwrap();
+        assert!(rep.samples.is_empty());
+        assert!(rep.stopped);
+        match rep.outcome {
+            BasicSettingsOutcome::Aborted { message, .. } => {
+                assert!(message.contains("no cells"), "{message}")
+            }
+            o => panic!("{o:?}"),
+        }
+    }
+
+    #[test]
+    fn cell_indices_never_wrap() {
+        // Regression: the index was `i as u8`, so an oversized record had two
+        // cells numbered 0 (and two of every other number after 255).
+        let rec: Vec<u8> = (0..300 * 3).map(|i| i as u8).collect();
+        let c = cells(&rec);
+        assert_eq!(c.len(), MAX_CELLS);
+        assert!(c.iter().enumerate().all(|(i, x)| x.index as usize == i));
     }
 
     #[test]

@@ -35,6 +35,12 @@ fn bit_positions(start: u16, len: u8, order: ByteOrder) -> Option<Vec<u16>> {
     Some(out)
 }
 
+/// Bit positions (0-based, `byte * 8 + bit`) a signal occupies, or `None`
+/// for an impossible layout.
+pub fn bits(start: u16, len: u8, order: ByteOrder) -> Option<Vec<u16>> {
+    bit_positions(start, len, order)
+}
+
 /// Bytes needed to hold the signal (highest byte index + 1), or `None` for an
 /// impossible layout.
 pub fn bytes_needed(start: u16, len: u8, order: ByteOrder) -> Option<usize> {
@@ -87,8 +93,12 @@ pub fn insert(data: &mut [u8], start: u16, len: u8, order: ByteOrder, value: u64
     true
 }
 
-/// Two's-complement sign extension of a `len`-bit raw value.
+/// Two's-complement sign extension of a `len`-bit raw value. A zero-width
+/// value is 0 (it used to overflow the shift).
 pub fn sign_extend(raw: u64, len: u8) -> i64 {
+    if len == 0 {
+        return 0;
+    }
     if len >= 64 {
         return raw as i64;
     }
@@ -228,6 +238,10 @@ mod tests {
     fn sign_and_curve() {
         assert_eq!(sign_extend(0x80, 8), -128);
         assert_eq!(sign_extend(0x1FFF, 13), -1);
+        // Regression: len 0 shifted a u64 by 64 (a panic in debug builds).
+        assert_eq!(sign_extend(0xFFFF, 0), 0);
+        assert_eq!(sign_extend(u64::MAX, 64), -1);
+        assert_eq!(sign_extend(1, 1), -1);
         let lever = [[0.0, 0.0], [128.0, 0.0], [253.0, 100.0], [255.0, 100.0]];
         assert_eq!(interpolate(&lever, 0x7F as f64), 0.0);
         assert!((interpolate(&lever, 0xBF as f64) - 50.4).abs() < 1e-9);

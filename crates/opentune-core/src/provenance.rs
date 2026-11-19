@@ -189,14 +189,19 @@ pub fn check(
 }
 
 /// `needle` occurs in `hay` with no ASCII alphanumeric directly before or after
-/// it (so "kess" does not hit "kessler").
+/// it (so "kess" does not hit "kessler"). The boundary is only checked on a
+/// side where the needle itself ends in an alphanumeric: `.clb` must match in
+/// `codes.clb`, where the dot already separates it from the file name.
 fn contains_word(hay: &str, needle: &str) -> bool {
     let b = hay.as_bytes();
+    let n = needle.as_bytes();
+    let check_before = n.first().is_some_and(|c| c.is_ascii_alphanumeric());
+    let check_after = n.last().is_some_and(|c| c.is_ascii_alphanumeric());
     hay.match_indices(needle).any(|(i, m)| {
         let before = i.checked_sub(1).map(|j| b[j]);
         let after = b.get(i + m.len()).copied();
-        !before.is_some_and(|c| c.is_ascii_alphanumeric())
-            && !after.is_some_and(|c| c.is_ascii_alphanumeric())
+        !(check_before && before.is_some_and(|c| c.is_ascii_alphanumeric()))
+            && !(check_after && after.is_some_and(|c| c.is_ascii_alphanumeric()))
     })
 }
 
@@ -221,7 +226,8 @@ fn check_license(license: &str, loc: &str, out: &mut Vec<ValidationIssue>) {
     let forbidden_token = tokens.iter().find(|t| {
         let t = t.to_ascii_lowercase();
         FORBIDDEN_LICENSE_TOKENS.contains(&t.as_str())
-            || (t.starts_with("cc-") && t.split('-').any(|p| p == "nc"))
+            // Any NC component: `CC-BY-NC-4.0`, but also `CC BY-NC 4.0`.
+            || t.split('-').any(|p| p == "nc")
     });
     if let Some(bad) = forbidden_phrase.copied().or(forbidden_token.copied()) {
         out.push(ValidationIssue::error(
@@ -323,6 +329,11 @@ mod tests {
             "CC-BY-NC-4.0",
             "CC-BY-NC-SA-4.0",
             "MIT AND NDA",
+            // Regression: written with spaces the NC part is its own token
+            // without the `cc-` prefix, and used to pass as a mere warning.
+            "CC BY-NC 4.0",
+            "CC BY-NC-SA 4.0",
+            "CC BY NC",
         ] {
             let v = check(&ok_sources(), lic, "implemented", "");
             assert_eq!(codes(&v), vec!["provenance.license_forbidden"], "{lic}");
@@ -367,6 +378,19 @@ mod tests {
         assert!(v.is_empty(), "{v:?}");
         let v = check(&["  ".into()], "MIT", "implemented", "");
         assert_eq!(codes(&v), vec!["provenance.source_empty"]);
+    }
+
+    #[test]
+    fn a_label_file_extension_matches_after_a_file_name() {
+        // Regression: `.clb` starts with a dot, so the old whole-word check
+        // demanded a non-alphanumeric before the dot and never matched a
+        // real file name.
+        for src in ["labels from codes.clb", "see 00X000000.CLB", "a .clb file"] {
+            let v = check(&[src.into()], "MIT", "implemented", "");
+            assert_eq!(codes(&v), vec!["provenance.source_commercial"], "{src}");
+        }
+        // Still a whole word on the alphanumeric side.
+        assert!(check(&["notes.clbx".into()], "MIT", "implemented", "").is_empty());
     }
 
     #[test]

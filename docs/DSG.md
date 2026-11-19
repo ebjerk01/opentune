@@ -119,7 +119,11 @@ Raw-CAN adapters only (socketcan, slcan, gsusb); `transport=tp20` and
 `tp20_addr=0x02` are implied, `--opt tp20_keepalive_ms=...` etc. are passed
 through. The channel setup, keep-alive (`A3`) and teardown (`A8`) are the
 core's `Tp20Channel`. `--session` (default `0x89`, `none` to skip) is started
-first; a refusal is reported and the reads continue.
+first; a refusal is reported and the reads continue. When a read fails like a
+lost session (the channel broke and was set up again without the unit's
+session, a timeout, or NRC `0x80`/`0x7E`/`0x7F`) the session is restarted and
+that read is tried once more; the group's `notes` say so. A plain refusal
+(`0x31`, `0x22`, ...) is recorded, never retried or guessed around.
 
 | Read | Request | What is decoded | Source / confidence |
 |---|---|---|---|

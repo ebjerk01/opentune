@@ -657,6 +657,74 @@ fn basic_settings_refused_start_is_an_error() {
 }
 
 #[test]
+fn basic_settings_start_with_a_lost_answer_is_not_an_error() {
+    // Regression: the module executed the start but its answer was lost (a
+    // K-line timeout). That used to be `Err`, documented as "nothing was
+    // started", while the module ran basic settings.
+    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let mut d = |req: &[u8]| -> Result<Vec<u8>, String> {
+        let resp = lock(&unit).answer(req);
+        if req == [0x31, 0xB8, 0x00, 60] {
+            return Err("timeout: no answer".into());
+        }
+        Ok(resp)
+    };
+    let sk = SimSeedKey;
+    let rep = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        3,
+        0,
+        &secured(&sk),
+        &confirmed(),
+    )
+    .unwrap();
+    assert!(!rep.started && !rep.stopped && rep.samples.is_empty());
+    match &rep.outcome {
+        BasicSettingsOutcome::Aborted {
+            step, session_lost, ..
+        } => assert_eq!((step.as_str(), *session_lost), ("start", true)),
+        o => panic!("{o:?}"),
+    }
+    // Nothing was sent after the lost answer.
+    let u = lock(&unit);
+    assert_eq!(u.seen.last().unwrap(), &vec![0x31, 0xB8, 0x00, 60]);
+    assert_eq!(u.basic_active, Some(60), "the module did start");
+    drop(u);
+
+    // A malformed (mis-echoed) answer: the session is still there, so a
+    // best-effort stop is sent.
+    let unit = Arc::new(Mutex::new(SimKwpModule::default()));
+    let mut d = |req: &[u8]| -> Result<Vec<u8>, String> {
+        let resp = lock(&unit).answer(req);
+        if req == [0x31, 0xB8, 0x00, 60] {
+            return Ok(vec![0x71, 0xB9, 0x00, 60]);
+        }
+        Ok(resp)
+    };
+    let rep = kwp::run_basic_settings(
+        &mut d,
+        &def(),
+        "Basic settings 60",
+        3,
+        0,
+        &secured(&sk),
+        &confirmed(),
+    )
+    .unwrap();
+    assert!(rep.stopped);
+    assert!(matches!(
+        rep.outcome,
+        BasicSettingsOutcome::Aborted {
+            session_lost: false,
+            ..
+        }
+    ));
+    assert_eq!(lock(&unit).basic_active, None, "stopped again");
+}
+
+#[test]
 fn wrong_kind_is_rejected() {
     let unit = Arc::new(Mutex::new(SimKwpModule::default()));
     let mut d = kline(&unit);

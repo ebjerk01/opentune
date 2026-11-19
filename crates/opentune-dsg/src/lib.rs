@@ -330,12 +330,35 @@ pub struct Group {
     pub raw_hex: String,
     /// Set when the read failed (the unit may not implement the group).
     pub error: Option<String>,
+    /// What the decode could not account for (a partial trailing cell, cells
+    /// past the 256 a cell number can name, a re-read after a lost session).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
+
+/// Most cells a group can have: the cell number (and the controller
+/// definition's `cell`) is a `u8`.
+pub const MAX_CELLS: usize = 256;
 
 /// Decode a measuring-group record (after the echoed group number).
 pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
-    let cells = vagmeas::cells(rec)
+    let mut notes = Vec::new();
+    let all = vagmeas::cells(rec);
+    if all.len() > MAX_CELLS {
+        notes.push(format!(
+            "record has {} cells; only the first {MAX_CELLS} are decoded (see raw_hex)",
+            all.len()
+        ));
+    }
+    if rec.len() % 3 != 0 {
+        notes.push(format!(
+            "{} trailing byte(s) do not form a whole cell (kept in raw_hex)",
+            rec.len() % 3
+        ));
+    }
+    let cells = all
         .into_iter()
+        .take(MAX_CELLS)
         .enumerate()
         .map(|(i, c)| {
             let cell = i as u8;
@@ -361,6 +384,7 @@ pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
         cells,
         raw_hex: hex(rec),
         error: None,
+        notes,
     }
 }
 
@@ -370,9 +394,26 @@ pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
 /// [`READ_SERVICES`].
 pub struct Dq250Reader<'a> {
     kwp: Kwp2000Client<'a>,
+    session: Option<u8>,
     /// `None` = session started (or not requested); `Some(err)` = it failed.
     /// The reads still run: some units answer them in the default session.
     pub session_error: Option<String>,
+    /// Reads that failed like a lost session ([`is_session_loss`]) and were
+    /// tried once more after restarting the session. A TP2.0 channel that
+    /// broke is set up again on the next request, without the unit's KWP
+    /// session, so the reader restarts it rather than reading on without.
+    pub reestablished: u32,
+}
+
+/// Whether a failed read looks like the session (or the channel under it) was
+/// lost: anything but a negative response, or the NRCs a module sends for a
+/// service outside its active session (`0x80`, and the UDS-style `0x7E` /
+/// `0x7F`). A plain refusal (`0x31`, `0x22`, a leaked `0x78`, ...) is not.
+pub fn is_session_loss(e: &opentune_core::Error) -> bool {
+    match e {
+        opentune_core::Error::NegativeResponse { code, .. } => matches!(code, 0x7E..=0x80),
+        _ => true,
+    }
 }
 
 impl<'a> Dq250Reader<'a> {
@@ -387,7 +428,31 @@ impl<'a> Dq250Reader<'a> {
         let mut kwp = Kwp2000Client::new(transport);
         kwp.timeout_ms = timeout_ms;
         let session_error = session.and_then(|s| kwp.start_session(s).err().map(|e| e.to_string()));
-        Self { kwp, session_error }
+        Self {
+            kwp,
+            session,
+            session_error,
+            reestablished: 0,
+        }
+    }
+
+    /// Run one read; after a session-loss symptom restart the session (when
+    /// one was requested) and run it once more. Reads only, so the retry is
+    /// safe. Returns the first failure when a retry happened.
+    fn read<T>(
+        &mut self,
+        f: impl Fn(&mut Kwp2000Client<'a>) -> opentune_core::Result<T>,
+    ) -> (opentune_core::Result<T>, Option<String>) {
+        match f(&mut self.kwp) {
+            Err(e) if is_session_loss(&e) => {
+                self.reestablished += 1;
+                if let Some(s) = self.session {
+                    self.session_error = self.kwp.start_session(s).err().map(|e| e.to_string());
+                }
+                (f(&mut self.kwp), Some(e.to_string()))
+            }
+            r => (r, None),
+        }
     }
 
     /// Read identification `options` (each in `0x80..=0x9F`, the ISO
@@ -405,7 +470,7 @@ impl<'a> Dq250Reader<'a> {
                 });
                 continue;
             }
-            let rec = match self.kwp.read_ecu_id(opt) {
+            let rec = match self.read(|k| k.read_ecu_id(opt)).0 {
                 // The client strips the SID; the record follows the echoed option.
                 Ok(resp) if resp.first() == Some(&opt) => resp[1..].to_vec(),
                 Ok(resp) => {
@@ -449,8 +514,8 @@ impl<'a> Dq250Reader<'a> {
 
     /// Stored trouble codes (`18 02 FF 00`: all stored codes, all groups).
     pub fn dtcs(&mut self) -> Result<Vec<Dtc>, String> {
-        self.kwp
-            .read_dtcs_by_status(0x02, 0xFF00)
+        self.read(|k| k.read_dtcs_by_status(0x02, 0xFF00))
+            .0
             .map(|list| {
                 list.into_iter()
                     .map(|d| Dtc {
@@ -466,15 +531,34 @@ impl<'a> Dq250Reader<'a> {
 
     /// One measuring group; a refusal is recorded in [`Group::error`].
     pub fn group(&mut self, group: u8, labels: &GroupLabels) -> Group {
-        match self.kwp.read_local_id(group) {
+        let (r, first) = self.read(|k| k.read_local_id(group));
+        let mut g = match r {
+            // The echo with not even one cell after it is a cut-off answer.
+            Ok(rec) if rec.len() < 3 => Group {
+                group,
+                cells: Vec::new(),
+                raw_hex: String::new(),
+                error: Some(format!(
+                    "the unit answered group {group} without a single cell ({})",
+                    hex(&rec)
+                )),
+                notes: Vec::new(),
+            },
             Ok(rec) => decode_group(group, &rec, labels),
             Err(e) => Group {
                 group,
                 cells: Vec::new(),
                 raw_hex: String::new(),
                 error: Some(e.to_string()),
+                notes: Vec::new(),
             },
+        };
+        if let Some(first) = first {
+            g.notes.push(format!(
+                "read again after restarting the session (first attempt: {first})"
+            ));
         }
+        g
     }
 }
 
@@ -563,5 +647,35 @@ mod tests {
         assert_eq!(g.cells[0].state, MeaningState::Unconfirmed);
         assert_eq!(g.cells[1].state, MeaningState::FromDefinition);
         assert_eq!(g.cells[1].meaning.as_ref().unwrap().name, "x");
+        assert!(g.notes.is_empty());
+    }
+
+    #[test]
+    fn oversized_and_ragged_records_are_noted_not_renumbered() {
+        // Regression: the cell number was `i as u8`, so cell 256 of an
+        // oversized record became cell 0 again and took cell 0's meaning.
+        let mut labels = GroupLabels::default();
+        labels.insert(
+            3,
+            0,
+            CellMeaning {
+                name: "first".into(),
+                unit: String::new(),
+                notes: String::new(),
+                source: "test".into(),
+            },
+        );
+        let rec: Vec<u8> = (0..(MAX_CELLS + 2) * 3 + 1).map(|i| i as u8).collect();
+        let g = decode_group(3, &rec, &labels);
+        assert_eq!(g.cells.len(), MAX_CELLS);
+        assert_eq!(g.cells.last().unwrap().cell, 255);
+        assert_eq!(
+            g.cells.iter().filter(|c| c.meaning.is_some()).count(),
+            1,
+            "only the real cell 0 carries its meaning"
+        );
+        assert_eq!(g.notes.len(), 2, "{:?}", g.notes);
+        assert!(g.notes[0].contains("258 cells") && g.notes[1].contains("1 trailing"));
+        assert_eq!(g.raw_hex.len(), rec.len() * 2);
     }
 }

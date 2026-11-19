@@ -2,7 +2,8 @@
 //! KWP2000 application behind a TP2.0 channel. **Synthetic only**: the part
 //! number, texts, codes and cell values below are made up (no real unit's
 //! identity) and the groups carry no meaning.
-use crate::{TP20_LOGICAL_ADDRESS, TP20_TESTER_RX_ID};
+use crate::{TP20_LOGICAL_ADDRESS, TP20_SETUP_ID, TP20_TESTER_RX_ID};
+use opentune_core::protocol::isotp::CanLink;
 use opentune_core::protocol::tp20channel::{Tp20Channel, Tp20Options};
 use opentune_core::protocol::tp20sim::{Tp20Ecu, Tp20EcuConfig, Tp20SimLink};
 use opentune_core::Result;
@@ -141,4 +142,52 @@ pub fn open_sim_channel(ecu: Arc<Mutex<Tp20Ecu>>, keepalive_ms: u64) -> Result<T
     o.keepalive_ms = keepalive_ms;
     o.timeout_ms = 200;
     Tp20Channel::open(Box::new(Tp20SimLink::new(ecu)), &o)
+}
+
+/// A [`CanLink`] in front of [`Tp20SimLink`] that closes the unit's KWP
+/// session whenever the tester sets up a channel (a frame on
+/// [`TP20_SETUP_ID`]), as a real module does: a re-opened channel starts in
+/// the default session.
+pub struct SessionResetLink {
+    inner: Tp20SimLink,
+    unit: Arc<Mutex<SimDq250>>,
+}
+
+impl SessionResetLink {
+    /// Wrap the link onto `ecu`, closing `unit`'s session on every setup.
+    pub fn new(ecu: Arc<Mutex<Tp20Ecu>>, unit: Arc<Mutex<SimDq250>>) -> Self {
+        Self {
+            inner: Tp20SimLink::new(ecu),
+            unit,
+        }
+    }
+}
+
+impl CanLink for SessionResetLink {
+    fn send_frame(&mut self, id: u32, data: &[u8]) -> Result<()> {
+        if id == TP20_SETUP_ID {
+            self.unit
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .session_open = false;
+        }
+        self.inner.send_frame(id, data)
+    }
+    fn recv_frame(&mut self, timeout_ms: u64) -> Result<(u32, Vec<u8>)> {
+        self.inner.recv_frame(timeout_ms)
+    }
+}
+
+/// [`open_sim_channel`] through a [`SessionResetLink`]: every channel set up
+/// (the first and each automatic re-open) closes `unit`'s session.
+pub fn open_sim_channel_resetting(
+    ecu: Arc<Mutex<Tp20Ecu>>,
+    unit: Arc<Mutex<SimDq250>>,
+    keepalive_ms: u64,
+) -> Result<Tp20Channel> {
+    let mut o = Tp20Options::new(TP20_LOGICAL_ADDRESS);
+    o.rx_id = TP20_TESTER_RX_ID;
+    o.keepalive_ms = keepalive_ms;
+    o.timeout_ms = 200;
+    Tp20Channel::open(Box::new(SessionResetLink::new(ecu, unit)), &o)
 }

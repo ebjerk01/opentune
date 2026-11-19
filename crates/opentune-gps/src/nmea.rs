@@ -297,6 +297,16 @@ fn opt_unsigned(
     }
 }
 
+/// Optional course-over-ground field: degrees in `0..=360` (some receivers
+/// write 360.0 for north).
+fn opt_course(s: &str, sentence: &'static str) -> Result<Option<f64>, NmeaError> {
+    let field = "course";
+    match opt_num(s, sentence, field)? {
+        Some(v) if !(0.0..=360.0).contains(&v) => Err(NmeaError::Malformed { sentence, field }),
+        v => Ok(v),
+    }
+}
+
 fn opt_time(s: &str, sentence: &'static str) -> Result<Option<UtcTime>, NmeaError> {
     if s.is_empty() {
         return Ok(None);
@@ -351,11 +361,21 @@ fn opt_date(s: &str, sentence: &'static str) -> Result<Option<UtcDate>, NmeaErro
     let day = d(0) * 10 + d(1);
     let month = d(2) * 10 + d(3);
     let yy = u16::from(d(4) * 10 + d(5));
-    if !(1..=31).contains(&day) || !(1..=12).contains(&month) {
+    let year = if yy < 80 { 2000 + yy } else { 1900 + yy };
+    if !(1..=12).contains(&month) || !(1..=days_in_month(year, month)).contains(&day) {
         return Err(bad);
     }
-    let year = if yy < 80 { 2000 + yy } else { 1900 + yy };
     Ok(Some(UtcDate { year, month, day }))
+}
+
+/// Days in `month` (1..=12) of `year`, Gregorian leap years.
+fn days_in_month(year: u16, month: u8) -> u8 {
+    match month {
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
 }
 
 /// `ddmm.mmmm` / `dddmm.mmmm` + hemisphere to signed decimal degrees. Both
@@ -450,7 +470,7 @@ fn parse_rmc(f: &[&str]) -> Result<Rmc, NmeaError> {
         valid,
         position: opt_position(f, 2, S)?,
         speed_knots: opt_unsigned(get(f, 6), S, "speed")?,
-        course_deg: opt_num(get(f, 7), S, "course")?,
+        course_deg: opt_course(get(f, 7), S)?,
         date: opt_date(get(f, 8), S)?,
         mode: opt_mode(get(f, 11), S)?,
     })
@@ -506,7 +526,7 @@ fn parse_vtg(f: &[&str]) -> Result<Vtg, NmeaError> {
     const S: &str = "VTG";
     if f.len() == 4 {
         return Ok(Vtg {
-            course_deg: opt_num(get(f, 0), S, "course")?,
+            course_deg: opt_course(get(f, 0), S)?,
             speed_knots: opt_unsigned(get(f, 2), S, "speed knots")?,
             speed_kmh: opt_unsigned(get(f, 3), S, "speed km/h")?,
             mode: None,
@@ -523,7 +543,7 @@ fn parse_vtg(f: &[&str]) -> Result<Vtg, NmeaError> {
         }
     }
     Ok(Vtg {
-        course_deg: opt_num(get(f, 0), S, "course")?,
+        course_deg: opt_course(get(f, 0), S)?,
         speed_knots: opt_unsigned(get(f, 4), S, "speed knots")?,
         speed_kmh: opt_unsigned(get(f, 6), S, "speed km/h")?,
         mode: opt_mode(get(f, 8), S)?,
@@ -625,6 +645,11 @@ mod tests {
             "GPRMC,123519,A,4807.038,N,01131.000,E,inf,0,010120",
             "GPRMC,123519,A,4807.038,N,01131.000,E,-1,0,010120",
             "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,320120",
+            // Regression: a day the month does not have used to pass (and
+            // reach the log as an impossible date).
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,310420",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,300220",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,0,290221",
             "GPRMC,123519,A",
             "GPGGA,123519,4807.038,N,01131.000,E,9,08,0.9,545.4,M,46.9,M,,",
             "GPGGA,123519,4807.038,N,01131.000,E,1,x8,0.9,545.4,M,46.9,M,,",
@@ -633,12 +658,37 @@ mod tests {
             "GPVTG,054.7,T,034.4,M,005.5,N,010.2,X,A",
             "GPVTG,054.7,T,034.4,M,005.5,N,010.2,K,ZZ",
             "GPVTG,1e3,T,034.4,M,005.5,N,010.2,K,A",
+            // Regression: a course outside 0..=360 degrees used to be kept.
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,-5,010120",
+            "GPRMC,123519,A,4807.038,N,01131.000,E,0,360.1,010120",
+            "GPVTG,720,T,034.4,M,005.5,N,010.2,K,A",
+            "GPVTG,-0.5,034.4,005.5,010.2",
         ] {
             assert!(
                 matches!(parse_sentence(&s(body)), Err(NmeaError::Malformed { .. })),
                 "{body}"
             );
         }
+    }
+
+    #[test]
+    fn calendar_edges_of_the_date_field() {
+        let date = |d: &str| match parse_sentence(&s(&format!(
+            "GPRMC,000000,A,4807.038,N,01131.000,E,0,0,{d}"
+        ))) {
+            Ok(Sentence {
+                body: Body::Rmc(r), ..
+            }) => r.date.map(|x| x.to_string()),
+            _ => None,
+        };
+        assert_eq!(date("290220").as_deref(), Some("2020-02-29"));
+        assert_eq!(date("290200").as_deref(), Some("2000-02-29"));
+        assert_eq!(date("300420").as_deref(), Some("2020-04-30"));
+        assert_eq!(date("311279").as_deref(), Some("2079-12-31"));
+        assert_eq!(date("010180").as_deref(), Some("1980-01-01"));
+        assert_eq!(date("290221"), None);
+        assert_eq!(date("000120"), None);
+        assert_eq!(date("011320"), None);
     }
 
     #[test]

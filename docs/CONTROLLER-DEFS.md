@@ -214,10 +214,12 @@ errors fail CI, warnings are shown with `--warnings`.
 | `signal.value` | error | enum raws fit the width and are unique. |
 | `signal.invalid` | error | invalid markers fit the width. |
 | `signal.raw_range` | error | `[min, max]` ordered and within the width. |
+| `signal.overlap` | warn | two signals of one frame share some, but not all, payload bits (the same bits under two names are an alternative view and fine). |
 | `live.duplicate` | error | live name used twice for the same source set. |
 | `live.ref` | error | a `can_signal` source names an existing bus/frame/signal. |
 | `live.uds_len` | error | UDS value length 1..4. |
 | `live.scaling` | error | UDS factor finite and non-zero. |
+| `live.kwp_duplicate` | error | a measuring-block `(group, cell)` is named by one live entry only. |
 | `adaptation.duplicate` | error | adaptation name used twice. |
 | `adaptation.table` | error | `table` names an existing table. |
 | `table.duplicate` | error | table name used twice. |
