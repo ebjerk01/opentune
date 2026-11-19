@@ -298,7 +298,9 @@
     setGauge("gR", vals.rpm != null ? vals.rpm : null, 0, max, "rpm", 0, red);
     const b = vals.boost_kpa;
     setGauge("gB", b == null ? null : bar ? b / 100 : b, bar ? -0.2 : -20, bar ? 2.5 : 250, bar ? "bar" : "kPa", bar ? 2 : 0, null);
-    panel.querySelectorAll(".tile").forEach((d) => { if (!d.classList.contains("na")) paintTile(d, d.dataset.k); });
+    // Only the dashboard's own tiles: the GPS card mounted in this panel has
+    // .tile elements of its own (no footer), which paintTile must not touch.
+    $("dashGrid").querySelectorAll(".tile").forEach((d) => { if (!d.classList.contains("na")) paintTile(d, d.dataset.k); });
   }
 
   // ---- record (Live-log CSV) -------------------------------------------------
