@@ -35,6 +35,12 @@ fn bit_positions(start: u16, len: u8, order: ByteOrder) -> Option<Vec<u16>> {
     Some(out)
 }
 
+/// Bit positions (0-based, `byte * 8 + bit`) a signal occupies, or `None`
+/// for an impossible layout.
+pub fn bits(start: u16, len: u8, order: ByteOrder) -> Option<Vec<u16>> {
+    bit_positions(start, len, order)
+}
+
 /// Bytes needed to hold the signal (highest byte index + 1), or `None` for an
 /// impossible layout.
 pub fn bytes_needed(start: u16, len: u8, order: ByteOrder) -> Option<usize> {

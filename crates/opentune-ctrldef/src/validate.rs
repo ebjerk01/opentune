@@ -4,7 +4,7 @@
 //! [`ControllerDef::validate_links`] also checks the ids it points at (ecudefs,
 //! database units, checksum algorithms) against a [`LinkContext`] the caller
 //! fills from the repository (the CLI and the repository test do).
-use crate::signal::bytes_needed;
+use crate::signal::{bits, bytes_needed};
 use crate::{ControllerDef, DiagChannel, LiveSource, SignalKind, TableAxis, TableDef};
 use opentune_core::ecudef::EcuDef;
 use opentune_core::Protocol;
@@ -380,6 +380,30 @@ impl ControllerDef {
                     o.warn("frame.empty", &floc, "frame has no signals");
                 }
                 let mut snames = HashSet::new();
+                // Two signals sharing *some* bits decode the same payload two
+                // ways: a layout typo, or a multiplexed frame this format
+                // cannot express. Signals over exactly the same bits are an
+                // alternative view of one field (a DBC name and a decoded
+                // one) and are fine.
+                let laid: Vec<(&str, HashSet<u16>)> = f
+                    .signals
+                    .iter()
+                    .filter_map(|s| {
+                        let b = bits(s.start, s.len, s.byte_order)?;
+                        Some((s.name.as_str(), b.into_iter().collect()))
+                    })
+                    .collect();
+                for (i, (a, ab)) in laid.iter().enumerate() {
+                    for (b, bb) in &laid[i + 1..] {
+                        if ab != bb && !ab.is_disjoint(bb) {
+                            o.warn(
+                                "signal.overlap",
+                                &floc,
+                                format!("signals '{a}' and '{b}' share some payload bits"),
+                            );
+                        }
+                    }
+                }
                 for s in &f.signals {
                     let sloc = format!("{floc} signal '{}'", s.name);
                     if !snames.insert(s.name.clone()) {
@@ -778,6 +802,38 @@ mod tests {
         ] {
             assert!(c.contains(&want), "{want} not in {c:?}");
         }
+    }
+
+    #[test]
+    fn overlapping_signals_are_flagged() {
+        let mut v = minimal();
+        let frame = |sigs: serde_json::Value| {
+            serde_json::json!([{"name": "main", "bitrate": 500000,
+                "frames": [{"id": "0x100", "name": "F", "signals": sigs}]}])
+        };
+        // Adjacent little- and big-endian signals do not overlap.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "a", "start": 0, "len": 8},
+            {"name": "b", "start": 8, "len": 8},
+            {"name": "c", "start": 23, "len": 16, "byte_order": "big"}
+        ]));
+        assert!(!codes(&def(v.clone())).contains(&"signal.overlap"));
+        // The same bits under two names: an alternative view, not a clash.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "raw", "start": 8, "len": 8},
+            {"name": "decoded", "start": 8, "len": 8}
+        ]));
+        assert!(!codes(&def(v.clone())).contains(&"signal.overlap"));
+        // Bits 12..=15 are in both a 16-bit Intel and a 4-bit Motorola signal.
+        v["buses"] = frame(serde_json::json!([
+            {"name": "a", "start": 0, "len": 16},
+            {"name": "b", "start": 15, "len": 4, "byte_order": "big"}
+        ]));
+        let issues = def(v).validate();
+        let o: Vec<_> = issues.iter().filter(|i| i.code == "signal.overlap").collect();
+        assert_eq!(o.len(), 1, "{issues:?}");
+        assert_eq!(o[0].severity, Severity::Warn);
+        assert!(o[0].message.contains("'a' and 'b'"));
     }
 
     #[test]
