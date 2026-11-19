@@ -1,5 +1,6 @@
 //! The interface-driver abstraction. Every reader/flasher implements [`Interface`].
 use crate::monitor::CanMonitor;
+use crate::protocol::kline::KLineRaw;
 use crate::protocol::seedkey::SeedKey;
 use crate::protocol::DiagTransport;
 use crate::{Capabilities, ConnectConfig, EcuId, MemoryRegion, Progress, Result};
@@ -84,6 +85,16 @@ pub trait Interface {
         None
     }
 
+    /// Borrow this driver's K-line as an unframed byte link ([`KLineRaw`]),
+    /// for protocols that frame their own packets (Subaru SSM2).
+    ///
+    /// The default returns `None`. A K-line driver that can offer it does so
+    /// after [`open`](Interface::open); open it with `options["init"] =
+    /// "none"` when the protocol needs no wake-up (SSM2 does not).
+    fn kline(&mut self) -> Option<&mut dyn KLineRaw> {
+        None
+    }
+
     /// Hand this driver a [`SeedKey`] handler for its security-access unlock
     /// (block read/write behind 0x27 / KWP security). OpenTune ships no OEM
     /// algorithm; the caller (a plugin or the user) supplies it.
@@ -151,6 +162,12 @@ mod tests {
     fn drivers_without_an_unlock_step_refuse_a_seed_key() {
         let mut d: Box<dyn Interface> = Box::new(Bare);
         assert!(!d.set_seed_key(Box::new(Echo)));
+    }
+
+    #[test]
+    fn drivers_offer_no_raw_kline_by_default() {
+        let mut d: Box<dyn Interface> = Box::new(Bare);
+        assert!(d.kline().is_none());
     }
 
     #[test]
