@@ -190,7 +190,10 @@
   };
 
   // ---- Adaptation ---------------------------------------------------------
-  const KIND_KEYS = { value: ["did", "unit", "min", "max"], routine: ["id"], actuator: ["did"] };
+  const KIND_KEYS = {
+    value: ["did", "unit", "min", "max"], routine: ["id"], actuator: ["did"],
+    kwp_group: ["group"], kwp_basic_settings: ["group"], kwp_adaptation: ["channel", "unit", "min", "max"],
+  };
   F.adaptation_list = async ({ defPath }) => {
     const def = readFile(defPath);
     const t = def.req_id != null ? { tx: canId(def.req_id), rx: canId(def.resp_id), assumed: false } : null;
@@ -198,8 +201,9 @@
       id: def.id, name: def.name, module: def.module, requires_security: !!def.requires_security, target: t && tjson(t),
       channels: def.channels.map((c) => {
         const o = { name: c.name, note: c.note || "", kind: c.kind };
-        const src = Object.assign({}, c, { unit: c.field && c.field.scaling ? c.field.scaling.unit : "" });
-        KIND_KEYS[c.kind].forEach((k) => (o[k] = src[k] == null ? null : src[k]));
+        const sc = (c.field && c.field.scaling) || c.scaling;
+        const src = Object.assign({}, c, { unit: sc ? sc.unit || "" : "" });
+        (KIND_KEYS[c.kind] || []).forEach((k) => (o[k] = src[k] == null ? null : src[k]));
         return o;
       }),
     };
@@ -244,6 +248,66 @@
       channel: ch.name, did: ch.did, applied: true, control_returned: true, response: `6F ${hexs(did)} 03 ${hexs(state)}`,
       status: state[0], status_unit: "", outcome: "completed", message: "", safe: true, security_required: !!def.requires_security, target: tjson(t),
     };
+  };
+
+  // ---- Adaptation: KWP2000 (simulated module only) ---------------------------
+  // Synthetic values in the shape of opentune_adaptation::sim; no adapter here.
+  const kwpSim = { adapt: { 1: 0x0200, 5: 1000 } };
+  const kwpOnlySim = (args) => {
+    if (!args.sim) throw "Preview: no adapter here — tick Simulated module.";
+  };
+  const kwpCell = (index, formula, a, b, value, unit) => ({ index, formula, a, b, value, unit });
+  const kwpReading = (ch, raw) => ({
+    channel: ch.name, adaptation_channel: ch.channel, raw, engineering: raw * ((ch.scaling && ch.scaling.factor) || 1),
+    unit: (ch.scaling && ch.scaling.unit) || "", status: 0, value_format: 3, measured: kwpCell(0, 0x1a, 0, 30, 30, "°C"), record: [], reestablished: false,
+  });
+  const kwpChannel = (args) => {
+    const def = readFile(args.defPath);
+    const ch = def.channels.find((c) => c.name === args.channel);
+    if (!ch) throw `channel '${args.channel}' not in ${def.id}`;
+    return ch;
+  };
+  F.adaptation_kwp_read = async (args) => {
+    await wait(150);
+    kwpOnlySim(args);
+    const ch = kwpChannel(args);
+    if (ch.kind === "kwp_group") {
+      return { kind: "kwp_group", reading: { channel: ch.name, group: ch.group, cells: [kwpCell(0, 0x1a, 0, 90, 90, "°C"), kwpCell(1, 0x21, 100, 50, 50, "%")], raw: [], reestablished: false }, target: { sim: true } };
+    }
+    if (ch.kind !== "kwp_adaptation") throw `\`${ch.name}\` is not a kwp_group / kwp_adaptation channel`;
+    return { kind: "kwp_adaptation", reading: kwpReading(ch, kwpSim.adapt[ch.channel] || 0), target: { sim: true } };
+  };
+  F.adaptation_kwp_basic = async (args) => {
+    if (!args.dryRun && args.ack !== true) throw "basic settings refused: confirm you understand it runs a procedure on the module (ack required)";
+    await wait(300);
+    const ch = kwpChannel(args);
+    const g = hx2(ch.group);
+    const plan = ["10 89  startDiagnosticSession", "27 03  securityAccess requestSeed", "27 04 <key>  securityAccess sendKey", "31 B8 00 00  enumerate", `31 B8 00 ${g}  start basic settings`, `31 BA 00 ${g}  read measuring block in basic settings (x${args.polls || 3})`, `32 B8 00 ${g}  stop basic settings`];
+    if (args.dryRun) return { channel: ch.name, group: ch.group, plan, login: null, started: false, stopped: false, samples: [], outcome: { outcome: "planned" }, target: { dry_run: true } };
+    kwpOnlySim(args);
+    if (!args.seedkey) throw "refused before sending anything: basic settings needs SecurityAccess with a seed/key handler; OpenTune ships no VAG KWP login algorithm, an embedding build (e.g. Bench) supplies one";
+    const samples = Array.from({ length: args.polls || 3 }, (_, i) => ({ index: i, status: 0, cells: [kwpCell(0, 0x21, 100, 10, 10, "%"), kwpCell(1, 0x1a, 0, 80, 80, "°C")], raw: [] }));
+    return { channel: ch.name, group: ch.group, plan, login: { session: 0x89, security_level: 3 }, started: true, stopped: true, samples, outcome: { outcome: "completed" }, target: { sim: true } };
+  };
+  F.adaptation_kwp_adapt = async (args) => {
+    if (!args.dryRun && args.ack !== true) throw "adaptation test/save refused: confirm you understand it changes the module (ack required)";
+    await wait(300);
+    const ch = kwpChannel(args);
+    const raw = parseInt(args.value, String(args.value).toLowerCase().startsWith("0x") ? 16 : 10);
+    if (!(raw >= 0 && raw <= 0xffff)) throw `value '${args.value}': expected 0..=65535 (decimal or 0x hex)`;
+    const save = args.mode === "save";
+    const v = [hx2(raw >> 8), hx2(raw)].join(" ");
+    const plan = ["10 89  startDiagnosticSession", "27 03  securityAccess requestSeed", "27 04 <key>  securityAccess sendKey", "31 B8 00 00  enumerate", "31 B8 01 03  enter adaptation", `31 B9 01 03 ${hx2(ch.channel)}  select channel`, "31 BA 01 03  read (before)", `31 B9 01 03 ${v}  test value`]
+      .concat(save ? [`31 BB 01 03 ${v} ${hexs(parseHex(args.wsc))}  save value + workshop code`] : [])
+      .concat(["31 BA 01 03  read back", "32 B8 01 03  exit adaptation"]);
+    const base = { channel: ch.name, adaptation_channel: ch.channel, mode: args.mode, new_raw: raw, plan, exited: true };
+    if (save && parseHex(args.wsc).length !== 6) throw `refused before sending anything: saving \`${ch.name}\` needs the module's 6-byte workshop code`;
+    if (args.dryRun) return Object.assign(base, { before: null, after: null, login: null, exited: false, outcome: { outcome: "planned" }, target: { dry_run: true } });
+    kwpOnlySim(args);
+    if (!args.seedkey) throw "refused before sending anything: an adaptation test needs SecurityAccess with a seed/key handler; OpenTune ships no VAG KWP login algorithm, an embedding build (e.g. Bench) supplies one";
+    const before = kwpReading(ch, kwpSim.adapt[ch.channel] || 0);
+    if (save) kwpSim.adapt[ch.channel] = raw;
+    return Object.assign(base, { before, after: kwpReading(ch, raw), login: { session: 0x89, security_level: 3 }, outcome: { outcome: save ? "verified" : "tested" }, target: { sim: true } });
   };
 
   // ---- Service functions ----------------------------------------------------

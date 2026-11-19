@@ -180,7 +180,8 @@ to ignore, one per line, for deliberate synthetic data the heuristics flag.
      safety notes, evidence words). Check it with
      `opentune controller validate packs/<your-id>/controllers --warnings`.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
-     `opentune-adaptation` and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
+     `opentune-adaptation` ([`ADAPTATION.md`](ADAPTATION.md), UDS and VAG
+     KWP2000 channel kinds) and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
      ships them yet: open, license-compatible coding data is rare, and vendor
      label files are off-limits.
 4. **Check it.** `opentune packs validate packs/<your-id>` must report 0

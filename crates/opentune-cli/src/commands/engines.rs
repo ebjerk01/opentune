@@ -305,7 +305,7 @@ pub fn run_log(
 
 /// Dispatch the `adaptation` subcommand.
 pub fn run_adaptation(
-    reg: &Registry,
+    ctx: &CliContext,
     def_path: &std::path::Path,
     driver: &str,
     store: Option<&std::path::Path>,
@@ -326,11 +326,11 @@ pub fn run_adaptation(
         AdaptAction::List => {
             println!("Adaptation channels in {} ({}):", def.name, def.id);
             for ch in &def.channels {
-                println!("  {}", ch.name);
+                println!("  {:<24} {}", ch.name, ch.kind.tag());
             }
         }
         AdaptAction::Read { channel } => {
-            let mut drv = open_diag_driver(reg, driver, store)?;
+            let mut drv = open_diag_driver(ctx.registry(), driver, store)?;
             let transport = drv.diag().ok_or_else(|| {
                 anyhow!("driver '{driver}' does not expose a diagnostic transport")
             })?;
@@ -342,6 +342,7 @@ pub fn run_adaptation(
                 r.channel, r.raw, r.engineering, r.unit
             );
         }
+        kwp => super::kwp_adapt::run(ctx, &def, driver, timeout_ms, kwp)?,
     }
     Ok(())
 }

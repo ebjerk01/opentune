@@ -86,7 +86,7 @@ a top-level command is added without a row here.
 | `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
 | `opentune coding` | Module coding over UDS (read, decode, edit, write) |
-| `opentune adaptation` | Adaptation channels (value / routine / actuator) |
+| `opentune adaptation` | Adaptation channels: UDS value / routine / actuator, and VAG KWP2000 over TP2.0 or K-line (`kwp-read`, `kwp-basic`, `kwp-test`, `kwp-save`; [`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
 | `opentune log` | Log live data from a RomRaider-style `logger.xml` to CSV (`--fast`: UDS `0x2C` dynamic DIDs; `--gps <port\|file>`: GPS channels + `speed_error_kmh`, see [`LIVE-LOGGING.md`](LIVE-LOGGING.md#gps-channels)) |
@@ -173,7 +173,7 @@ apps that need it.
 | `opentune-container` | VAG flash containers (FRF / ODX / ODX-F / SGO) |
 | `opentune-cbf` | Mercedes CBF diagnostic-description parser |
 | `opentune-coding` | Module coding engine (read / decode / edit / safe write-back) |
-| `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests |
+| `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests over UDS; VAG KWP2000 measuring blocks, basic settings and adaptation read/test/save over TP2.0 or K-line (`kwp`, data-defined `kwp_*` channel kinds, gated writes, synthetic module in `sim`) ([`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |
 | `opentune-logdef` | RomRaider-style `logger.xml` parser + live logging: per-channel polling and fast mode over UDS `0x2C` dynamic DIDs ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |

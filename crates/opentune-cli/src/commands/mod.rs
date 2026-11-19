@@ -16,6 +16,7 @@ pub mod device;
 pub mod engines;
 pub mod formats;
 pub mod image;
+pub mod kwp_adapt;
 pub mod module_flash;
 pub mod reference;
 
@@ -173,7 +174,7 @@ pub fn dispatch(ctx: &CliContext, cmd: Command) -> Result<()> {
             store,
             timeout_ms,
             action,
-        } => engines::run_adaptation(reg, &def, &driver, store.as_deref(), timeout_ms, action),
+        } => engines::run_adaptation(ctx, &def, &driver, store.as_deref(), timeout_ms, action),
         Command::Autoscan {
             modules,
             driver,

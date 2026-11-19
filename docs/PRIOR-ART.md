@@ -47,6 +47,13 @@ they are here only to indicate relative reach, not to rank quality.
 | [fenugrec/freediag](https://github.com/fenugrec/freediag) | ~160 | GPL-2.0-or-later | A long-standing K-line / ISO 9141 / ISO 14230 diagnostic stack; a reference for L-line init, timing and the older K-line protocols behind our `iso14230_kline`/`iso9141` transports. GPL-2.0-**or-later** → compatible with GPL-3.0. |
 | [fenugrec/nisprog](https://github.com/fenugrec/nisprog) | ~160 | GPL-3.0 | Nissan ECU read/reflash over K-line; a worked example of a vendor-specific reprogramming sequence and its seed/key handling. GPL-3.0 → compatible. |
 
+## VAG KWP2000 adaptation and basic settings
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [gmenounos/kw1281test](https://github.com/gmenounos/kw1281test) | — | MIT | Licence checked 2026-11-19 (MIT `LICENSE.txt`). The VAG adaptation workflow (read / test / save of a 16-bit channel value, save with a workshop code; KWP1281 block titles `0x21`/`0x22`/`0x2A`, basic settings `0x28`) and, for KWP2000, the startRoutineByLocalIdentifier family behind the `kwp_*` defaults of `opentune-adaptation`: routine ids `B8` (enter, `32 B8` exits), `B9` (select channel / test value), `BA` (read), `BB` (save + 6-byte workshop code), the `01 03` adaptation and `00 <group>` basic-settings selectors, the read-record layouts, and SecurityAccess level `03`/`04`. Observed there on EDC16 over K-line, so **unconfirmed** for other modules. Facts only, no code copied; its key computation is **not** used (OpenTune ships no VAG login algorithm). See [ADAPTATION.md](ADAPTATION.md#kwp2000-vag-tp20--k-line). |
+| [michaeldove/vag-diag-sim](https://github.com/michaeldove/vag-diag-sim) | ~12 | MIT | A TP2.0 KWP2000 module simulator that answers session `10 89` and the `31 B8` routine ("basic measuring blocks"): a second, independent sighting of the session byte and the `B8` routine id. |
+
 ## Tuning suites & map/definition formats
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
@@ -114,7 +121,7 @@ above:
 - **MIT / BSD (permissive)** — code and patterns may be reused in OpenTune,
   keeping the original copyright/licence notice. Covers VW_Flash, ME7Sum,
   moto-ecu-checksum, OpenVehicleDiag, python-udsoncan, python-can-isotp,
-  cantools, SavvyCAN, esp32-isotp-ble-bridge.
+  cantools, SavvyCAN, esp32-isotp-ble-bridge, kw1281test, vag-diag-sim.
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
