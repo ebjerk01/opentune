@@ -1,7 +1,7 @@
 {
   "id": "generic-obd2",
   "name": "Generic OBD-II (SAE J1979)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "maker": "Any",
   "platform": "OBD-II on CAN (ISO 15765-4)",
   "vehicles": [
@@ -9,7 +9,7 @@
   ],
   "author": "OpenTune contributors",
   "license": "GPL-3.0-or-later",
-  "description": "Standardised, maker-independent OBD-II content: the ISO 15765-4 11-bit module addresses for Auto-scan, a mode-01 live-data logger for the common PIDs, and service scripts for readiness / DTC reads / VIN and the mode-04 clear. Everything here is defined by SAE J1979 / ISO 15031-5 and ISO 15765-4; no manufacturer data.",
+  "description": "Standardised, maker-independent OBD-II content: the ISO 15765-4 11-bit module addresses for Auto-scan, a mode-01 live-data logger for the common PIDs, a datalogging trigger set (WOT pulls, coolant over-temperature marks), and service scripts for readiness / DTC reads / VIN and the mode-04 clear. Everything here is defined by SAE J1979 / ISO 15031-5 and ISO 15765-4; no manufacturer data.",
   "sources": [
     "SAE J1979 / ISO 15031-5",
     "ISO 15765-4 (11-bit OBD-on-CAN identifiers)"

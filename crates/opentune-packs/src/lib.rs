@@ -3,7 +3,7 @@
 //! A **definition pack** is one versioned, loadable bundle of OpenTune's
 //! data-defined knowledge for a vehicle/platform: ECU definitions, coding-label
 //! sets, adaptation-channel maps, service-function scripts, logger definitions,
-//! module lists and drivetrain controller definitions. It is how OpenTune's coverage grows by *data* rather than
+//! module lists, drivetrain controller definitions and datalogging triggers. It is how OpenTune's coverage grows by *data* rather than
 //! code — the app (or a community contributor) ships a pack, and every service
 //! engine (`opentune-coding`, `-adaptation`, `-servicefn`, `-logdef`,
 //! `-autoscan`, `-ctrldef`) picks up what it needs.
@@ -23,6 +23,7 @@
 //!     loggers/*.json      # opentune_logdef::LogDef
 //!     modules/*.json      # opentune_autoscan::VehicleModules
 //!     controllers/*.json  # opentune_ctrldef::ControllerDef (TCU / AWD)
+//!     triggers/*.json     # opentune_logdef::TriggerSet (datalogging triggers)
 //! ```
 //!
 //! Loading is **honest**: a file that fails to parse or validate is recorded in
@@ -34,7 +35,8 @@
 //! structural/honesty rules plus its file-name rule (the file stem is the id);
 //! its links (ecudefs, database units, checksum ids) need the repository and
 //! are checked by the consumer that has it (`opentune controller validate`, the
-//! desktop Controller panel).
+//! desktop Controller panel). A trigger set is validated with
+//! [`TriggerSet::validate`]; a non-empty `id` must match the file stem.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -48,7 +50,7 @@ use opentune_coding::CodingDef;
 use opentune_core::ecudef::{is_scaffolding_file, EcuDef};
 use opentune_core::validate::has_errors;
 use opentune_ctrldef::ControllerDef;
-use opentune_logdef::LogDef;
+use opentune_logdef::{LogDef, TriggerSet};
 use opentune_servicefn::ServiceScript;
 
 mod validate;
@@ -121,6 +123,9 @@ pub enum Kind {
     /// `controllers/` — [`ControllerDef`] (drivetrain TCU / AWD definitions,
     /// the same files as the repository's `ctrldefs/`).
     Controller,
+    /// `triggers/` — [`TriggerSet`] (datalogging triggers for `log` /
+    /// `obd read --trigger`).
+    Trigger,
 }
 
 impl Kind {
@@ -134,9 +139,10 @@ impl Kind {
             Kind::Logger => "loggers",
             Kind::Modules => "modules",
             Kind::Controller => "controllers",
+            Kind::Trigger => "triggers",
         }
     }
-    /// Singular name of the kind (`ecudef`, `coding`, …, `controller`).
+    /// Singular name of the kind (`ecudef`, `coding`, …, `trigger`).
     pub fn name(self) -> &'static str {
         match self {
             Kind::EcuDef => "ecudef",
@@ -146,10 +152,11 @@ impl Kind {
             Kind::Logger => "logger",
             Kind::Modules => "modules",
             Kind::Controller => "controller",
+            Kind::Trigger => "trigger",
         }
     }
     /// All kinds, in load order.
-    pub fn all() -> [Kind; 7] {
+    pub fn all() -> [Kind; 8] {
         [
             Kind::EcuDef,
             Kind::Coding,
@@ -158,6 +165,7 @@ impl Kind {
             Kind::Logger,
             Kind::Modules,
             Kind::Controller,
+            Kind::Trigger,
         ]
     }
 }
@@ -227,6 +235,8 @@ pub struct Pack {
     pub modules: Vec<VehicleModules>,
     /// Drivetrain controller definitions (TCU / AWD).
     pub controllers: Vec<ControllerDef>,
+    /// Datalogging trigger sets.
+    pub triggers: Vec<TriggerSet>,
     /// Every definition file that loaded, in load order (kind, then file name).
     pub entries: Vec<PackEntry>,
     /// Load diagnostics.
@@ -294,6 +304,7 @@ pub fn load_pack(dir: &Path) -> Result<Pack, PackError> {
         loggers: Vec::new(),
         modules: Vec::new(),
         controllers: Vec::new(),
+        triggers: Vec::new(),
         entries: Vec::new(),
         report: LoadReport::default(),
     };
@@ -442,6 +453,24 @@ fn load_one(
             }
             Err(e) => Err(format!("parse error: {e}")),
         },
+        Kind::Trigger => match TriggerSet::from_json(text) {
+            Ok(d) => {
+                let mut errs = d.validate();
+                if !d.id.is_empty() && d.id != stem {
+                    errs.push(format!(
+                        "id '{}' does not match the file name '{stem}.json'",
+                        d.id
+                    ));
+                }
+                if !errs.is_empty() {
+                    return Err(format!("trigger validation: {}", errs.join("; ")));
+                }
+                let label = (d.id.clone(), d.name.clone());
+                pack.triggers.push(d);
+                Ok(label)
+            }
+            Err(e) => Err(format!("parse error: {e}")),
+        },
     }
 }
 
@@ -499,7 +528,7 @@ impl PackLibrary {
     }
 
     /// Total definitions loaded across all packs, by kind.
-    pub fn counts(&self) -> [(Kind, usize); 7] {
+    pub fn counts(&self) -> [(Kind, usize); 8] {
         let mut c = [
             (Kind::EcuDef, 0usize),
             (Kind::Coding, 0),
@@ -508,6 +537,7 @@ impl PackLibrary {
             (Kind::Logger, 0),
             (Kind::Modules, 0),
             (Kind::Controller, 0),
+            (Kind::Trigger, 0),
         ];
         for p in &self.packs {
             c[0].1 += p.ecudefs.len();
@@ -517,6 +547,7 @@ impl PackLibrary {
             c[4].1 += p.loggers.len();
             c[5].1 += p.modules.len();
             c[6].1 += p.controllers.len();
+            c[7].1 += p.triggers.len();
         }
         c
     }
@@ -540,6 +571,10 @@ impl PackLibrary {
     /// All controller definitions across packs.
     pub fn controllers(&self) -> impl Iterator<Item = &ControllerDef> {
         self.packs.iter().flat_map(|p| p.controllers.iter())
+    }
+    /// All datalogging trigger sets across packs.
+    pub fn triggers(&self) -> impl Iterator<Item = &TriggerSet> {
+        self.packs.iter().flat_map(|p| p.triggers.iter())
     }
     /// Find a coding def by its `id`.
     pub fn coding_by_id(&self, id: &str) -> Option<&CodingDef> {
@@ -765,6 +800,57 @@ mod tests {
             "{}",
             dup.message
         );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    const TRIGGERS: &str = r#"{"format":"opentune-triggers","version":1,"id":"wot","name":"WOT",
+      "triggers":[{"name":"pull","action":"record",
+        "when":{"channel":"rpm","op":">","value":3000,"units":"rpm"},"pre_ms":1000}]}"#;
+
+    #[test]
+    fn loads_trigger_sets_with_validation() {
+        let d = temp_dir("trig");
+        write(&d, "pack.json", r#"{"id":"p","name":"P"}"#);
+        write(&d, "triggers/wot.json", TRIGGERS);
+        // named after a different id
+        write(&d, "triggers/other.json", TRIGGERS);
+        // parses, fails validation (mark with a pre window, no triggers)
+        write(
+            &d,
+            "triggers/bad.json",
+            r#"{"triggers":[{"name":"m","action":"mark","pre_ms":5,
+               "when":{"channel":"c","op":">","value":1}}]}"#,
+        );
+        write(&d, "triggers/typo.json", r#"{"triggers":[],"trigers":[]}"#);
+        let pack = load_pack(&d).unwrap();
+        assert_eq!(pack.triggers.len(), 1);
+        assert_eq!(
+            pack.entries,
+            vec![PackEntry {
+                kind: Kind::Trigger,
+                file: "triggers/wot.json".into(),
+                id: "wot".into(),
+                name: "WOT".into(),
+            }]
+        );
+        let mut notes: Vec<(&str, &str)> = pack
+            .report
+            .notes
+            .iter()
+            .map(|n| (n.file.as_str(), n.message.as_str()))
+            .collect();
+        notes.sort();
+        assert_eq!(notes.len(), 3, "{notes:?}");
+        assert!(notes[0].0.ends_with("bad.json") && notes[0].1.contains("not mark"));
+        assert!(notes[1].0.ends_with("other.json") && notes[1].1.contains("file name"));
+        assert!(notes[2].0.ends_with("typo.json") && notes[2].1.contains("parse error"));
+        let lib = PackLibrary {
+            packs: vec![pack],
+            failed: Vec::new(),
+        };
+        assert_eq!(lib.triggers().count(), 1);
+        assert_eq!(lib.counts()[7], (Kind::Trigger, 1));
+        assert_eq!(Kind::Trigger.dir(), "triggers");
         std::fs::remove_dir_all(&d).ok();
     }
 

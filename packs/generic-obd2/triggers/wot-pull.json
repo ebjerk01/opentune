@@ -1,0 +1,33 @@
+{
+  "format": "opentune-triggers",
+  "version": 1,
+  "id": "wot-pull",
+  "name": "WOT pull + over-temperature marks (generic OBD-II)",
+  "description": "Records wide-open-throttle pulls from the SAE J1979 mode-01 channels and marks coolant over-temperature. Channel ids list the loggers/obd2-mode01.json id first and the `opentune obd read` key second, so the file works with both. Use: opentune obd read --driver <id> --rounds 0 --out pulls.csv --trigger packs/generic-obd2/triggers/wot-pull.json --split 0C 11 05",
+  "max_pre_rows": 20000,
+  "triggers": [
+    {
+      "name": "wot-pull",
+      "description": "Engine speed (PID 0x0C) above 3000 rpm with throttle position (PID 0x11) above 90 % for 300 ms. Released after 1 s below either threshold; keeps 3 s before the fire and 5 s after the release.",
+      "action": "record",
+      "when": {
+        "all": [
+          { "channel": ["obd01_0c_rpm", "rpm"], "op": ">", "value": 3000, "units": "rpm" },
+          { "channel": ["obd01_11_throttle", "throttle_pos"], "op": ">", "value": 90, "units": "%" }
+        ]
+      },
+      "arm_ms": 300,
+      "release_ms": 1000,
+      "pre_ms": 3000,
+      "post_ms": 5000
+    },
+    {
+      "name": "coolant-hot",
+      "description": "Coolant temperature (PID 0x05) above 105 °C for 1 s; re-arms after 5 s below.",
+      "action": "mark",
+      "when": { "channel": ["obd01_05_coolant_temp", "coolant_temp"], "op": ">", "value": 105, "units": "°C" },
+      "arm_ms": 1000,
+      "release_ms": 5000
+    }
+  ]
+}

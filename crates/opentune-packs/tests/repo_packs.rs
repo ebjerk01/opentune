@@ -117,6 +117,87 @@ fn obd_logger_polls_through_the_live_engine() {
     assert_eq!(by_id("obd01_05_coolant_temp"), Some(83.0));
 }
 
+/// Every shipped trigger set refers to channels its own pack logs: each
+/// comparison has an id among the pack's logger parameters.
+#[test]
+fn shipped_triggers_refer_to_logged_channels() {
+    let lib = PackLibrary::load_all(&packs_root());
+    let mut n = 0;
+    for p in &lib.packs {
+        let ids: Vec<&str> = p
+            .loggers
+            .iter()
+            .flat_map(|d| d.params())
+            .map(|(_, _, x)| x.id.as_str())
+            .collect();
+        for t in &p.triggers {
+            n += 1;
+            assert!(
+                t.missing_channels(&ids).is_empty(),
+                "{}/{}: channels not in the pack's loggers: {:?}",
+                p.manifest.id,
+                t.id,
+                t.missing_channels(&ids)
+            );
+        }
+    }
+    assert!(n >= 1, "the generic-obd2 pack ships a trigger set");
+}
+
+/// The generic-obd2 WOT trigger fires on a simulated pull polled through the
+/// pack's own logger, and the over-temperature mark fires on a hot engine.
+#[test]
+fn obd_wot_trigger_fires_on_a_pull() {
+    use opentune_logdef::trigger::{Emit, MarkerKind};
+    use opentune_logdef::TriggerEngine;
+    let pack = load_pack(&packs_root().join("generic-obd2")).unwrap();
+    let def = &pack.loggers[0];
+    let set = pack.triggers.iter().find(|t| t.id == "wot-pull").unwrap();
+    let mut e: TriggerEngine<usize> = TriggerEngine::new(set.clone());
+    let mut kinds = Vec::new();
+    for round in 0..40usize {
+        // 100 ms rounds: WOT at 4000 rpm from 1.0 s to 2.5 s, coolant
+        // 110 degC from 2.5 s (mark after its 1 s hold, inside the window).
+        let pull = (10..25).contains(&round);
+        let rpm = if pull { 4000u16 } else { 1500 };
+        let tps = if pull { 250u8 } else { 30 };
+        let ect = if round >= 25 { 150u8 } else { 120 };
+        let mut diag = |req: &[u8]| -> Result<Vec<u8>, String> {
+            match req {
+                [0x01, 0x0C] => Ok([vec![0x41, 0x0C], (rpm * 4).to_be_bytes().to_vec()].concat()),
+                [0x01, 0x11] => Ok(vec![0x41, 0x11, tps]),
+                [0x01, 0x05] => Ok(vec![0x41, 0x05, ect]),
+                _ => Err("no response".into()),
+            }
+        };
+        let s = opentune_logdef::poll_once(
+            &mut diag,
+            def,
+            &["obd01_0c_rpm", "obd01_11_throttle", "obd01_05_coolant_temp"],
+        );
+        for em in e.push(round as u64 * 100, &s, vec![round]) {
+            if let Emit::Marker(m) = em {
+                kinds.push((m.kind, m.trigger));
+            }
+        }
+    }
+    e.finish();
+    let r = e.report();
+    assert_eq!(
+        r.fires,
+        vec![("wot-pull".to_string(), 1), ("coolant-hot".to_string(), 1)],
+        "{r:?}"
+    );
+    assert_eq!(r.windows.len(), 1);
+    // Fires at 1.3 s (300 ms hold), 3 s of history back to round 0 (the log
+    // start); released at 3.5 s (1 s below), recorded to the end of the log.
+    let w = &r.windows[0];
+    assert_eq!(w.start_ts, 0);
+    assert!(w.cut_by_end, "{w:?}");
+    assert_eq!(kinds[0], (MarkerKind::Start, "wot-pull".to_string()));
+    assert!(kinds.contains(&(MarkerKind::Mark, "coolant-hot".to_string())));
+}
+
 #[test]
 fn module_lists_use_valid_can_ids() {
     let lib = PackLibrary::load_all(&packs_root());
