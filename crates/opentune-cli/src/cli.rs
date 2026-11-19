@@ -432,7 +432,9 @@ pub enum Command {
     /// Data-defined by `--def`. UDS `0x22` (DID), OBD-II mode `0x01` (PID) and
     /// UDS `0x23` (raw-memory) parameters are driven; parameters with unknown
     /// addressing are reported as undetermined rather than guessed. With the
-    /// default `mock` driver it runs offline.
+    /// default `mock` driver it runs offline. `--transport ssm` / `ssm-can`
+    /// logs Subaru SSM parameters instead (batched A8 reads, chosen by the
+    /// module's capability bitmap and ROM ID; `--driver ssmsim` simulates).
     Log {
         /// RomRaider-style `logger.xml` definition file.
         #[arg(long)]
@@ -485,6 +487,8 @@ pub enum Command {
         /// OBD PID 0x0D or an id like `vss` / `vehicle_speed`).
         #[arg(long, value_name = "ID")]
         gps_speed_param: Option<String>,
+        #[command(flatten)]
+        ssm: crate::ssm_log::SsmLogArgs,
         /// Only poll these parameter ids (default: all enabled).
         params: Vec<String>,
     },
