@@ -72,7 +72,10 @@ test("every filled unit renders its card; units without a profile say so", () =>
       assert.ok(h.includes("Boot mode") && h.includes("Security"), u.id);
       if (u.access.boot.possible !== true) assert.ok(!h.includes("open case"), u.id);
       if (u.access.boot.possible === "unknown") assert.match(h, /unknown \(not documented\)/, u.id);
-      if (u.access.boot.possible === "unknown") assert.ok(!/Possible<\/div><div class="v">yes/.test(h), u.id);
+      if (u.access.boot.possible === "unknown") {
+        const boot = h.slice(h.indexOf("Boot mode"));
+        assert.ok(!/Possible<\/div><div class="v">yes/.test(boot.slice(0, boot.indexOf("Reach"))), u.id);
+      }
     } else assert.match(h, /No access profile for this unit yet/, u.id);
   }
   assert.ok(filled >= 4, `filled: ${filled}`);
