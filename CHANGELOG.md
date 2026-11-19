@@ -108,6 +108,18 @@ section (alpha/bench builds) until they are vehicle-tested.
   chunking. `opentune info` / `identify` / `read --driver openport2` now run end
   to end against it over a pty. Offline only.
 
+- Desktop **Render check** (Debug panel): the WebKit/GTK environment the app
+  sees (a fixed whitelist: `WEBKIT_DISABLE_COMPOSITING_MODE`,
+  `WEBKIT_DISABLE_DMABUF_RENDERER`, `GDK_BACKEND`, `XDG_SESSION_TYPE`,
+  Wayland/X11 display and AppImage presence, `/dev/dri` render nodes), the
+  WebGL renderer, and scroll frame timing per panel (fps, p50/p95 frame time,
+  long frames) measured while you scroll for ~5 s. Results go to the session
+  log; `OPENTUNE_PERF=1` logs the environment at startup and measures every
+  panel's first scroll (also on stderr). New commands `render_env` and
+  `render_note`.
+- Desktop: a one-time, dismissible warning when `WEBKIT_DISABLE_COMPOSITING_MODE`
+  is set (everything is CPU-painted, scrolling will be slow).
+
 ### Changed
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the

@@ -51,6 +51,19 @@
   const FIXTURES = {
     build_channel: () => "alpha",
     startup_mark: () => null,
+    // Render check (startup.rs render_env): a healthy Wayland session.
+    render_env: () => ({
+      os: "linux",
+      vars: {
+        GDK_BACKEND: null, OPENTUNE_KEEP_WEBKIT_ENV: null, WEBKIT_DISABLE_COMPOSITING_MODE: null,
+        WEBKIT_DISABLE_DMABUF_RENDERER: null, XDG_SESSION_TYPE: "wayland",
+      },
+      present: { APPIMAGE: true, DISPLAY: true, WAYLAND_DISPLAY: true },
+      dri_render_nodes: ["renderD128"],
+      set_by_opentune: [],
+      perf: false,
+    }),
+    render_note: ({ line }) => { log("render: " + line); return null; },
     checksum_algos: () => [
       ["edc16", "Bosch EDC16 (MPC56x)"], ["edc17", "Bosch EDC17 (TriCore)"], ["pcr21", "Continental Simos PCR2.1"],
       ["edc15c6", "Bosch EDC15 (VAG) / EDC15C6 (Mercedes CR1)"], ["me7", "Bosch ME7"], ["dq381", "VAG DQ381 TCU"],

@@ -341,6 +341,8 @@ macro_rules! core_command_list {
             update::update_install,
             update::update_relaunch,
             startup::startup_mark,
+            startup::render_env,
+            startup::render_note,
         }
     };
 }

@@ -685,3 +685,14 @@ button.ot-lb {
 .ot-lb-opt[aria-disabled="true"] { color: var(--muted); cursor: default; }
 /* sidebar adapter box: the driver picker spans the row */
 #connDriver + .ot-lb { width: 100%; }
+
+/* ---- Render check (render-check.js) -------------------------------------- */
+.rc-warn { display: flex; align-items: center; gap: 12px; color: var(--warn); }
+.rc-warn .rc-warn-text { flex: 1 1 auto; }
+.rc-env { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; }
+.rc-results td:first-child { font-weight: 600; }
+.rc-overlay {
+  position: fixed; right: 18px; bottom: 18px; z-index: 1500; max-width: min(360px, calc(100vw - 36px));
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: var(--card); color: var(--ink); border: 2px solid var(--accent);
+}
