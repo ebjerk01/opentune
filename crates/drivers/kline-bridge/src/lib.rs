@@ -8,7 +8,7 @@
 //!   H->D: 0x01 fast-init | 0x02 5baud <addr> | 0x03 set-baud <hi><lo> |
 //!         0x10 transceive <kwp-frame…>
 //!   D->H: 0x81 init-result <status…> | 0x90 rx <kwp-frame…> | 0xEE error <code>
-use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::{
@@ -98,8 +98,8 @@ impl DiagTransport for Bridge {
             match cmd {
                 0x90 => {
                     let resp = self.parse_kwp(&data)?;
-                    if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
-                        continue; // response pending
+                    if is_response_pending(req, &resp) {
+                        continue; // response pending for this service
                     }
                     return Ok(resp);
                 }
@@ -393,6 +393,47 @@ mod seedkey_hook_tests {
         assert!(d.diag().is_some(), "diag() must expose the K-line bridge");
     }
     use std::collections::VecDeque;
+
+    /// One request through a pseudo-terminal bridge whose device has already
+    /// queued `replies` (each a KWP payload in a `0x90` rx frame).
+    #[cfg(unix)]
+    fn bridge_exchange(req: &[u8], replies: &[&[u8]]) -> Result<Vec<u8>> {
+        use std::io::Write;
+        let (host, mut adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let mut b = Bridge {
+            port: Box::new(host),
+            target: 0x10,
+            source: 0xF1,
+        };
+        for r in replies {
+            // ISO-14230 frame from the ECU to the tester.
+            let mut kwp = vec![0x80 | r.len() as u8, 0xF1, 0x10];
+            kwp.extend_from_slice(r);
+            kwp.push(kwp.iter().fold(0u8, |a, &x| a.wrapping_add(x)));
+            let mut dev = vec![SYNC, 0x90, kwp.len() as u8];
+            dev.extend(kwp);
+            adapter.write_all(&dev).unwrap();
+        }
+        adapter.flush().unwrap();
+        b.request(req, 300)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn response_pending_is_echo_checked() {
+        let real: &[u8] = &[0x63, 0x01, 0x02];
+        let r = bridge_exchange(
+            &[0x23, 0x00, 0x10, 0x00, 0x02],
+            &[&[0x7F, 0x23, 0x78], real],
+        );
+        assert_eq!(r.unwrap(), real, "0x78 for this service is waited out");
+        // A 0x78 for another service (0x10) is not treated as pending.
+        let r = bridge_exchange(
+            &[0x23, 0x00, 0x10, 0x00, 0x02],
+            &[&[0x7F, 0x10, 0x78], real],
+        );
+        assert_eq!(r.unwrap(), vec![0x7F, 0x10, 0x78]);
+    }
 
     /// A scripted diagnostic transport: returns queued responses and records
     /// every request so a handshake can be asserted.

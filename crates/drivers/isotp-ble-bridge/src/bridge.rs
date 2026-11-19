@@ -5,6 +5,7 @@ use crate::codec::{
     FLAG_SETTINGS_GET, FLAG_SPLIT, MAX_ATT_VALUE,
 };
 use crate::link::{Framing, Link};
+use opentune_core::protocol::diag::is_response_pending;
 use opentune_core::{Error, Result};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -261,7 +262,7 @@ impl Bridge {
                 ));
             };
             let r = resp.payload;
-            if r.len() >= 3 && r[0] == 0x7F && r[2] == 0x78 {
+            if is_response_pending(req, &r) {
                 pending += 1;
                 if pending > MAX_PENDING {
                     return Err(Error::Protocol(

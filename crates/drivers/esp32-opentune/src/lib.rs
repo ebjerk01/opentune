@@ -24,7 +24,7 @@ pub mod proto;
 
 pub use device::{CanFrame, Device, PingInfo};
 
-use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
 use opentune_core::protocol::isotp::CanLink;
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
@@ -151,21 +151,26 @@ impl DiagTransport for KlineDiag<'_> {
         let raw = self
             .dev
             .kline_transceive(clamp_timeout(timeout_ms), &frame)?;
-        // The device may return one message or several (e.g. a responsePending
-        // then the real answer) concatenated; walk the KWP stream and return the
-        // first non-pending service payload.
-        let mut last_err = Error::Protocol("no KWP frame in K-line reply".into());
-        for payload in parse_kwp_stream(&raw) {
-            if payload.len() >= 3 && payload[0] == 0x7F && payload[2] == 0x78 {
-                continue; // responsePending
-            }
-            return Ok(payload);
-        }
-        // If everything was pending (or nothing parsed), surface a timeout.
-        if raw.is_empty() {
-            last_err = Error::Timeout(timeout_ms);
-        }
-        Err(last_err)
+        first_final_kwp(req, &raw, timeout_ms)
+    }
+}
+
+/// The device may return one message or several (e.g. a responsePending then
+/// the real answer) concatenated: walk the KWP stream and return the first
+/// payload that is not a responsePending for `req`'s service. A 0x78 echoing
+/// another service is returned (the client reports it as mis-correlated).
+fn first_final_kwp(req: &[u8], raw: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+    if let Some(p) = parse_kwp_stream(raw)
+        .into_iter()
+        .find(|p| !is_response_pending(req, p))
+    {
+        return Ok(p);
+    }
+    // Everything was pending, or nothing parsed / arrived.
+    if raw.is_empty() {
+        Err(Error::Timeout(timeout_ms))
+    } else {
+        Err(Error::Protocol("no KWP frame in K-line reply".into()))
     }
 }
 
@@ -871,6 +876,36 @@ mod tests {
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0], vec![0x7F, 0x10, 0x78]);
         assert_eq!(msgs[1], vec![0x50, 0x01]);
+    }
+
+    #[test]
+    fn kline_reply_skips_only_this_services_pending() {
+        let frame = |d: &[u8]| {
+            let mut f = vec![0x80 | d.len() as u8, 0xF1, 0x10];
+            f.extend_from_slice(d);
+            f.push(f.iter().fold(0u8, |a, &b| a.wrapping_add(b)));
+            f
+        };
+        let real = [0x5A, 0x9B, 0x01];
+        let mut raw = frame(&[0x7F, 0x1A, 0x78]);
+        raw.extend(frame(&real));
+        assert_eq!(first_final_kwp(&[0x1A, 0x9B], &raw, 100).unwrap(), real);
+        // A 0x78 for another service (0x10) is not treated as pending.
+        let mut raw = frame(&[0x7F, 0x10, 0x78]);
+        raw.extend(frame(&real));
+        assert_eq!(
+            first_final_kwp(&[0x1A, 0x9B], &raw, 100).unwrap(),
+            vec![0x7F, 0x10, 0x78]
+        );
+        // Only pending, or nothing at all.
+        assert!(matches!(
+            first_final_kwp(&[0x1A, 0x9B], &frame(&[0x7F, 0x1A, 0x78]), 100),
+            Err(Error::Protocol(_))
+        ));
+        assert!(matches!(
+            first_final_kwp(&[0x1A], &[], 100),
+            Err(Error::Timeout(100))
+        ));
     }
 
     #[test]

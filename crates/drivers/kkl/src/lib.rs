@@ -53,7 +53,7 @@
 //! scheduling hiccup can stretch a bit); this is the normal limitation of
 //! bit-banging a K-line from userspace and matches what freediag / VAG-COM do.
 
-use opentune_core::protocol::diag::DiagTransport;
+use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
 use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
@@ -367,10 +367,11 @@ impl DiagTransport for KklTransport {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
         self.send_framed(req)?;
         // Loop while the ECU answers requestCorrectlyReceived-ResponsePending
-        // (NRC 0x78) to the pending request.
+        // (NRC 0x78) to this request's service; a 0x78 echoing another
+        // service is returned (mis-correlated), not waited on.
         for _ in 0..40 {
             let resp = self.read_framed(timeout_ms)?;
-            if resp.len() >= 3 && resp[0] == 0x7F && resp[2] == 0x78 {
+            if is_response_pending(req, &resp) {
                 continue;
             }
             return Ok(resp);
@@ -979,6 +980,47 @@ mod tests {
         // Claims 2 data bytes but only one is present before the checksum.
         let frame = [0x82u8, 0x10, 0xF1, 0x1A, 0x00];
         assert!(matches!(parse_kwp_frame(&frame), Err(Error::Protocol(_))));
+    }
+
+    /// One request over a pseudo-terminal "K-line": the ECU side reads the
+    /// request frame, echoes it (half duplex) and answers with `replies`.
+    #[cfg(unix)]
+    fn kline_exchange(req: &[u8], replies: Vec<Vec<u8>>) -> Result<Vec<u8>> {
+        use serialport::SerialPort;
+        use std::io::{Read, Write};
+        let (host, mut adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let mut t = KklTransport {
+            port: Box::new(host),
+            target: 0x10,
+            source: TESTER_ADDR,
+            key_bytes: None,
+        };
+        let n = build_kwp_frame(0x10, TESTER_ADDR, req).len();
+        let ecu = std::thread::spawn(move || {
+            adapter.set_timeout(Duration::from_secs(2)).unwrap();
+            let mut out = vec![0u8; n];
+            adapter.read_exact(&mut out).unwrap(); // becomes the echo
+            for r in &replies {
+                out.extend(build_kwp_frame(TESTER_ADDR, 0x10, r));
+            }
+            adapter.write_all(&out).unwrap();
+            adapter.flush().unwrap();
+            adapter
+        });
+        let r = t.request(req, 300);
+        let _adapter = ecu.join().unwrap();
+        r
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn response_pending_is_echo_checked() {
+        let real = vec![0x5A, 0x9B, 0x01];
+        let r = kline_exchange(&[0x1A, 0x9B], vec![vec![0x7F, 0x1A, 0x78], real.clone()]);
+        assert_eq!(r.unwrap(), real, "0x78 for this service is waited out");
+        // A 0x78 for another service (0x10) is not treated as pending.
+        let r = kline_exchange(&[0x1A, 0x9B], vec![vec![0x7F, 0x10, 0x78], real]);
+        assert_eq!(r.unwrap(), vec![0x7F, 0x10, 0x78]);
     }
 
     /// Scripted transport to exercise the seed/key hook without hardware.
