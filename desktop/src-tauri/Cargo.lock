@@ -2629,6 +2629,7 @@ name = "opentune-core"
 version = "0.7.0"
 dependencies = [
  "opentune-dtc",
+ "opentune-vin",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2699,6 +2700,8 @@ dependencies = [
  "opentune-udssim",
  "opentune-vin",
  "opentune-xdf",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

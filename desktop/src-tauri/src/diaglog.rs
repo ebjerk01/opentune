@@ -71,9 +71,9 @@ const MAX_CTX_BYTES: usize = 12 * 1024;
 /// Records kept in memory before the log file is open.
 const PENDING_CAP: usize = 256;
 /// Hex payloads longer than this many bytes are cut ...
-pub const HEX_MAX_BYTES: usize = 64;
+pub const HEX_MAX_BYTES: usize = opentune_core::redact::HEX_MAX_BYTES;
 /// ... to their length and this many leading bytes.
-pub const HEX_KEEP_BYTES: usize = 16;
+pub const HEX_KEEP_BYTES: usize = opentune_core::redact::HEX_KEEP_BYTES;
 /// Frontend records (`js` + `cmd`) accepted per second.
 pub const FRONTEND_PER_SEC: u32 = 5;
 
@@ -278,140 +278,6 @@ fn sanitize_value(v: Value, depth: usize) -> Value {
     }
 }
 
-/// One run of hex in a text: byte range in the text and the decoded bytes.
-struct HexRun {
-    start: usize,
-    end: usize,
-    bytes: Vec<u8>,
-}
-
-fn is_word_byte(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_' || c >= 0x80
-}
-
-fn unhex(w: &[u8]) -> Vec<u8> {
-    let nib = |c: u8| (c as char).to_digit(16).unwrap_or(0) as u8;
-    let mut out = Vec::with_capacity(w.len().div_ceil(2));
-    let mut it = w.iter().copied();
-    if !w.len().is_multiple_of(2) {
-        out.push(nib(it.next().unwrap_or(b'0')));
-    }
-    while let (Some(a), Some(b)) = (it.next(), it.next()) {
-        out.push(nib(a) << 4 | nib(b));
-    }
-    out
-}
-
-/// The hex runs in `s`: words of an even number of hex digits (`27`,
-/// `2702AABB`) joined by single spaces (`27 02 AA BB`), and `0x…` words on
-/// their own. Anything else (another separator, a non-hex word such as a
-/// CAN id `[7E0]`) ends a run.
-fn hex_runs(s: &str) -> Vec<HexRun> {
-    let b = s.as_bytes();
-    let mut runs = Vec::new();
-    let mut cur: Option<HexRun> = None;
-    let mut i = 0;
-    while i < b.len() {
-        if !is_word_byte(b[i]) || (i > 0 && is_word_byte(b[i - 1])) {
-            i += 1;
-            continue;
-        }
-        let mut j = i;
-        while j < b.len() && is_word_byte(b[j]) {
-            j += 1;
-        }
-        let w = &b[i..j];
-        let prefixed = w.len() > 2 && (w[0] == b'0' && (w[1] | 0x20) == b'x');
-        if prefixed && w[2..].iter().all(u8::is_ascii_hexdigit) {
-            runs.extend(cur.take());
-            runs.push(HexRun {
-                start: i,
-                end: j,
-                bytes: unhex(&w[2..]),
-            });
-        } else if w.len().is_multiple_of(2) && w.iter().all(u8::is_ascii_hexdigit) {
-            let bytes = unhex(w);
-            match &mut cur {
-                Some(r) if i == r.end + 1 && b[r.end] == b' ' => {
-                    r.bytes.extend(bytes);
-                    r.end = j;
-                }
-                _ => {
-                    runs.extend(cur.take());
-                    cur = Some(HexRun {
-                        start: i,
-                        end: j,
-                        bytes,
-                    });
-                }
-            }
-        } else {
-            runs.extend(cur.take());
-        }
-        i = j;
-    }
-    runs.extend(cur);
-    runs
-}
-
-/// Where a SecurityAccess (0x27) request or its positive response (0x67)
-/// starts in `b`: at the front, after an ISO-TP single/first-frame PCI, or
-/// after a KWP2000 header.
-fn security_access_at(b: &[u8]) -> Option<usize> {
-    let sa = |i: usize| matches!(b.get(i), Some(0x27 | 0x67));
-    let first = *b.first()?;
-    if sa(0) {
-        Some(0)
-    } else if (0x01..=0x0F).contains(&first) && sa(1) {
-        Some(1) // ISO-TP single frame / length prefix
-    } else if first & 0xF0 == 0x10 && sa(2) {
-        Some(2) // ISO-TP first frame
-    } else if first & 0x80 != 0 && sa(3) {
-        Some(3) // KWP2000: format, target, source
-    } else if first & 0x80 != 0 && sa(4) {
-        Some(4) // KWP2000 with a length byte
-    } else {
-        None
-    }
-}
-
-fn hexs(b: &[u8]) -> String {
-    crate::common::hexs(b)
-}
-
-/// The text a run is replaced by, or `None` to keep it as it is.
-fn mask_run(run: &HexRun, before: &str) -> Option<String> {
-    let b = &run.bytes;
-    // "seed: 1A2B3C4D", "key=0x11223344": the value after a seed/key label.
-    let label = before
-        .trim_end_matches([' ', ':', '=', '\t'])
-        .to_ascii_lowercase();
-    if ["seed", "seeds", "key", "keys"]
-        .iter()
-        .any(|w| label.ends_with(w))
-    {
-        return Some(format!("<masked: {} bytes>", b.len()));
-    }
-    if let Some(at) = security_access_at(b) {
-        let keep = at + 2; // the service byte and the sub-function
-        if b.len() > keep {
-            return Some(format!(
-                "{} <masked: {} bytes>",
-                hexs(&b[..keep]),
-                b.len() - keep
-            ));
-        }
-    }
-    if b.len() > HEX_MAX_BYTES {
-        return Some(format!(
-            "{} … <{} bytes>",
-            hexs(&b[..HEX_KEEP_BYTES]),
-            b.len()
-        ));
-    }
-    None
-}
-
 /// The write-time masker for one text (a message or a `ctx` string):
 ///
 /// * **SecurityAccess** — in hex that is a 0x27 request or a 0x67 response
@@ -421,26 +287,11 @@ fn mask_run(run: &HexRun, before: &str) -> Option<String> {
 /// * **long payloads** — hex longer than [`HEX_MAX_BYTES`] bytes keeps its
 ///   first [`HEX_KEEP_BYTES`] bytes and its length.
 ///
-/// Everything else is left exactly as it was. A later upload step adds its
-/// own redaction (VINs, part numbers, paths) on top of this.
+/// Everything else is left exactly as it was. The diagnostics upload
+/// ([`crate::diagupload`]) redacts much more on top of this
+/// ([`opentune_core::redact::redact`]: VINs, part numbers, paths, …).
 pub fn mask(s: &str) -> String {
-    let runs = hex_runs(s);
-    let mut out = String::with_capacity(s.len());
-    let mut at = 0;
-    for r in &runs {
-        let before = &s[s[..r.start]
-            .char_indices()
-            .rev()
-            .nth(11)
-            .map_or(0, |(i, _)| i)..r.start];
-        if let Some(rep) = mask_run(r, before) {
-            out.push_str(&s[at..r.start]);
-            out.push_str(&rep);
-            at = r.end;
-        }
-    }
-    out.push_str(&s[at..]);
-    out
+    opentune_core::redact::mask_secrets(s)
 }
 
 fn encode(rec: &Record) -> String {
@@ -1126,6 +977,7 @@ pub async fn diag_log_clear() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::hexs;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     fn tmp(tag: &str) -> PathBuf {

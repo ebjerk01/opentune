@@ -53,6 +53,7 @@ fn plugin_api_paths_and_shapes() {
         seedkeys,
         seedkey_loader: None,
         updater: false,
+        diagnostics: None,
     };
     assert!(cfg.channel.debug_enabled());
     assert_eq!(cfg.channel.as_str(), "bench");
@@ -74,6 +75,25 @@ fn plugin_api_paths_and_shapes() {
     let _: fn(&std::path::Path) -> Vec<diaglog::Record> = diaglog::read_since_session;
     let _: fn() -> Option<std::path::PathBuf> = diaglog::log_dir;
     assert_eq!(diaglog::mask("67 01 AA BB"), "67 01 <masked: 2 bytes>");
+    // The diagnostics upload target an embedder may set (never in the public
+    // app; the endpoint here is a reserved, unresolvable name).
+    use opentune_desktop::{diagupload, AutoPolicy, DiagMode, DiagUpload, SecretString};
+    let up = DiagUpload {
+        endpoint: diagupload::Url::parse("https://diag.example.invalid/upload").unwrap(),
+        token: Some(SecretString::new("synthetic-test-token")),
+        label: Some("plugin build".into()),
+        mode: DiagMode::Auto(AutoPolicy {
+            crash_on_next_start: true,
+            on_error: true,
+            periodic_min: Some(60),
+        }),
+    };
+    assert!(!format!("{up:?}").contains("synthetic-test-token"));
+    let _with = DesktopConfig {
+        diagnostics: Some(up),
+        ..DesktopConfig::default()
+    };
+    assert!(DesktopConfig::default().diagnostics.is_none());
 
     // Managed state types a plugin command may take as tauri::State.
     let data = AppData {

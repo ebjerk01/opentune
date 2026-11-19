@@ -59,6 +59,9 @@ pub mod startup;
 // Local diagnostics log file (panics, frontend + command errors, session log,
 // startup marks). Public so an embedder can add its own records.
 pub mod diaglog;
+// Diagnostics upload (capability only: the public app has no endpoint; an
+// embedder or OPENTUNE_DIAG_ENDPOINT supplies one). See docs/DIAGNOSTICS.md.
+pub mod diagupload;
 #[cfg(test)]
 mod vcar_e2e;
 
@@ -81,6 +84,7 @@ mod utilities; // VIN / part / DTC / seed-key calculator
 
 // The public plugin API (see docs/PLUGINS.md): these paths are stable.
 pub use checksum::{ChecksumResolver, Checksums};
+pub use diagupload::{AutoPolicy, DiagMode, DiagUpload, SecretString};
 pub use drivers::open_registry_driver;
 pub use seedkeys::{SeedKeyResolver, SeedKeys};
 pub use state::{AppData, BuildChannel, DebugLog};
@@ -129,6 +133,12 @@ pub struct DesktopConfig {
     /// (endpoint + pubkey) in the embedding app's `tauri.conf.json`; when off,
     /// the update commands report "updater unavailable".
     pub updater: bool,
+    /// Where (and how) to upload the redacted diagnostics log: endpoint,
+    /// optional token, label and [`DiagMode`] (manual, or automatic — the
+    /// only way automatic mode can be turned on). `None` (the public app)
+    /// leaves only manual mode through `OPENTUNE_DIAG_ENDPOINT`; see
+    /// docs/DIAGNOSTICS.md.
+    pub diagnostics: Option<DiagUpload>,
 }
 
 impl Default for DesktopConfig {
@@ -140,6 +150,7 @@ impl Default for DesktopConfig {
             seedkeys: Vec::new(),
             seedkey_loader: None,
             updater: true,
+            diagnostics: None,
         }
     }
 }
@@ -170,6 +181,7 @@ pub fn builder_with(
         seedkeys,
         seedkey_loader,
         updater,
+        diagnostics,
     } = config;
     let core = tauri::plugin::Builder::<tauri::Wry>::new("opentune-core")
         .setup(move |app, _api| {
@@ -178,6 +190,7 @@ pub fn builder_with(
             // (panic hook, startup marks) follow its session header.
             let debug_log = DebugLog::default();
             diaglog::init(app, &channel, &debug_log);
+            app.manage(diagupload::init(app, diagnostics, &channel, &debug_log));
             let data = startup::timed("setup: data roots resolved", || {
                 resolve_data(app, &data_roots)
             });
@@ -357,6 +370,12 @@ macro_rules! core_command_list {
             diaglog::diag_log_info,
             diaglog::diag_log_open_folder,
             diaglog::diag_log_clear,
+            diagupload::diag_upload_status,
+            diagupload::diag_upload_set,
+            diagupload::diag_upload_preview,
+            diagupload::diag_upload_send,
+            diagupload::diag_upload_payload,
+            diagupload::diag_upload_panel,
         }
     };
 }
@@ -531,6 +550,11 @@ mod embed_tests {
         let compiled = BuildChannel::compiled();
         assert_eq!(compiled.debug_enabled(), cfg!(feature = "alpha"));
         assert_eq!(DesktopConfig::default().channel, compiled);
+    }
+
+    #[test]
+    fn public_default_has_no_diagnostics_upload() {
+        assert!(DesktopConfig::default().diagnostics.is_none());
     }
 
     #[test]
