@@ -1,33 +1,41 @@
-# opentune-native (prototype)
+# opentune-native
 
-The native OpenTune frontend: **egui + eframe on wgpu** (Vulkan / Metal /
+The native OpenTune desktop app: **egui + eframe on wgpu** (Vulkan / Metal /
 DX12 / GL), no webview on any OS. It calls the Rust core **in-process**
-(`opentune-core`, `-checksum`, `-scan`); there is no IPC bridge.
+(`opentune-core`, `-checksum`, `-scan`, `-db`); there is no IPC bridge.
 
-Status: **proof-of-approach** (roadmap APP-13). The Tauri app in `desktop/`
-is the shipping app and is not affected by this crate.
+Status: **in development** on its own line (roadmap APP-13, planned as
+1.0.0-beta). The Tauri app in `desktop/` is the shipping app and is not
+affected by this crate.
 
-## What it does today
+## Layout
 
-- Open a flash image (file dialog or command line); identify it in-process
-  with the same scanner the CLI and the webview app use; pick the matching
-  ECU definition.
-- **Hex view**, virtualised: only the visible rows are laid out, so a 1 MiB
-  image scrolls like a 4 KiB one. Go-to address; the selected map's bytes are
-  highlighted.
-- **Map view** and **All maps**: calibration tables painted directly on the
-  canvas, heat-coloured, with axis breakpoints and a hover tooltip (cell,
-  value, axis values, address). Off-screen cells are culled.
-- **Checksum verify** side panel (any library algorithm; the definition's
-  algorithm is preselected).
-- **Frame timing**: `--bench hex|maps` scrolls a scene by `--px` points per
-  frame for `--frames` frames (after a 30-frame warm-up), prints a summary in
-  the same terms as the webview's Render check and writes every frame to
-  `--csv`.
+```
+src/
+  main.rs        arguments, window options
+  app.rs         shell: global top bar, sidebar, status bar, view routing,
+                 drag-and-drop / Ctrl+O, settings persistence
+  theme.rs       design tokens (light/dark), bundled fonts, egui style,
+                 widgets: panel, buttons, pills, stats, empty states
+  icons.rs       Phosphor glyph constants (generated)
+  settings.rs    persisted settings (theme, units, BSL baud, adapter, panes)
+  adapters.rs    serial / SocketCAN discovery, ELM327 auto-detect and link
+  shell/         top bar (cable select, auto-detect, battery, link, settings
+                 menu) and sidebar
+  views/         flash (hex | map / checksum), maps, ecudb, drivers, vault,
+                 project, logview, controllers, placeholder
+  hex.rs         virtualised hex rows
+  mapview.rs     heat-grid map canvas + legend
+  image.rs       map decoding (thin local copy of the Tauri backend's)
+  bench.rs       --bench frame timing
+  screenshot.rs  --screenshot capture
+assets/fonts/    Inter, Space Grotesk, JetBrains Mono (SIL OFL 1.1, subset,
+                 see README there), Phosphor (MIT)
+```
 
-The map decoding here is a thin local copy of what
-`desktop/src-tauri/src/maps.rs` does. The plan is to move that logic into a
-shared core crate used by both frontends.
+The map decoding is a thin copy of what `desktop/src-tauri/src/maps.rs`
+does; the plan is to move the shared logic into a core crate both frontends
+use.
 
 ## Build and run
 
@@ -35,17 +43,32 @@ It is not part of the root workspace (own `[workspace]` and lockfile):
 
 ```sh
 cd native
-cargo run --release -- path/to/dump.bin --def bosch-edc15c6
-cargo run --release -- path/to/dump.bin --def bosch-edc15c6 \
-    --bench hex --frames 600 --px 24 --csv hex.csv [--no-vsync]
+cargo run --release -- [path/to/dump.bin] [--def bosch-edc15c6]
 ```
 
-The ECU definitions are read from `ecudefs/` or `../ecudefs/` (or `--defs`).
+ECU definitions are read from `ecudefs/`, `../ecudefs/` or next to the
+executable (or `--defs DIR`); the control-unit database from `database/`.
 On Linux it runs on Wayland or X11 (unset `WAYLAND_DISPLAY` to force X11).
+Settings and the window geometry persist between runs; the last dump and
+definition reopen.
 
-## Measuring
+## Review and measurement modes
 
-The summary line reports fps, p50 / p95 / max frame interval, frames over
-16.7 ms, frames over 25 ms (a real missed vsync at 60 Hz; with vsync on,
-jitter puts about half the frames just over 16.7 ms), frames over 50 ms (the
-webview's "long" frame) and the CPU time spent building the UI per frame.
+```sh
+# Capture the window to a PNG after it settles, then exit (settings untouched).
+cargo run --release -- dump.bin --theme dark --view flash --screenshot out.png
+# Scripted scroll with per-frame timing (fps, p50/p95/max, frames over
+# 16.7 / 25 / 50 ms, UI CPU time), summary on stdout, every frame in the CSV.
+cargo run --release -- dump.bin --bench hex --frames 600 --px 24 --csv hex.csv [--no-vsync]
+```
+
+Views for `--view`: flash, maps, ecudb, drivers, vault, project, log,
+controllers, sa2, drive.
+
+## Safety
+
+- Nothing here writes to an ECU. The adapter layer only sends ELM327 AT
+  commands (identification, battery voltage) and never opens K-line, CAN or
+  unknown ports during auto-detect.
+- "Fix & save" writes corrected checksums to a NEW file chosen in a save
+  dialog; the opened dump is never overwritten.
