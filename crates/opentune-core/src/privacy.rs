@@ -237,7 +237,7 @@ const FILE_EXTENSIONS: &[&str] = &[
     "js", "mjs", "css", "html", "rs", "py", "toml", "yml", "yaml", "xml", "xdf", "pdf",
 ];
 
-fn scan_emails(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
+pub(crate) fn scan_emails(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
     let b = text.as_bytes();
     for (at, _) in text.match_indices('@') {
         let mut s = at;
@@ -302,7 +302,7 @@ const SERIAL_LABELS: &[(&str, bool)] = &[
     ("sn", true),
 ];
 
-fn scan_serials(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
+pub(crate) fn scan_serials(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
     let lower = text.to_ascii_lowercase();
     let b = lower.as_bytes();
     let mut i = 0;

@@ -13,6 +13,7 @@ pub mod interface;
 pub mod monitor;
 pub mod obd;
 pub mod privacy;
+pub mod redact;
 pub mod protocol;
 pub mod provenance;
 pub mod registry;
