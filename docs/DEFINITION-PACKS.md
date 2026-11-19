@@ -133,7 +133,8 @@ is `packs`, so `opentune packs` from the repository root lists the shipped packs
      the algorithm a host application (e.g. a desktop plugin) must supply for
      that step; without one, a secured script can be planned but not run.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
-     `opentune-adaptation` and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
+     `opentune-adaptation` ([`ADAPTATION.md`](ADAPTATION.md), UDS and VAG
+     KWP2000 channel kinds) and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
      ships them yet: open, license-compatible coding data is rare, and vendor
      label files are off-limits.
 4. **Check it loads cleanly.** `opentune packs packs/<your-id>` must show no
