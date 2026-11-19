@@ -11,9 +11,9 @@
     "EGS53",
     "NAG52"
   ],
-  "cpu": null,
-  "flash_kib": null,
-  "eeprom": null,
+  "cpu": "Infineon C167 family (SAK-C167; the open EGS52 emulator models a C167CS)",
+  "flash_kib": 512,
+  "eeprom": "95320 SPI EEPROM (4 KiB), separate chip",
   "bus": [
     "kline",
     "can"
@@ -22,8 +22,8 @@
   "read_methods": {
     "obd": "unknown",
     "bench": true,
-    "boot": false,
-    "notes": "Bench connection: supply, ground and K-line on C1 (ecupinouts); CAN is on the C2 connector (ATSG). OBD programming capability is not documented in the cited sources."
+    "boot": true,
+    "notes": "Bench connection: supply, ground and K-line on C1 (ecupinouts); CAN is on the C2 connector (ATSG). OBD programming capability is not documented in the cited sources. Board-level boot: the C167 bootstrap loader (access.boot)."
   },
   "checksum": null,
   "ecudef": null,
@@ -42,7 +42,7 @@
     }
   ],
   "part_number_examples": [],
-  "notes": "External (body-mounted) TCU for the Mercedes 722.6 5-speed automatic, also used by Chrysler. Per ATSG, 1996-1999 units read the range switch on C1-25..28 while 2000+ units use CAN. The open-source ultimate_nag52 project is a drop-in replacement TCU for EGS51/52/53 cars. No OpenTune checksum applies.",
+  "notes": "External (body-mounted) TCU for the Mercedes 722.6 5-speed automatic, also used by Chrysler. Per ATSG, 1996-1999 units read the range switch on C1-25..28 while 2000+ units use CAN. The open-source ultimate_nag52 project is a drop-in replacement TCU for EGS51/52/53 cars. No OpenTune checksum applies. Hardware (public sources): an Infineon C167-family CPU with an external AM29F400BB flash (512 KiB) and a separate 95320 SPI EEPROM (VF2 support list; the open EGS52_emu maps a 512 KiB flash image and models a C167CS; Ultimate-NAG52: EGS52/53 on C166/ST10).",
   "connectors": [
     {
       "name": "C1",
@@ -144,6 +144,90 @@
     {
       "title": "ultimate_nag52: open-source 722.6 TCU",
       "url": "https://github.com/rnd-ash/ultimate_nag52"
+    },
+    {
+      "title": "rnd-ash/EGS52_emu (GPL-3.0): EGS52 emulator that simulates the C167CS CPU and maps the flash file as a 512 KiB (0x80000) image",
+      "url": "https://github.com/rnd-ash/EGS52_emu"
+    },
+    {
+      "title": "rnd-ash/ultimate-nag52-fw-rs README (GPL-3.0): EGS52/53 are based on a C166/ST10 processor, EGS51 on an SEC51C810",
+      "url": "https://github.com/rnd-ash/ultimate-nag52-fw-rs"
+    },
+    {
+      "title": "VF2 Flasher support list (retailer post): EGS52 TCU SAK-C167, AM29F400BB external flash, 95x320 external EEPROM",
+      "url": "https://www.greentechnologydevices.com/2022/09/25/vf2-flasher-v2-8-1-5/"
+    },
+    {
+      "title": "DFB Technology product page: boot mode for TCU Siemens EGS52 (flash + 95320 EEPROM)",
+      "url": "https://www.dfbtechnology.com/en/boot-mode-for-tcu-siemens-egs52-mercedes-benz/"
+    },
+    {
+      "title": "Infineon C167CR Derivatives User's Manual V3.1: ch. 14 bootstrap loader, Table 19-2 reset configuration",
+      "url": "https://www.keil.com/dd/docs/datashts/infineon/c167cr_um.pdf"
+    },
+    {
+      "title": "Infineon C167CR data sheet: P-MQFP-144 pin 104 = P0L.4/AD4",
+      "url": "https://www.infineon.com/assets/row/public/documents/10/57/infineon-c167cr-ds-en.pdf"
+    },
+    {
+      "title": "rnd-ash/ultimate-nag52-fw lib/slave_ecus/README.md (GPL-3.0): stock EGS52 security access level for a service function; flash read on an external reader",
+      "url": "https://github.com/rnd-ash/ultimate-nag52-fw/blob/dev/lib/slave_ecus/README.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": "K-line diagnosis line to the data-link connector (C1-1); CAN on C2 on 2000+ units. The diagnostic protocol is not stated in the cited sources.",
+      "notes": "Whether a complete read or a write works over the diagnostic socket is not documented in a cited public source. OpenTune does not talk to this TCU's diagnostics yet.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "+12 V to C1-29, ground C1-30, K-line C1-1 (ATSG and ecupinouts agree); CAN-H/L on C2 pins H and L (ATSG only). The same diagnostic link and security access as in the car apply.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "C167 bootstrap loader (BSL) on ASC0, entered with P0L.4 low at the end of a hardware reset: the host sends one zero byte, the BSL answers with an identification byte (C5h/D5h) and loads 32 bytes of loader code. OpenTune's bsl preset 'egs52' covers the 512 KiB external-flash window but not yet the board's bus setup.",
+      "points": [
+        {
+          "name": "P0L.4 / AD4 strap",
+          "location": "pcb:P0L.4 net (not publicly located on the EGS52 board)",
+          "action": "pull-to-gnd",
+          "resistor_ohms": 8000,
+          "note": "No public source gives the pad on this board. Trace P0L.4 from the CPU (pin 104 on the C167CR P-MQFP-144 per its data sheet; confirm for the fitted C167 variant) or from the flash data pin wired to it, and confirm by continuity.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "P0L.4 low at the end of the hardware reset (power-up), P0L.5, P0L.3 and P0L.2 high (Table 19-2); release the strap once the BSL has answered.",
+      "reachable": "open-case",
+      "notes": "Board level: the TCU must be opened. That an EGS52 boot-mode read of the flash and the 95320 works is stated by a tool vendor's public page (community at most; its procedure is not used). The Ultimate-NAG52 author read his unit's flash on an external reader (chip-off).",
+      "confidence": "community",
+      "sources": [
+        7,
+        8,
+        3,
+        6,
+        9
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The stock EGS52 has diagnostic security-access levels (the Ultimate-NAG52 notes name a 'Siemens level' access for a service function); what a complete read or a write over diagnostics needs is not publicly documented. OpenTune ships no OEM key.",
+      "confidence": "community",
+      "sources": [
+        9
+      ]
+    }
+  }
 }
