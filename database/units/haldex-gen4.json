@@ -216,6 +216,50 @@
     {
       "title": "oemwolf: 0BS 598 554 B Haldex control unit repair set (Passat / Passat CC 4Motion 2009-2015)",
       "url": "https://oemwolf.com/oem-parts/0bs598554b.html"
+    },
+    {
+      "title": "OpenTune docs/HALDEX.md: Gen4 known and unknown (MCU, flash, read procedure, checksum)",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/HALDEX.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": "KWP2000 over VW TP2.0, logical address 0x0A, on the drivetrain CAN",
+      "notes": "Identification, trouble codes and measuring groups are readable (public capture of an 0AY 907 554 C). No public flash read or write procedure is known. Whether the gateway passes the TP2.0 channel from the OBD socket to the drivetrain CAN is to be confirmed on the car.",
+      "confidence": "community",
+      "sources": [
+        3,
+        4
+      ]
+    },
+    "bench": {
+      "possible": false,
+      "how": "The in-line plug pinout comes from one source (terminal 15 on 1, ground 2, K-line 5, CAN-H 8, CAN-L 7), so the unit can be powered and diagnosed on the bench, but no public source documents reading its flash that way.",
+      "confidence": "community",
+      "sources": [
+        0
+      ]
+    },
+    "boot": {
+      "possible": false,
+      "entry": "unknown",
+      "points": [],
+      "reachable": "unknown",
+      "notes": "The MCU, the flash size and any boot or debug entry are not publicly documented.",
+      "confidence": "unverified",
+      "sources": [
+        7
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "Not publicly documented. OpenTune's Gen4 read sends no security-access service and never writes. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        7
+      ]
+    }
+  }
 }
