@@ -20,6 +20,7 @@ path = "src/main.rs"
 opentune-core = { path = "../crates/opentune-core" }
 opentune-checksum = { path = "../crates/opentune-checksum" }
 opentune-scan = { path = "../crates/opentune-scan" }
+opentune-db = { path = "../crates/opentune-db" }
 
 # GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }

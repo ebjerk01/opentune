@@ -1838,6 +1838,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-db"
+version = "0.7.0"
+dependencies = [
+ "opentune-checksum",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-dtc"
 version = "0.1.0"
 
@@ -1848,6 +1858,7 @@ dependencies = [
  "eframe",
  "opentune-checksum",
  "opentune-core",
+ "opentune-db",
  "opentune-scan",
  "rfd",
  "serde",

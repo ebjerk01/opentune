@@ -55,6 +55,7 @@ pub struct FlashView {
     pub def_idx: Option<usize>,
     pub map_idx: usize,
     show_all_maps: bool,
+    pending_jump_to_map: bool,
     hex: HexView,
     hex_offset: f32,
     hex_max: f32,
@@ -72,6 +73,13 @@ impl FlashView {
             bench,
             ..Default::default()
         }
+    }
+
+    /// Show map `idx` of the current definition and jump the hex view to it.
+    pub fn open_map(&mut self, idx: usize) {
+        self.map_idx = idx;
+        self.show_all_maps = false;
+        self.pending_jump_to_map = true;
     }
 
     pub fn select_def(&mut self, defs: &[EcuDef], idx: Option<usize>) {
@@ -357,6 +365,11 @@ impl FlashView {
 
     fn hex_pane(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef]) {
         let sel = self.def_idx.and_then(|i| defs[i].maps.get(self.map_idx));
+        if std::mem::take(&mut self.pending_jump_to_map) {
+            if let Some(m) = sel {
+                self.hex.jump(m.address as usize);
+            }
+        }
         let hl = sel.map(|m| m.address as usize..(m.address + m.byte_len()) as usize);
         let top = (self.hex_offset / self.hex.row_height.max(1.0)) as usize * BYTES_PER_ROW;
         let mut jump = None;

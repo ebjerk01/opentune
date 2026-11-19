@@ -19,6 +19,8 @@ pub struct App {
     defs: Vec<EcuDef>,
     defs_note: String,
     flash: FlashView,
+    maps: views::maps::MapsView,
+    ecudb: views::ecudb::EcuDbView,
     env: String,
     last_frame: Option<Instant>,
     frame_ms: f64,
@@ -111,6 +113,8 @@ impl App {
             defs,
             defs_note,
             flash,
+            maps: Default::default(),
+            ecudb: Default::default(),
             env,
             last_frame: None,
             frame_ms: 0.0,
@@ -185,11 +189,11 @@ impl eframe::App for App {
             .def_idx
             .map(|i| self.defs[i].maps.len())
             .filter(|n| *n > 0);
-        let defs_count = self.defs.len();
+        let db_count = self.ecudb.count();
         let counts = move |v: View| match v {
             View::Flash => flash_size.clone(),
             View::Maps => map_count.map(|n| n.to_string()),
-            View::EcuDb => Some(defs_count.to_string()),
+            View::EcuDb => db_count.map(|n| n.to_string()),
             View::Drivers => Some(crate::shell::topbar::DRIVERS.len().to_string()),
             _ => None,
         };
@@ -209,6 +213,17 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(t.bg))
             .show(ui, |ui| match self.view {
                 View::Flash => self.flash.ui(ui, &t, &self.defs, &mut self.settings),
+                View::Maps => {
+                    if let Some((d, m)) =
+                        self.maps.ui(ui, &t, &self.defs, self.flash.image.as_ref())
+                    {
+                        self.flash.select_def(&self.defs, Some(d));
+                        self.flash.open_map(m);
+                        self.view = View::Flash;
+                    }
+                }
+                View::EcuDb => self.ecudb.ui(ui, &t),
+                View::Drivers => views::drivers::ui(ui, &t),
                 other => views::placeholder::ui(ui, &t, other),
             });
 

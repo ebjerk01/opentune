@@ -1,7 +1,10 @@
 //! The sidebar destinations. `Flash` is the ported workspace; the rest are
 //! being ported (see each module).
 
+pub mod drivers;
+pub mod ecudb;
 pub mod flash;
+pub mod maps;
 pub mod placeholder;
 
 use crate::icons;
