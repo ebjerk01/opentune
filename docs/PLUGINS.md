@@ -56,7 +56,7 @@ What the library provides:
 | Item | Purpose |
 |---|---|
 | `builder_with(builder, DesktopConfig)` | Registers the dialog (and optionally updater) plugin and a setup plugin that manages all core state. Leaves `Builder::setup` and the invoke handler to you. Do not register dialog/updater yourself. |
-| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `seedkeys` resolvers (see below; empty in the public app), `updater` on/off. `Default` = the public app's settings. |
+| `DesktopConfig` | `channel`, extra `data_roots` searched for `ecudefs/` `catalog/` `guide/`, extra checksum `checksums` resolvers (tried before the public set by every checksum command), `seedkeys` resolvers (see below; empty in the public app), `seedkey_loader` (the user's UnlockECU-format definitions file + provider(s), `None` = off; honoured only on alpha / bench channels, see [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)), `updater` on/off. `Default` = the public app's settings. |
 | `BuildChannel` | Managed state behind the `build_channel` command. `STABLE`, `ALPHA` (public `--features alpha`), `BENCH`, or any name. Every channel except `stable` enables the debug commands. |
 | `public_handler()` / `public_commands()` | The core invoke handler and the names of every core command. |
 | `extension_handler![..]` / `with_extra_commands(names, handler)` | An invoke handler that sends your command names to your `generate_handler!` and everything else to the core. A name that collides with a core command (or repeats) panics at startup. |
@@ -144,7 +144,9 @@ the script inline in the id, and `sa2:@<file>` = a script file (size-capped;
 `require` says why a file could not be used). The calculator labels those results
 `source: "sa2"`, not `"plugin"`. A resolver of yours that answers `sa2` wins;
 `SeedKeys::plugin(id)` asks only your resolvers and `is_builtin_sa2(id)` tells
-the two apart.
+the two apart. Last, `unlockecu:<name>` resolves through the user's definitions
+loader when `DesktopConfig::seedkey_loader` set one up on an alpha / bench
+channel (`SeedKeys::seedkey_loader()`; [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)).
 
 ```rust
 use opentune_core::protocol::seedkey::SeedKey;
@@ -323,10 +325,10 @@ fn main() -> std::process::ExitCode {
 |---|---|
 | `run()` / `run_with(CliConfig)` | Run the public CLI / the configured one on the process arguments; returns the `ExitCode`. |
 | `run_from(cfg, args)` / `try_run_from(cfg, args)` | Same on explicit arguments, never exiting the process; `try_run_from` returns help/usage as a `clap::Error`, a silent exit as `ExitStatus`, other failures as the command's error (for tests). |
-| `CliConfig` | `name` (help and `--version`, default `opentune`), `about`, `seedkeys`, `checksums`, `drivers` (`(id, description, fn() -> Box<dyn Interface>)`, listed after the public drivers), `extra` subcommands. `Default` = the public CLI. |
+| `CliConfig` | `name` (help and `--version`, default `opentune`), `about`, `seedkeys`, `checksums`, `drivers` (`(id, description, fn() -> Box<dyn Interface>)`, listed after the public drivers), `extra` subcommands, `seedkey_loader` (`Option<seedkey_loader::LoaderConfig>`, default `None` = off; the `--seedkey-defs` / `--seedkey-provider` flags take precedence, see [SEEDKEY-LOADER.md](SEEDKEY-LOADER.md)). `Default` = the public CLI. |
 | `SeedKeyResolver` / `ChecksumResolver` | `fn(&str) -> Option<Box<dyn SeedKey>>` / `fn(&str) -> Option<Box<dyn ChecksumAlgo>>`, the desktop's shapes. Tried in order; checksum ids fall back to the public `opentune_checksum::get`. |
 | `ExtraCommand { command, run }` | A `clap::Command` merged into the top-level tree and its `fn(&ArgMatches, &CliContext) -> anyhow::Result<()>`. A name or alias that collides with a core subcommand, `help` or another extra (or an extra driver id that repeats a public one) is refused at startup; `check_config` reports the same check. |
-| `CliContext` | `registry()`, `checksum(id)` / `require_checksum(id)`, `seed_key(id)` / `require_seed_key(id)`, `open_driver(driver, &ConnectConfig, seedkey)`, `open_connect(&ConnectArgs)`, `attach_seed_key(drv, driver, id)`, `plan_read(drv, driver, region)` (dry run through `Interface::plan_read_memory`; errors with "driver cannot plan" when the driver has none). |
+| `CliContext` | `registry()`, `checksum(id)` / `require_checksum(id)`, `seed_key(id)` / `require_seed_key(id)` (also `unlockecu:<name>` when a definitions loader is configured; `seedkey_loader()` returns it), `open_driver(driver, &ConnectConfig, seedkey)`, `open_connect(&ConnectArgs)`, `attach_seed_key(drv, driver, id)`, `plan_read(drv, driver, region)` (dry run through `Interface::plan_read_memory`; errors with "driver cannot plan" when the driver has none). |
 | `ConnectArgs` | The public connection group, to flatten into extra commands: `--driver --seedkey`, the adapter flags `--port --baud --bus --tx-id --rx-id --opt KEY=VALUE` (repeatable), and `--file --base` for the mock. `config()` gives the `ConnectConfig` it opens with. |
 | `command(cfg)` | The merged clap tree (e.g. to render help in tests). |
 | `ExitStatus(n)` | Return `Err(ExitStatus(n).into())` to end with exit code `n` and no error message. |

@@ -58,6 +58,8 @@ opentune-ctrldef = { path = "../opentune-ctrldef" }
 opentune-tsini = { path = "../opentune-tsini" }
 opentune-tsproto = { path = "../opentune-tsproto" }
 opentune-sa2 = { path = "../opentune-sa2" }
+# Off-by-default loader for the user's own UnlockECU-format seed/key files.
+opentune-seedkey-loader = { path = "../opentune-seedkey-loader" }
 opentune-c167bsl = { path = "../opentune-c167bsl" }
 # GPS/GNSS source for `log --gps` and `gps` (serial reader + NMEA replay).
 opentune-gps = { path = "../opentune-gps" }

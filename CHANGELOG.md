@@ -12,6 +12,25 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **Seed/key definitions loader (UnlockECU format), off by default**: new crate
+  `opentune-seedkey-loader` reads the *user's own* UnlockECU-format definitions
+  file and answers `--seedkey unlockecu:<EcuName or alias>` through the existing
+  `SeedKey` hook, choosing the definition by the requested access level. Loads
+  only when both a file and a provider are configured (CLI global flags
+  `--seedkey-defs` + `--seedkey-provider`, `CliConfig::seedkey_loader`, or
+  `DesktopConfig::seedkey_loader` on alpha / bench channels only). Providers:
+  the user's **external provider program** (absolute path, no shell, one JSON
+  request on stdin / one JSON response on stdout, 5 s timeout, 64 KiB output
+  cap) or `builtin:sa2` (`VolkswagenSA2` entries on the SA2 VM over their own
+  `InstructionTape`). Strict validation (file size, lengths, level range,
+  parameter types; bad entries rejected and reported), and a hard
+  **immobiliser / anti-theft refuse-list** (EZS, ESL, ELV, WFS, immo/immobili*,
+  keyless/KESSY, entriegeln, unlock, Wegfahrsperre, theft) applied even to
+  user-supplied files. Keys and parameter values are never printed. New
+  `opentune seedkey defs <FILE>` checks a file without running anything.
+  OpenTune ships **no** provider and **no** definition
+  ([SEEDKEY-LOADER.md](docs/SEEDKEY-LOADER.md)); synthetic-tested only (a
+  synthetic provider program and the UDS simulator's SecurityAccess).
 - **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
   BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
   `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and
@@ -30,6 +49,9 @@ section (alpha/bench builds) until they are vehicle-tested.
   `implemented` evidence.
 
 ### Changed
+- **Host API: `CliConfig` and `DesktopConfig` gained a `seedkey_loader` field**
+  (default `None`). Embedders that build either with a full struct literal
+  must add `seedkey_loader: None` (or use `..Default::default()`).
 - **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
   part number stays a match key); anything referencing the old id (scripts, packs,

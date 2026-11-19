@@ -228,6 +228,7 @@ fn config() -> CliConfig {
                 run: probe_open,
             },
         ],
+        seedkey_loader: None,
     }
 }
 

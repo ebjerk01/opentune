@@ -22,8 +22,15 @@
 //! to a script file (raw bytes, hex or SA2 assembler, at most
 //! [`MAX_SCRIPT_FILE`](crate::feat_sa2::MAX_SCRIPT_FILE) bytes) — the CLI's
 //! `--seedkey sa2:<hex>` / `sa2:@<file>` forms. No script ships with OpenTune.
+//!
+//! Last, `unlockecu:<EcuName>` resolves through the user's UnlockECU-format
+//! definitions loader when the embedder configured one
+//! ([`DesktopConfig::seedkey_loader`](crate::DesktopConfig::seedkey_loader),
+//! Bench tier: alpha / bench channels only; see `docs/SEEDKEY-LOADER.md`).
 
+use crate::state::BuildChannel;
 use opentune_core::protocol::seedkey::SeedKey;
+use opentune_seedkey_loader::{Loader, LoaderConfig};
 use std::sync::{Arc, Mutex};
 
 /// Looks up a seed/key algorithm by id (see [`crate::DesktopConfig::seedkeys`]).
@@ -42,6 +49,32 @@ pub type SeedKeyResolver = fn(&str) -> Option<Box<dyn SeedKey>>;
 pub struct SeedKeys {
     resolvers: Vec<SeedKeyResolver>,
     sa2: Arc<Mutex<Option<ArmedSa2>>>,
+    loader: Option<Loader>,
+}
+
+/// The definitions loader `cfg` describes, if the channel allows it: `None`
+/// without a config (the default), an error on the stable channel (Bench
+/// tier) or when the file / provider cannot be used. On success the load
+/// report (counts, refused and rejected entries; never values) goes to stderr.
+pub fn loader_for(
+    cfg: Option<&LoaderConfig>,
+    channel: &BuildChannel,
+) -> Result<Option<Loader>, String> {
+    let Some(cfg) = cfg else {
+        return Ok(None);
+    };
+    if !channel.debug_enabled() {
+        return Err(format!(
+            "seed/key definitions loader ignored on the '{}' channel: it is a Bench-tier feature \
+             (alpha / bench builds) until vehicle-tested",
+            channel.as_str()
+        ));
+    }
+    let loader = Loader::new(cfg)?;
+    for line in loader.report() {
+        eprintln!("{line}");
+    }
+    Ok(Some(loader))
 }
 
 /// The SA2 script the user armed for live sessions (see [`SeedKeys::arm_sa2`]).
@@ -59,7 +92,39 @@ impl SeedKeys {
         SeedKeys {
             resolvers,
             sa2: Arc::default(),
+            loader: None,
         }
+    }
+
+    /// This lookup with the user's definitions loader as its last resolver
+    /// (see [`loader_for`]).
+    pub fn with_loader(mut self, loader: Option<Loader>) -> Self {
+        self.loader = loader;
+        self
+    }
+
+    /// The definitions loader, if one is installed.
+    pub fn seedkey_loader(&self) -> Option<&Loader> {
+        self.loader.as_ref()
+    }
+
+    /// The loader's handler for `unlockecu:<name>`: `None` when `id` is not
+    /// of that form; an error when no loader is installed or it cannot serve
+    /// the id.
+    fn loaded(&self, id: &str) -> Option<Result<Box<dyn SeedKey>, String>> {
+        if !Loader::handles(id) {
+            return None;
+        }
+        Some(match &self.loader {
+            None => Err(format!(
+                "seed/key '{id}': the definitions loader is off — it needs your definitions file \
+                 and a provider in an alpha / bench build (OpenTune ships no algorithm or data)"
+            )),
+            Some(l) => l
+                .seed_key(id)
+                .unwrap_or_else(|| Err(format!("'{id}' is not a loader id")))
+                .map(|sk| Box::new(sk) as Box<dyn SeedKey>),
+        })
     }
 
     /// Resolve `id` (trimmed): the first plugin resolver that knows it, else
@@ -73,6 +138,7 @@ impl SeedKeys {
         }
         self.plugin(id)
             .or_else(|| self.builtin_sa2(id).and_then(Result::ok))
+            .or_else(|| self.loaded(id).and_then(Result::ok))
     }
 
     /// Resolve `id` through the plugin resolvers only.
@@ -110,7 +176,7 @@ impl SeedKeys {
         match self.builtin_sa2(id) {
             Some(Ok(h)) => Ok(h),
             Some(Err(e)) => Err(format!("seed/key '{id}': {e}")),
-            None => Err(unavailable(id)),
+            None => self.loaded(id).unwrap_or_else(|| Err(unavailable(id))),
         }
     }
 
@@ -339,6 +405,50 @@ mod tests {
         assert!(e.contains("longer than any SA2 script"), "{e}");
         let e = keys.require("sa2:@ ").err().unwrap();
         assert!(e.contains("no file"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn definitions_loader_is_off_by_default_and_bench_tier() {
+        use opentune_seedkey_loader::ProviderSpec;
+        let dir = std::env::temp_dir().join(format!("ot-seedkeys-loader-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Synthetic definition: tape `eor 0xFFFFFFFF; finish` (key = NOT seed).
+        let defs = dir.join("defs.json");
+        std::fs::write(
+            &defs,
+            r#"[{"EcuName":"SIM","AccessLevel":17,"SeedLength":4,"KeyLength":4,"Provider":"VolkswagenSA2",
+                "Parameters":[{"Key":"InstructionTape","Value":"87FFFFFFFF4C","DataType":"ByteArray"}]},
+               {"EcuName":"ELV-SIM","AccessLevel":17,"SeedLength":4,"KeyLength":4,"Provider":"VolkswagenSA2"}]"#,
+        )
+        .unwrap();
+        let cfg = LoaderConfig::new(defs, vec![ProviderSpec::BuiltinSa2]);
+        let bench = BuildChannel::new(BuildChannel::BENCH);
+        let stable = BuildChannel::new(BuildChannel::STABLE);
+
+        // Off by default: no config, no loader; the id says why.
+        assert!(loader_for(None, &bench).unwrap().is_none());
+        let keys = SeedKeys::default();
+        assert!(keys.get("unlockecu:SIM").is_none());
+        let e = keys.require("unlockecu:SIM").err().unwrap();
+        assert!(e.contains("loader is off"), "{e}");
+        // Stable channel: refused (Bench tier).
+        let e = loader_for(Some(&cfg), &stable).unwrap_err();
+        assert!(e.contains("Bench-tier"), "{e}");
+        // Bench channel: resolves, after plugins and SA2.
+        let keys = SeedKeys::default().with_loader(loader_for(Some(&cfg), &bench).unwrap());
+        let h = keys.require(" unlockecu:sim ").unwrap();
+        assert_eq!(
+            h.compute(&[0, 0, 0, 1], 0x11).unwrap(),
+            [0xFF, 0xFF, 0xFF, 0xFE]
+        );
+        assert!(keys.seedkey_loader().is_some());
+        assert!(
+            keys.clone().get("unlockecu:SIM").is_some(),
+            "clones keep it"
+        );
+        let e = keys.require("unlockecu:ELV-SIM").err().unwrap();
+        assert!(e.contains("CONTRIBUTING.md"), "{e}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

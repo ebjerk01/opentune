@@ -15,6 +15,17 @@ use std::path::PathBuf;
 pub struct Cli {
     #[command(subcommand)]
     pub cmd: Command,
+    /// Your own seed/key definitions file in the UnlockECU format. Off by
+    /// default: it loads only together with --seedkey-provider, and then
+    /// answers `--seedkey unlockecu:<EcuName>`. Immobiliser / anti-theft
+    /// entries are refused (docs/SEEDKEY-LOADER.md). OpenTune ships none.
+    #[arg(long, global = true, value_name = "FILE")]
+    pub seedkey_defs: Option<PathBuf>,
+    /// Provider for --seedkey-defs: `builtin:sa2` (VolkswagenSA2 entries run
+    /// on the SA2 VM over their own InstructionTape) and/or the absolute path
+    /// of your provider program (JSON over stdin/stdout). Repeatable.
+    #[arg(long, global = true, value_name = "SPEC")]
+    pub seedkey_provider: Vec<String>,
 }
 
 #[derive(Subcommand)]
