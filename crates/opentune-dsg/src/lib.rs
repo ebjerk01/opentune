@@ -330,12 +330,35 @@ pub struct Group {
     pub raw_hex: String,
     /// Set when the read failed (the unit may not implement the group).
     pub error: Option<String>,
+    /// What the decode could not account for (a partial trailing cell, cells
+    /// past the 256 a cell number can name, a re-read after a lost session).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
+
+/// Most cells a group can have: the cell number (and the controller
+/// definition's `cell`) is a `u8`.
+pub const MAX_CELLS: usize = 256;
 
 /// Decode a measuring-group record (after the echoed group number).
 pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
-    let cells = vagmeas::cells(rec)
+    let mut notes = Vec::new();
+    let all = vagmeas::cells(rec);
+    if all.len() > MAX_CELLS {
+        notes.push(format!(
+            "record has {} cells; only the first {MAX_CELLS} are decoded (see raw_hex)",
+            all.len()
+        ));
+    }
+    if rec.len() % 3 != 0 {
+        notes.push(format!(
+            "{} trailing byte(s) do not form a whole cell (kept in raw_hex)",
+            rec.len() % 3
+        ));
+    }
+    let cells = all
         .into_iter()
+        .take(MAX_CELLS)
         .enumerate()
         .map(|(i, c)| {
             let cell = i as u8;
@@ -361,6 +384,7 @@ pub fn decode_group(group: u8, rec: &[u8], labels: &GroupLabels) -> Group {
         cells,
         raw_hex: hex(rec),
         error: None,
+        notes,
     }
 }
 
@@ -473,6 +497,7 @@ impl<'a> Dq250Reader<'a> {
                 cells: Vec::new(),
                 raw_hex: String::new(),
                 error: Some(e.to_string()),
+                notes: Vec::new(),
             },
         }
     }
@@ -563,5 +588,35 @@ mod tests {
         assert_eq!(g.cells[0].state, MeaningState::Unconfirmed);
         assert_eq!(g.cells[1].state, MeaningState::FromDefinition);
         assert_eq!(g.cells[1].meaning.as_ref().unwrap().name, "x");
+        assert!(g.notes.is_empty());
+    }
+
+    #[test]
+    fn oversized_and_ragged_records_are_noted_not_renumbered() {
+        // Regression: the cell number was `i as u8`, so cell 256 of an
+        // oversized record became cell 0 again and took cell 0's meaning.
+        let mut labels = GroupLabels::default();
+        labels.insert(
+            3,
+            0,
+            CellMeaning {
+                name: "first".into(),
+                unit: String::new(),
+                notes: String::new(),
+                source: "test".into(),
+            },
+        );
+        let rec: Vec<u8> = (0..(MAX_CELLS + 2) * 3 + 1).map(|i| i as u8).collect();
+        let g = decode_group(3, &rec, &labels);
+        assert_eq!(g.cells.len(), MAX_CELLS);
+        assert_eq!(g.cells.last().unwrap().cell, 255);
+        assert_eq!(
+            g.cells.iter().filter(|c| c.meaning.is_some()).count(),
+            1,
+            "only the real cell 0 carries its meaning"
+        );
+        assert_eq!(g.notes.len(), 2, "{:?}", g.notes);
+        assert!(g.notes[0].contains("258 cells") && g.notes[1].contains("1 trailing"));
+        assert_eq!(g.raw_hex.len(), rec.len() * 2);
     }
 }
