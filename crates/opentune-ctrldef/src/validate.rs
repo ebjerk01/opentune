@@ -476,6 +476,7 @@ impl ControllerDef {
 
         // --- live channels ----------------------------------------------------
         let mut live_names = HashSet::new();
+        let mut kwp_cells = HashSet::new();
         for ch in &self.live {
             let loc = format!("live '{}'", ch.name);
             // Names are unique per bus set (the same channel can come from
@@ -513,7 +514,17 @@ impl ControllerDef {
                         o.err("live.scaling", &loc, "factor must be finite and non-zero");
                     }
                 }
-                LiveSource::KwpMeasuringBlock { .. } => {}
+                LiveSource::KwpMeasuringBlock { group, cell } => {
+                    // One meaning per cell: a second entry would silently
+                    // replace the first when the engine attaches meanings.
+                    if !kwp_cells.insert((*group, *cell)) {
+                        o.err(
+                            "live.kwp_duplicate",
+                            &loc,
+                            format!("measuring block group {group} cell {cell} is named twice"),
+                        );
+                    }
+                }
             }
         }
 
@@ -767,6 +778,21 @@ mod tests {
         ] {
             assert!(c.contains(&want), "{want} not in {c:?}");
         }
+    }
+
+    #[test]
+    fn a_measuring_block_cell_has_one_meaning() {
+        // Regression: two live entries for the same (group, cell) validated,
+        // and the DSG engine's label map then kept only the last one.
+        let mut v = minimal();
+        let kwp = |name: &str, group: u8, cell: u8| {
+            serde_json::json!({"name": name,
+                "source": {"kind": "kwp_measuring_block", "group": group, "cell": cell}})
+        };
+        v["live"] = serde_json::json!([kwp("a", 1, 0), kwp("b", 1, 1), kwp("c", 2, 0)]);
+        assert!(!codes(&def(v.clone())).contains(&"live.kwp_duplicate"));
+        v["live"] = serde_json::json!([kwp("a", 1, 0), kwp("b", 1, 0)]);
+        assert_eq!(codes(&def(v)), vec!["live.kwp_duplicate"]);
     }
 
     #[test]
