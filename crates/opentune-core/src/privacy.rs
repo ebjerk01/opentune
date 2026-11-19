@@ -231,6 +231,12 @@ pub fn is_reserved_domain(domain: &str) -> bool {
             .any(|s| d.ends_with(s))
 }
 
+/// "Top-level domains" that are really file extensions (`name@2x.png`).
+const FILE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "json", "bin", "txt", "csv", "md",
+    "js", "mjs", "css", "html", "rs", "py", "toml", "yml", "yaml", "xml", "xdf", "pdf",
+];
+
 fn scan_emails(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
     let b = text.as_bytes();
     for (at, _) in text.match_indices('@') {
@@ -255,7 +261,9 @@ fn scan_emails(text: &str, hits: &mut Vec<(PrivacyKind, usize, usize)>) {
             && labels.iter().all(|l| !l.is_empty())
             && tld.len() >= 2
             && tld.bytes().all(|c| c.is_ascii_alphabetic());
-        if well_formed && !is_reserved_domain(domain) {
+        // `icon@2x.png`, `logo@3x.webp`: a file name, not an address.
+        let file_like = FILE_EXTENSIONS.contains(&tld.to_ascii_lowercase().as_str());
+        if well_formed && !file_like && !is_reserved_domain(domain) {
             hits.push((PrivacyKind::Email, s, e));
         }
     }
@@ -426,6 +434,8 @@ mod tests {
             "git@1.2.3",
             "see crate@1.2",
             "opendbc @ d714bb4",
+            "icons/128x128@2x.png",
+            "logo@3x.webp",
         ] {
             assert!(kinds(ok).is_empty(), "{ok}");
         }
