@@ -216,6 +216,9 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- Desktop "What's new": versions compare with semver pre-release precedence,
+  so an update from a pre-release to its final release (e.g. `1.0.0-rc.1` to
+  `1.0.0`) shows the popup instead of being taken for a downgrade.
 - Desktop: the sidebar adapter row no longer runs about 20 px past the pane;
   the port field and the HS/MS picker now shrink to fit.
 - Desktop: the sidebar's adapter **driver** and **CAN bus** pickers no longer

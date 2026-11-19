@@ -201,17 +201,61 @@ fn clip(s: &str, max: usize) -> String {
 // Seen-version state
 // ---------------------------------------------------------------------------
 
-/// `Some(true)` when `a` is a newer `x.y.z` than `b`, `None` when either does
-/// not parse (pre-release suffixes are ignored).
+/// `Some(true)` when `a` is a newer semver than `b`, `None` when either does
+/// not parse. Pre-releases follow semver precedence (`1.0.0-beta.2` <
+/// `1.0.0-rc.1` < `1.0.0`); build metadata (`+...`) is ignored.
 fn newer(a: &str, b: &str) -> Option<bool> {
-    fn parse(v: &str) -> Option<[u64; 3]> {
-        let core = v.trim().trim_start_matches('v');
-        let core = core.split(['-', '+']).next()?;
+    Some(semver_cmp(a, b)? == std::cmp::Ordering::Greater)
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum PreId {
+    // Declared first: numeric identifiers sort below alphanumeric ones.
+    Num(u64),
+    Alpha(String),
+}
+
+fn semver_cmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    fn parse(v: &str) -> Option<([u64; 3], Vec<PreId>)> {
+        let v = v.trim().trim_start_matches('v');
+        let v = v.split('+').next()?;
+        let (core, pre) = match v.split_once('-') {
+            Some((c, p)) => (c, Some(p)),
+            None => (v, None),
+        };
         let mut it = core.split('.').map(|p| p.parse::<u64>().ok());
-        let out = [it.next()??, it.next()??, it.next()??];
-        it.next().is_none().then_some(out)
+        let nums = [it.next()??, it.next()??, it.next()??];
+        if it.next().is_some() {
+            return None;
+        }
+        let mut ids = Vec::new();
+        if let Some(pre) = pre {
+            for id in pre.split('.') {
+                if id.is_empty() {
+                    return None;
+                }
+                ids.push(match id.parse::<u64>() {
+                    Ok(n) if id.bytes().all(|c| c.is_ascii_digit()) => PreId::Num(n),
+                    _ => PreId::Alpha(id.to_string()),
+                });
+            }
+        }
+        Some((nums, ids))
     }
-    Some(parse(a)? > parse(b)?)
+    let (an, ap) = parse(a)?;
+    let (bn, bp) = parse(b)?;
+    Some(
+        an.cmp(&bn)
+            .then_with(|| match (ap.is_empty(), bp.is_empty()) {
+                (true, true) => Ordering::Equal,
+                // A release ranks above its pre-releases.
+                (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                // Identifier by identifier; a longer list wins a tie on the shared part.
+                (false, false) => ap.cmp(&bp),
+            }),
+    )
 }
 
 fn write_seen(file: &Path, version: &str) -> std::io::Result<()> {
@@ -357,6 +401,48 @@ mod tests {
         assert_eq!(newer("v1.0.0-rc1", "0.9.0"), Some(true));
         assert_eq!(newer("0.8.0", ""), None);
         assert_eq!(newer("0.8", "0.7.0"), None);
+        assert_eq!(newer("0.8.0-", "0.7.0"), None, "empty pre-release id");
+    }
+
+    #[test]
+    fn pre_release_precedence() {
+        // The semver.org example chain, each newer than the one before.
+        let chain = [
+            "1.0.0-alpha",
+            "1.0.0-alpha.1",
+            "1.0.0-alpha.beta",
+            "1.0.0-beta",
+            "1.0.0-beta.2",
+            "1.0.0-beta.11",
+            "1.0.0-rc.1",
+            "1.0.0",
+        ];
+        for w in chain.windows(2) {
+            assert_eq!(newer(w[1], w[0]), Some(true), "{} > {}", w[1], w[0]);
+            assert_eq!(newer(w[0], w[1]), Some(false), "{} < {}", w[0], w[1]);
+        }
+        assert_eq!(
+            newer("1.0.0+build.5", "1.0.0"),
+            Some(false),
+            "build metadata ignored"
+        );
+        assert_eq!(newer("1.0.0-beta.1", "0.9.9"), Some(true));
+    }
+
+    #[test]
+    fn pre_release_to_final_shows_the_popup() {
+        let dir = tmp("pre");
+        let file = dir.join(FILE);
+        write_seen(&file, "1.2.0-rc.1").unwrap();
+        let w = check_at(&file, "1.2.0", LOG, false).expect("rc -> final is an update");
+        assert_eq!(w.previous, "1.2.0-rc.1");
+        write_seen(&file, "1.2.0").unwrap();
+        assert_eq!(
+            check_at(&file, "1.2.0-rc.1", LOG, false),
+            None,
+            "final -> rc is a downgrade"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn tmp(tag: &str) -> std::path::PathBuf {
