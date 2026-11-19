@@ -162,7 +162,7 @@
   },
   "adaptation": {
     "title": "Adaptation",
-    "summary": "Read adaptation values, run basic-settings routines and actuator tests from an adaptation definition. Tests move real parts.",
+    "summary": "Read adaptation values, run basic-settings routines and actuator tests from an adaptation definition (UDS, or VAG KWP2000 over TP2.0 / K-line). Tests move real parts.",
     "needs": ["Adapter: CAN", "Adaptation definition (.json)", "Target module ids", "Ignition on", "Vehicle stationary"],
     "risk": "writes-ecu",
     "guide": "28-adaptation"

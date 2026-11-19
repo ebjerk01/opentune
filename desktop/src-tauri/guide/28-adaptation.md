@@ -21,6 +21,18 @@ tests on a module, all from a data-defined channel set (an AdaptationDef JSON).
 
 The confirmation box clears after each run. Tick it again for the next one.
 
+## Older VAG modules (KWP2000)
+
+Channels of kind **KWP measuring block**, **KWP basic settings** and **KWP adaptation** talk KWP2000, over a VW TP2.0 channel (raw-CAN adapter: socketcan, slcan or gsusb) or the K-line (kkl, kline-bridge, elm327). They show the **KWP2000** card instead.
+
+1. Enter the **Module address** (TP2.0 logical or K-line address, for example `0x01`), unless the definition carries one. Leave **Session** at `0x89` unless the module needs another.
+2. **Read** a measuring block or an adaptation channel. Some modules want **SecurityAccess** even to read an adaptation channel: enter a **Seed/key id** from a plugin. OpenTune ships none.
+3. **Plan** shows every request a write would send, and sends nothing.
+4. **Test value** applies a raw value temporarily and reads it back; the module is expected to drop it when the adaptation is left. **Save value** stores it and needs the module's 6-byte **Workshop code**. **Run basic settings** starts basic settings for the group, reads the measuring block a few times, then stops. All three need the confirmation tick, a seed/key id, and confirm once more.
+5. Tick **Simulated module** to try all of this against a synthetic module (seed/key id `kwpsim-test`). Its values are made up.
+
+The VAG routine numbers and record layouts behind these channels are from public community work on one module family and are **unconfirmed** for most modules.
+
 ## Reading the results
 
 - **routine ok** and an optional **result** — the module accepted the routine. **request results** only reads.
@@ -32,6 +44,8 @@ The confirmation box clears after each run. Tick it again for the next one.
 - **Refused: ack required** — tick the confirmation.
 - **Target unknown** — set tx/rx or add `req_id` / `resp_id` to the definition.
 - **Negative response** — the module refused: security access needed, wrong session, or conditions not met (speed, temperature, engine state).
+- **KWP: session lost** — the TP2.0 channel broke and was set up again without the module's session. A read is retried once on its own. A test or save stops at once and sends nothing more: **read the channel again** before anything else.
+- **Refused before sending anything** — a KWP write was not confirmed, or no seed/key id or workshop code was given.
 
 ## Safety
 
