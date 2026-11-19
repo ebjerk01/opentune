@@ -56,6 +56,9 @@ pub mod seedkeys;
 // parsed-data cache. Public so an embedder can add its own trace marks.
 pub mod dmabuf;
 pub mod startup;
+// Local diagnostics log file (panics, frontend + command errors, session log,
+// startup marks). Public so an embedder can add its own records.
+pub mod diaglog;
 #[cfg(test)]
 mod vcar_e2e;
 
@@ -158,6 +161,7 @@ pub fn builder_with(
     // WebKitGTK environment defaults (see startup.rs and
     // docs/TROUBLESHOOTING-STARTUP.md).
     startup::begin();
+    diaglog::install_panic_hook();
     startup::apply_platform_env();
     let DesktopConfig {
         channel,
@@ -170,6 +174,10 @@ pub fn builder_with(
     let core = tauri::plugin::Builder::<tauri::Wry>::new("opentune-core")
         .setup(move |app, _api| {
             startup::mark("setup plugin: start");
+            // The diagnostics log file opens first: the records made so far
+            // (panic hook, startup marks) follow its session header.
+            let debug_log = DebugLog::default();
+            diaglog::init(app, &channel, &debug_log);
             let data = startup::timed("setup: data roots resolved", || {
                 resolve_data(app, &data_roots)
             });
@@ -186,7 +194,7 @@ pub fn builder_with(
             app.manage(Checksums(checksums));
             app.manage(SeedKeys::new(seedkeys).with_loader(loader));
             app.manage(OpGuard::default());
-            app.manage(DebugLog::default());
+            app.manage(debug_log);
             app.manage(adapter::AdapterHub::with_registry());
             app.manage(feat_candump::CandumpState::default());
             app.manage(feat_logging::LiveLogState::default());
@@ -344,6 +352,11 @@ macro_rules! core_command_list {
             startup::startup_mark,
             startup::render_env,
             startup::render_note,
+            diaglog::diag_log,
+            diaglog::diag_log_tail,
+            diaglog::diag_log_info,
+            diaglog::diag_log_open_folder,
+            diaglog::diag_log_clear,
         }
     };
 }

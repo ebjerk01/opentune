@@ -62,6 +62,18 @@ fn plugin_api_paths_and_shapes() {
     let _: fn(&adapter::ConnKey) -> Result<Box<dyn opentune_core::Interface>, String> =
         open_registry_driver;
     let _: fn(&str) = startup::mark;
+    // The diagnostics log: an embedder's own records and the read-back API.
+    use opentune_desktop::diaglog;
+    diaglog::record(
+        diaglog::Level::Warn,
+        diaglog::Src::Rust,
+        "plugin record",
+        None,
+    );
+    let _: fn(&std::path::Path, usize, diaglog::Level) -> Vec<diaglog::Record> = diaglog::read_tail;
+    let _: fn(&std::path::Path) -> Vec<diaglog::Record> = diaglog::read_since_session;
+    let _: fn() -> Option<std::path::PathBuf> = diaglog::log_dir;
+    assert_eq!(diaglog::mask("67 01 AA BB"), "67 01 <masked: 2 bytes>");
 
     // Managed state types a plugin command may take as tauri::State.
     let data = AppData {

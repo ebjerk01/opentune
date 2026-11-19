@@ -142,10 +142,18 @@ pub fn build_channel(channel: tauri::State<'_, BuildChannel>) -> String {
 pub struct DebugLog(pub(crate) Arc<Mutex<Vec<String>>>);
 
 impl DebugLog {
-    /// Append one line to the session log.
+    /// Append one line to the session log. The line is mirrored into the
+    /// diagnostics log file ([`crate::diaglog`]), masked there.
     pub fn push(&self, line: impl Into<String>) {
+        let line = line.into();
+        crate::diaglog::record(
+            crate::diaglog::Level::Info,
+            crate::diaglog::Src::Rust,
+            line.as_str(),
+            Some(json!({ "via": "session-log" })),
+        );
         if let Ok(mut v) = self.0.lock() {
-            v.push(line.into());
+            v.push(line);
         }
     }
 }

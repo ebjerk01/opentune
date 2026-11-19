@@ -88,18 +88,23 @@ pub fn elapsed_ms() -> f64 {
     T0.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-/// Print one trace line (no-op unless the trace is on).
+/// One startup milestone: always recorded in the diagnostics log
+/// ([`crate::diaglog`]), printed to stderr when the trace is on.
 pub fn mark(label: &str) {
+    let ms = elapsed_ms();
+    crate::diaglog::record(
+        crate::diaglog::Level::Info,
+        crate::diaglog::Src::Startup,
+        label,
+        Some(serde_json::json!({ "ms": (ms * 10.0).round() / 10.0 })),
+    );
     if enabled() {
-        eprintln!("[startup {:8.1} ms] {label}", elapsed_ms());
+        eprintln!("[startup {ms:8.1} ms] {label}");
     }
 }
 
-/// Time `f` and print `label (n ms)` when the trace is on.
+/// Time `f` and [`mark`] `label (n ms)`.
 pub fn timed<T>(label: &str, f: impl FnOnce() -> T) -> T {
-    if !enabled() {
-        return f();
-    }
     let t = Instant::now();
     let out = f();
     mark(&format!(
@@ -376,6 +381,15 @@ pub fn render_env_from(
         perf: get(PERF_ENV).map(|v| truthy(&v)).unwrap_or(false),
         dmabuf,
     }
+}
+
+/// The render decision of this start, for the diagnostics log's session
+/// header: the DMA-BUF decision and what OpenTune set before WebKit started.
+pub fn render_summary() -> serde_json::Value {
+    serde_json::json!({
+        "dmabuf": DECISION.get(),
+        "set_by_opentune": SET_BY_US.get().cloned().unwrap_or_default(),
+    })
 }
 
 /// The render environment of this process (Debug panel → Render check, and

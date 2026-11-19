@@ -46,6 +46,12 @@
   // Session log shown by the Debug tab; fixtures push their exchanges here.
   const LOG = ["preview: demo backend started — nothing here talks to hardware"];
   const log = (line) => { LOG.push(line); if (LOG.length > 400) LOG.shift(); };
+  const DIAG_LEVELS = ["debug", "info", "warn", "error"];
+  const DIAG = [
+    { ts: new Date(t0).toISOString(), level: "info", src: "startup", msg: "session start", ctx: { session: true, version: VERSION, channel: "alpha", os: "linux", webkit: "2.46.0" } },
+    { ts: new Date(t0).toISOString(), level: "info", src: "startup", msg: "setup plugin: start", ctx: { ms: 12.5 } },
+    { ts: new Date(t0).toISOString(), level: "warn", src: "cmd", msg: "image_info failed: demo/missing.bin: no such file", ctx: { cmd: "image_info" } },
+  ];
 
   // Each fixture: (args) => value | Promise. Shapes mirror desktop/src-tauri.
   const FIXTURES = {
@@ -111,6 +117,15 @@
     update_relaunch: () => { throw "Preview: there is no app to restart here."; },
     debug_log_dump: () => LOG.slice(),
     debug_log_clear: () => { LOG.length = 0; return null; },
+    // Diagnostics log (diaglog.rs): a short demo file, kept in memory.
+    diag_log: (r) => { DIAG.push({ ts: new Date().toISOString(), level: r.level || "error", src: r.src === "cmd" ? "cmd" : "js", msg: String(r.msg || ""), ctx: r.ctx || undefined }); return null; },
+    diag_log_tail: ({ limit, level }) => {
+      const min = DIAG_LEVELS.indexOf(level || "debug");
+      return DIAG.filter((r) => DIAG_LEVELS.indexOf(r.level) >= min).slice(-(limit || 100));
+    },
+    diag_log_info: () => ({ state: "on", dir: "demo/logs", file: "demo/logs/opentune.log", files: 1, bytes: JSON.stringify(DIAG).length, max_file_bytes: 1048576, rotated_files: 5 }),
+    diag_log_open_folder: () => { throw "Preview: there is no folder to open here."; },
+    diag_log_clear: () => { DIAG.length = 1; return null; },
   };
 
   async function invoke(cmd, args) {
