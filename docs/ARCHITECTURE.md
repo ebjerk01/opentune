@@ -85,7 +85,7 @@ a top-level command is added without a row here.
 | `opentune container` | Decode a VAG flash container (FRF / ODX / ODX-F / SGO); lists the SA2 seed/key scripts it declares |
 | `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
-| `opentune coding` | Module coding over UDS (read, decode, edit, write) |
+| `opentune coding` | Module coding over UDS (read, decode, edit, write) and offline EGS52 candidate coding CRC (`egs52-crc`) |
 | `opentune adaptation` | Adaptation channels: UDS value / routine / actuator, timed actuator tests on declared channels (`actuator list`, `actuator run`: plan by default, `--ack` executes, control always returned), and VAG KWP2000 over TP2.0 or K-line (`kwp-read`, `kwp-basic`, `kwp-test`, `kwp-save`; [`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
@@ -99,7 +99,7 @@ a top-level command is added without a row here.
 | `opentune doip` | DoIP (ISO 13400) over Ethernet: `discover` entities by vehicle identification request (all / `--eid` / `--vin`, broadcast, unicast or IPv6 multicast) or `--listen` for announcements, optionally `--activate` routing on each; `status` (entity status) and `power` (diagnostic power mode) over UDP; `--sim` for the simulated entity, `--json` |
 | `opentune controller` | Drivetrain controller definitions (TCU, AWD; [`ctrldefs/`](../ctrldefs/)): `list`, `show`, `validate`, `match` a part number / gearbox code, `decode` a CAN log with a definition's frame sets, e.g. Mercedes 722.6 EGS51 (see [`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md)) |
 | `opentune ts` | TunerStudio-compatible aftermarket ECUs (Speeduino, rusEFI, MegaSquirt): `ini info`/`tables`, `msq show`/`diff`, `read`, `write` (dry run unless `--confirm`; backup, verify, burn), `log`; `--port sim` for the simulated ECU ([`AFTERMARKET-ECUS.md`](AFTERMARKET-ECUS.md)) |
-| `opentune bsl` | C167/ST10 bootstrap-mode memory read for EDC15 boards: `presets`, `plan` (dry run, every byte exchange), `read` (unverified on hardware, needs `--i-understand`; `--port sim` for the simulated C167) ([`C167-BSL.md`](C167-BSL.md)) |
+| `opentune bsl` | C167/ST10 bootstrap-mode memory read for EDC15 and EGS52 boards: `presets`, `plan` (dry run, every byte exchange), `read` (unverified on hardware, needs `--i-understand`; `--port sim` for the simulated C167) ([`C167-BSL.md`](C167-BSL.md)) |
 
 ### Core — `opentune-core`
 The abstraction every app talks to and every driver implements.
@@ -208,7 +208,7 @@ apps that need it.
 | `opentune-ctrldef` | Data-defined drivetrain controller definitions ([`ctrldefs/`](../ctrldefs/), schema `docs/ctrldef.schema.json`): identity, ecudef/unit links, diagnostic channels, DBC-style CAN frame sets, live channels, adaptations, tables with axes, gear ratios; loader, validation, CAN decoder + log summary ([`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md), [`MERCEDES-722.6.md`](MERCEDES-722.6.md)) |
 | `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
 | `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
-| `opentune-c167bsl` | C167/ST10 bootstrap-loader (BSL) client, read only: autobaud + ID byte, 32-byte loader, user-supplied monitor kernel, register setup with read-back, checksummed block reads; EDC15 presets as data, dry-run plan, simulated BSL responder ([`C167-BSL.md`](C167-BSL.md)) |
+| `opentune-c167bsl` | C167/ST10 bootstrap-loader (BSL) client, read only: autobaud + ID byte, 32-byte loader, user-supplied monitor kernel, register setup with read-back, checksummed block reads; EDC15 and EGS52 presets as data, dry-run plan, simulated BSL responder ([`C167-BSL.md`](C167-BSL.md)) |
 | `opentune-ffi` | UniFFI binding used by the Android app |
 
 ### Drivers — `crates/drivers/*`

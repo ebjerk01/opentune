@@ -648,6 +648,38 @@ pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
     use opentune_coding::{read_coding, set, write_coding, CoreDiag, WriteOptions};
 
     let conn = match &action {
+        CodingAction::Egs52Crc {
+            input,
+            crc,
+            out,
+            allow_unconfirmed,
+        } => {
+            use std::io::Write;
+            let bytes =
+                std::fs::read(input).with_context(|| format!("read {}", input.display()))?;
+            let mut record: [u8; 42] = bytes
+                .try_into()
+                .map_err(|v: Vec<u8>| anyhow!("expected 42 coding bytes, got {}", v.len()))?;
+            let crc = opentune_coding::egs52::Crc16 {
+                poly: crc.poly,
+                init: crc.init,
+                refin: crc.refin,
+                refout: crc.refout,
+                xorout: crc.xorout,
+            };
+            let (stored, expected) = crc.verify(&record);
+            println!("{crc:x?} candidate (implemented, unconfirmed on a real EGS): stored {stored:#06x}, calculated {expected:#06x}");
+            if let Some(path) = out {
+                crc.recompute(&mut record, *allow_unconfirmed)
+                    .map_err(anyhow::Error::msg)?;
+                std::fs::File::create_new(path)
+                    .with_context(|| format!("create {}", path.display()))?
+                    .write_all(&record)?;
+            } else {
+                anyhow::ensure!(stored == expected, "candidate CRC mismatch");
+            }
+            return Ok(());
+        }
         CodingAction::Read { conn }
         | CodingAction::Decode { conn }
         | CodingAction::Set { conn, .. }
@@ -665,6 +697,7 @@ pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
     let mut diag = CoreDiag::new(transport, timeout);
 
     match action {
+        CodingAction::Egs52Crc { .. } => unreachable!("offline operation handled above"),
         CodingAction::Read { .. } => {
             let coding = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
             println!("Coding for {} ({}):", def.name, def.id);

@@ -4,7 +4,7 @@
 //! here writes or erases flash or EEPROM. See docs/C167-BSL.md.
 use crate::util::parse_num;
 use anyhow::{anyhow, bail, Context, Result};
-use opentune_c167bsl::plan::{build_read_plan, PlanInput, ReadPlan, RenderOptions};
+use opentune_c167bsl::plan::{build_with_registers, PlanInput, ReadPlan, RenderOptions};
 use opentune_c167bsl::protocol;
 use opentune_c167bsl::{
     find_preset, run_plan, Exchange, LinkOptions, Port, Preset, Region, SerialPort, SimC167,
@@ -54,6 +54,9 @@ pub struct Target {
     /// The monitor kernel the loader pulls in (user-supplied).
     #[arg(long, value_name = "FILE")]
     kernel: Option<PathBuf>,
+    /// Supply an unknown board SFR in programming order (repeat NAME=VALUE).
+    #[arg(long, value_name = "NAME=VALUE", conflicts_with = "no_setup")]
+    register: Vec<String>,
     /// Skip the bus / chip-select register setup.
     #[arg(long)]
     no_setup: bool,
@@ -122,6 +125,9 @@ fn presets() -> Result<()> {
                 "    {:<10} {:#08x} default {:#x}, window {:#x} — {}",
                 r.id, r.base, r.default_len, r.max_len, r.description
             );
+            for (name, _) in r.unknown_setup {
+                println!("        {name}: unknown/unverified");
+            }
             for w in r.setup {
                 let d = protocol::describe_register(w.addr, w.value);
                 println!(
@@ -184,17 +190,30 @@ fn build(t: &Target, p: &Payloads) -> Result<ReadPlan> {
     let (preset, region) = target(t)?;
     let block =
         u16::try_from(t.block).map_err(|_| anyhow!("block size {:#x} too large", t.block))?;
-    Ok(build_read_plan(&PlanInput {
-        preset,
-        region,
-        offset: t.offset,
-        len: t.len,
-        block,
-        loader: p.loader.as_deref(),
-        loader_sha256: p.loader_sha.as_deref(),
-        kernel: p.kernel.as_deref(),
-        setup: !t.no_setup,
-    })?)
+    let mut values = Vec::new();
+    for arg in &t.register {
+        let (name, value) = arg
+            .split_once('=')
+            .context("expected --register NAME=VALUE")?;
+        values.push((
+            name,
+            u16::try_from(parse_num(value)?).context("register value exceeds 16 bits")?,
+        ));
+    }
+    Ok(build_with_registers(
+        &PlanInput {
+            preset,
+            region,
+            offset: t.offset,
+            len: t.len,
+            block,
+            loader: p.loader.as_deref(),
+            loader_sha256: p.loader_sha.as_deref(),
+            kernel: p.kernel.as_deref(),
+            setup: !t.no_setup,
+        },
+        &values,
+    )?)
 }
 
 fn fcpu_hz(t: &Target) -> Result<Option<u32>> {
@@ -246,6 +265,7 @@ fn read(a: ReadArgs) -> Result<()> {
         bail!("a real read needs --loader and --kernel (no loader ships with OpenTune)");
     }
     let plan = build(t, &p)?;
+    plan.ensure_setup_complete()?;
     let baud = match (t.baud, sim) {
         (Some(b), _) => b,
         (None, true) => PLAN_DEFAULT_BAUD,
@@ -268,9 +288,7 @@ fn read(a: ReadArgs) -> Result<()> {
     let mut port: Box<dyn Port> = if sim {
         println!("port         sim (simulated C167 BSL, synthetic memory, no hardware)");
         Box::new(sim_ecu(
-            plan.region,
-            plan.start,
-            plan.len,
+            &plan,
             echo,
             p.kernel.as_ref().map_or(394, Vec::len),
         ))
@@ -334,19 +352,30 @@ fn read(a: ReadArgs) -> Result<()> {
 
 /// The simulated ECU for `--port sim`: the region holds a deterministic
 /// pattern, readable once the region's setup registers are programmed.
-fn sim_ecu(region: &Region, start: u32, len: u32, echo: bool, kernel_len: usize) -> SimC167 {
+fn sim_ecu(plan: &ReadPlan, echo: bool, kernel_len: usize) -> SimC167 {
+    let (start, len) = (plan.start, plan.len);
     let bytes: Vec<u8> = (0..len)
         .map(|i| {
             let a = start.wrapping_add(i);
             (a ^ (a >> 8) ^ (a >> 16)) as u8
         })
         .collect();
-    let requires: Vec<(u32, u16)> = region
-        .setup
-        .iter()
-        .filter(|w| w.value != 0)
-        .map(|w| (w.addr, w.value))
-        .collect();
+    let requires = if plan.region.unknown_setup.is_empty() {
+        plan.region
+            .setup
+            .iter()
+            .filter(|w| w.value != 0)
+            .map(|w| (w.addr, w.value))
+            .collect::<Vec<_>>()
+    } else {
+        plan.steps
+            .iter()
+            .filter_map(|step| match step.expect {
+                opentune_c167bsl::Expect::Word { addr, expect, .. } => Some((addr, expect)),
+                _ => None,
+            })
+            .collect()
+    };
     SimC167::new(SimConfig {
         echo,
         kernel_len,

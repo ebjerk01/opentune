@@ -169,3 +169,23 @@ car, the capture is the evidence an EGS52 set will be derived from.
 - Gear ratios: the public 5G-Tronic ratio table (Wikipedia, facts).
 - Not used: any OEM CAN-matrix-derived layout, DAS / Xentry / CBF content,
   EGS calibration data, seed/key.
+
+## Offline EGS52 coding CRC
+
+The 42-byte variant coding record belongs to the coding engine and its
+`opentune coding` CLI. Its CRC covers the first 40 bytes and occupies the
+last two bytes, least significant byte first. The EGS52 flash checksum
+algorithm remains unknown.
+
+    opentune coding egs52-crc coding.bin
+    opentune coding egs52-crc coding.bin --out candidate.bin --allow-unconfirmed
+
+Verify reports stored and calculated values and exits unsuccessfully on a
+mismatch. Recompute creates a new 42-byte binary file. Both operate offline.
+The Rust helper accepts the polynomial, initial value, input/output reflection
+and final XOR. The CLI exposes these as `--poly`, `--init`, `--refin true|false`,
+`--refout true|false` and `--xorout`. It defaults to the CRC-16/ARC candidate (normal polynomial
+`0x8005`, reflected `0xa001`, initial value and final XOR zero, both
+reflections enabled). Status **implemented** for EGS52, unconfirmed on a real
+EGS. The standard check vector and synthetic records exercise the calculation.
+[Sources and licences](PRIOR-ART.md#egs52-groundwork).

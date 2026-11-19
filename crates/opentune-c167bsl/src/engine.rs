@@ -99,6 +99,7 @@ pub fn run_plan(
     transcript: &mut Vec<Exchange>,
     progress: &mut dyn FnMut(u32, u32),
 ) -> Result<ReadOutcome> {
+    plan.ensure_setup_complete()?;
     port.discard_input()?;
     let mut data = Vec::with_capacity(plan.len as usize);
     let mut id_byte = 0u8;
