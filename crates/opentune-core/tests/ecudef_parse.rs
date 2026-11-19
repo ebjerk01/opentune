@@ -167,7 +167,7 @@ fn live_vw_16tdi_identity_matches_identification_only_def() {
         ..Default::default()
     };
     let def = ecudef::match_ecu(&defs, &id).expect("03L907425C must match a definition");
-    assert_eq!(def.id, "vag-1.6tdi-cr-simos-pcr21-ident");
+    assert_eq!(def.id, "siemens-pcr21-vag16tdi-ident");
     assert_eq!(def.diag_layer, opentune_core::DiagLayer::Uds);
     assert_eq!((def.tx_id, def.rx_id), (0x7E0, 0x7E8));
     // Identification only: no checksum, seed/key, maps, layout or size claim.

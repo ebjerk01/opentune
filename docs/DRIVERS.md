@@ -326,7 +326,7 @@ name, part number and VIN from a VW 1.6 TDI CR (EA189) engine ECU on the first
 try: the first real-ECU exchange of this driver. Not yet exercised on a car: DTC
 read/clear, block reads and anything that needs security access. The reported
 identity (ECU name `R4 1.6l TDI`, hardware/part number `03L907425C`) now
-matches the identification-only definition `vag-1.6tdi-cr-simos-pcr21-ident`. Public
+matches the identification-only definition `siemens-pcr21-vag16tdi-ident`. Public
 parts listings cross-reference that number to Continental Simos PCR2.1 (not
 Bosch EDC17 as first noted here); the family is unconfirmed until an image of
 this unit is read.

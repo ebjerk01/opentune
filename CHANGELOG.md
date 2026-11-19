@@ -16,7 +16,7 @@ section (alpha/bench builds) until they are vehicle-tested.
   never used to identify a real unit, labelled "Example — placeholder data".
 
 ### Changed
-- **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `vag-1.6tdi-cr-simos-pcr21-ident`, so
+- **Breaking: ECU definition id renamed** `siemens-pcr21-03l907425c` → `siemens-pcr21-vag16tdi-ident`, so
   the id no longer carries a hardware part number. Identification is unchanged (the
   part number stays a match key); anything referencing the old id (scripts, packs,
   saved sessions) must use the new one. Its `vehicle-tested` evidence now states
