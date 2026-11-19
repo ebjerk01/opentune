@@ -738,6 +738,176 @@ transport. `ssmsim` is handled by the `log` command and the desktop's
 adapter opener (Live log, SSM transports), not the registry, like `obdsim`
 for `opentune obd`; `SsmSim` implements `Interface` for that.
 
+## 3l. `openport2`: Tactrix OpenPort 2.0 (hardware validation pending)
+
+`crates/drivers/j2534-openport` (crate `opentune-driver-openport2`, id
+`openport2`) talks to an OpenPort 2.0 (OP2) or clone through its USB CDC-ACM
+interface (`/dev/ttyACM*` on Linux, a COM port on Windows): no vendor DLL, no
+kernel driver. It opens the cable's **raw CAN channel** (J2534 protocol 5) and
+implements `CanLink`, so ISO-TP, UDS, identify and the block read/write come
+from `opentune-core` like every raw-CAN driver. It does **not** use the
+cable's own ISO-TP channel (6) or its K-line channels (3, 4).
+
+**Validation state: hardware validation pending.** The serial path was
+audited on 2026-11-19 against the public protocol notes below and is tested
+against an offline fake only. No OP2 or clone has been connected yet; until
+the checklist at the end of this section has been worked through on a cable,
+treat every byte of it as unproven.
+
+### The session as implemented
+
+| Step | Host sends | Device answers |
+|---|---|---|
+| resync | `\r\n\r\n` (ends any half line a previous session left) | nothing |
+| identify | `ati\r\n` (no sequence number) | `ari main code version : 1.17.4877` |
+| reset | `atz <seq>`, then `ata <seq>` | `aro <seq>` each |
+| open | `ato5 <flags> <baud> 0 <seq>` (flags **before** baud; 4th field ignored; flags `256` = 29-bit ids) | `aro <seq>` |
+| filter | `atf5 1 <txflags> 4 <seq>` + mask + pattern (4 bytes each, big-endian): PASS on the response id | `arf5 <filter id> <seq>` |
+| transmit | `att5 <4+n> <txflags> <budget µs> <seq>` + CAN id (4 bytes BE) + data, **one write** | `aro <seq>`, then a `0x10` transmit-indication record |
+| receive | — | `a r '5' <len> <status> <timestamp BE32> <id BE32> <data>`, `len` = 9 + data length |
+| battery | `atr 16 <seq>` | `arr 16 <mV> <seq>` |
+| close | `atc5 <seq>`, `ata <seq>` | `aro <seq>` each |
+
+Every line ends in `\r\n`; the protocol digit is glued to the verb. Replies
+are matched on their trailing sequence number (1..0xFFFF, wrapping); stale
+replies are dropped and counted. Receive records interleave with replies, so
+frames that arrive while a command waits are queued, not lost. Records with
+status `0x10` (transmit indication), `0x20` (loopback) or a bare `0x80` (START)
+are indications, not data, and are dropped. `are <code> … <seq>` becomes an
+error naming the J2534 code (`ERR_TIMEOUT` on a transmit means nothing on the
+bus acknowledged the frame).
+
+Options: `port` (default `/dev/ttyACM0`), `bitrate` (overrides the config;
+one of 50000, 83333, 100000, 125000, 250000, 500000, 1000000 — the cable does
+not check the rate and a wrong one on a live bus can hang it, so other values
+are refused), `tx_timeout_ms` (per-frame transmit budget, 1..=5000, default
+100; a zero budget never transmits). `programming_voltage` is **not**
+advertised: the cable can drive a pin (`atv`) but the driver sends no `atv`.
+
+### Audit, 2026-11-19
+
+Sources (facts only, no code copied; licences in
+[PRIOR-ART.md](PRIOR-ART.md#openport-20-and-j2534-interface-protocol)):
+**[B]** bisak/openport-j2534 `docs/PROTOCOL.md` (cable-verified, with black-box
+traces of the vendor DLL), **[M]** Mackanized/op2j2534 `PROTOCOL.md`,
+**[R]** roffe/libj2534_openport2 `RE_NOTES.md`, **[J]** SAE J2534-1 (04.04).
+The vendor DLL and EcuFlash were not opened.
+
+| # | Before the audit | Now | Source |
+|---|---|---|---|
+| 1 | Lines ended in a bare `\r` | `\r\n` (a bare CR is ignored by the cable, so no command was ever executed) | [M] §2, [B] §2 |
+| 2 | `ato 5 …` (spaced digit) | `ato5 …`, the form all three codebases send ([M] §2 says the space is skipped, [B] §2 that "spacing matters"; glued works either way) | [B] §2, [M] §2 |
+| 3 | `ato <proto> <flags> <baud> <seq>`: the seq landed in the ignored 4th field and the command went unnumbered | `ato5 <flags> <baud> 0 <seq>` | [B] §3–4, [R] §4 |
+| 4 | `atc`/`att`/`atf` addressed a "channel handle" read from the `aro` | addressed by protocol id (`atc5`) | [M] §3 Channels, [B] §5 |
+| 5 | `att <ch> 0 <µs> ` + `<len><id><data>` + ` <seq>\r` inline, `len` = data length | `att5 <4+n> <txflags> <µs> <seq>\r\n` + id + data in one write | [M] §4 Transmit, [R] §4, [B] §2 |
+| 6 | `atf <ch> 1 0 <mask hex> <pattern hex>` in ASCII | binary payload, `atf5 1 <txflags> 4` | [B] §4 (see note) |
+| 7 | RX `len` read as the data length after the id, so every frame swallowed 9 bytes of the next message | `len` counts status + timestamp + id + data | [B] §7.1, [M] §4, [R] §4 |
+| 8 | Transmit indications / echoes delivered to ISO-TP as received frames | dropped by status bit | [B] §7.2, §7.5, §7.7 |
+| 9 | Frames that arrived while a command awaited its ack were thrown away | queued | [B] §2 "they interleave" |
+| 10 | Replies not matched; `are` read as `are <seq> <code>` | `are <code> [<detail>] <seq>`; matched on the trailing seq; stale ones dropped | [R] §4, [M] §2, [B] §3, §9.2 |
+| 11 | 8-bit sequence counter | 1..0xFFFF | [R] §4 |
+| 12 | `atr 16` reply expected as `aro <seq> <mV>` | `arr 16 <mV> <seq>` | [M] §3, [B] §3, [R] §4 |
+| 13 | `ati` numbered, reply kept raw | unnumbered (as the vendor DLL sends it), version parsed | [B] §4, [R] §4 |
+| 14 | No resync; `atz` failure ignored; a failed open left the cable claimed | `\r\n\r\n`, `ati`, `atz`, `ata`; a failed open sends `ata` | [B] §4, §9.1 |
+| 15 | One byte per read with a per-byte timeout | buffered parser with an overall deadline: split, merged and partial reads, resync on `ar` | [B] §2 |
+| 16 | Any bit rate sent | allow-list (above) | [B] §1, §5 |
+| 17 | DTR/RTS untouched | asserted (best effort) | [M] §1 |
+| 18 | `programming_voltage: true` with no implementation | `false` | DRIVERS.md §2 contract |
+| 19 | 50 ms budget, 1 s ack wait | `tx_timeout_ms` (100 ms default), ack wait budget + 1.5 s (no-ACK `are 9` measured at ~1.3 s for a 1 s budget) | [M] §4, [B] §4, §10 |
+| 20 | `j2534` crate: ISO 15765 flow-control filter without `ISO15765_FRAME_PAD` | set (flow-control frames padded) | [J], [B] §4 DLL trace `atf6 3 64 4`, §11 |
+| 21 | `j2534` crate (Windows FFI): any `PassThruReadMsgs` error with no message reported as a timeout | only `ERR_BUFFER_EMPTY`/`ERR_TIMEOUT` are timeouts | [J] |
+
+Note on `atf` (item 6): [M] and [R] read its 2nd and 3rd fields as
+`<mask_len> <pattern_len>` and send `4 4`; [B] reads `<txflags> <len>` and
+shows the vendor DLL sending `atf6 3 64 4` with 12 bytes (TxFlags 0x40, three
+4-byte messages), which only that reading explains. The driver follows [B]
+(`atf5 1 0 4`); `4 4` also parses as "TxFlags 4, length 4", which is why both
+projects work. [M]'s PROTOCOL.md table also lists `ato` as `<baud> <flags>`,
+contradicted by its own code and the other two sources. Both are on the
+checklist.
+
+Not done here (each needs owner approval first, see the audit report): the
+K-line channels (`ato3`/`ato4`, `aty` fast init, `atw` five-baud; the K-line
+record layout is unverified even upstream, [B] §7.9), the cable's own ISO-TP
+channel 6 with flow-control filters, `ats`/`atg` configuration, `atv`
+programming voltage, periodic messages, and VW TP2.0 over this raw-CAN link.
+
+### The offline fake
+
+`opentune_driver_openport2::fake` is a scripted OP2 that speaks the protocol
+above and simulates one CAN bus with an ISO-TP ECU behind it (the tests put
+the independent `opentune-udssim` server there). It enforces what the notes
+report: `\n`-terminated lines, glued protocol digits, sequence-number echo
+(unnumbered `att` gets no reply), payload lengths (a wrong one is refused
+without consuming the payload, so the stream desynchronises as on the cable),
+mandatory filters with PASS/BLOCK semantics, non-zero transmit budgets and
+transmit indications. Faults: `are` replies per command, silence, stale
+replies, ECU frames ahead of the `aro`, no other node on the bus (`are 9`),
+background traffic, leading garbage, loopback echoes, and an ECU flow-control
+block size. `FakePort` feeds it to the driver with whole, byte-wise or
+patterned read chunking; `serve` runs it behind a pty.
+
+Tests: `crates/drivers/j2534-openport/src/proto.rs` (codec, parser under
+every split), `tests/fake_e2e.rs` (identify, block read and write through the
+real driver, filters, flow control, 29-bit ids, error and timeout paths), and
+`crates/opentune-cli/tests/openport2_fake.rs` (`opentune info`, `identify` and
+`read` through the real binary and the real serial open path, against the
+fake on a pty). The fake was written from the same notes as the driver, so it
+cannot catch a misreading the two share: only the cable can.
+
+### Hardware-validation checklist (when the clone arrives)
+
+Do not run any firmware "update" (EcuFlash or the Tactrix updater) on a clone:
+clone serial numbers are blacklisted and the update can wipe the device. The
+driver never sends `atx` (bootloader); do not send it by hand either. Remove
+the microSD card (with a card in, the cable enumerates as storage). Record
+results here with dates; do not commit serial numbers or VINs.
+
+1. **Enumeration.** `lsusb` shows `0403:cc4d` (note the product string; clones
+   vary); `/dev/ttyACM*` appears via `cdc_acm` (`dmesg`), and
+   `/dev/serial/by-id/` has an entry. The user is in `dialout`/`uucp`.
+2. **Version.** `opentune info --driver openport2 --port /dev/ttyACM0` with
+   no car: it opens, prints the firmware text, closes cleanly; `ati` by hand
+   (115200 8N1, `\r\n`) answers `ari …`. Record the clone's string.
+3. **Battery.** On USB power alone `atr 16` reads ~0.1 V; on a 12 V supply or
+   the car it matches a multimeter within ~0.2 V.
+4. **CAN 500k loopback on the bench.** OP2 plus a reference node (CANable /
+   candleLight with `candump`), terminated, 500 kbit/s. Each transmit answers
+   `aro` and the reference sees the exact id and data; frames from the
+   reference reach the driver; 29-bit ids work both ways (status bit `0x02`).
+   With the reference unplugged, a transmit fails with `ERR_TIMEOUT` after
+   roughly the budget (+ up to ~1.3 s), never hangs.
+5. **Filters.** Frames on other ids never reach the host; with only the PASS
+   filter, the reference's 0x7E8 traffic does. Try `atf5 1 0 4` and
+   `atf5 1 4 4` by hand: both should answer `arf5`, settling the `atf` field
+   reading. Read back `DATA_RATE` (`atg5 1 <seq>` → `arg5 1 500000 <seq>`) to
+   confirm the `ato` argument order.
+6. **Status bits.** Capture the raw stream (e.g. `strace -e read,write -x` or
+   a USB capture) during a transmit and a received frame: transmit indication
+   `0x10` + id after the `aro`, received frames status `0x00`/`0x02`,
+   `len` = 9 + data length.
+7. **Timing.** `aro` latency per frame (expect a few ms); an ISO-TP read of
+   4 KB blocks (`read --len 0x4000` on a bench ECU that allows upload) without
+   consecutive-frame sequence errors; the ECU's STmin honoured on writes.
+8. **ISO 15765 identify on a car.** `opentune identify --driver openport2
+   --port /dev/ttyACM0` against the engine ECU (7E0/7E8), ignition on; compare
+   the VIN / part numbers with another adapter's result.
+9. **K-line.** Not implemented in OpenTune. Check the clone's K-line with a
+   reference J2534 tool only to decide whether the K-line plan is worth it
+   (clone K-line paths are reported unreliable).
+10. **Error paths.** Unplug USB mid-read (clean I/O error, no hang); a second
+    program holding the cable (`ERR_CHANNEL_IN_USE`); a refused bit rate.
+    If the cable stops answering after a wrong-rate close, remove USB **and**
+    the OBD connector together to recover ([B] §1).
+11. **Clone quirks to watch.** Different USB ids or product strings; a
+    different `ati` text; missing transmit indications or `0x02` bits; other
+    `atf`/`ato` field readings; CR/LF handling; packetisation (64-byte bulk,
+    one record per packet); battery reading scale; K-line transceiver
+    missing; behaviour after `atz`.
+
+Only when steps 1–8 pass on the clone does the status here move from
+"hardware validation pending" to "validated (clone)", naming the firmware text.
+
 ## 4. Registration
 
 Driver ids registered in the CLI today (`opentune drivers`; crates and hardware
