@@ -635,7 +635,12 @@ pub fn run_resilient<'l>(
 
 /// Sleep `ms` in slices of at most [`SLEEP_SLICE_MS`], stopping early at the
 /// deadline or when `stopped()`. Returns `false` when cut short.
-fn pause_for(clock: &dyn Clock, ms: u64, stopped: &dyn Fn() -> bool, deadline: Option<u64>) -> bool {
+fn pause_for(
+    clock: &dyn Clock,
+    ms: u64,
+    stopped: &dyn Fn() -> bool,
+    deadline: Option<u64>,
+) -> bool {
     let mut left = ms;
     let mut cut = false;
     if let Some(d) = deadline {
@@ -706,7 +711,11 @@ mod tests {
         }
     }
 
-    fn opts<'a>(clock: &'a VirtualClock, rounds: Option<u64>, policy: ReconnectPolicy) -> RunOptions<'a> {
+    fn opts<'a>(
+        clock: &'a VirtualClock,
+        rounds: Option<u64>,
+        policy: ReconnectPolicy,
+    ) -> RunOptions<'a> {
         RunOptions {
             limits: RunLimits {
                 rounds,
@@ -932,7 +941,9 @@ mod tests {
 
     #[test]
     fn adapter_reset_is_lost_at_once() {
-        assert!(is_link_lost(&crate::Error::AdapterReset("ELM327 v1.5".into())));
+        assert!(is_link_lost(&crate::Error::AdapterReset(
+            "ELM327 v1.5".into()
+        )));
         assert!(!is_link_lost(&crate::Error::Timeout(5)));
         let clock = VirtualClock::new(0);
         let reset = |_: &[u8]| -> Result<Vec<u8>, String> {

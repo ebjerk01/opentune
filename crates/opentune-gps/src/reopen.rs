@@ -84,14 +84,12 @@ impl GpsFeed for ReopenFeed {
                 self.backoff_ms = self.initial_ms;
                 return snap.unwrap_or_default();
             }
-            Some(s) => {
-                if self.ended.is_none() {
-                    // First time we see it end: wait one backoff, then try.
-                    self.ended = s.ended.clone();
-                    self.next_try_ms = now.saturating_add(self.initial_ms);
-                }
+            // First time we see it end: wait one backoff, then try.
+            Some(s) if self.ended.is_none() => {
+                self.ended = s.ended.clone();
+                self.next_try_ms = now.saturating_add(self.initial_ms);
             }
-            None => {}
+            _ => {}
         }
         if now >= self.next_try_ms {
             self.attempts += 1;
@@ -177,12 +175,20 @@ mod tests {
         assert!(f.snapshot().ended.is_none()); // the one epoch
         up.store(0, Ordering::SeqCst); // unplugged
         let s = f.snapshot(); // ended: wait one backoff
-        assert!(!s.good && s.note.contains("re-opening in 1.0 s"), "{}", s.note);
+        assert!(
+            !s.good && s.note.contains("re-opening in 1.0 s"),
+            "{}",
+            s.note
+        );
         let mut tried = 0;
         for ms in (0..=7000).step_by(100) {
             t.store(ms, Ordering::SeqCst);
             let s = f.snapshot();
-            assert!(!s.good && s.note.starts_with("GPS source lost"), "{}", s.note);
+            assert!(
+                !s.good && s.note.starts_with("GPS source lost"),
+                "{}",
+                s.note
+            );
             tried = f.attempts();
         }
         // Attempts at 1.0, 2.0, 4.0 and 8.0 (not yet) s: backoff, not per sample.

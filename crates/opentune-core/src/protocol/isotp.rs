@@ -150,8 +150,8 @@ impl IsoTp {
     /// (a gateway's diagnostic CAN carries nothing until queried) the link's
     /// own timeout ends the wait as before.
     fn recv_from_ecu(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
-        let deadline = std::time::Instant::now()
-            .checked_add(std::time::Duration::from_millis(timeout_ms));
+        let deadline =
+            std::time::Instant::now().checked_add(std::time::Duration::from_millis(timeout_ms));
         let mut wait = timeout_ms;
         loop {
             let (id, data) = self.link.recv_frame(wait)?;
@@ -349,7 +349,8 @@ impl IsoTp {
             self.block_size,
             self.st_min,
         ]);
-        self.link.send_frame(self.fc_tx_id.unwrap_or(self.tx_id), &fc)
+        self.link
+            .send_frame(self.fc_tx_id.unwrap_or(self.tx_id), &fc)
     }
 }
 

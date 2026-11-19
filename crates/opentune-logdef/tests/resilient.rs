@@ -13,9 +13,9 @@ use opentune_core::resilient::{Clock, VirtualClock};
 use opentune_core::{OwnedDiag, RawDiag};
 use opentune_logdef::live::poll_once;
 use opentune_logdef::{
-    Addressing, Conversion, ConversionFit, EcuGroup, EndReason, FastLogConfig, LiveSession,
-    LogDef, LogMode, LogParam, ProtocolGroup, ProtocolKind, ReconnectPolicy, RunLimits,
-    RunOptions, SourceFormat, LINK_PARAM_ID,
+    Addressing, Conversion, ConversionFit, EcuGroup, EndReason, FastLogConfig, LiveSession, LogDef,
+    LogMode, LogParam, ProtocolGroup, ProtocolKind, ReconnectPolicy, RunLimits, RunOptions,
+    SourceFormat, LINK_PARAM_ID,
 };
 use opentune_udssim::server::UdsServer;
 use std::sync::{Arc, Mutex};
@@ -187,7 +187,11 @@ fn polling_and_fast_over_isotp_on_a_quiet_noisy_slow_bus() {
 
     let polled = poll_once(d, &def(), &[]);
     let values: Vec<Option<f64>> = polled.iter().map(|s| s.value).collect();
-    assert_eq!(values, [Some(1726.0), Some(-20.0), Some(300.0)], "{polled:?}");
+    assert_eq!(
+        values,
+        [Some(1726.0), Some(-20.0), Some(300.0)],
+        "{polled:?}"
+    );
 
     let mut s = LiveSession::new(&def(), &[], FastLogConfig::fast()).unwrap();
     let st = s.start(d).clone();
@@ -296,7 +300,9 @@ fn drop_reconnect_redefine_resume() {
     assert_eq!(rpm.iter().filter(|v| **v == 1726.0).count(), 6);
     assert!(rpm.iter().any(|v| v.is_nan()));
     assert!(
-        log.notes.iter().any(|n| n.contains("Link status = reconnected")),
+        log.notes
+            .iter()
+            .any(|n| n.contains("Link status = reconnected")),
         "{:?}",
         log.notes
     );
@@ -321,7 +327,8 @@ fn link_that_comes_back_on_its_own_without_reconnect() {
         fault: Fault::Calls(18, FailKind::Silent),
         n: 0,
     };
-    let mut open = || -> Result<Box<dyn RawDiag>, String> { panic!("no reopen without --reconnect") };
+    let mut open =
+        || -> Result<Box<dyn RawDiag>, String> { panic!("no reopen without --reconnect") };
     let opts = RunOptions {
         limits: RunLimits {
             rounds: Some(7),
@@ -353,7 +360,10 @@ fn link_that_comes_back_on_its_own_without_reconnect() {
         .map(|x| x.3.as_str())
         .collect();
     assert_eq!(dead_notes.len(), 9);
-    assert!(dead_notes.iter().all(|n| n.contains("timed out")), "{dead_notes:?}");
+    assert!(
+        dead_notes.iter().all(|n| n.contains("timed out")),
+        "{dead_notes:?}"
+    );
     // Backoff after each dead round (250, 500, 1000) plus the virtual time
     // the 9 silent requests waited (50 ms each).
     assert_eq!(clock.slept_ms(), 250 + 500 + 1000);
@@ -380,7 +390,9 @@ fn gives_up_and_leaves_the_dead_link_alone() {
     bus.refuse_opens(u32::MAX);
     let b2 = bus.clone();
     let mut open = move || -> Result<Box<dyn RawDiag>, String> {
-        b2.reopen().map(|l| Box::new(diag(l)) as Box<dyn RawDiag>).map_err(|e| e.to_string())
+        b2.reopen()
+            .map(|l| Box::new(diag(l)) as Box<dyn RawDiag>)
+            .map_err(|e| e.to_string())
     };
     let opts = RunOptions {
         limits: RunLimits::default(), // no round or time limit
@@ -404,9 +416,19 @@ fn gives_up_and_leaves_the_dead_link_alone() {
     let r = rows(&csv);
     assert_eq!(
         markers(&r),
-        ["lost", "reopen-failed", "reopen-failed", "reopen-failed", "gave-up"]
+        [
+            "lost",
+            "reopen-failed",
+            "reopen-failed",
+            "reopen-failed",
+            "gave-up"
+        ]
     );
-    assert!(csv.lines().last().unwrap().contains("gave up reconnecting after 4 attempt(s)"));
+    assert!(csv
+        .lines()
+        .last()
+        .unwrap()
+        .contains("gave up reconnecting after 4 attempt(s)"));
     // Never a hot spin: one sleep before each attempt (100, 200, 300, 300).
     assert_eq!(clock.slept_ms(), 900);
     // Nothing could clear the dynamic DID on a dead link; it is not pretended.

@@ -432,7 +432,8 @@ pub enum Command {
     /// Data-defined by `--def`. UDS `0x22` (DID), OBD-II mode `0x01` (PID) and
     /// UDS `0x23` (raw-memory) parameters are driven; parameters with unknown
     /// addressing are reported as undetermined rather than guessed. With the
-    /// default `mock` driver it runs offline.
+    /// default `mock` driver it runs offline. `--rounds 0` runs until Ctrl-C
+    /// or `--duration`; `--reconnect` re-opens a dropped adapter and resumes.
     Log {
         /// RomRaider-style `logger.xml` definition file.
         #[arg(long)]
@@ -446,12 +447,9 @@ pub enum Command {
         /// Per-request UDS timeout, milliseconds.
         #[arg(long, default_value_t = 1000)]
         timeout_ms: u64,
-        /// Number of polling rounds.
-        #[arg(long, default_value_t = 1)]
-        rounds: usize,
-        /// Sleep between rounds, milliseconds (0 = as fast as possible).
-        #[arg(long, default_value_t = 0)]
-        interval_ms: u64,
+        /// Rounds, duration, Ctrl-C and reconnect behaviour.
+        #[command(flatten)]
+        run: crate::livelog::RunArgs,
         /// Write the CSV here (otherwise to stdout).
         #[arg(long)]
         out: Option<PathBuf>,

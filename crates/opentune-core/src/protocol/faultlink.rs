@@ -542,14 +542,20 @@ mod tests {
             assert!(matches!(link.recv_frame(5), Err(Error::Timeout(5))));
         }
         let mut tp = isotp(link, 0x7E0, 0x7E8);
-        assert_eq!(tp.request(&[0x22, 0x10, 0x00], 5).unwrap(), [0x62, 0x10, 0x00, 1, 0x10]);
+        assert_eq!(
+            tp.request(&[0x22, 0x10, 0x00], 5).unwrap(),
+            [0x62, 0x10, 0x00, 1, 0x10]
+        );
         // Multi-frame reply over the quiet bus.
         let vin = tp.request(&[0x22, 0xF1, 0x90], 5).unwrap();
         assert_eq!(&vin[3..], b"ZZZTEST0000000001");
         // A silent node (responder None) is a timeout, not a hang.
         let bus = FaultBus::new().with_node(SimNode::new(0x7E0, 0x7E8, Box::new(|_| None)));
         let mut tp = isotp(bus.link(), 0x7E0, 0x7E8);
-        assert!(matches!(tp.request(&[0x3E, 0x00], 5), Err(Error::Timeout(_))));
+        assert!(matches!(
+            tp.request(&[0x3E, 0x00], 5),
+            Err(Error::Timeout(_))
+        ));
         assert_eq!(bus.stats().requests, 1);
     }
 
@@ -573,7 +579,10 @@ mod tests {
             .with_idle_noise(0x280, &[0; 8]);
         let mut tp = isotp(bus.link(), 0x7E0, 0x7E8);
         let t = std::time::Instant::now();
-        assert!(matches!(tp.request(&[0x3E, 0x00], 20), Err(Error::Timeout(20))));
+        assert!(matches!(
+            tp.request(&[0x3E, 0x00], 20),
+            Err(Error::Timeout(20))
+        ));
         assert!(t.elapsed() < std::time::Duration::from_secs(5));
     }
 
@@ -592,7 +601,10 @@ mod tests {
         // A multi-frame reply to a functional request needs the flow control
         // sent physically (ISO 15765-4); one on 0x7DF is ignored.
         let mut a = isotp(bus.reopen().unwrap(), OBD_FUNCTIONAL_ID, 0x7E8);
-        assert!(matches!(a.request(&[0x09, 0x02], 5), Err(Error::Timeout(_))));
+        assert!(matches!(
+            a.request(&[0x09, 0x02], 5),
+            Err(Error::Timeout(_))
+        ));
         a.fc_tx_id = Some(0x7E0);
         let vin = a.request(&[0x09, 0x02], 5).unwrap();
         assert_eq!(&vin[3..], b"ZZZTEST0000000002");
@@ -606,7 +618,10 @@ mod tests {
         let vin = tp.request(&[0x22, 0xF1, 0x90], 5).unwrap();
         assert_eq!(vin.len(), 20);
         tp.max_response_pending = 3;
-        assert!(matches!(tp.request(&[0x22, 0x00, 0x02], 5), Err(Error::Timeout(_))));
+        assert!(matches!(
+            tp.request(&[0x22, 0x00, 0x02], 5),
+            Err(Error::Timeout(_))
+        ));
     }
 
     #[test]
@@ -637,7 +652,10 @@ mod tests {
         bus.fail_after(2, Fault::UntilReopen(FailKind::Silent));
         assert!(tp.request(&[0x22, 0, 1], 100).is_ok()); // 2 calls: send + recv
         for _ in 0..5 {
-            assert!(matches!(tp.request(&[0x22, 0, 1], 100), Err(Error::Timeout(100))));
+            assert!(matches!(
+                tp.request(&[0x22, 0, 1], 100),
+                Err(Error::Timeout(100))
+            ));
         }
         assert_eq!(clock.now_ms(), 500, "timeouts advance the virtual clock");
         assert!(clock.sleeps().is_empty());
@@ -675,7 +693,10 @@ mod tests {
         // Functional addressing reaches the same ECU (single-frame replies).
         let mut f = OwnedDiag::new(Box::new(isotp(bus.link(), OBD_FUNCTIONAL_ID, 0x7E8)), 20);
         let ro = ObdSession::new().read(&mut f, &[0x0C, 0x0D]);
-        assert!(ro.values["speed"].is_some() && ro.errors.is_empty(), "{ro:?}");
+        assert!(
+            ro.values["speed"].is_some() && ro.errors.is_empty(),
+            "{ro:?}"
+        );
     }
 
     #[test]

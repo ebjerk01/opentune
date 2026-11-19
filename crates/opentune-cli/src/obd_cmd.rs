@@ -12,7 +12,9 @@ use opentune_core::obd::{
     sim::{SimEcu, SimVehicle},
     ObdSession, ObdValue,
 };
+use opentune_core::resilient::{LinkEvent, LogJob};
 use opentune_core::{ConnectConfig, RawDiag, Registry};
+use std::io::Write;
 
 #[derive(Subcommand)]
 pub enum ObdAction {
@@ -24,19 +26,22 @@ pub enum ObdAction {
     },
     /// Discover the ECU's supported PIDs and read the VIN.
     Supported(ObdConn),
-    /// Poll PIDs and print decoded values.
+    /// Poll PIDs and print decoded values, or record them to a Live-log CSV
+    /// (`--out`, the desktop Dashboard recording layout). `--rounds 0` runs
+    /// until Ctrl-C or `--duration`; `--reconnect` re-opens a dropped adapter.
     Read {
         #[command(flatten)]
         conn: ObdConn,
-        /// Number of polls.
-        #[arg(long, default_value_t = 1)]
-        rounds: usize,
-        /// Sleep between polls, milliseconds.
-        #[arg(long, default_value_t = 0)]
-        interval_ms: u64,
+        /// Polls, duration, Ctrl-C and reconnect behaviour.
+        #[command(flatten)]
+        run: crate::livelog::RunArgs,
         /// Emit one JSON readout per poll.
         #[arg(long)]
         json: bool,
+        /// Record to this Live-log CSV (`ts,param_id,name,raw,value,units,
+        /// note,text`; the Log viewer opens it) instead of printing.
+        #[arg(long, value_name = "CSV")]
+        out: Option<std::path::PathBuf>,
         /// Hex PIDs (e.g. `0C 05 78`). Default: every supported table PID.
         pids: Vec<String>,
     },
@@ -107,6 +112,19 @@ fn with_diag_at<T>(
     (tx, rx): (u32, u32),
     f: impl FnOnce(&mut dyn RawDiag) -> Result<T>,
 ) -> Result<T> {
+    let mut drv = open_at(reg, conn, (tx, rx))?;
+    let t = drv
+        .diag()
+        .ok_or_else(|| anyhow!("driver '{}' has no diagnostic transport", conn.driver))?;
+    f(&mut opentune_core::CoreDiag::new(t, conn.timeout_ms))
+}
+
+/// Make and open `conn`'s driver bound to the module `(tx, rx)`.
+fn open_at(
+    reg: &Registry,
+    conn: &ObdConn,
+    (tx, rx): (u32, u32),
+) -> Result<Box<dyn opentune_core::Interface>> {
     let mut drv = reg
         .make(&conn.driver)
         .ok_or_else(|| anyhow!("unknown driver '{}'", conn.driver))?;
@@ -127,10 +145,7 @@ fn with_diag_at<T>(
     }
     drv.open(&cfg)
         .map_err(|e| anyhow!("open {}: {e}", conn.driver))?;
-    let t = drv
-        .diag()
-        .ok_or_else(|| anyhow!("driver '{}' has no diagnostic transport", conn.driver))?;
-    f(&mut opentune_core::CoreDiag::new(t, conn.timeout_ms))
+    Ok(drv)
 }
 
 /// Inspect the engine, or every OBD address with `--all-ecus` (keeping only
@@ -383,6 +398,189 @@ fn parse_pid(s: &str) -> Result<u8> {
     u8::from_str_radix(t, 16).map_err(|_| anyhow!("bad PID '{s}' (expected hex)"))
 }
 
+/// Where `obd read` puts each poll.
+enum ReadOut<W: std::io::Write> {
+    /// Live-log CSV rows (and link marker rows).
+    Csv(W),
+    /// One JSON readout per line on stdout.
+    Json,
+    /// The text listing on stdout.
+    Text { blank_between: bool },
+}
+
+/// `obd read` as a [`LogJob`]: one [`ObdSession::read`] per round.
+struct ObdJob<W: std::io::Write> {
+    session: ObdSession,
+    pids: Vec<u8>,
+    /// `pids` came from discovery (re-run after a reopen).
+    discovered: bool,
+    out: ReadOut<W>,
+}
+
+impl<W: std::io::Write> LogJob for ObdJob<W> {
+    fn round(&mut self, d: &mut dyn RawDiag, round: u64, ts: u64) -> std::io::Result<()> {
+        let ro = self.session.read(d, &self.pids);
+        match &mut self.out {
+            ReadOut::Csv(w) => {
+                for line in obd::live_log_lines(ts, &ro) {
+                    writeln!(w, "{line}")?;
+                }
+            }
+            ReadOut::Json => println!("{}", serde_json::to_string(&ro)?),
+            ReadOut::Text { blank_between } => {
+                if *blank_between && round > 0 {
+                    println!();
+                }
+                print_readout(&ro);
+            }
+        }
+        Ok(())
+    }
+
+    fn event(&mut self, ev: &LinkEvent, _round: u64, ts: u64) -> std::io::Result<()> {
+        if let ReadOut::Csv(w) = &mut self.out {
+            {
+                let line = obd::live_log_line(
+                    ts,
+                    opentune_logdef::LINK_PARAM_ID,
+                    "Link status",
+                    "",
+                    "",
+                    "",
+                    &ev.describe(),
+                    ev.state(),
+                );
+                writeln!(w, "{line}")?;
+                w.flush()?;
+            }
+        }
+        eprintln!("link: {}", ev.describe());
+        Ok(())
+    }
+
+    fn reopened(&mut self, d: &mut dyn RawDiag) {
+        // A new connection: forget what the old one taught (it may have died
+        // mid-learning) and refresh the support bitmaps.
+        self.session = ObdSession::new();
+        if self.discovered {
+            let _ = self.session.discover(d);
+        }
+    }
+
+    fn stop(&mut self, _d: &mut dyn RawDiag) {}
+}
+
+fn print_readout(ro: &obd::Readout) {
+    for (key, v) in &ro.values {
+        let unit = obd::channel(key).map(|c| c.unit).unwrap_or("");
+        match v {
+            Some(v) => println!(
+                "{key:<24} {} {unit}",
+                serde_json::to_string(v).unwrap_or_default()
+            ),
+            None => println!(
+                "{key:<24} -  ({})",
+                ro.errors.get(key).map(String::as_str).unwrap_or("no value")
+            ),
+        }
+    }
+    for (key, e) in ro
+        .errors
+        .iter()
+        .filter(|(k, _)| !ro.values.contains_key(*k))
+    {
+        println!("{key:<24} -  ({e})");
+    }
+}
+
+/// A fresh link to the engine ECU for `obd read` (the simulated ECU for
+/// `obdsim`): an owning transport, so a reopen can replace it.
+fn open_read_link(reg: &Registry, conn: &ObdConn) -> Result<Box<dyn RawDiag>> {
+    if conn.driver == "obdsim" {
+        return Ok(Box::new(SimEcu::demo(0)));
+    }
+    let drv = open_at(reg, conn, OBD_ECU_IDS[0])?;
+    let d = opentune_core::InterfaceDiag::new(drv, conn.timeout_ms)
+        .map_err(|_| anyhow!("driver '{}' has no diagnostic transport", conn.driver))?;
+    Ok(Box::new(d))
+}
+
+/// `obd read`: poll on the resilient loop (rounds / duration / Ctrl-C,
+/// optional reconnect), printing or recording a Live-log CSV.
+fn run_read(
+    reg: &Registry,
+    conn: &ObdConn,
+    run: &crate::livelog::RunArgs,
+    json: bool,
+    out: Option<&std::path::Path>,
+    mut pids: Vec<u8>,
+) -> Result<()> {
+    use opentune_core::resilient::{run_resilient, RunOptions, SystemClock};
+    let limits = run.limits()?;
+    let policy = run.policy()?;
+    let mut link = open_read_link(reg, conn)?;
+    let mut session = ObdSession::new();
+    let discovered = pids.is_empty();
+    if discovered {
+        let set = session
+            .discover(link.as_mut())
+            .map_err(|e| anyhow!("{e}"))?;
+        pids = set
+            .into_iter()
+            .filter(|&p| obd::channels_for_pid(p).next().is_some())
+            .collect();
+    }
+    let out_w = match out {
+        Some(p) => {
+            let f = std::fs::File::create(p).map_err(|e| anyhow!("create {}: {e}", p.display()))?;
+            let mut w = std::io::BufWriter::new(f);
+            writeln!(w, "{}", obd::LIVE_LOG_HEADER)?;
+            ReadOut::Csv(w)
+        }
+        None if json => ReadOut::Json,
+        None => ReadOut::Text {
+            blank_between: run.rounds != 1,
+        },
+    };
+    let mut job = ObdJob {
+        session,
+        pids,
+        discovered,
+        out: out_w,
+    };
+    if run.open_ended() {
+        eprintln!("polling until Ctrl-C");
+    }
+    let stop = crate::livelog::ctrlc_flag();
+    let clock = SystemClock::new();
+    let opts = RunOptions {
+        limits,
+        policy,
+        stop: Some(&stop),
+        clock: &clock,
+    };
+    let mut reopen = || -> std::result::Result<Box<dyn RawDiag>, String> {
+        eprintln!("link: re-opening driver '{}'", conn.driver);
+        open_read_link(reg, conn).map_err(|e| format!("{e:#}"))
+    };
+    let report = run_resilient(&mut job, link, &mut reopen, &opts)?;
+    if let ReadOut::Csv(w) = &mut job.out {
+        w.flush()?;
+    }
+    if let Some(line) = crate::livelog::link_summary(&report) {
+        eprintln!("{line}");
+    }
+    if let Some(p) = out {
+        eprintln!(
+            "Recorded {} poll(s) of {} PID(s) to {}",
+            report.rounds,
+            job.pids.len(),
+            p.display()
+        );
+    }
+    Ok(())
+}
+
 pub fn run(reg: &Registry, action: ObdAction) -> Result<()> {
     match action {
         ObdAction::Pids { json } => {
@@ -430,53 +628,13 @@ pub fn run(reg: &Registry, action: ObdAction) -> Result<()> {
         })?,
         ObdAction::Read {
             conn,
-            rounds,
-            interval_ms,
+            run,
             json,
+            out,
             pids,
         } => {
-            let mut pids: Vec<u8> = pids.iter().map(|s| parse_pid(s)).collect::<Result<_>>()?;
-            with_diag(reg, &conn, |d| {
-                let mut session = ObdSession::new();
-                if pids.is_empty() {
-                    let set = session.discover(d).map_err(|e| anyhow!("{e}"))?;
-                    pids = set
-                        .into_iter()
-                        .filter(|&p| obd::channels_for_pid(p).next().is_some())
-                        .collect();
-                }
-                for round in 0..rounds.max(1) {
-                    if round > 0 && interval_ms > 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(interval_ms));
-                    }
-                    let ro = session.read(d, &pids);
-                    if json {
-                        println!("{}", serde_json::to_string(&ro)?);
-                        continue;
-                    }
-                    for (key, v) in &ro.values {
-                        let unit = obd::channel(key).map(|c| c.unit).unwrap_or("");
-                        match v {
-                            Some(v) => println!("{key:<24} {} {unit}", serde_json::to_string(v)?),
-                            None => println!(
-                                "{key:<24} -  ({})",
-                                ro.errors.get(key).map(String::as_str).unwrap_or("no value")
-                            ),
-                        }
-                    }
-                    for (key, e) in ro
-                        .errors
-                        .iter()
-                        .filter(|(k, _)| !ro.values.contains_key(*k))
-                    {
-                        println!("{key:<24} -  ({e})");
-                    }
-                    if rounds > 1 {
-                        println!();
-                    }
-                }
-                Ok(())
-            })?
+            let pids: Vec<u8> = pids.iter().map(|s| parse_pid(s)).collect::<Result<_>>()?;
+            run_read(reg, &conn, &run, json, out.as_deref(), pids)?
         }
         ObdAction::Readiness(args) => run_inspect(reg, &args, only(|s| s.readiness = true), 0)?,
         ObdAction::Freeze { args, frame } => {
@@ -527,6 +685,130 @@ mod tests {
         for (_, _, i) in &all {
             print_inspection(i);
         }
+    }
+
+    /// `obd read --out` over core IsoTp on the fault bus (OBD ECU on 7E0, a
+    /// second responder and foreign traffic on the bus): the adapter drops
+    /// mid-recording, comes back on the third re-open, and the CSV stays a
+    /// well-formed Live log with no invented values.
+    #[test]
+    fn obd_recording_survives_a_dropped_adapter() {
+        use opentune_core::protocol::faultlink::{
+            raw_responder, FailKind, Fault, FaultBus, FaultLink, SimNode,
+        };
+        use opentune_core::protocol::IsoTp;
+        use opentune_core::resilient::{
+            run_resilient, Clock, ReconnectPolicy, RunLimits, RunOptions, VirtualClock,
+        };
+        use opentune_core::OwnedDiag;
+
+        let clock = VirtualClock::new(1_700_000_000_000);
+        let bus = FaultBus::new()
+            .with_node(SimNode::obd(0x7E0, 0x7E8, raw_responder(SimEcu::demo(0))))
+            .with_node(SimNode::obd(0x7E1, 0x7E9, raw_responder(SimEcu::demo(5))))
+            .with_noise(0x280, &[0; 8])
+            .with_clock(clock.clone());
+        // Functional requests (7DF, both ECUs answer), the engine's reply
+        // taken on 7E8, flow control sent physically to 7E0.
+        let diag = |l: FaultLink| -> Box<dyn RawDiag> {
+            let mut tp = IsoTp::new(Box::new(l), 0x7DF, 0x7E8);
+            tp.fc_tx_id = Some(0x7E0);
+            Box::new(OwnedDiag::new(Box::new(tp), 50))
+        };
+        /// Unplugs the adapter after `after` requests.
+        struct Trigger {
+            inner: Box<dyn RawDiag>,
+            bus: FaultBus,
+            after: u32,
+        }
+        impl RawDiag for Trigger {
+            fn request(&mut self, req: &[u8]) -> std::result::Result<Vec<u8>, String> {
+                if self.after == 0 {
+                    self.bus.fail(Fault::UntilReopen(FailKind::Io));
+                }
+                self.after = self.after.saturating_sub(1);
+                self.inner.request(req)
+            }
+        }
+        let mut first = diag(bus.link());
+        let mut session = ObdSession::new();
+        session.discover(first.as_mut()).unwrap();
+        // Two good polls (one 3-PID request each), then unplugged.
+        let link: Box<dyn RawDiag> = Box::new(Trigger {
+            inner: first,
+            bus: bus.clone(),
+            after: 2,
+        });
+        bus.refuse_opens(2);
+        let mut job = ObdJob {
+            session,
+            pids: vec![0x0C, 0x05, 0x0D],
+            discovered: true,
+            out: ReadOut::Csv(Vec::new()),
+        };
+        let b2 = bus.clone();
+        let mut reopen = move || -> std::result::Result<Box<dyn RawDiag>, String> {
+            b2.reopen().map(diag).map_err(|e| e.to_string())
+        };
+        let opts = RunOptions {
+            limits: RunLimits {
+                rounds: Some(6),
+                duration_ms: None,
+                interval_ms: 1000,
+            },
+            policy: ReconnectPolicy {
+                dead_after: 2,
+                initial_backoff_ms: 500,
+                ..ReconnectPolicy::reconnecting()
+            },
+            stop: None,
+            clock: &clock,
+        };
+        let rep = run_resilient(&mut job, link, &mut reopen, &opts).unwrap();
+        assert_eq!((rep.drops, rep.reconnects, rep.reopen_attempts), (1, 1, 3));
+        assert_eq!(rep.dead_rounds, 2);
+        // Never a hot spin: intervals, a dead-round backoff and 3 attempts.
+        assert!(clock.sleeps().iter().all(|&s| s > 0));
+        assert!(clock.now_ms() >= 3 * 1000 + 500 + 500 + 1000 + 2000);
+        // The re-opened session re-learned the ECU from scratch.
+        assert_eq!(job.session.multi_pid(), Some(true));
+        assert!(job.session.absent().is_empty());
+
+        let ReadOut::Csv(buf) = job.out else {
+            unreachable!()
+        };
+        let mut csv = format!("{}\n", obd::LIVE_LOG_HEADER);
+        csv.push_str(&String::from_utf8(buf).unwrap());
+        let rows: Vec<Vec<&str>> = csv
+            .lines()
+            .skip(1)
+            .map(|l| l.split(',').collect())
+            .collect();
+        assert!(rows.iter().all(|r| r.len() == 8), "{csv}");
+        let states: Vec<&str> = rows
+            .iter()
+            .filter(|r| r[1] == "link")
+            .map(|r| r[7])
+            .collect();
+        assert_eq!(
+            states,
+            ["lost", "reopen-failed", "reopen-failed", "reconnected"]
+        );
+        let rpm: Vec<&str> = rows
+            .iter()
+            .filter(|r| r[1] == "rpm")
+            .map(|r| r[4])
+            .collect();
+        assert_eq!(rpm, ["1800", "1800", "", "", "1800", "1800"]);
+        let log =
+            opentune_logview::parse(&csv, &opentune_logview::ParseOptions::default()).unwrap();
+        assert_eq!(log.format, opentune_logview::LogFormat::OpentuneLong);
+        let names: Vec<&str> = log.channels.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"Engine speed") && names.contains(&"Vehicle speed"));
+        assert!(log
+            .notes
+            .iter()
+            .any(|n| n.contains("Link status = reconnected")));
     }
 
     #[test]

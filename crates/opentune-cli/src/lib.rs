@@ -51,6 +51,7 @@ mod doip_cmd;
 mod dsg_cmd;
 mod gps_cmd;
 mod haldex_cmd;
+mod livelog;
 mod mapfind_cmd;
 mod obd_cmd;
 mod recipe_cmd;
