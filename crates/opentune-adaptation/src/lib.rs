@@ -52,7 +52,11 @@
 //!   adaptation value from a DID and write a new one, as a big-endian numeric
 //!   field with linear scaling and an optional raw min/max range.
 //! * **InputOutputControlByIdentifier (0x2F)** — actuator / output test: drive
-//!   an IO DID with shortTermAdjustment, then return control to the ECU.
+//!   an IO DID with shortTermAdjustment, then return control to the ECU. The
+//!   [`actuator`] module runs **timed** tests (returnControlToECU /
+//!   resetToDefault / freezeCurrentState / shortTermAdjustment with a
+//!   range-checked value) with tester present during the hold and an
+//!   automatic return of control at the end, on a stop and on any error.
 //!
 //! ## KWP2000 (VAG KWP over TP2.0 and K-line)
 //!
@@ -71,9 +75,11 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod actuator;
 pub mod kwp;
 pub mod sim;
 
+pub use actuator::IoControl;
 pub use kwp::KwpAddressing;
 
 use serde::{Deserialize, Serialize};
@@ -292,17 +298,38 @@ pub enum ChannelKind {
         max: Option<u64>,
     },
     /// **InputOutputControlByIdentifier (0x2F)**: an IO DID actuated for a
-    /// component test.
+    /// component test. The fields after `status` are optional and used by
+    /// timed tests ([`actuator`]); definitions without them parse unchanged.
     Actuator {
         /// Data identifier of the IO control.
         did: u16,
         /// Default control-state record sent with shortTermAdjustment when the
-        /// caller supplies none; empty if none.
+        /// caller supplies none; empty if none. With `value`, the template the
+        /// value is spliced into.
         #[serde(default)]
         state: Vec<u8>,
         /// Optional interpretation of a numeric status in the 0x2F response.
         #[serde(default)]
         status: Option<NumericField>,
+        /// Control options a timed test may use (returnControlToECU is always
+        /// allowed). Empty means shortTermAdjustment only.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        options: Vec<actuator::IoControl>,
+        /// The adjustable value of shortTermAdjustment: a big-endian field in
+        /// the `state` record, with scaling and the raw range `min`/`max`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        value: Option<NumericField>,
+        /// Inclusive minimum raw `value` (needs `value`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<u64>,
+        /// Inclusive maximum raw `value` (needs `value`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<u64>,
+        /// The longest a timed test may hold the output, in ms (default
+        /// [`actuator::DEFAULT_MAX_DURATION_MS`], at most
+        /// [`actuator::HARD_MAX_DURATION_MS`]).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_duration_ms: Option<u64>,
     },
     /// **KWP2000 readDataByLocalIdentifier (0x21)**: a VAG measuring block
     /// (group) read as 3-byte `(formula, a, b)` cells. Read-only.
@@ -393,6 +420,11 @@ pub struct AdaptationDef {
     /// the caller and surfaced in every report.
     #[serde(default)]
     pub requires_security: bool,
+    /// UDS SecurityAccess requestSeed level (odd) used by timed actuator tests
+    /// when `requires_security` is set (default
+    /// [`actuator::DEFAULT_SECURITY_LEVEL`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security_level: Option<u8>,
     /// The channels.
     pub channels: Vec<AdaptationChannel>,
 }
@@ -416,6 +448,13 @@ impl AdaptationDef {
     pub fn validate(&self) -> Result<()> {
         if self.channels.is_empty() {
             return Err(AdaptationError::InvalidDef("no channels declared".into()));
+        }
+        if let Some(l) = self.security_level {
+            if l % 2 == 0 || l > 0x7D {
+                return Err(AdaptationError::InvalidDef(format!(
+                    "security_level 0x{l:02X} is not an odd requestSeed level 0x01..=0x7D"
+                )));
+            }
         }
         let mut seen = std::collections::HashSet::new();
         for ch in &self.channels {
@@ -455,10 +494,19 @@ impl AdaptationDef {
                         }
                     }
                 }
-                ChannelKind::Actuator { status, .. } => {
+                ChannelKind::Actuator {
+                    state,
+                    status,
+                    value,
+                    min,
+                    max,
+                    max_duration_ms,
+                    ..
+                } => {
                     if let Some(s) = status {
                         check_width(&ch.name, s.width)?;
                     }
+                    check_actuator(&ch.name, state, value.as_ref(), *min, *max, *max_duration_ms)?;
                 }
                 ChannelKind::KwpGroup { .. } => {}
                 ChannelKind::KwpBasicSettings { kwp, .. } => kwp.validate(&ch.name)?,
@@ -477,6 +525,59 @@ impl AdaptationDef {
         }
         Ok(())
     }
+}
+
+/// The timed-test fields of an actuator channel: the value field lies inside
+/// the state template, a range needs a value field and fits it, and the
+/// duration cap is within the hard limit.
+fn check_actuator(
+    name: &str,
+    state: &[u8],
+    value: Option<&NumericField>,
+    min: Option<u64>,
+    max: Option<u64>,
+    max_duration_ms: Option<u64>,
+) -> Result<()> {
+    let bad = |m: String| Err(AdaptationError::InvalidDef(format!("`{name}` {m}")));
+    match value {
+        Some(f) => {
+            check_width(name, f.width)?;
+            if f.offset + f.width as usize > state.len() {
+                return bad(format!(
+                    "value field (offset {}, width {}) lies outside its {}-byte state template",
+                    f.offset,
+                    f.width,
+                    state.len()
+                ));
+            }
+            let cap = width_cap(f.width);
+            for (which, b) in [("min", min), ("max", max)] {
+                if let Some(v) = b {
+                    if v > cap {
+                        return bad(format!("{which} {v} does not fit in {} byte(s)", f.width));
+                    }
+                }
+            }
+            if let (Some(lo), Some(hi)) = (min, max) {
+                if lo > hi {
+                    return bad(format!("range is inverted (min {lo} > max {hi})"));
+                }
+            }
+        }
+        None if min.is_some() || max.is_some() => {
+            return bad("has min/max but no value field".into());
+        }
+        None => {}
+    }
+    if let Some(ms) = max_duration_ms {
+        if ms == 0 || ms > actuator::HARD_MAX_DURATION_MS {
+            return bad(format!(
+                "max_duration_ms {ms} is not 1..={}",
+                actuator::HARD_MAX_DURATION_MS
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn check_width(name: &str, width: u8) -> Result<()> {
@@ -587,8 +688,9 @@ fn check(req_sid: u8, resp: &[u8]) -> Result<()> {
             )));
         }
         return Err(AdaptationError::Protocol(format!(
-            "negative response 0x{:02X} to service 0x{req_sid:02X}",
-            resp[2]
+            "negative response 0x{:02X} ({}) to service 0x{req_sid:02X}",
+            resp[2],
+            opentune_core::protocol::nrc_name(resp[2])
         )));
     }
     let want = req_sid.wrapping_add(0x40);
@@ -1106,7 +1208,9 @@ pub fn run_actuator_test(
         .channel(channel)
         .ok_or_else(|| AdaptationError::UnknownChannel(channel.to_string()))?;
     let (did, default_state, status_field) = match &ch.kind {
-        ChannelKind::Actuator { did, state, status } => (*did, state, status),
+        ChannelKind::Actuator {
+            did, state, status, ..
+        } => (*did, state, status),
         _ => {
             return Err(AdaptationError::ChannelKindMismatch {
                 channel: channel.to_string(),
@@ -1180,6 +1284,7 @@ mod tests {
             name: "Test module".into(),
             module: "synthetic".into(),
             requires_security: true,
+            security_level: None,
             channels: vec![
                 AdaptationChannel {
                     name: "Idle RPM".into(),
@@ -1227,6 +1332,11 @@ mod tests {
                             width: 1,
                             scaling: Scaling::default(),
                         }),
+                        options: Vec::new(),
+                        value: None,
+                        min: None,
+                        max: None,
+                        max_duration_ms: None,
                     },
                     note: String::new(),
                 },

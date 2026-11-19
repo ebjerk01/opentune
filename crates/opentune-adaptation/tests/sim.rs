@@ -14,6 +14,7 @@ fn def() -> AdaptationDef {
         name: "Sim".into(),
         module: "synthetic".into(),
         requires_security: false,
+        security_level: None,
         channels: vec![AdaptationChannel {
             name: "Rail pressure".into(),
             kind: ChannelKind::Value {

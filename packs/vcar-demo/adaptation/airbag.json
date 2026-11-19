@@ -71,6 +71,11 @@
           "unit": ""
         }
       },
+      "options": [
+        "short_term_adjustment",
+        "reset_to_default"
+      ],
+      "max_duration_ms": 10000,
       "note": "IO control 0x0530; 01 = on, control returned to the ECU afterwards"
     }
   ]
