@@ -252,14 +252,17 @@ Ranked by value, liftability and dependencies. **Offline** items need only a `.b
 
 **Offline — buildable now**
 *(Recently done: resilient logging over any transport (reconnect loop, fault-injecting ISO-TP bus, `obd read --out`), Drive view + log replay, Subaru SSM2 logging, Actuator tests panel, ELM parser echo-checked `0x78` + robustness, `kline-elm327` compact CAN formats, seeded fuzz tests + 17 fixes across the batch-5 crates; earlier: read-only DQ250 diagnostics (`opentune dsg`), TP2.0/KWP hardening + fuzzer, DoIP driver + discovery, desktop SA2 + Controllers panels, GPS source, VAG KWP2000 adaptation, controllers pack kind, community contribution workflow, ESP32 driver registered, CLI logs readable in the Log viewer; earlier: controller defs + 722.6, real SA2, EFP02C + ISO-TP BLE drivers, C167 bootstrap planner, pack picker, map relocation, EDC15/16 cross-validation, conformance vs python-udsoncan.)*
-1. **Datalogging triggers** — start/stop/mark on conditions; SSM in the desktop Live log panel.
-2. **Guided wizards** — desktop/Android flows over the engines (identify → scan → DTCs → live data).
+1. ✅ **Datalogging triggers** — start/stop/mark conditions (`log --trigger/--split`, `triggers/` pack kind); SSM in the desktop Live log panel.
+2. ✅ **Guided wizard (desktop)** — "Check my car" (identify → scan → DTCs → live data), read-only, Bench tier. Next: more wizards and the Android app.
 3. **First community packs** — e.g. a pack that ships controller definitions, through the new contribution workflow.
-4. **Desktop reconnect** — bring the CLI's reconnect loop to the desktop fast-logging session (today it stops after a few dead ticks) and treat an all-NRC tick as alive there too.
+4. ✅ **Desktop reconnect** — the desktop fast-logging session reconnects through the adapter hub, and an all-NRC tick counts as alive.
+5. ✅ **Desktop UI** — sidebar and content scroll independently, collapsible sidebar groups, 60 fps scrolling in WebKitGTK (blur-free card shadows).
+6. **EGS52 (Mercedes 722.6) checksums** — groundwork landed: coding-record CRC-16 (unconfirmed), `egs52` bootstrap-read preset (bus registers unknown, read refused until supplied) and an offline checksum-search tool (`tools/checksum-search/`). The flash checksum needs own raw EGS52 reads (see *Waiting on data*).
 
 **Waiting on data**
 - **DQ250 02E measuring-group meanings** — need a real capture (raw groups + what the car was doing); `opentune dsg groups` already reads them raw.
 - **SA2 script location in ODX** — confirm the field on one of the owner's own decrypted ODX files.
+- **EGS52 flash checksum** — needs at least two raw EGS52 flash reads of different software (ideally a stock/modified pair) from the owner's own units; then `tools/checksum-search/`.
 - **Mercedes 722.6 EGS52 frame set** — needs a listen-only capture of the owner's W210 (EGS51 ships).
 - **EDC17CP14 maps** (Passat CC) — need a VAG CP14 stock read, ideally with a tune of it.
 - **PCR2.1 CASM2L95 maps** — need a tune of that software (or the relocation helper).
