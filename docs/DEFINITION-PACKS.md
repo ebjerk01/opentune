@@ -203,9 +203,10 @@ evidence, pull request), worked through on `packs/community-drivetrain/`.
      `opentune obd read --driver obdsim --rounds 20 --out t.csv --trigger <file>`.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
      `opentune-adaptation` ([`ADAPTATION.md`](ADAPTATION.md), UDS and VAG
-     KWP2000 channel kinds) and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
-     ships them yet: open, license-compatible coding data is rare, and vendor
-     label files are off-limits.
+     KWP2000 channel kinds) and [`ECU-DEFS.md`](ECU-DEFS.md). Open,
+     license-compatible coding data is rare and vendor label files are
+     off-limits; `vag-mib2-coding` is the one brand coding pack so far
+     ([`CODING.md`](CODING.md) lists its sources and the ones rejected).
 4. **Check it.** `opentune packs validate packs/<your-id>` must report 0
    errors (it also runs on a fork: point it at any pack folder), and
    `cargo test -p opentune-packs` (the `repo_packs` tests load and validate

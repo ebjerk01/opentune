@@ -25,6 +25,16 @@ section (alpha/bench builds) until they are vehicle-tested.
   DBC transcription, validate, privacy scan, synthetic tests, evidence, pull
   request), linked from CONTRIBUTING.md; the PR template's pack checklist now
   asks for the controller validator and a synthetic test.
+- **Brand module coding** ([CODING.md](docs/CODING.md)): pack `vag-mib2-coding`,
+  the long coding of the VAG MIB2 High infotainment unit (module 5F, DID
+  `0x0600`, 118 parameters), converted from the MIT-licensed mib2-toolbox;
+  Ford As-Built format support in `opentune-coding` (line checksum, `.ab` XML
+  reader, block = DID `0xDE00 + n - 1`) with `opentune coding asbuilt` (check
+  checksums, export a module as a mock coding store); and an importer for a
+  user-supplied CCF/CCC parameter descriptor (`opentune coding import-ccf`).
+  No Ford labels ship: no openly licensed Ford label source was found.
+  Synthetic-tested only (udssim, vcar and mock-store round trips with invented
+  coding bytes); never run against a real module.
 - **BMW PSdZData SWE flash containers (read-only)**: `container unpack` decodes a
   BTLD / SWFL / SWFK / IBAD `.bin` + `.xml` pair (the sibling is found by name, or
   `--pair`): the `FLASH-SEGMENT` table, stored, UCL NRV2B and gzip segments, and

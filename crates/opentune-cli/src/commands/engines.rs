@@ -642,6 +642,77 @@ fn print_coding_report(rep: &opentune_coding::WriteReport) {
     }
 }
 
+/// Create `path` with `text`, refusing to overwrite an existing file.
+fn write_new(path: &std::path::Path, text: &str) -> Result<()> {
+    use std::io::Write;
+    std::fs::File::create_new(path)
+        .with_context(|| format!("create {} (it must not exist yet)", path.display()))?
+        .write_all(text.as_bytes())
+        .with_context(|| format!("write {}", path.display()))
+}
+
+/// `coding asbuilt`: check every line checksum of an As-Built file and
+/// optionally export one module's blocks as a `mock` coding store.
+fn run_asbuilt_check(
+    input: &std::path::Path,
+    module: Option<&str>,
+    store_out: Option<&std::path::Path>,
+) -> Result<()> {
+    use opentune_coding::asbuilt;
+    let text =
+        std::fs::read_to_string(input).with_context(|| format!("read {}", input.display()))?;
+    let (lines, skipped) = if text.trim_start().starts_with('<') {
+        let ab = asbuilt::parse_ab_xml(&text).map_err(|e| anyhow!("{e}"))?;
+        (ab.lines, ab.skipped)
+    } else {
+        (
+            asbuilt::parse_text(&text).map_err(|e| anyhow!("{e}"))?,
+            Vec::new(),
+        )
+    };
+    let mut bad = 0;
+    for l in &lines {
+        if l.is_valid() {
+            println!("  OK   {}", l.to_text());
+        } else {
+            bad += 1;
+            println!(
+                "  BAD  {}  (checksum should be {:02X})",
+                l.to_text(),
+                l.expected_checksum()
+            );
+        }
+    }
+    for (label, why) in &skipped {
+        println!("  skipped {label}: {why}");
+    }
+    println!("{} line(s), {bad} bad checksum(s)", lines.len());
+    anyhow::ensure!(bad == 0, "{bad} As-Built line(s) fail their checksum");
+    if let (Some(m), Some(out)) = (module, store_out) {
+        let module = u16::from_str_radix(m.trim().trim_start_matches("0x"), 16)
+            .ok()
+            .filter(|&v| v <= 0xFFF)
+            .ok_or_else(|| anyhow!("--module {m}: expected a hex request id like 726"))?;
+        let blocks = asbuilt::blocks_by_did(module, &lines).map_err(|e| anyhow!("{e}"))?;
+        anyhow::ensure!(!blocks.is_empty(), "no lines for module {module:03X}");
+        let mut map = serde_json::Map::new();
+        for (did, bytes) in &blocks {
+            let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+            map.insert(format!("0x{did:04X}"), serde_json::Value::String(hex));
+        }
+        write_new(
+            out,
+            &serde_json::to_string_pretty(&serde_json::Value::Object(map))?,
+        )?;
+        println!(
+            "Wrote {} block(s) of module {module:03X} to {}",
+            blocks.len(),
+            out.display()
+        );
+    }
+    Ok(())
+}
+
 /// Dispatch the `coding` subcommand: load the def, obtain a transport from the
 /// selected driver, wrap it in [`opentune_coding::CoreDiag`] and run the op.
 pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
@@ -680,6 +751,44 @@ pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
             }
             return Ok(());
         }
+        CodingAction::Asbuilt {
+            input,
+            module,
+            store_out,
+        } => return run_asbuilt_check(input, module.as_deref(), store_out.as_deref()),
+        CodingAction::ImportCcf {
+            xml,
+            did,
+            block,
+            id,
+            name,
+            requires_security,
+            out,
+        } => {
+            let did = u16::try_from(crate::util::parse_num(did)?)
+                .map_err(|_| anyhow!("DID {did} does not fit in 16 bits"))?;
+            let text =
+                std::fs::read_to_string(xml).with_context(|| format!("read {}", xml.display()))?;
+            let opts = opentune_coding::ccf::CcfOptions {
+                block: block.clone(),
+                did,
+                id: id.clone(),
+                name: name.clone(),
+                requires_security: *requires_security,
+            };
+            let imp = opentune_coding::ccf::import_descriptor(&text, &opts)
+                .map_err(|e| anyhow!("{e}"))?;
+            write_new(out, &serde_json::to_string_pretty(&imp.def)?)?;
+            println!(
+                "Imported {} parameter(s) from block {block} onto DID 0x{did:04X} -> {}",
+                imp.def.params.len(),
+                out.display()
+            );
+            for s in &imp.skipped {
+                println!("  skipped {}: {}", s.parameter, s.reason);
+            }
+            return Ok(());
+        }
         CodingAction::Read { conn }
         | CodingAction::Decode { conn }
         | CodingAction::Set { conn, .. }
@@ -697,7 +806,9 @@ pub fn run_coding(reg: &Registry, action: CodingAction) -> Result<()> {
     let mut diag = CoreDiag::new(transport, timeout);
 
     match action {
-        CodingAction::Egs52Crc { .. } => unreachable!("offline operation handled above"),
+        CodingAction::Egs52Crc { .. }
+        | CodingAction::Asbuilt { .. }
+        | CodingAction::ImportCcf { .. } => unreachable!("offline operation handled above"),
         CodingAction::Read { .. } => {
             let coding = read_coding(&mut diag, &def).map_err(|e| anyhow!("{e}"))?;
             println!("Coding for {} ({}):", def.name, def.id);

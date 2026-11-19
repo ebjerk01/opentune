@@ -13,6 +13,9 @@ publish = false
 serde = { workspace = true }
 serde_json = { workspace = true }
 opentune-core = { path = "../opentune-core" }
+# roxmltree 0.20.0 (2023-12-29): small pull-free DOM reader, already used by
+# opentune-xdf / -logdef / -tsini; reads Ford .ab files and CCF/CCC descriptors.
+roxmltree = "0.20.0"
 
 [dev-dependencies]
 opentune-udssim = { path = "../opentune-udssim" }

@@ -799,6 +799,45 @@ pub enum CodingAction {
         #[arg(long, requires = "out")]
         allow_unconfirmed: bool,
     },
+    /// Check a Ford As-Built file offline (`.ab` XML or `MMM-BB-LL hhhh…` text
+    /// lines): verify every line checksum. With `--module` and `--store-out`,
+    /// write that module's blocks (DIDs 0xDE00+) as a `mock` coding store, so a
+    /// coding definition can decode the file with `coding decode --driver mock`.
+    Asbuilt {
+        /// The As-Built file.
+        input: PathBuf,
+        /// Module request id (hex, e.g. `726`) whose blocks to export.
+        #[arg(long, requires = "store_out")]
+        module: Option<String>,
+        /// Write the module's blocks as a coding store JSON (never overwrites).
+        #[arg(long, requires = "module")]
+        store_out: Option<PathBuf>,
+    },
+    /// Turn a user-supplied CCF/CCC parameter descriptor XML into a coding
+    /// definition JSON. Parameters the bit-field engine cannot express are
+    /// listed, not guessed. OpenTune ships no such descriptor.
+    ImportCcf {
+        /// The descriptor XML (`<block name=…><group><parameter …>`).
+        xml: PathBuf,
+        /// The DID whose data is the configuration string (e.g. `0x1234`).
+        #[arg(long)]
+        did: String,
+        /// Descriptor block to import.
+        #[arg(long, default_value = "CCF")]
+        block: String,
+        /// Id of the new definition.
+        #[arg(long, default_value = "user-ccf")]
+        id: String,
+        /// Display name of the new definition.
+        #[arg(long, default_value = "Imported CCF/CCC parameters")]
+        name: String,
+        /// Mark writes as needing SecurityAccess first.
+        #[arg(long)]
+        requires_security: bool,
+        /// Output coding definition JSON (never overwrites).
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Read every coding block and print its raw bytes (DID + hex).
     Read {
         #[command(flatten)]

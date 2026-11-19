@@ -85,7 +85,7 @@ a top-level command is added without a row here.
 | `opentune container` | Decode a flash container (VAG FRF / ODX / ODX-F / SGO, Ford VBF, BMW PSdZData SWE `.bin`+`.xml`, [`BMW-CONTAINERS.md`](BMW-CONTAINERS.md)); lists the SA2 seed/key scripts it declares; `--flat` writes a flat image; `container identify` names a file's format |
 | `opentune seedkey` | Run a user-supplied seed/key script offline: `seedkey sa2` computes a VAG SA2 key from a script (`--script` hex, `--script-file`, or `--container` your own FRF/ODX/SGO) and a seed, `--disasm` lists it, `--trace` steps it ([`SEEDKEY.md`](SEEDKEY.md#vag-sa2-scripts)) |
 | `opentune cbf` | Parse a Mercedes CBF diagnostic-description file |
-| `opentune coding` | Module coding over UDS (read, decode, edit, write) and offline EGS52 candidate coding CRC (`egs52-crc`) |
+| `opentune coding` | Module coding over UDS (read, decode, edit, write), offline EGS52 candidate coding CRC (`egs52-crc`), Ford As-Built checksum check / store export (`asbuilt`) and CCF/CCC descriptor import (`import-ccf`) ([`CODING.md`](CODING.md)) |
 | `opentune adaptation` | Adaptation channels: UDS value / routine / actuator, timed actuator tests on declared channels (`actuator list`, `actuator run`: plan by default, `--ack` executes, control always returned), and VAG KWP2000 over TP2.0 or K-line (`kwp-read`, `kwp-basic`, `kwp-test`, `kwp-save`; [`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune autoscan` | Scan every module in a vehicle map: presence, identity, DTCs |
 | `opentune service` | Plan or run a service-function script |
@@ -186,7 +186,7 @@ apps that need it.
 | `opentune-image` | Sparse addressed image model with Intel HEX / Motorola SREC I/O |
 | `opentune-container` | Flash containers: VAG (FRF / ODX / ODX-F / SGO), Ford VBF, BMW PSdZData SWE (read-only, NRV2B) |
 | `opentune-cbf` | Mercedes CBF diagnostic-description parser |
-| `opentune-coding` | Module coding engine (read / decode / edit / safe write-back) |
+| `opentune-coding` | Module coding engine (read / decode / edit / safe write-back); Ford As-Built line format, checksum and `.ab` reader (`asbuilt`); CCF/CCC descriptor importer (`ccf`) ([`CODING.md`](CODING.md)) |
 | `opentune-adaptation` | Adaptation channels, basic-settings routines, actuator tests over UDS (timed IO-control tests with tester present and automatic return of control in `actuator`); VAG KWP2000 measuring blocks, basic settings and adaptation read/test/save over TP2.0 or K-line (`kwp`, data-defined `kwp_*` channel kinds, gated writes, synthetic module in `sim`) ([`ADAPTATION.md`](ADAPTATION.md)) |
 | `opentune-servicefn` | Declarative service-function scripts run by one safe executor |
 | `opentune-autoscan` | Full-vehicle module scan: presence, identity, stored DTCs |

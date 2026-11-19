@@ -1,0 +1,18 @@
+{
+  "id": "vag-mib2-coding",
+  "name": "VAG MIB2 infotainment long coding (community)",
+  "version": "1.0.0",
+  "maker": "VAG",
+  "platform": "MQB",
+  "vehicles": [
+    "MQB-era vehicles with a MIB2 High infotainment unit (module 5F)"
+  ],
+  "author": "OpenTune contributors",
+  "license": "MIT",
+  "description": "Coding-label set for the long coding of the MIB2 High infotainment unit (VAG module 5F): 118 parameters over coding bytes 0-24 (brand, car class, navigation country, speaker channels, tuner band settings, amplifier, Bluetooth, USB, display and online-feature flags). The byte/bit/option table is converted one-to-one from jilleb/mib2-toolbox (MIT); see LICENSE-MIT.txt. Read/written as UDS DID 0x0600. ASSUMPTIONS, not verified: that the toolbox's persistence byte order equals the DID 0x0600 data, and that coding writes need no SecurityAccess (a module that demands it answers 0x33 and nothing is written). Evidence: synthetic-tested (udssim and vcar read/decode/edit/write round trips with invented coding bytes); never run against a real unit. Coding a unit the wrong way can disable functions; keep the backup the write report prints.",
+  "sources": [
+    "jilleb/mib2-toolbox Toolbox/GEM/mqb-coding.esd @ a8e2f08 (MIT, Copyright (c) 2019 Chillout): every parameter name, byte, mask and option label; each param's 'source' names its persistence key",
+    "bri3d/VW_Flash lib/constants.py @ 293f46d (BSD-2-Clause, Copyright (c) 2022-2024 Brian Ledbetter and contributors): DID 0x0600 'VW Coding Value'"
+  ],
+  "evidence": "synthetic-tested"
+}
