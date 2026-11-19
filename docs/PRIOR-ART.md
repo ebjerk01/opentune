@@ -141,3 +141,13 @@ In every case the design was informed by reading these projects; where a file in
 OpenTune is a close adaptation of permissively-licensed or GPL-compatible code,
 that is noted at the top of the file. Any resemblance to GPL-2.0-only projects is
 conceptual only — their source was not copied.
+
+## EGS52 groundwork
+
+| Source | Licence | Use |
+|---|---|---|
+| [rnd-ash/EGS52_emu memory implementation](https://github.com/rnd-ash/EGS52_emu/blob/7c21a27f1cf7bbff844939acc1fa20451c8f8f15/src/c167/mod.rs#L399) | GPL-3.0 | C167 emulator flash base. No hardware setup values taken. |
+| [AutoKeyProg EGS52 support list](https://autokeyprog.com.mx/actualizacion-agosto/), [board memory report](https://autoprogs.ru/diagnostika-mercedes-remont-elektroniki-doosnaschenie-170/kodirovka-egs52-7617/index18.html) | Public product listing and forum post, no open reuse licence identified | CPU, flash/EEPROM part names and capacities only. |
+| [EGS52 coding discussion](https://www.smartland.am/threads/1126/) | Public forum, no open reuse licence identified | Reports CRC-16 recalculation for variant coding. The 40+2 layout and ARC hypothesis follow the project brief. No coding records or attachments used. |
+| [Greg Cook, Catalogue of parametrised CRC algorithms](https://reveng.sourceforge.io/crc-catalogue/) | Public reference, no open licence identified for the catalogue text | Numerical CRC parameters and standard check values only. |
+| [OpenTune Bosch checksum notes](BOSCH-CHECKSUM.md) and [VAG EDC15 loop](../crates/opentune-checksum/src/edc15.rs) | GPL-3.0-or-later | Public VAG loop, two accumulator seeds and finalisation for the generic search. |

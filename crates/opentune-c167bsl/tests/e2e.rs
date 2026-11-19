@@ -372,3 +372,54 @@ fn dry_run_plan_cannot_be_executed() {
         BslError::MissingPayload { step: 2, .. }
     ));
 }
+
+#[test]
+fn egs52_requires_complete_operator_setup_before_io() {
+    use opentune_c167bsl::plan::build_with_registers;
+    let preset = find_preset("egs52").unwrap();
+    let region = &preset.regions[0];
+    assert_eq!(
+        (region.base, region.max_len, region.default_len),
+        (0x80000, 0x80000, 0x80000)
+    );
+    let k = kernel(394);
+    let mut input = PlanInput {
+        preset,
+        region,
+        offset: region.max_len - 16,
+        len: Some(16),
+        block: 16,
+        loader: Some(&LOADER),
+        loader_sha256: None,
+        kernel: Some(&k),
+        setup: true,
+    };
+    // Arbitrary simulator-only sentinels, unrelated to board settings.
+    let values: Vec<_> = region
+        .unknown_setup
+        .iter()
+        .enumerate()
+        .map(|(i, &(name, _))| (name, i as u16 + 1))
+        .collect();
+    let requires: Vec<_> = region
+        .unknown_setup
+        .iter()
+        .zip(&values)
+        .map(|((_, addr), (_, value))| (*addr, *value))
+        .collect();
+    let data = image(16, 3);
+    let mut sim = SimC167::new(SimConfig::default()).with_memory(0xffff0, data.clone(), &requires);
+    let incomplete = build_with_registers(&input, &values[..9]).unwrap();
+    let (err, transcript) = run(&mut sim, &incomplete, true);
+    assert!(err.unwrap_err().to_string().contains("BUSCON4"));
+    assert!(transcript.is_empty());
+    assert!(build_with_registers(&input, &[values[0], values[0]]).is_err());
+    assert!(build_with_registers(&input, &[("BOGUS", 0)]).is_err());
+    let complete = build_with_registers(&input, &values).unwrap();
+    assert_eq!(run(&mut sim, &complete, true).0.unwrap().data, data);
+    input.setup = false;
+    assert!(build_read_plan(&input).is_err());
+    input.setup = true;
+    input.len = Some(17);
+    assert!(build_read_plan(&input).is_err());
+}

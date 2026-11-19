@@ -11,6 +11,14 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Added
+- Offline EGS52 coding CRC verification and opt-in recomputation. CRC-16/ARC
+  is implemented and remains unconfirmed on a real EGS.
+- EGS52 C167 flash read preset for the 512 KiB emulator window at `0x80000`.
+  Plans name missing board registers. Reads require all values. Simulator coverage only.
+- Standalone multithreaded checksum search and stock/modified diff tool under
+  `tools/checksum-search/`, with generated synthetic test cases.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added

@@ -55,7 +55,8 @@ speaks the protocol above works. A loader must be exactly 32 bytes.
 |---|---|---|---|---|
 | `edc15vm-p` | `ext-flash` | `0x400000` (1 MiB CS3 window) | 512 KiB | `SYSCON E204h`, `BUSCON0 04ADh`, `ADDRSEL3 4008h`, `BUSCON1 040Dh`, `BUSCON3 848Eh`, other windows/buses off |
 | `edc15c6` | `ext-flash` | `0x400000` | 1 MiB | same as above (assumed for C6) |
-| all three | `int-rom` | `0x010000` (32 KiB) | 32 KiB | `SYSCON F604h` (`ROMS1=1`, `ROMEN=1`), buses off |
+| `egs52` | `ext-flash` | `0x080000` | 512 KiB | Board setup unknown. Supply each named SFR in board-specific programming order. |
+| EDC15 and generic C167 | `int-rom` | `0x010000` (32 KiB) | 32 KiB | `SYSCON F604h` (`ROMS1=1`, `ROMEN=1`), buses off |
 
 Register values are C167BootTool's (GPL-3.0): its EDC15 values, in the order
 NefMotoOpenSource (GPL-3.0) programs them for an EDC15 external-flash read,
@@ -63,6 +64,23 @@ and C167BootTool's internal-ROM read. In BSL mode data reads of the internal add
 from the user ROM/flash (code fetches come from the Boot-ROM), which is what
 makes the internal read possible. On a ROMless (`-LM`) part the internal read
 returns undefined data. None of the regions is hardware-verified.
+
+### EGS52 bench planning
+
+Run `opentune bsl plan --preset egs52` to see the inclusive flash window
+`0x080000..0x0fffff` and the missing register values. The emulator supplies
+the base address. The SAK-C167 board uses an AM29F400BB and a separate
+4 KiB 95320 SPI EEPROM. This preset reads external flash only.
+
+The chip select, bus width, timing, register values and programming order
+are board-specific and unverified. Supply a repeatable `--register NAME=VALUE`
+to both plan and read, once per listed SFR (decimal or hex, 16 bits), in the
+order appropriate to the board. The planner rejects duplicate or unknown
+names. An incomplete plan cannot execute, including with `--port sim` or
+`--no-setup`. Register read-back confirms that a value latched. It cannot
+establish that the value maps the right chip. The board connector pinout,
+bootstrap pad, CPU clock and serial routing remain unknown here. The EDC15
+wiring below is specific to those boards. [Sources and licences](PRIOR-ART.md#egs52-groundwork).
 
 ## Bench setup (public material only)
 

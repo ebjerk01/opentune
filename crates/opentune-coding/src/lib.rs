@@ -38,6 +38,7 @@
 #![warn(missing_docs)]
 
 use serde::{Deserialize, Serialize};
+pub mod egs52;
 
 // ---------------------------------------------------------------------------
 // Errors

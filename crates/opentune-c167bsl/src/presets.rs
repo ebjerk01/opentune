@@ -35,6 +35,8 @@ pub struct Region {
     pub max_len: u32,
     /// Registers to program, in order, before reading.
     pub setup: &'static [RegWrite],
+    /// Named SFRs whose values must be supplied by the board operator.
+    pub unknown_setup: &'static [(&'static str, u32)],
     pub source: &'static str,
     /// Has this exact read been confirmed on a real ECU? (all `false`)
     pub verified: bool,
@@ -98,6 +100,7 @@ const INT_ROM: Region = Region {
     default_len: 0x8000,
     max_len: 0x8000,
     setup: INT_ROM_SETUP,
+    unknown_setup: &[],
     source: "C167BootTool -readInt (SYSCON F604h, buses off, read from 01'0000h)",
     verified: false,
 };
@@ -110,12 +113,30 @@ const fn edc15_ext(default_len: u32) -> Region {
         default_len,
         max_len: 0x10_0000,
         setup: EDC15_EXT_SETUP,
+        unknown_setup: &[],
         source: "NefMotoOpenSource EDC15 external-flash read setup / C167BootTool values (ADDRSEL3 4008h, BUSCON3 848Eh, BUSCON0 04ADh)",
         verified: false,
     }
 }
 
 pub const PRESETS: &[Preset] = &[
+    Preset {
+        id: "egs52",
+        name: "Mercedes 722.6 EGS52 (C167)",
+        accept_ids: C167_IDS,
+        regions: &[Region {
+            id: "ext-flash",
+            description: "external AM29F400BB flash; board chip select and bus timings unknown",
+            base: 0x08_0000,
+            default_len: 0x8_0000,
+            max_len: 0x8_0000,
+            setup: &[],
+            unknown_setup: &[("SYSCON", sfr::SYSCON), ("BUSCON0", sfr::BUSCON0), ("ADDRSEL1", sfr::ADDRSEL1), ("ADDRSEL2", sfr::ADDRSEL2), ("ADDRSEL3", sfr::ADDRSEL3), ("ADDRSEL4", sfr::ADDRSEL4), ("BUSCON1", sfr::BUSCON1), ("BUSCON2", sfr::BUSCON2), ("BUSCON3", sfr::BUSCON3), ("BUSCON4", sfr::BUSCON4)],
+            source: "rnd-ash/EGS52_emu flash mapping (emulator); register values unverified",
+            verified: false,
+        }],
+        notes: "95320 SPI EEPROM (4 KiB) is outside the flash window and out of scope.",
+    },
     Preset {
         id: "edc15vm-p",
         name: "Bosch EDC15VM+ / EDC15P+ (VAG TDI)",
@@ -160,7 +181,11 @@ mod tests {
                     r.id
                 );
                 assert!(!r.verified, "nothing is hardware-verified yet");
-                assert_eq!(r.setup[0].addr, sfr::SYSCON, "SYSCON first");
+                if r.unknown_setup.is_empty() {
+                    assert_eq!(r.setup[0].addr, sfr::SYSCON, "SYSCON first");
+                } else {
+                    assert!(r.setup.is_empty());
+                }
             }
         }
         assert!(find_preset("EDC15C6").is_some());

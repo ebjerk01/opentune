@@ -782,6 +782,18 @@ pub enum ServiceAction {
 
 #[derive(Subcommand)]
 pub enum CodingAction {
+    /// Verify a candidate CRC in an offline, 42-byte EGS52 coding file (default CRC-16/ARC).
+    Egs52Crc {
+        input: PathBuf,
+        #[command(flatten)]
+        crc: CodingCrcParams,
+        /// Recompute the CRC and create a new binary file.
+        #[arg(long, requires = "allow_unconfirmed")]
+        out: Option<PathBuf>,
+        /// Opt in to recomputing a CRC unconfirmed on real EGS hardware.
+        #[arg(long, requires = "out")]
+        allow_unconfirmed: bool,
+    },
     /// Read every coding block and print its raw bytes (DID + hex).
     Read {
         #[command(flatten)]
@@ -815,6 +827,29 @@ pub enum CodingAction {
         #[command(flatten)]
         conn: CodingConn,
     },
+}
+
+fn crc_word(s: &str) -> anyhow::Result<u16> {
+    Ok(u16::try_from(crate::util::parse_num(s)?)?)
+}
+
+#[derive(clap::Args)]
+pub struct CodingCrcParams {
+    /// Normal (MSB-first) polynomial without the x^16 term.
+    #[arg(long, default_value = "0x8005", value_parser = crc_word)]
+    pub poly: u16,
+    /// Initial CRC register value.
+    #[arg(long, default_value = "0", value_parser = crc_word)]
+    pub init: u16,
+    /// Reflect each input byte.
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub refin: bool,
+    /// Reflect the final register before XOR-out.
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub refout: bool,
+    /// Final XOR mask.
+    #[arg(long, default_value = "0", value_parser = crc_word)]
+    pub xorout: u16,
 }
 
 #[derive(clap::Args)]

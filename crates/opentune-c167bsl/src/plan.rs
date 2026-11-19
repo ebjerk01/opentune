@@ -1,7 +1,7 @@
 //! The read plan: every step and byte exchange, built before anything is
 //! sent. [`crate::engine::run_plan`] executes exactly these steps, so what
 //! `opentune bsl plan` prints is what `opentune bsl read` does.
-use crate::presets::{Preset, Region};
+use crate::presets::{Preset, RegWrite, Region};
 use crate::protocol::{self, *};
 use crate::{BslError, Result};
 use std::fmt::Write as _;
@@ -151,6 +151,7 @@ pub struct ReadPlan {
     pub start: u32,
     pub len: u32,
     pub block: u16,
+    missing_registers: Vec<&'static str>,
     pub steps: Vec<Step>,
     pub notes: Vec<String>,
 }
@@ -161,7 +162,34 @@ fn plan_err(s: impl Into<String>) -> BslError {
 
 /// Build the plan; validates lengths and payload sizes.
 pub fn build_read_plan(input: &PlanInput<'_>) -> Result<ReadPlan> {
+    build_with_registers(input, &[])
+}
+
+/// Build using operator-supplied SFR values in the requested programming order.
+/// Names are restricted to the region's unknown setup registers.
+pub fn build_with_registers(input: &PlanInput<'_>, values: &[(&str, u16)]) -> Result<ReadPlan> {
     let region = input.region;
+    let mut setup = region.setup.to_vec();
+    let mut missing_registers: Vec<_> =
+        region.unknown_setup.iter().map(|&(name, _)| name).collect();
+    if !missing_registers.is_empty() && !input.setup {
+        return Err(plan_err(
+            "unknown board setup cannot be skipped with --no-setup",
+        ));
+    }
+    for &(key, value) in values {
+        let &(name, addr) = region
+            .unknown_setup
+            .iter()
+            .find(|&&(name, _)| name == key)
+            .ok_or_else(|| plan_err(format!("unexpected setup register {key}")))?;
+        let index = missing_registers
+            .iter()
+            .position(|&item| item == name)
+            .ok_or_else(|| plan_err(format!("duplicate setup register {key}")))?;
+        missing_registers.remove(index);
+        setup.push(RegWrite { name, addr, value });
+    }
     let len = input.len.unwrap_or(region.default_len);
     if len == 0 {
         return Err(plan_err("length is 0"));
@@ -270,7 +298,7 @@ pub fn build_read_plan(input: &PlanInput<'_>) -> Result<ReadPlan> {
         None,
     );
     if input.setup {
-        for w in region.setup {
+        for w in &setup {
             push(
                 Phase::Setup,
                 format!("write {} command", w.name),
@@ -356,6 +384,7 @@ pub fn build_read_plan(input: &PlanInput<'_>) -> Result<ReadPlan> {
         len,
         block: input.block,
         steps,
+        missing_registers,
         notes,
     })
 }
@@ -384,6 +413,15 @@ fn hex_preview(b: &[u8]) -> String {
 }
 
 impl ReadPlan {
+    /// Reject incomplete board setup before opening or using a port.
+    pub fn ensure_setup_complete(&self) -> Result<()> {
+        if self.missing_registers.is_empty() {
+            Ok(())
+        } else {
+            Err(plan_err(format!("missing unverified register values: {} (supply --register NAME=VALUE in board setup order)", self.missing_registers.join(", "))))
+        }
+    }
+
     /// Blocks in the read.
     pub fn blocks(&self) -> usize {
         self.steps
@@ -406,6 +444,9 @@ impl ReadPlan {
     pub fn render(&self, o: &RenderOptions) -> String {
         let mut out = String::new();
         let r = self.region;
+        if let Err(e) = self.ensure_setup_complete() {
+            let _ = writeln!(out, "READ BLOCKED: {e}");
+        }
         let _ = writeln!(
             out,
             "preset       {} — {}",
