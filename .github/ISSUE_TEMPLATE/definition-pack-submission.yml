@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Packs grow OpenTune's coverage as **data**. Format and rules:
+        Packs grow OpenTune's coverage as **data**. Step-by-step guide:
+        `docs/PACK-AUTHORING.md`. Format and rules:
         `docs/DEFINITION-PACKS.md` (packs), `docs/CONTRIBUTING-ECUDEFS.md`
         (ECU definitions), `CONTRIBUTING.md` (provenance and privacy). The best
         way to submit is a pull request; this form is for discussing it first or
@@ -22,7 +23,7 @@ body:
     id: contents
     attributes:
       label: Contents
-      description: Which kinds (modules, loggers, services, coding, adaptation, ecudefs) and which vehicles / modules they cover.
+      description: Which kinds (modules, loggers, services, coding, adaptation, ecudefs, controllers, triggers) and which vehicles / modules they cover.
     validations:
       required: true
   - type: textarea

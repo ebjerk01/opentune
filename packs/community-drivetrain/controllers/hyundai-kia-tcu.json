@@ -1,0 +1,492 @@
+{
+  "id": "hyundai-kia-tcu",
+  "name": "Hyundai / Kia automatic transmission controller (classic CAN, TCU11-TCU13 broadcast)",
+  "kind": "tcu",
+  "maker": "Hyundai / Kia",
+  "family": "TCU (classic CAN)",
+  "vehicles": [
+    "Hyundai Sonata 2018-19",
+    "Hyundai Tucson 2019 (diesel) and 2021",
+    "Hyundai Veloster 2019-20",
+    "Kia Optima 2017 and 2019-20"
+  ],
+  "validation": "synthetic-tested",
+  "notes": "The TCU broadcast frames of opendbc's hyundai_can.dbc (the DBC opendbc uses for every non-CAN-FD Hyundai / Kia / Genesis platform). 'vehicles' lists the platforms whose gear opendbc reads from TCU12 (flag TCU_GEARS in car/hyundai/values.py); other platforms of that DBC may send the frames too, which the source does not say. Signal meanings beyond the DBC names and scales are not documented upstream and are marked so per signal; checksums are not verified. No gearbox codes, part numbers or flash layout are claimed: there is no open source for them, so identify is empty and the definition is chosen by id. The UDS channel is untested (validation: implemented).",
+  "identify": {
+    "part_numbers": [],
+    "sw_numbers": [],
+    "gearbox_codes": []
+  },
+  "ecudefs": [],
+  "units": [],
+  "diagnostics": [
+    {
+      "name": "uds",
+      "transport": "iso_tp",
+      "layer": "uds",
+      "bitrate": 500000,
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "identification": "22F100",
+      "validation": "implemented",
+      "notes": "Request id from opendbc car/hyundai/fingerprints.py (Ecu.transmission 0x7E1), response = request + 8 (ISO 15765-4, opendbc's default rx_offset). 22 F100 is the 'long description' identification opendbc's firmware query sends (HYUNDAI_VERSION_REQUEST_LONG). Not tried on a car."
+    }
+  ],
+  "buses": [
+    {
+      "name": "ccan",
+      "description": "Hyundai / Kia classic CAN (C-CAN) as opendbc's hyundai_can.dbc describes it",
+      "bitrate": 500000,
+      "notes": "500 kbit/s is assumed (the OBD-II CAN rate of ISO 15765-4); opendbc does not state bus rates.",
+      "frames": [
+        {
+          "id": "0x111",
+          "name": "TCU11",
+          "sender": "TCU",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "TCU status 1 (hyundai_can.dbc).",
+          "signals": [
+            {
+              "name": "TQI_TCU_INC",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.390625,
+              "unit": "%",
+              "notes": "Torque-increase request to the engine, in % (meaning from the DBC name)."
+            },
+            {
+              "name": "G_SEL_DISP",
+              "start": 8,
+              "len": 4,
+              "kind": "number",
+              "notes": "Selector position for the cluster display. opendbc has no value table for it, so raw values are shown as numbers."
+            },
+            {
+              "name": "F_TCU",
+              "start": 12,
+              "len": 2,
+              "kind": "number",
+              "notes": "TCU fault/status field (2 bits); meaning not documented in the source."
+            },
+            {
+              "name": "TCU_TYPE",
+              "start": 14,
+              "len": 2,
+              "kind": "number",
+              "notes": "TCU type (2 bits); values not documented in the source."
+            },
+            {
+              "name": "TCU_OBD",
+              "start": 16,
+              "len": 3,
+              "kind": "number",
+              "notes": "TCU OBD status (3 bits); values not documented in the source."
+            },
+            {
+              "name": "SWI_GS",
+              "start": 19,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Gear-select switch flag (meaning from the DBC name)."
+            },
+            {
+              "name": "GEAR_TYPE",
+              "start": 20,
+              "len": 4,
+              "kind": "number",
+              "notes": "Gearbox type (4 bits); values not documented in the source."
+            },
+            {
+              "name": "TQI_TCU",
+              "start": 24,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.390625,
+              "unit": "%",
+              "notes": "Torque request to the engine, in % (meaning from the DBC name)."
+            },
+            {
+              "name": "TEMP_AT",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "offset": -40.0,
+              "unit": "degC",
+              "notes": "Automatic-transmission fluid temperature, raw - 40 (DBC unit 'deg', read as degC)."
+            },
+            {
+              "name": "N_TC",
+              "start": 40,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.25,
+              "unit": "rpm",
+              "notes": "Torque-converter turbine speed (raw x 0.25)."
+            },
+            {
+              "name": "SWI_CC",
+              "start": 56,
+              "len": 2,
+              "kind": "number",
+              "notes": "Cruise-control related switch (2 bits); values not documented in the source."
+            },
+            {
+              "name": "CF_Tcu_Alive1",
+              "start": 58,
+              "len": 2,
+              "kind": "number",
+              "notes": "Alive counter."
+            },
+            {
+              "name": "CF_Tcu_ChkSum1",
+              "start": 60,
+              "len": 4,
+              "kind": "number",
+              "notes": "Checksum nibble (algorithm not documented in the source; not verified)."
+            }
+          ]
+        },
+        {
+          "id": "0x112",
+          "name": "TCU12",
+          "sender": "TCU",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "TCU status 2 (hyundai_can.dbc). opendbc reads the current gear from CUR_GR on platforms with its TCU_GEARS flag.",
+          "signals": [
+            {
+              "name": "ETL_TCU",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "factor": 2.0,
+              "unit": "Nm",
+              "notes": "Engine torque limit requested by the TCU (raw x 2 Nm)."
+            },
+            {
+              "name": "CUR_GR",
+              "start": 8,
+              "len": 4,
+              "kind": "enum",
+              "values": [
+                {
+                  "raw": 0,
+                  "name": "P"
+                },
+                {
+                  "raw": 1,
+                  "name": "D1"
+                },
+                {
+                  "raw": 2,
+                  "name": "D2"
+                },
+                {
+                  "raw": 3,
+                  "name": "D3"
+                },
+                {
+                  "raw": 4,
+                  "name": "D4"
+                },
+                {
+                  "raw": 5,
+                  "name": "D5"
+                },
+                {
+                  "raw": 6,
+                  "name": "D6"
+                },
+                {
+                  "raw": 7,
+                  "name": "D7"
+                },
+                {
+                  "raw": 8,
+                  "name": "D8"
+                },
+                {
+                  "raw": 14,
+                  "name": "R"
+                }
+              ],
+              "notes": "Current gear. opendbc's value table names 0 P, 1-8 D and 14 R; the forward gear number is kept in the name here (D1..D8)."
+            },
+            {
+              "name": "CF_Tcu_Alive",
+              "start": 12,
+              "len": 2,
+              "kind": "number",
+              "notes": "Alive counter."
+            },
+            {
+              "name": "CF_Tcu_ChkSum",
+              "start": 14,
+              "len": 2,
+              "kind": "number",
+              "notes": "Checksum (2 bits; algorithm not documented in the source)."
+            },
+            {
+              "name": "VS_TCU",
+              "start": 16,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Vehicle speed seen by the TCU, whole km/h (VS_TCU_DECIMAL adds the fraction)."
+            },
+            {
+              "name": "FUEL_CUT_TCU",
+              "start": 28,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Fuel-cut request (meaning from the DBC name)."
+            },
+            {
+              "name": "INH_FUEL_CUT",
+              "start": 29,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Fuel-cut inhibit (meaning from the DBC name)."
+            },
+            {
+              "name": "IDLE_UP_TCU",
+              "start": 30,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Idle-up request (meaning from the DBC name)."
+            },
+            {
+              "name": "N_INC_TCU",
+              "start": 31,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Engine-speed increase request (meaning from the DBC name)."
+            },
+            {
+              "name": "SPK_RTD_TCU",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.375,
+              "offset": -23.625,
+              "notes": "Spark-retard request (raw x 0.375 - 23.625; the DBC gives no unit)."
+            },
+            {
+              "name": "N_TC_RAW",
+              "start": 40,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.25,
+              "unit": "rpm",
+              "notes": "Turbine speed, unfiltered (raw x 0.25)."
+            },
+            {
+              "name": "VS_TCU_DECIMAL",
+              "start": 56,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.0078125,
+              "unit": "km/h",
+              "notes": "Fractional part of the vehicle speed (raw / 128 km/h)."
+            }
+          ]
+        },
+        {
+          "id": "0x113",
+          "name": "TCU13",
+          "sender": "TCU",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "TCU status 3 (hyundai_can.dbc).",
+          "signals": [
+            {
+              "name": "N_TGT_LUP",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "factor": 10.0,
+              "offset": 500.0,
+              "unit": "rpm",
+              "notes": "Target lock-up speed (raw x 10 + 500 rpm; meaning from the DBC name)."
+            },
+            {
+              "name": "SLOPE_TCU",
+              "start": 8,
+              "len": 6,
+              "kind": "number",
+              "factor": 0.5,
+              "offset": -16.0,
+              "unit": "%",
+              "notes": "Road slope estimated by the TCU (raw x 0.5 - 16 %)."
+            },
+            {
+              "name": "CF_Tcu_TarGr",
+              "start": 20,
+              "len": 4,
+              "kind": "number",
+              "notes": "Target gear (4 bits; no value table in the source)."
+            },
+            {
+              "name": "CF_Tcu_ShfPatt",
+              "start": 24,
+              "len": 4,
+              "kind": "number",
+              "notes": "Shift pattern / drive mode (4 bits; no value table in the source)."
+            },
+            {
+              "name": "CF_Tcu_TqGrdLim",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "factor": 10.0,
+              "unit": "Nm/s",
+              "notes": "Torque-gradient limit (raw x 10 Nm/s)."
+            },
+            {
+              "name": "CR_Tcu_IsgTgtRPM",
+              "start": 40,
+              "len": 8,
+              "kind": "number",
+              "factor": 20.0,
+              "unit": "rpm",
+              "notes": "Idle stop-and-go target engine speed (raw x 20 rpm)."
+            },
+            {
+              "name": "CF_Tcu_SptRdy",
+              "start": 48,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Sport mode ready (meaning from the DBC name)."
+            },
+            {
+              "name": "CF_Tcu_Alive3",
+              "start": 58,
+              "len": 2,
+              "kind": "number",
+              "notes": "Alive counter."
+            },
+            {
+              "name": "CF_Tcu_ChkSum3",
+              "start": 60,
+              "len": 4,
+              "kind": "number",
+              "notes": "Checksum nibble (algorithm not documented in the source)."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "current gear",
+      "unit": "",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU12",
+        "signal": "CUR_GR"
+      }
+    },
+    {
+      "name": "target gear",
+      "unit": "",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU13",
+        "signal": "CF_Tcu_TarGr"
+      }
+    },
+    {
+      "name": "selector (cluster)",
+      "unit": "",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU11",
+        "signal": "G_SEL_DISP"
+      }
+    },
+    {
+      "name": "ATF temperature",
+      "unit": "degC",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU11",
+        "signal": "TEMP_AT"
+      }
+    },
+    {
+      "name": "turbine speed",
+      "unit": "rpm",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU11",
+        "signal": "N_TC"
+      }
+    },
+    {
+      "name": "vehicle speed (TCU)",
+      "unit": "km/h",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU12",
+        "signal": "VS_TCU"
+      }
+    },
+    {
+      "name": "TCU torque limit",
+      "unit": "Nm",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "TCU12",
+        "signal": "ETL_TCU"
+      }
+    }
+  ],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "OpenTune only listens to these broadcast frames (and, where a diagnostic channel is listed, reads identification); it never writes to this controller.",
+    "Do not transmit on a drivetrain CAN bus of a moving car: these frames feed the engine, brakes and instrument cluster. Log with a listen-only adapter."
+  ],
+  "sources": [
+    {
+      "title": "commaai/opendbc opendbc/dbc/generator/hyundai/hyundai_can.dbc @ 27fa1c5d8eed (Copyright (c) 2020, Comma.ai, Inc.)",
+      "url": "https://github.com/commaai/opendbc/blob/27fa1c5d8eed3238a0a78c52ff5abb6cdc807bd2/opendbc/dbc/generator/hyundai/hyundai_can.dbc",
+      "license": "MIT",
+      "used_for": "TCU11/TCU12/TCU13 signal layouts, names, scales and the CUR_GR value table"
+    },
+    {
+      "title": "commaai/opendbc opendbc/car/hyundai/values.py @ 27fa1c5d8eed (Copyright (c) 2020, Comma.ai, Inc.)",
+      "url": "https://github.com/commaai/opendbc/blob/27fa1c5d8eed3238a0a78c52ff5abb6cdc807bd2/opendbc/car/hyundai/values.py",
+      "license": "MIT",
+      "used_for": "platforms that read the gear from TCU12 (TCU_GEARS) and the 22 F100 identification request"
+    },
+    {
+      "title": "commaai/opendbc opendbc/car/hyundai/fingerprints.py @ 27fa1c5d8eed (Copyright (c) 2020, Comma.ai, Inc.)",
+      "url": "https://github.com/commaai/opendbc/blob/27fa1c5d8eed3238a0a78c52ff5abb6cdc807bd2/opendbc/car/hyundai/fingerprints.py",
+      "license": "MIT",
+      "used_for": "transmission request id 0x7E1"
+    },
+    {
+      "title": "ISO 15765-4 (OBD-II on CAN: 500 kbit/s, physical request 0x7E0-0x7E7, response = request + 8)",
+      "url": "https://www.iso.org/standard/78384.html",
+      "license": "standard (identifiers only)",
+      "used_for": "response id = request id + 8 and the assumed 500 kbit/s bus rate"
+    }
+  ]
+}

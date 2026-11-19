@@ -269,6 +269,12 @@ CLI's `controller` commands on a pack definition, pass its path
 (`opentune controller show packs/<id>/controllers/<file>.json`) or
 `--dir packs/<id>/controllers`.
 
+The first community pack, [`packs/community-drivetrain/`](../packs/community-drivetrain/),
+carries Hyundai / Kia TCU and 4WD-coupling definitions and a Subaru
+Global-platform transmission definition this way (CAN frames transcribed from
+opendbc, synthetic-tested); [PACK-AUTHORING.md](PACK-AUTHORING.md) shows how it
+was made.
+
 ## Adding a controller
 
 1. Copy the closest file in `ctrldefs/` (a TCU with CAN frames:

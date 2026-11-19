@@ -8,7 +8,8 @@ welcome. Please read the [code of conduct](CODE_OF_CONDUCT.md) first.
 | You want to… | Read |
 |---|---|
 | add or fix an ECU definition / map library entry | [`docs/CONTRIBUTING-ECUDEFS.md`](docs/CONTRIBUTING-ECUDEFS.md), [`docs/ECU-DEFS.md`](docs/ECU-DEFS.md), [`docs/MAP-DEFS.md`](docs/MAP-DEFS.md) |
-| add a definition pack (coding, adaptation, service scripts, loggers, module lists) | [`docs/DEFINITION-PACKS.md`](docs/DEFINITION-PACKS.md), [`packs/README.md`](packs/README.md) |
+| write and submit your first definition pack, step by step | [`docs/PACK-AUTHORING.md`](docs/PACK-AUTHORING.md) (worked example: [`packs/community-drivetrain/`](packs/community-drivetrain/)) |
+| add a definition pack (coding, adaptation, service scripts, loggers, module lists, controllers) | [`docs/DEFINITION-PACKS.md`](docs/DEFINITION-PACKS.md), [`packs/README.md`](packs/README.md) |
 | add a gearbox / AWD controller definition | [`docs/CONTROLLER-DEFS.md`](docs/CONTROLLER-DEFS.md) |
 | change code | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/DRIVERS.md`](docs/DRIVERS.md) |
 | request support for an ECU or report a bug | open an issue from the templates |
@@ -25,7 +26,9 @@ pass every gate (`scripts/check.sh`).
 ## Contributing data
 
 1. Fork the repository and start from the template: `ecudefs/TEMPLATE.json`,
-   `packs/_template/` or an existing controller definition.
+   `packs/_template/` or an existing controller definition. For a pack,
+   [`docs/PACK-AUTHORING.md`](docs/PACK-AUTHORING.md) walks through every
+   step below on a real example.
 2. Fill in the **provenance**: `sources` (one citation per source),
    `license` (SPDX id of the data, normally `GPL-3.0-or-later`) and `evidence`
    (the validation state you actually reached, see below). It goes in a
@@ -40,7 +43,9 @@ pass every gate (`scripts/check.sh`).
    opentune privacy-scan ecudefs packs ctrldefs             # VINs, e-mails, serials
    ```
 
-4. Open a pull request and tick the provenance checklist in the template.
+4. Add a test that exercises the data on synthetic input (built from the
+   source, not from your file) if you claim `synthetic-tested` or higher.
+5. Open a pull request and tick the provenance checklist in the template.
    CI repeats these checks and also privacy-scans every data file the PR
    changes. Findings are printed redacted, so a mistake is not repeated in a
    public log; fix it with a new commit and, if a real identifier was pushed,

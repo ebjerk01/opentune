@@ -1,0 +1,401 @@
+{
+  "id": "hyundai-kia-4wd",
+  "name": "Hyundai / Kia 4WD / AWD coupling controller (classic CAN, _4WD11-_4WD13 broadcast)",
+  "kind": "awd",
+  "maker": "Hyundai / Kia",
+  "family": "4WD coupling controller (classic CAN)",
+  "vehicles": [
+    "Hyundai / Kia models with an electronically controlled 4WD coupling on classic (non-CAN-FD) CAN; the source does not list models"
+  ],
+  "validation": "synthetic-tested",
+  "notes": "The 4WD controller frames (_4WD11/_4WD12/_4WD13, node _4WD) of opendbc's hyundai_can.dbc plus the ABS wheel-speed frame they work against. opendbc defines but does not use these frames, so which models send them is unknown. The 2H/4H/LOW flags suggest the same frames also cover part-time transfer-case systems; the source does not say. No diagnostic channel is declared: no open source documents the 4WD unit's diagnostic ids. Signal meanings beyond the DBC names and scales are marked per signal.",
+  "identify": {
+    "part_numbers": [],
+    "sw_numbers": [],
+    "gearbox_codes": []
+  },
+  "ecudefs": [],
+  "units": [],
+  "diagnostics": [],
+  "buses": [
+    {
+      "name": "ccan",
+      "description": "Hyundai / Kia classic CAN (C-CAN) as opendbc's hyundai_can.dbc describes it",
+      "bitrate": 500000,
+      "notes": "500 kbit/s is assumed (the OBD-II CAN rate of ISO 15765-4); opendbc does not state bus rates.",
+      "frames": [
+        {
+          "id": "0x428",
+          "name": "_4WD11",
+          "sender": "4WD",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "4WD controller status 1 (hyundai_can.dbc, node _4WD).",
+          "signals": [
+            {
+              "name": "_4WD_TYPE",
+              "start": 0,
+              "len": 2,
+              "kind": "number",
+              "notes": "4WD system type (2 bits; values not documented in the source)."
+            },
+            {
+              "name": "_4WD_SUPPORT",
+              "start": 2,
+              "len": 2,
+              "kind": "number",
+              "notes": "4WD support state (2 bits; values not documented in the source)."
+            },
+            {
+              "name": "_4WD_ERR",
+              "start": 8,
+              "len": 8,
+              "kind": "number",
+              "notes": "4WD error code byte (values not documented in the source)."
+            },
+            {
+              "name": "CLU_DUTY",
+              "start": 16,
+              "len": 8,
+              "kind": "number",
+              "unit": "%",
+              "notes": "Coupling clutch duty, % (DBC range 0-64)."
+            },
+            {
+              "name": "R_TIRE",
+              "start": 24,
+              "len": 8,
+              "kind": "number",
+              "offset": 200.0,
+              "unit": "mm",
+              "notes": "Rolling tyre radius used by the controller (raw + 200 mm)."
+            },
+            {
+              "name": "_4WD_SW",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "notes": "4WD switch / mode-selector state (values not documented in the source)."
+            },
+            {
+              "name": "_2H_ACT",
+              "start": 40,
+              "len": 1,
+              "kind": "bool",
+              "notes": "2H active."
+            },
+            {
+              "name": "_4H_ACT",
+              "start": 41,
+              "len": 1,
+              "kind": "bool",
+              "notes": "4H active."
+            },
+            {
+              "name": "LOW_ACT",
+              "start": 42,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Low range active."
+            },
+            {
+              "name": "AUTO_ACT",
+              "start": 43,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Auto (on-demand) mode active."
+            },
+            {
+              "name": "LOCK_ACT",
+              "start": 44,
+              "len": 1,
+              "kind": "bool",
+              "notes": "Lock mode active (coupling held closed)."
+            },
+            {
+              "name": "_4WD_TQC_CUR",
+              "start": 48,
+              "len": 16,
+              "kind": "number",
+              "unit": "Nm",
+              "notes": "Coupling torque currently transferred, Nm (meaning from the DBC name)."
+            }
+          ]
+        },
+        {
+          "id": "0x429",
+          "name": "_4WD12",
+          "sender": "4WD",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "4WD controller status 2 (hyundai_can.dbc): the inputs it reports to the ESC.",
+          "signals": [
+            {
+              "name": "Ster_Pos",
+              "start": 0,
+              "len": 16,
+              "kind": "number",
+              "offset": -600.0,
+              "unit": "deg",
+              "notes": "Steering angle (raw - 600 deg)."
+            },
+            {
+              "name": "FRSS",
+              "start": 16,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Wheel speed front right, whole km/h."
+            },
+            {
+              "name": "FLSS",
+              "start": 24,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Wheel speed front left, whole km/h."
+            },
+            {
+              "name": "RRSS",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Wheel speed rear right, whole km/h."
+            },
+            {
+              "name": "RLSS",
+              "start": 40,
+              "len": 8,
+              "kind": "number",
+              "unit": "km/h",
+              "notes": "Wheel speed rear left, whole km/h."
+            },
+            {
+              "name": "CLU_PRES",
+              "start": 48,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.0625,
+              "offset": -50.0,
+              "unit": "bar",
+              "notes": "Coupling clutch pressure (raw x 0.0625 - 50 bar)."
+            }
+          ]
+        },
+        {
+          "id": "0x42A",
+          "name": "_4WD13",
+          "sender": "4WD",
+          "dlc": 6,
+          "min_len": 6,
+          "validation": "synthetic-tested",
+          "notes": "4WD controller status 3 (hyundai_can.dbc), 6-byte frame.",
+          "signals": [
+            {
+              "name": "_4WD_CURRENT",
+              "start": 0,
+              "len": 8,
+              "kind": "number",
+              "factor": 0.390625,
+              "unit": "A",
+              "notes": "Coupling actuator current (raw x 0.390625 A)."
+            },
+            {
+              "name": "_4WD_POSITION",
+              "start": 8,
+              "len": 16,
+              "kind": "number",
+              "factor": 0.015625,
+              "unit": "deg",
+              "notes": "Actuator position (raw x 0.015625 deg)."
+            },
+            {
+              "name": "_4WD_CLU_THERM_STR",
+              "start": 24,
+              "len": 8,
+              "kind": "number",
+              "unit": "%",
+              "notes": "Clutch thermal stress, % (meaning from the DBC name)."
+            },
+            {
+              "name": "_4WD_STATUS",
+              "start": 32,
+              "len": 8,
+              "kind": "number",
+              "notes": "4WD status byte (DBC range 0-15; values not documented in the source)."
+            }
+          ]
+        },
+        {
+          "id": "0x386",
+          "name": "WHL_SPD11",
+          "sender": "ABS",
+          "dlc": 8,
+          "min_len": 8,
+          "validation": "synthetic-tested",
+          "notes": "Wheel speeds from the ABS/ESC (hyundai_can.dbc), the reference the coupling works against.",
+          "signals": [
+            {
+              "name": "WHL_SPD_FL",
+              "start": 0,
+              "len": 14,
+              "kind": "number",
+              "factor": 0.03125,
+              "unit": "km/h",
+              "notes": "Wheel speed front left (raw / 32 km/h)."
+            },
+            {
+              "name": "WHL_SPD_FR",
+              "start": 16,
+              "len": 14,
+              "kind": "number",
+              "factor": 0.03125,
+              "unit": "km/h",
+              "notes": "Wheel speed front right (raw / 32 km/h)."
+            },
+            {
+              "name": "WHL_SPD_RL",
+              "start": 32,
+              "len": 14,
+              "kind": "number",
+              "factor": 0.03125,
+              "unit": "km/h",
+              "notes": "Wheel speed rear left (raw / 32 km/h)."
+            },
+            {
+              "name": "WHL_SPD_RR",
+              "start": 48,
+              "len": 14,
+              "kind": "number",
+              "factor": 0.03125,
+              "unit": "km/h",
+              "notes": "Wheel speed rear right (raw / 32 km/h)."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "live": [
+    {
+      "name": "coupling torque",
+      "unit": "Nm",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD11",
+        "signal": "_4WD_TQC_CUR"
+      }
+    },
+    {
+      "name": "clutch duty",
+      "unit": "%",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD11",
+        "signal": "CLU_DUTY"
+      }
+    },
+    {
+      "name": "lock mode",
+      "unit": "",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD11",
+        "signal": "LOCK_ACT"
+      }
+    },
+    {
+      "name": "clutch pressure",
+      "unit": "bar",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD12",
+        "signal": "CLU_PRES"
+      }
+    },
+    {
+      "name": "actuator current",
+      "unit": "A",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD13",
+        "signal": "_4WD_CURRENT"
+      }
+    },
+    {
+      "name": "clutch thermal stress",
+      "unit": "%",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "_4WD13",
+        "signal": "_4WD_CLU_THERM_STR"
+      }
+    },
+    {
+      "name": "wheel speed FL",
+      "unit": "km/h",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "WHL_SPD11",
+        "signal": "WHL_SPD_FL"
+      }
+    },
+    {
+      "name": "wheel speed FR",
+      "unit": "km/h",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "WHL_SPD11",
+        "signal": "WHL_SPD_FR"
+      }
+    },
+    {
+      "name": "wheel speed RL",
+      "unit": "km/h",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "WHL_SPD11",
+        "signal": "WHL_SPD_RL"
+      }
+    },
+    {
+      "name": "wheel speed RR",
+      "unit": "km/h",
+      "source": {
+        "kind": "can_signal",
+        "bus": "ccan",
+        "frame": "WHL_SPD11",
+        "signal": "WHL_SPD_RR"
+      }
+    }
+  ],
+  "adaptations": [],
+  "tables": [],
+  "gearsets": [],
+  "checksum": null,
+  "flash": null,
+  "safety": [
+    "Changing how an AWD system engages changes how the car drives. OpenTune only decodes these frames; it never commands the coupling.",
+    "Do not transmit on a drivetrain CAN bus of a moving car: these frames feed the engine, brakes and instrument cluster. Log with a listen-only adapter."
+  ],
+  "sources": [
+    {
+      "title": "commaai/opendbc opendbc/dbc/generator/hyundai/hyundai_can.dbc @ 27fa1c5d8eed (Copyright (c) 2020, Comma.ai, Inc.)",
+      "url": "https://github.com/commaai/opendbc/blob/27fa1c5d8eed3238a0a78c52ff5abb6cdc807bd2/opendbc/dbc/generator/hyundai/hyundai_can.dbc",
+      "license": "MIT",
+      "used_for": "_4WD11/_4WD12/_4WD13 and WHL_SPD11 signal layouts, names and scales"
+    }
+  ]
+}
