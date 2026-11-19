@@ -47,7 +47,10 @@ CAN (S2-11 / S2-12) comes from a single source and is not needed for K-line work
   access. OpenTune ships no OEM seed/key; you supply your own (the off-by-default
   seed/key loader, `docs/SEEDKEY-LOADER.md`) or use a boot-mode read.
 - **Boot mode** is not on the connector: it needs the case opened and a
-  board-level boot select. That procedure is not in this page yet.
+  board-level boot select. The ECU database entry's **Access** card lists
+  what is publicly known (C167 bootstrap loader; a pull-down on the flash's
+  DQ4 pin, *unverified* for this unit until you confirm by continuity that it
+  reaches the CPU's P0L.4).
 - Once you have a read, the **Checksum** panel verifies and corrects the
   EDC15C6 checksum.
 

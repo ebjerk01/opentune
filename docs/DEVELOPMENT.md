@@ -20,7 +20,7 @@ It stops at the first failure and names the failing gate. Order:
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace` (includes the doc-drift tests, §5)
 4. `opentune ecudefs validate ecudefs`
-5. `opentune db validate`
+5. `opentune db validate --require-access`
    (then the `opentune-udssim` conformance harness against python-udsoncan /
    python-doipclient, [`tools/conformance/`](../tools/conformance/README.md) —
    run when `OPENTUNE_CONFORMANCE_PYTHON` or `python3` can import both

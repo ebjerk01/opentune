@@ -12,6 +12,18 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **ECU database access profiles**: each control unit can say how it is
+  reached — OBD, bench, boot mode (entry, strap points, whether the case must
+  be opened, reset timing) and the security access a read or write needs —
+  each part with its own confidence and cited public sources. `read_methods.obd`
+  gains `read`, boot pins can carry a `strap`, units a `flash_note`. The
+  validator checks the profile against `read_methods`, requires sources,
+  boot points and an "OpenTune ships no OEM key" statement; there is no field
+  for key material. `opentune db validate --require-access` (CI) fails on any
+  new unit without a profile (`database/units/.access-pending` lists the older
+  units, and only shrinks). Filled: Bosch EDC15C6 (worked example), Mercedes
+  EGS52, DQ250 02E and Haldex Gen4. The ECU database panel shows an
+  **Access** card. Docs: [UNIT-ACCESS-PROFILE.md](docs/UNIT-ACCESS-PROFILE.md).
 - **Bench wiring diagrams**, drawn from the ECU database: every unit with a
   pinout gets an inline diagram (pins wired to +12 V permanent / ignition,
   ground, K-line, CAN) in the ECU database panel, and guide pages can embed one

@@ -27,6 +27,12 @@ A wrong pin on the bench can destroy a control unit, so the pinout rules are str
 - Every unit with a pinout carries a `safety_note`.
 - `checksum` must be an `opentune_checksum::get()` id; `ecudef` must exist in
   `ecudefs/`. `read_methods.obd` is `unknown` when no source says either way.
+- **Access profile.** Every unit carries an `access` block (OBD / bench / boot /
+  security, each with confidence and sources) that agrees with `read_methods`.
+  `opentune db validate --require-access` (CI) fails on a unit without one
+  unless it is listed in `database/units/.access-pending`, a list that only
+  shrinks. Schema, rules and allowed sources:
+  [UNIT-ACCESS-PROFILE.md](UNIT-ACCESS-PROFILE.md).
 
 ## Scope
 

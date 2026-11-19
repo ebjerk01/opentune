@@ -11,6 +11,7 @@ welcome. Please read the [code of conduct](CODE_OF_CONDUCT.md) first.
 | write and submit your first definition pack, step by step | [`docs/PACK-AUTHORING.md`](docs/PACK-AUTHORING.md) (worked example: [`packs/community-drivetrain/`](packs/community-drivetrain/)) |
 | add a definition pack (coding, adaptation, service scripts, loggers, module lists, controllers) | [`docs/DEFINITION-PACKS.md`](docs/DEFINITION-PACKS.md), [`packs/README.md`](packs/README.md) |
 | add a gearbox / AWD controller definition | [`docs/CONTROLLER-DEFS.md`](docs/CONTROLLER-DEFS.md) |
+| add or fix a control unit in the ECU database (pinout, access profile: OBD / bench / boot / security) | [`docs/DATABASE.md`](docs/DATABASE.md), [`docs/UNIT-ACCESS-PROFILE.md`](docs/UNIT-ACCESS-PROFILE.md) |
 | change code | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/DRIVERS.md`](docs/DRIVERS.md) |
 | request support for an ECU or report a bug | open an issue from the templates |
 
@@ -40,8 +41,15 @@ pass every gate (`scripts/check.sh`).
    opentune ecudefs validate ecudefs --require-provenance   # ECU definitions
    opentune packs validate packs                            # definition packs
    opentune controller validate ctrldefs                    # controller definitions
-   opentune privacy-scan ecudefs packs ctrldefs             # VINs, e-mails, serials
+   opentune db validate --require-access                    # ECU database units
+   opentune privacy-scan ecudefs packs ctrldefs database    # VINs, e-mails, serials
    ```
+
+   A new ECU database unit must carry an access profile; see
+   [`docs/UNIT-ACCESS-PROFILE.md`](docs/UNIT-ACCESS-PROFILE.md) for the schema
+   and which sources are allowed (public datasheets, pinout sites, forums and
+   open projects; never commercial-tool internals, leaked manuals or
+   immobiliser procedures).
 
 4. Add a test that exercises the data on synthetic input (built from the
    source, not from your file) if you claim `synthetic-tested` or higher.

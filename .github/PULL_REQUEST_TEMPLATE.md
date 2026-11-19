@@ -18,6 +18,7 @@ any error. See CONTRIBUTING.md.
 - [ ] New or updated ECU definition / map library entry (`ecudefs/*.json`)
 - [ ] New or updated definition pack (`packs/<id>/`)
 - [ ] New or updated controller definition (`ctrldefs/*.json`)
+- [ ] New or updated ECU database unit (`database/units/*.json`)
 - [ ] Docs only
 
 ## General checklist
@@ -53,6 +54,15 @@ Format & review (see `docs/CONTRIBUTING-ECUDEFS.md`, `docs/ECU-DEFS.md`, `docs/M
 - [ ] Controller definitions: `opentune controller validate packs/<id>/controllers --warnings` reports 0 errors
 - [ ] `synthetic-tested` or higher is backed by a test that runs the definitions on synthetic data built from the source (see `docs/PACK-AUTHORING.md`)
 - [ ] A row for the pack is added / updated in `packs/README.md`
+
+## ECU database checklist (only if you touched `database/`)
+
+See `docs/DATABASE.md` and `docs/UNIT-ACCESS-PROFILE.md`:
+
+- [ ] `opentune db validate --require-access` reports **0 issues** (warnings for units still in `.access-pending` are fine)
+- [ ] A new unit carries an `access` profile; a filled unit is removed from `database/units/.access-pending` (the list only shrinks)
+- [ ] Every pin and every access part cites a **public** source (datasheet, pinout site, public forum, open project); `verified` only where two independent sources agree
+- [ ] Nothing from commercial-tool internals, leaked manuals or unauthorised copies (e.g. Scribd uploads of tool sheets), and no immobiliser / transponder procedures or key material
 
 ## Scope (`README.md` "what OpenTune will NOT do" / `CONTRIBUTING.md`)
 
