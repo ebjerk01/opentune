@@ -11,14 +11,19 @@ use crate::GpsFeed;
 const DAY_MS: u64 = 86_400_000;
 
 /// How far the replay clock moves from NMEA time of day `cur` to `t` (ms).
-/// Going backwards is the midnight rollover; a day that ended in a leap
-/// second (`23:59:60.x`, at or past [`DAY_MS`]) is one second longer.
-fn advance_ms(cur: u64, t: u64) -> u64 {
+/// Going back by more than half a day is the midnight rollover; a day that
+/// ended in a leap second (`23:59:60.x`, at or past [`DAY_MS`]) is one second
+/// longer. A smaller step back (a reordered line, a receiver glitch) is
+/// `None`: the clock never runs backwards, and is not a new day.
+fn advance_ms(cur: u64, t: u64) -> Option<u64> {
     if t >= cur {
-        return t - cur;
+        return Some(t - cur);
+    }
+    if cur - t <= DAY_MS / 2 {
+        return None;
     }
     let day = if cur >= DAY_MS { DAY_MS + 1000 } else { DAY_MS };
-    (t + day).saturating_sub(cur)
+    Some((t + day).saturating_sub(cur))
 }
 
 /// Replays recorded NMEA, one epoch at a time.
@@ -107,9 +112,13 @@ impl ReplayFeed {
                     match self.epoch_time {
                         Some(cur) if cur == t => {}
                         Some(_) if consumed => break, // next epoch starts here
+                        // A step back within the day (`None`) keeps the
+                        // clock and the epoch time it is measured from.
                         Some(cur) => {
-                            self.clock_ms += advance_ms(cur, t);
-                            self.epoch_time = Some(t);
+                            if let Some(d) = advance_ms(cur, t) {
+                                self.clock_ms += d;
+                                self.epoch_time = Some(t);
+                            }
                         }
                         None => self.epoch_time = Some(t),
                     }
@@ -177,10 +186,27 @@ mod tests {
         // Regression: 23:59:60.500 is 86_400_500 ms of day, so the rollover
         // `t + DAY_MS - cur` underflowed (a panic in debug builds, a clock
         // jump of ~2^64 ms in release).
-        let lines = [gga("235959.500", 1), gga("235960.500", 0), gga("000000.000", 0)];
+        let lines = [
+            gga("235959.500", 1),
+            gga("235960.500", 0),
+            gga("000000.000", 0),
+        ];
         assert_eq!(ages(&lines), vec![Some(0), Some(1000), Some(1500)]);
         // An ordinary midnight.
         let lines = [gga("235959.000", 1), gga("000001.000", 0)];
         assert_eq!(ages(&lines), vec![Some(0), Some(2000)]);
+    }
+
+    #[test]
+    fn a_step_back_in_time_is_not_a_new_day() {
+        // Regression: one line a second older than the one before it was
+        // taken as a midnight rollover, moving the replay clock ~24 h ahead
+        // (the position then read as 86 399 s old).
+        let lines = [
+            gga("120001.000", 1),
+            gga("120000.000", 0),
+            gga("120002.000", 0),
+        ];
+        assert_eq!(ages(&lines), vec![Some(0), Some(0), Some(1000)]);
     }
 }
