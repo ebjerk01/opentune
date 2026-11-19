@@ -24,7 +24,7 @@
     "obd": "unknown",
     "bench": true,
     "boot": false,
-    "notes": "Bench over CAN. MaxxECU documents reflashing Gen1 units with its own software; OEM OBD read/write capability is not documented in the cited sources."
+    "notes": "Bench communication uses CAN. BMW F-series variants have listed OBD flashing support. Complete original-image reading through the vehicle socket remains undocumented in the cited sources."
   },
   "checksum": "zf8hp",
   "ecudef": null,
@@ -133,6 +133,58 @@
     {
       "title": "MaxxECU: advanced 8HP installation and wiring (CPU / supported units)",
       "url": "https://www.maxxecu.com/webhelp/advanced-8hp-installation_and_wiring.html"
+    },
+    {
+      "title": "8hp-teensy-flasher bench hardware (GPL-3.0), Ram 1500 ZF 8HP connector",
+      "url": "https://raw.githubusercontent.com/alldogsoffroad/8hp-teensy-flasher/main/hardware/README.md"
+    },
+    {
+      "title": "1769Flash supported BMW transmission controllers, F-series 8HP Gen1 OBD coverage",
+      "url": "https://flash.1769.fi/supported"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": null,
+      "notes": "1769Flash lists OBD flashing support for BMW F-series 8HP45, 8HP70 and 8HP90. The listing does not specify a complete original-image read or the diagnostic protocol, and covers only the BMW application.",
+      "confidence": "unverified",
+      "sources": [
+        4
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "On the documented 16-pin connector, TCU-13 and TCU-9 take +12 V, TCU-14 is ground, TCU-5 is CAN high and TCU-6 is CAN low. The Ram 1500 bench project communicates through this CAN pair. Match the connector variant before applying power.",
+      "confidence": "verified",
+      "sources": [
+        1,
+        3
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "The bench wiring documents CAN communication. The cited sources identify no physical processor boot entry point or reset timing for this unit.",
+      "confidence": "unverified",
+      "sources": [
+        1,
+        3
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The cited sources do not establish the security access requirements for a complete diagnostic read or flash programming. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        3,
+        4
+      ]
+    }
+  }
 }
