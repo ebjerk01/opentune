@@ -22,7 +22,7 @@
     "obd": "read+write",
     "bench": true,
     "boot": true,
-    "notes": "Read and flash over K-line (OBD or bench, no auxiliary signals - ecupinouts). Nefmoto documents a board-level boot mode for recovery / EEPROM access."
+    "notes": "Full flash read and write over K-line in the car or on the bench. See access.bench for the ME7.5 ignition feed and access.boot for open-case recovery."
   },
   "checksum": "me7",
   "ecudef": "bosch-me7",
@@ -208,6 +208,70 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "NefMoto ME7 ECU Flasher (GPL-3.0): Flashing guide (KWP full read/write and ME7.5 bench power)",
+      "url": "https://raw.githubusercontent.com/NefMoto/NefMotoOpenSource/master/docs/user-guide/flashing.md"
+    },
+    {
+      "title": "NefMoto ME7 ECU Flasher (GPL-3.0): Bootmode guide (ME7.5 bootstrap entry)",
+      "url": "https://raw.githubusercontent.com/NefMoto/NefMotoOpenSource/master/docs/user-guide/bootmode.md"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "KWP2000 over K-line",
+      "notes": "NefMoto supports full flash reads and writes. A full diagnostic read requires selecting the flash layout for the fitted chip.",
+      "confidence": "community",
+      "sources": [
+        4,
+        2
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "Use the T121 connector for K-line diagnostics and programming. ECUpinouts lists +12 V on pins 3 and 62, ground on 1 and K-line on 43. NefMoto also lists pin 21 as a supply and requires switched +12 V on pin 121 for ME7.5 programming. Leave CAN disconnected for K-line access.",
+      "confidence": "community",
+      "sources": [
+        2,
+        4
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "C167 serial bootstrap loader over K-line",
+      "points": [
+        {
+          "name": "Flash pin 24",
+          "location": "pcb:flash pin 24",
+          "action": "pull-to-gnd",
+          "confidence": "unverified"
+        },
+        {
+          "name": "ME7.5 boot pads",
+          "location": "pcb:P0L.4 boot pad pair",
+          "action": "bridge",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "Apply either strap before switching on ignition power. Release it 2–3 seconds after power-up.",
+      "reachable": "open-case",
+      "notes": "NefMoto describes two alternative contacts for the same bootstrap input. The guide identifies the ME7.5 pad pair in text but illustrates an ME7.1 board.",
+      "confidence": "community",
+      "sources": [
+        5
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "NefMoto attempts login for a full diagnostic read and can continue probing after refusal. The guide does not establish whether this ME7.5 requires security access for a full read or write. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        4
+      ]
+    }
+  }
 }
