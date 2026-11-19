@@ -71,6 +71,7 @@
           "unit": ""
         }
       },
+      "max_duration_ms": 5000,
       "note": "IO control 0x0510; 01 = on, control returned to the ECU afterwards"
     }
   ]

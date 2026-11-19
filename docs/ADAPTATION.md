@@ -10,7 +10,7 @@ supported:
 |---|---|---|---|
 | `value` | UDS | `22` read / `2E` write a DID field (read fresh, splice, write, read back) | write |
 | `routine` | UDS | `31 01/02/03` RoutineControl start / stop / results | start / stop |
-| `actuator` | UDS | `2F <did> 03` shortTermAdjustment, then always `2F <did> 00` | yes |
+| `actuator` | UDS | `2F <did> 03` shortTermAdjustment, then always `2F <did> 00`; timed tests below | yes |
 | `kwp_group` | KWP2000 | `21 <group>` measuring block | no |
 | `kwp_basic_settings` | KWP2000 | start / read in basic settings / stop (below) | start |
 | `kwp_adaptation` | KWP2000 | read / test / save (below) | test, save |
@@ -58,6 +58,93 @@ Definitions written before the KWP kinds existed parse unchanged.
 
 `AdaptationDef::validate` checks unique names, field widths, non-inverted
 ranges and that the four routine ids are distinct.
+
+## Timed actuator tests (UDS 0x2F)
+
+`opentune_adaptation::actuator` runs an output test for a set time. Only an
+`actuator` channel the definition **declares** can be driven, and only with
+what it declares:
+
+```json
+{ "name": "Radiator fan", "kind": "actuator", "did": 1280, "state": [1],
+  "options": ["short_term_adjustment", "reset_to_default", "freeze_current_state"],
+  "value": { "offset": 0, "width": 1, "scaling": { "factor": 1, "unit": "%" } },
+  "min": 0, "max": 100, "max_duration_ms": 10000 }
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `options` | `["short_term_adjustment"]` | control options a test may use; `return_control_to_ecu` is always allowed |
+| `value` | none | where the shortTermAdjustment value goes in the `state` record (big-endian field + scaling); without it the declared `state` is sent as is |
+| `min` / `max` | the field's full range | raw range of `value` (needs `value`) |
+| `max_duration_ms` | 10000 | longest hold; never more than 60000 |
+| `security_level` (top level) | `0x01` | UDS SecurityAccess requestSeed level used when `requires_security` is set |
+
+`AdaptationDef::validate` checks that `value` lies inside `state`, that the
+range fits the field and is not inverted, and the duration cap.
+
+A test (`plan_test`, then `run_test`) sends:
+
+| Step | Request |
+|---|---|
+| session | `10 03` |
+| SecurityAccess (definitions with `requires_security`) | `27 <level>` -> seed, `27 <level+1> <key>` |
+| control | `2F <did> <option> [state]` |
+| hold | `3E 00` every 2 s until the duration ends or a stop is requested |
+| return | `2F <did> 00` (returnControlToECU), retried once |
+| leave | `10 01` |
+
+returnControlToECU is sent after **every** control request: at the end of the
+duration, on a stop (desktop STOP, panel left, adapter disconnected, window
+closed; Ctrl-C in the CLI), after a refused control request and after a link
+failure during the hold. If it is not acknowledged the report says
+`control_return_failed` and `safe: false`; the output may still be forced, so
+recover the module (ignition off and on) before driving. Returning to the
+default session also ends IO control on an ISO 14229 module. A failed session
+or SecurityAccess step drives nothing (`aborted`). The run is refused before
+any I/O when it is not confirmed, or when SecurityAccess is required and no
+seed/key handler is given (OpenTune ships none).
+
+`returnControlToECU` on its own is a one-shot test (no hold), for handing an
+output back after an interrupted session.
+
+**Free-form DIDs.** The engine can build a one-channel definition for an
+undeclared IO DID (`freeform_def`: every option, a raw state from the caller,
+at most 5 s). Only the desktop's Debug card (alpha / bench builds) offers it,
+with a second confirmation and explicit Target ids. The CLI has no free-form
+path.
+
+### CLI
+
+Timed tests live under `opentune adaptation` because they run on the same
+`AdaptationDef` files, `--def` / `--driver` / `--timeout-ms` flags and engine
+as the other adaptation actions.
+
+```sh
+D=packs/vcar-demo/adaptation/engine.json   # the virtual car's engine module
+opentune adaptation --def $D actuator list
+opentune adaptation --def $D actuator run "Radiator fan" --value 40 --duration-ms 3000
+#   prints the plan; nothing is sent
+opentune adaptation --def $D --driver vcar actuator run "Radiator fan" \
+    --value 40 --duration-ms 3000 --ack --port demo
+# real hardware: --driver elm327obd --port /dev/ttyUSB0 --bus hs [--tx-id 7E0 --rx-id 7E8]
+```
+
+`--op adjust|reset|freeze|return`, `--value` (engineering) or `--raw`,
+`--seedkey ID` for secured modules, `--json`. The module address comes from
+`--tx-id` / `--rx-id` or the definition's `req_id` / `resp_id`; a test never
+defaults to the engine ECU. The command exits non-zero unless the test
+completed or was stopped with control returned.
+
+### Desktop
+
+The **Actuator tests** panel (Bench tier) lists the declared channels of the
+chosen definition, plans a test (sends nothing, every build) and, on alpha /
+bench builds, runs it with a per-run confirmation, a live exchange log, a
+progress bar and a STOP button. Commands: `actuator_list`, `actuator_plan`,
+`actuator_start`, `actuator_status`, `actuator_stop`. A test holds the adapter
+for its whole duration (other panels see "adapter busy"); the engine ends it
+at the end of the duration even if the window goes away.
 
 ## KWP2000 (VAG, TP2.0 / K-line)
 
@@ -152,6 +239,14 @@ confirmation-gated Test / Save / Run basic settings. Commands:
 adapter is closed after each KWP operation, so the TP2.0 channel is torn down.
 
 ## Tests
+
+`crates/opentune-adaptation/tests/actuator.rs` runs timed tests against the
+`opentune-udssim` server (IO control allowed in the extended session only):
+the hold with tester present, stop, a refused control request, a link failure
+during the hold, a lost link (control not returned, reported loudly),
+SecurityAccess with the simulator's test key and with a wrong key. The desktop
+(`feat_actuator.rs`) and CLI (`tests/actuator.rs`) tests drive the virtual
+car.
 
 `crates/opentune-adaptation/tests/kwp.rs` drives the KWP path against the
 synthetic module (`opentune_adaptation::sim`) over the core TP2.0 stack

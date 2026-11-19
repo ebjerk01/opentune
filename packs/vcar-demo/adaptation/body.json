@@ -71,7 +71,24 @@
           "unit": ""
         }
       },
-      "note": "IO control 0x0550; 01 = on, control returned to the ECU afterwards"
+      "options": [
+        "short_term_adjustment",
+        "reset_to_default",
+        "freeze_current_state"
+      ],
+      "value": {
+        "offset": 0,
+        "width": 1,
+        "scaling": {
+          "factor": 1.0,
+          "offset": 0.0,
+          "unit": "step"
+        }
+      },
+      "min": 0,
+      "max": 3,
+      "max_duration_ms": 20000,
+      "note": "IO control 0x0550; brightness step 0..3 (01 = default test state); timed tests return control to the ECU at the end"
     }
   ]
 }

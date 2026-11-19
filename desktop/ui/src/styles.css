@@ -522,6 +522,11 @@ table.heat.lv-heat td.cell.lv-zero { background: transparent; color: var(--muted
 .pack-picker details { margin-top: 4px; }
 .pack-picker summary { cursor: pointer; }
 
+/* ---- Actuator tests (feat_actuator.js) ----------------------------------- */
+.btn.act-stop { background: var(--bad); border-color: var(--bad); color: #fff; font-size: 16px; font-weight: 800; letter-spacing: 0.08em; padding: 10px 30px; }
+.btn.act-stop:hover { filter: brightness(1.08); }
+#panel-actuator tr.bad td { color: var(--bad); }
+
 /* ---- SA2 script (feat_sa2.js) -------------------------------------------- */
 textarea.sa2-text { display: block; width: 100%; min-height: 84px; resize: vertical; margin: 8px 0; box-sizing: border-box; font-family: var(--mono); }
 .sa2-scroll { max-height: 360px; overflow: auto; }

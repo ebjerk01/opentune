@@ -181,6 +181,13 @@
     "risk": "writes-ecu",
     "guide": "28-adaptation"
   },
+  "actuator": {
+    "title": "Actuator tests",
+    "summary": "Drive one declared output (fan, lamp, solenoid) for a set time with UDS 0x2F, inside its declared range and time limit. Control returns to the ECU at the end, on STOP and on any error. Moves real parts.",
+    "needs": ["Adapter: CAN", "Adaptation definition with actuator channels (.json)", "Target module ids", "Ignition on", "Vehicle stationary"],
+    "risk": "writes-ecu",
+    "guide": "40-actuator-tests"
+  },
   "service": {
     "title": "Service functions",
     "summary": "Plan (send nothing) or run a ServiceScript procedure such as DPF regeneration, service reset, SAS calibration or EPB service mode.",

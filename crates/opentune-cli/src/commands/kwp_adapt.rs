@@ -213,7 +213,7 @@ pub fn run(
             &gate,
             &kwp,
         ),
-        AdaptAction::List | AdaptAction::Read { .. } => {
+        AdaptAction::List | AdaptAction::Read { .. } | AdaptAction::Actuator { .. } => {
             bail!("internal: not a KWP adaptation action")
         }
     }
