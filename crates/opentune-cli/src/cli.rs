@@ -638,6 +638,7 @@ pub enum AdaptAction {
 /// `opentune adaptation actuator ...`: timed IO-control tests on declared
 /// channels only (no free-form DIDs on the command line).
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)] // parsed once per process
 pub enum ActuatorAction {
     /// List the declared actuator channels: DID, options, value range and
     /// time limit. Sends nothing.
