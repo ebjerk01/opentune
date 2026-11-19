@@ -343,6 +343,17 @@ pub fn read_gen4(transport: &mut dyn DiagTransport, opts: &Gen4ReadOptions) -> G
     }
     for &g in &opts.groups {
         r.groups.push(match kwp.read_local_id(g) {
+            // The echo with not even one cell after it is a cut-off answer,
+            // not an empty group (same rule as opentune-dsg).
+            Ok(rec) if rec.len() < 3 => Group {
+                group: g,
+                values: Vec::new(),
+                raw_hex: String::new(),
+                error: Some(format!(
+                    "the unit answered group {g} without a single cell ({})",
+                    hex(&rec)
+                )),
+            },
             Ok(rec) => decode_group(g, &rec),
             Err(e) => Group {
                 group: g,
@@ -358,6 +369,57 @@ pub fn read_gen4(transport: &mut dyn DiagTransport, opts: &Gen4ReadOptions) -> G
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Answers each request from a fixed table; anything else is an error.
+    struct Script(Vec<(Vec<u8>, Vec<u8>)>);
+    impl DiagTransport for Script {
+        fn request(&mut self, req: &[u8], _t: u64) -> opentune_core::Result<Vec<u8>> {
+            self.0
+                .iter()
+                .find(|(q, _)| q.as_slice() == req)
+                .map(|(_, a)| a.clone())
+                .ok_or_else(|| opentune_core::Error::Protocol(format!("unscripted {req:02X?}")))
+        }
+    }
+
+    #[test]
+    fn a_cut_off_group_answer_is_an_error_not_an_empty_group() {
+        // Regression: `61 07` (the echo, nothing after it) read as a group
+        // with no cells and no error. A partial cell is cut off too.
+        for answer in [vec![0x61, 0x07], vec![0x61, 0x07, 0x1A, 0x00]] {
+            let mut t = Script(vec![
+                (vec![0x10, 0x89], vec![0x50, 0x89]),
+                (vec![0x21, 0x07], answer.clone()),
+            ]);
+            let opts = Gen4ReadOptions {
+                groups: vec![7],
+                read_dtcs: false,
+                timeout_ms: 100,
+            };
+            let r = read_gen4(&mut t, &opts);
+            let g = &r.groups[0];
+            assert!(g.values.is_empty(), "{answer:02X?}");
+            assert!(
+                g.error
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("without a single cell"),
+                "{g:?}"
+            );
+        }
+        // One whole cell still decodes.
+        let mut t = Script(vec![
+            (vec![0x10, 0x89], vec![0x50, 0x89]),
+            (vec![0x21, 0x01], vec![0x61, 0x01, 0x1A, 0x00, 0x17]),
+        ]);
+        let opts = Gen4ReadOptions {
+            groups: vec![1],
+            read_dtcs: false,
+            timeout_ms: 100,
+        };
+        let r = read_gen4(&mut t, &opts);
+        assert!(r.groups[0].error.is_none() && r.groups[0].values.len() == 1);
+    }
 
     #[test]
     fn tp20_drivers_and_connect_config() {
