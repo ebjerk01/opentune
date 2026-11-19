@@ -41,6 +41,12 @@ Press **■ Stop recording** to finish.
 - **MAP / boost** — manifold absolute pressure. Boost is the part above atmospheric pressure.
 - Update speed depends on the adapter. An ELM327 reads only a few values per second, so more gauges means slower updates per gauge.
 
+## Drive view
+
+**Drive view** in the bar opens the same polling as a few large, high-contrast
+tiles for reading while driving, with stale / link-lost states and min / max
+hold. See the Drive view page.
+
 ## GPS (optional)
 
 The **GPS** card below the gauges adds a GNSS receiver (a u-blox style USB

@@ -27,6 +27,7 @@
     obd: ["Detect the adapter", "Start with the ignition on", "Values read — when the ECU does not report them"],
     inspection: ["Detect the adapter, ignition on", "Read all (tick All OBD modules for every ECU)", "Check MIL, monitors not ready, codes and CVNs"],
     logging: ["Load a logger definition", "Pick parameters and Start", "Save the log as CSV"],
+    driveview: ["Replay: Open log… (or ▶ Drive view in the Log viewer), then play at 1×–8×", "Live (Bench): Start, or keep the Dashboard / a Live log session running", "F fullscreen, R reset min/max, Space pause"],
     logview: ["Open a CSV log and tick channels to plot", "Zoom with the wheel, drag to pan, read values at the cursor", "Map overlay: definition, map, image, X/Y channels → Overlay"],
     haldex: ["Tick Simulated unit to try it, or connect to the drivetrain CAN", "Read status; change the mode only when stationary (confirm + read-back)", "Decode a CAN capture offline: lock, clutch and temperature charts"],
     ts: ["Load the INI for the ECU's firmware (and a .msq, or read the ECU)", "Edit tables and settings: values outside the INI's limits are refused", "Connect (port or sim), Plan write, then Write: backup first, verify, burn"],

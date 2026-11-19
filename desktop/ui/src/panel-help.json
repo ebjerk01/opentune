@@ -111,6 +111,13 @@
     "risk": "none",
     "guide": "35-log-viewer"
   },
+  "driveview": {
+    "title": "Drive view",
+    "summary": "Big, high-contrast tiles readable at arm's length: RPM, speed, coolant, intake air, boost and load (plus GPS speed and speed error when present) with min/max/peak hold, a 60 s sparkline and warn/critical colouring. A tile that is not fresh says so (stale, no data, link lost) instead of showing a frozen number. Replay plays any log the Log viewer opens at 1×–8× with a scrub bar, offline. Live mode (Bench builds) shows the Dashboard's polling.",
+    "needs": ["A CSV log to replay", "Live: the Dashboard's adapter (Bench builds)"],
+    "risk": "none",
+    "guide": "40-drive-view"
+  },
   "dashboard": {
     "title": "Dashboard",
     "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown. Record writes the polled values to a Live-log CSV for the Log viewer. Optional GPS card: an NMEA receiver (or recorded file) adds position, GPS speed and the speedometer error.",
