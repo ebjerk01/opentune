@@ -94,3 +94,12 @@ test("cheap repaints: no filter / path transitions on live tiles, contained tile
   assert.equal(rule(".dv-tile").contain, "content");
   assert.equal(rule(".heatwrap").contain, "content");
 });
+
+test("sidebar adapter rows fit the pane and keep the hidden DoIP row hidden", () => {
+  const row = rule(".conn-row");
+  assert.equal(row.display, "flex");
+  assert.equal(row["min-width"], "0");
+  const field = rule(".conn-row > .inp");
+  assert.equal(field["min-width"], "0", "the port input (size=20) must be allowed to shrink below its intrinsic width");
+  assert.equal(rule(".conn-row[hidden]").display, "none", "display: flex would beat the UA [hidden] rule");
+});

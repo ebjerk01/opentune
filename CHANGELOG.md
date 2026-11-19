@@ -168,6 +168,9 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- CI and `scripts/check.sh` build, lint and test with `--locked` (the
+  workspace, `desktop/src-tauri` and the release builds), so a stale
+  `Cargo.lock` fails the run instead of being silently updated.
 - **Breaking for embedders: `DesktopConfig` gained a `diagnostics` field**
   (the diagnostics upload target). A plugin that builds `DesktopConfig` with a
   struct literal adds `diagnostics: None` (or its own `DiagUpload`); one that
@@ -209,6 +212,8 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- Desktop: the sidebar adapter row no longer runs about 20 px past the pane;
+  the port field and the HS/MS picker now shrink to fit.
 - Desktop: the sidebar's adapter **driver** and **CAN bus** pickers no longer
   open their menu past the screen edge in fullscreen (WebKitGTK placed the
   native `<select>` popup itself). They are now an in-page listbox

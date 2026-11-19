@@ -120,6 +120,13 @@ button.nav-group-label:focus-visible { outline: 2px solid var(--accent); outline
 .sidebar-foot { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .data-status { font-size: 10.5px; color: var(--sidebar-ink-dim); word-break: break-all; line-height: 1.4; }
 .offline-badge { font-size: 11px; color: var(--good); margin-top: 7px; font-weight: 600; }
+/* Sidebar adapter bar (app-boot.js initConnBar). The row is a flex box whose
+   fields shrink to the pane: without min-width: 0 the port input (default
+   size=20) plus the HS/MS picker ran ~20px past the 228px sidebar. */
+.conn-row { display: flex; gap: 6px; margin-bottom: 4px; min-width: 0; }
+.conn-row[hidden] { display: none; } /* display: flex would beat the UA [hidden] rule (DoIP row) */
+.conn-row > .inp { flex: 1 1 0; min-width: 0; width: 100%; }
+.conn-row > #connBus + .ot-lb, .conn-row > select#connBus:not(.ot-lb-native) { flex: 0 0 64px; }
 
 /* Main */
 #main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 30px 60px; }

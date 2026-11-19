@@ -130,9 +130,9 @@ start=$SECONDS
 
 # --- workspace (CI job: check) ---------------------------------------------
 step "workspace fmt" cargo fmt --all -- --check
-step "workspace clippy -D warnings" cargo clippy --workspace --all-targets -- -D warnings
+step "workspace clippy -D warnings" cargo clippy --locked --workspace --all-targets -- -D warnings
 if [ "$fast" = 0 ]; then
-    step "workspace test" cargo test --workspace
+    step "workspace test" cargo test --locked --workspace
     # --- data gates (CI job: ecudefs) --------------------------------------
     step "ecudefs validate" opentune ecudefs validate ecudefs --require-provenance
     step "packs validate" opentune packs validate packs
@@ -163,10 +163,10 @@ fi
 # --- desktop (CI job: desktop) ---------------------------------------------
 if [ "$desktop" = 1 ]; then
     step "desktop fmt" desktop_cargo fmt -- --check
-    step "desktop clippy (default features)" desktop_cargo clippy --all-targets -- -D warnings
-    step "desktop clippy (--features alpha)" desktop_cargo clippy --all-targets --features alpha -- -D warnings
+    step "desktop clippy (default features)" desktop_cargo clippy --locked --all-targets -- -D warnings
+    step "desktop clippy (--features alpha)" desktop_cargo clippy --locked --all-targets --features alpha -- -D warnings
     if [ "$fast" = 0 ]; then
-        step "desktop test (--features alpha)" desktop_cargo test --features alpha
+        step "desktop test (--features alpha)" desktop_cargo test --locked --features alpha
         # --- UI JavaScript (CI job: ui) ------------------------------------
         if command -v node >/dev/null 2>&1; then
             step "node --check desktop UI + preview JS" node_check_ui
