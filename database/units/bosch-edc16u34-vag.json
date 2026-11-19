@@ -249,8 +249,8 @@
       "mcu_mode": null,
       "points": [],
       "reset_timing": null,
-      "reachable": "open-case",
-      "notes": "Microtronik lists open-case access for this ECU. The listing does not identify a board point, entry action or reset sequence, so a usable boot route cannot be specified.",
+      "reachable": "unknown",
+      "notes": "No boot route is documented in a public source here. Microtronik's support list mentions open-case access for this ECU, but names no board point, entry action or reset sequence, so a usable boot route cannot be specified.",
       "confidence": "unverified",
       "sources": [
         6
