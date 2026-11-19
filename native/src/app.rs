@@ -21,6 +21,10 @@ pub struct App {
     flash: FlashView,
     maps: views::maps::MapsView,
     ecudb: views::ecudb::EcuDbView,
+    vault: views::vault::VaultView,
+    project: views::project::ProjectView,
+    logview: views::logview::LogView,
+    controllers: views::controllers::ControllersView,
     env: String,
     /// Scripted runs (bench / screenshot) never save settings.
     scripted: bool,
@@ -128,6 +132,10 @@ impl App {
             flash,
             maps: Default::default(),
             ecudb: Default::default(),
+            vault: Default::default(),
+            project: Default::default(),
+            logview: Default::default(),
+            controllers: Default::default(),
             env,
             scripted,
             shot: args.screenshot.clone().map(crate::screenshot::Shot::new),
@@ -263,6 +271,29 @@ impl eframe::App for App {
                 }
                 View::EcuDb => self.ecudb.ui(ui, &t),
                 View::Drivers => views::drivers::ui(ui, &t),
+                View::Vault => {
+                    let img = self.flash.image.as_ref().map(|i| i.path.clone());
+                    if let Some(p) = self.vault.ui(ui, &t, img.as_deref()) {
+                        self.flash.open(&self.defs, p, &mut self.settings);
+                        self.view = View::Flash;
+                    }
+                }
+                View::Project => {
+                    let img = self.flash.image.as_ref().map(|i| i.path.clone());
+                    let def_id = self.flash.def_idx.map(|i| self.defs[i].id.clone());
+                    if let Some(views::project::ProjectAction::Open { image, def_id }) =
+                        self.project.ui(ui, &t, img.as_deref(), def_id.as_deref())
+                    {
+                        self.flash.open(&self.defs, image, &mut self.settings);
+                        if let Some(id) = def_id {
+                            let idx = self.defs.iter().position(|d| d.id == id);
+                            self.flash.select_def(&self.defs, idx);
+                        }
+                        self.view = View::Flash;
+                    }
+                }
+                View::Log => self.logview.ui(ui, &t),
+                View::Controllers => self.controllers.ui(ui, &t),
                 other => views::placeholder::ui(ui, &t, other),
             });
 
