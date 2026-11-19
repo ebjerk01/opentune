@@ -1025,7 +1025,8 @@ fn live_job(
         inbox: &inbox,
         run: run.clone(),
         reconnect: job.policy.reconnect,
-        answered_since_open: false, // until a tick answers
+        // The first open counts as answered: only re-opens can be hollow.
+        answered_since_open: true,
         hollow: 0,
     };
     let mut reopen = || {
@@ -1841,8 +1842,11 @@ mod tests {
         }
         let e = err.expect("the session ended");
         assert!(e.contains("re-opened 3 time(s)"), "{e}");
+        // The first loss, then one per hollow re-open.
         let lost = seen.iter().filter(|m| *m == "lost").count();
-        assert_eq!(lost as u32, MAX_HOLLOW_RECONNECTS, "{seen:?}");
+        assert_eq!(lost as u32, MAX_HOLLOW_RECONNECTS + 1, "{seen:?}");
+        let back = seen.iter().filter(|m| *m == "reconnected").count();
+        assert_eq!(back as u32, MAX_HOLLOW_RECONNECTS, "{seen:?}");
         assert!(released(&hub));
     }
 
