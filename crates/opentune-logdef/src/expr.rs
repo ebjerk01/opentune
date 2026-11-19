@@ -158,11 +158,7 @@ impl<'a> Parser<'a> {
     fn expr(&mut self) -> Result<Node, ExprError> {
         self.enter()?;
         let mut lhs = self.term()?;
-        loop {
-            let op = match self.peek() {
-                Some(c @ (b'+' | b'-')) => c,
-                _ => break,
-            };
+        while let Some(op @ (b'+' | b'-')) = self.peek() {
             self.pos += 1;
             let rhs = self.term()?;
             lhs = Node::Bin(op, Box::new(lhs), Box::new(rhs));
@@ -173,11 +169,7 @@ impl<'a> Parser<'a> {
 
     fn term(&mut self) -> Result<Node, ExprError> {
         let mut lhs = self.unary()?;
-        loop {
-            let op = match self.peek() {
-                Some(c @ (b'*' | b'/')) => c,
-                _ => break,
-            };
+        while let Some(op @ (b'*' | b'/')) = self.peek() {
             self.pos += 1;
             let rhs = self.unary()?;
             lhs = Node::Bin(op, Box::new(lhs), Box::new(rhs));

@@ -131,7 +131,7 @@ fn validate_protocol(proto: &ProtocolGroup, errs: &mut Vec<String>) {
         false
     }
     for (id, _) in &calc_edges {
-        if state.get(id).is_none() && visit(id, &edges, &mut state) {
+        if !state.contains_key(id) && visit(id, &edges, &mut state) {
             errs.push(format!(
                 "{} / {id}: calculated parameters depend on each other in a cycle",
                 proto.id

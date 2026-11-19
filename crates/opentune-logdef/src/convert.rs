@@ -55,7 +55,7 @@ fn retoken_x(expr: &str, from: u8, to: char, value_placeholder: bool) -> String 
             }
         } else if c == from
             && (i == 0 || !word(bytes[i - 1]))
-            && bytes.get(i + 1).is_none_or(|&n| !word(n))
+            && !bytes.get(i + 1).is_some_and(|&n| word(n))
         {
             out.push(to);
             i += 1;
