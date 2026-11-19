@@ -95,8 +95,10 @@ Rules that trip people up:
     warning for the reviewer.
   - `evidence` — the validation state the definition as a whole has reached,
     using the project vocabulary ([`DEVELOPMENT.md`](DEVELOPMENT.md) §7):
-    `implemented`, `synthetic-tested`, `real-image-tested`, `bench-tested`,
-    `vehicle-tested`. When parts differ, pick the lower state and explain in
+    `example`, `implemented`, `synthetic-tested`, `real-image-tested`,
+    `bench-tested`, `vehicle-tested`. `example` marks placeholder data (a worked
+    example, not a real unit): it never matches an identity, and its `name` must
+    end in "Example — placeholder data". Upgrade it once an own read backs it. When parts differ, pick the lower state and explain in
     `notes`; per-map confidence stays in each map's `CONFIDENCE:` label.
 
   Older definitions without the block still load everywhere and only get a

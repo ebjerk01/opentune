@@ -20,7 +20,7 @@ readout before any read or write.
 | `maker` | string | yes | ECU manufacturer (e.g. `"Bosch"`, `"Continental"`). |
 | `family` | string | yes | ECU family (e.g. `"EDC16"`, `"Simos PCR2.1"`). |
 | `notes` | string | no (default `""`) | Free text; use it to flag that addresses need per-variant confirmation. |
-| `provenance` | object | for contributions | `sources` (citations), `license` (SPDX), `evidence` (validation state). Required by `ecudefs validate --require-provenance` (CI); a warning otherwise. See [`CONTRIBUTING-ECUDEFS.md`](CONTRIBUTING-ECUDEFS.md#2-the-json-schema-quick-shape). |
+| `provenance` | object | for contributions | `sources` (citations), `license` (SPDX), `evidence` (validation state; `example` = placeholder data that never identifies a real unit). Required by `ecudefs validate --require-provenance` (CI); a warning otherwise. See [`CONTRIBUTING-ECUDEFS.md`](CONTRIBUTING-ECUDEFS.md#2-the-json-schema-quick-shape). |
 | `protocol` | enum | yes | Transport the ECU speaks (see below). |
 | `diag_layer` | enum | yes | Diagnostic service layer: `uds` or `kwp2000`. |
 | `bitrate` | integer (u32) | yes | CAN bitrate in bit/s, or K-line baud. |

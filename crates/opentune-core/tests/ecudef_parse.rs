@@ -109,6 +109,39 @@ fn all_ecudefs_pass_validation() {
 /// (0xF191). `identify` must resolve it to the identification-only definition,
 /// and that definition must not claim anything an image read would be needed
 /// for (layout, maps, checksum, seed/key).
+/// Regression: `bosch-edc16-toyota` carries placeholder data but real-looking
+/// keys (`0281011…`, sw `1037…`) that overlap `bosch-edc16u34`; it sorted first
+/// and could claim a real EDC16U34. As an `example` it must never match.
+#[test]
+fn example_definitions_never_match_a_real_unit() {
+    let defs = ecudef::load_dir(&ecudefs_dir()).expect("ecudefs parse");
+    let toyota = defs.iter().find(|d| d.id == "bosch-edc16-toyota").expect("toyota def");
+    assert!(toyota.is_example(), "placeholder def is evidence `example`");
+    assert!(toyota.name.contains("Example — placeholder data"), "{}", toyota.name);
+    // Every key the example def carries, alone and together.
+    let mut ids = Vec::new();
+    for p in &toyota.identify.part_numbers {
+        ids.push(opentune_core::EcuId { hw_number: Some(format!("{p}999")), ..Default::default() });
+    }
+    for s in &toyota.identify.sw_numbers {
+        ids.push(opentune_core::EcuId { sw_number: Some(format!("{s}382088")), ..Default::default() });
+    }
+    for id in &ids {
+        assert!(!toyota.matches_id(id), "example matched {id:?}");
+        if let Some(d) = ecudef::match_ecu(&defs, id) {
+            assert!(!d.is_example(), "{id:?} resolved to example def {}", d.id);
+        }
+    }
+    // An EDC16U34-style identity (as read from an EDC16U34 image) resolves to
+    // the real definition, not the example.
+    let u34 = opentune_core::EcuId {
+        hw_number: Some("0281011900".into()),
+        sw_number: Some("1037382088".into()),
+        ..Default::default()
+    };
+    assert_eq!(ecudef::match_ecu(&defs, &u34).map(|d| d.id.as_str()), Some("bosch-edc16u34"));
+}
+
 #[test]
 fn live_vw_16tdi_identity_matches_identification_only_def() {
     let defs = ecudef::load_dir(&ecudefs_dir()).expect("ecudefs parse");
@@ -118,7 +151,7 @@ fn live_vw_16tdi_identity_matches_identification_only_def() {
         ..Default::default()
     };
     let def = ecudef::match_ecu(&defs, &id).expect("03L907425C must match a definition");
-    assert_eq!(def.id, "siemens-pcr21-03l907425c");
+    assert_eq!(def.id, "vag-1.6tdi-cr-simos-pcr21-ident");
     assert_eq!(def.diag_layer, opentune_core::DiagLayer::Uds);
     assert_eq!((def.tx_id, def.rx_id), (0x7E0, 0x7E8));
     // Identification only: no checksum, seed/key, maps, layout or size claim.
