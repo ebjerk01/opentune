@@ -6,7 +6,6 @@
 # shrinks: remove an id in the same change that fills its profile (a listed unit
 # that has `access` is an error), never add one. See docs/UNIT-ACCESS-PROFILE.md.
 bosch-dq381-vag
-bosch-edc15-vag
 bosch-edc16c3x-bmw
 haldex-gen5
 temic-dq250-mqb-vag

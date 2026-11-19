@@ -255,6 +255,67 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "fjvva/ecu-tool, EDC15 User Manual (project licence unspecified)",
+      "url": "https://github.com/fjvva/ecu-tool/wiki/EDC15-User-Manual"
+    },
+    {
+      "title": "Dilemma (author), VAG EDC15P hardware and communication notes, in the author's VAGEDCSuite repository (licence unspecified)",
+      "url": "https://github.com/mattiasclaesson/VAGEDCSuite/blob/master/Docs/VAG%20EDC15P.pdf"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "K-line (KWP2000 documented for EDC15P).",
+      "notes": "ecu-tool documents a full flash read and writes to the calibration area through the vehicle socket on supported EDC15P, EDC15V and 512 KiB EDC15VM units. Its manual excludes the 1 MiB EDC15VM.",
+      "confidence": "community",
+      "sources": [
+        7,
+        8
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "On T121, apply +12 V to pins 2 and 37, ground pins 4 and 5, and use pin 16 for K-line diagnostics. Pins 6 (CAN-L) and 7 (CAN-H) carry powertrain CAN. Diag-Prof labels 2 as switched and 37 as permanent. Dilemma labels 37 as switched, so confirm the ignition feed for the specific revision.",
+      "confidence": "verified",
+      "sources": [
+        0,
+        2,
+        3,
+        8
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "C167 bootstrap mode on the documented EDC15P board.",
+      "points": [
+        {
+          "name": "Am29F400 flash data pin DQ4",
+          "location": "pcb:Am29F400 DQ4",
+          "action": "pull-to-gnd",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "DQ4 is sampled low at startup. The source gives no release interval.",
+      "reachable": "open-case",
+      "notes": "Dilemma identifies DQ4 on the EDC15P flash chip as the boot input. The board connection on other revisions is unconfirmed.",
+      "confidence": "community",
+      "sources": [
+        8
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The ecu-tool manual mentions authentication during model selection. It does not establish the access requirement for a complete diagnostic read or for programming across these revisions. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        7
+      ]
+    }
+  },
+  "flash_note": "The documented EDC15P has a 512 KiB Am29F400. The ecu-tool manual distinguishes 512 KiB and 1 MiB EDC15VM revisions."
 }
