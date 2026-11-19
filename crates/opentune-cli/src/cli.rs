@@ -1,7 +1,7 @@
 //! The clap definitions of the public command tree.
 use crate::{
     bsl_cmd, candump, ctrldef_cmd, doip_cmd, dsg_cmd, gps_cmd, haldex_cmd, mapfind_cmd, obd_cmd,
-    recipe_cmd, seedkey_cmd, ts_cmd,
+    recipe_cmd, romraider_cmd, seedkey_cmd, ts_cmd,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -212,6 +212,14 @@ pub enum Command {
         #[arg(long)]
         into: Option<PathBuf>,
     },
+    /// Import a RomRaider logger definition (`logger.xml`: one protocol, plus
+    /// one ECU's `<ecuparam>`s with `--ecu`) as an OpenTune logger definition
+    /// (JSON) with a per-parameter report; unusable parameters are disabled
+    /// with the reason.
+    ImportRomraiderLogger(romraider_cmd::ImportArgs),
+    /// Export an OpenTune logger definition as a RomRaider `logger.xml` (the
+    /// representable subset; what is left out is listed).
+    ExportRomraiderLogger(romraider_cmd::ExportArgs),
     /// Import a WinOLS `.ols` project and list (or merge) its map definitions.
     ImportOls {
         /// Path to the `.ols` project file.
@@ -438,7 +446,8 @@ pub enum Command {
     /// `--rounds 0` runs until Ctrl-C or `--duration`; `--reconnect` re-opens a
     /// dropped adapter and resumes.
     Log {
-        /// RomRaider-style `logger.xml` definition file.
+        /// Logger definition: a RomRaider-style `logger.xml` or an OpenTune
+        /// JSON logger definition (`import-romraider-logger -o`, pack loggers).
         #[arg(long)]
         def: PathBuf,
         /// Driver id (see `drivers`); must expose a diagnostic transport.

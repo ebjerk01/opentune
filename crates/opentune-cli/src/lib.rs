@@ -56,6 +56,7 @@ mod mapfind_cmd;
 mod obd_cmd;
 mod recipe_cmd;
 mod registry;
+mod romraider_cmd;
 mod seedkey_cmd;
 mod ssm_log;
 mod ts_cmd;

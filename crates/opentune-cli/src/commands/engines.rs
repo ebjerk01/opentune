@@ -204,8 +204,8 @@ pub fn run_log(
     let raw = std::fs::read(def_path)
         .with_context(|| format!("read logger def {}", def_path.display()))?;
     let src = String::from_utf8_lossy(&raw);
-    let def = opentune_logdef::parse(&src)
-        .map_err(|e| anyhow!("parse logger def {}: {e:?}", def_path.display()))?;
+    let def = opentune_logdef::load(&src)
+        .map_err(|e| anyhow!("parse logger def {}: {e}", def_path.display()))?;
 
     let ids: Vec<&str> = params.iter().map(String::as_str).collect();
     let limits = run.limits()?;
