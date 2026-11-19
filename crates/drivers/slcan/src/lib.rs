@@ -201,6 +201,40 @@ impl SlcanDriver {
 }
 
 /// The ISO-TP transport for the UDS block flows, refusing on a TP2.0 channel.
+/// RequestUpload + TransferData loop for `region`. Fails (rather than
+/// returning a short image) when the ECU stops sending data early.
+fn uds_upload(
+    t: &mut dyn DiagTransport,
+    region: MemoryRegion,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Vec<u8>> {
+    let mut uds = UdsClient::new(t);
+    uds.request_upload(0x00, region.address, region.length)?;
+    let mut out = Vec::with_capacity(region.length as usize);
+    let mut seq = 1u8;
+    while (out.len() as u32) < region.length {
+        let data = uds.transfer_data(seq, &[])?;
+        if data.len() <= 1 {
+            uds.transfer_exit().ok();
+            return Err(Error::Protocol(format!(
+                "upload ended after {} of {} bytes (empty TransferData block {seq})",
+                out.len(),
+                region.length
+            )));
+        }
+        out.extend_from_slice(&data[1..]);
+        seq = seq.wrapping_add(1);
+        progress(Progress {
+            phase: Phase::Read,
+            done: (out.len() as u64).min(region.length as u64),
+            total: region.length as u64,
+        });
+    }
+    uds.transfer_exit().ok();
+    out.truncate(region.length as usize);
+    Ok(out)
+}
+
 fn isotp_of(t: &mut Option<CanDiag>) -> Result<&mut IsoTp> {
     t.as_mut().ok_or(Error::NotConnected)?.isotp("slcan")
 }
@@ -298,28 +332,7 @@ impl Interface for SlcanDriver {
         // no handler is set and security is not required.
         self.security_access()?;
         let tp = isotp_of(&mut self.transport)?;
-        let mut uds = UdsClient::new(tp);
-        let max = uds.request_upload(0x00, region.address, region.length)?;
-        let block = max.clamp(1, 4095);
-        let mut out = Vec::with_capacity(region.length as usize);
-        let mut seq = 1u8;
-        while (out.len() as u32) < region.length {
-            let data = uds.transfer_data(seq, &[])?;
-            if data.len() <= 1 {
-                break;
-            }
-            out.extend_from_slice(&data[1..]);
-            seq = seq.wrapping_add(1);
-            progress(Progress {
-                phase: Phase::Read,
-                done: out.len() as u64,
-                total: region.length as u64,
-            });
-            let _ = block;
-        }
-        uds.transfer_exit().ok();
-        out.truncate(region.length as usize);
-        Ok(out)
+        uds_upload(tp, region, progress)
     }
 
     fn write_memory(
@@ -467,6 +480,32 @@ mod seedkey_hook_tests {
             self.requests.push(req.to_vec());
             self.replies.pop_front().ok_or(Error::Timeout(0))
         }
+    }
+
+    fn upload_script(blocks: &[&[u8]]) -> ScriptedTransport {
+        let mut replies = vec![vec![0x75, 0x20, 0x01, 0x02]];
+        for (i, b) in blocks.iter().enumerate() {
+            let mut r = vec![0x76, (i + 1) as u8];
+            r.extend_from_slice(b);
+            replies.push(r);
+        }
+        replies.push(vec![0x77]);
+        ScriptedTransport {
+            replies: VecDeque::from(replies),
+            requests: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn upload_reads_the_whole_region_or_fails() {
+        let mut t = upload_script(&[&[1, 2, 3], &[4, 5, 6]]);
+        let out = uds_upload(&mut t, MemoryRegion::new(0x1000, 5), &mut |_| {}).unwrap();
+        assert_eq!(out, vec![1, 2, 3, 4, 5]);
+        // An empty TransferData block used to end the loop with a 3-byte
+        // "image" of a 6-byte region.
+        let mut t = upload_script(&[&[1, 2, 3], &[]]);
+        let e = uds_upload(&mut t, MemoryRegion::new(0x1000, 6), &mut |_| {}).unwrap_err();
+        assert!(e.to_string().contains("3 of 6"), "{e}");
     }
 
     /// DEMO ONLY — not a real OEM algorithm. XOR 0x5A then +1 per byte.

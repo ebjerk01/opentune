@@ -779,9 +779,9 @@ fn kwp_read_memory(
             done: out.len().min(region.length as usize) as u64,
             total,
         });
-        if block.len() < n as usize {
-            break; // ECU returned a short block; stop to avoid looping.
-        }
+        // A short block is fine: the next request starts right after it (the
+        // block is never empty, so every pass makes progress). Stopping here
+        // would return a short image.
     }
     out.truncate(region.length as usize);
     Ok(out)
@@ -1034,6 +1034,26 @@ mod tests {
             self.requests.push(req.to_vec());
             self.replies.pop_front().ok_or(Error::Timeout(0))
         }
+    }
+
+    #[test]
+    fn kwp_read_memory_keeps_reading_after_a_short_block() {
+        // The ECU returns 2 of the 4 bytes asked for: the next request starts
+        // right after them and the image is complete, never short.
+        let mut t = ScriptedTransport {
+            replies: VecDeque::from(vec![vec![0x63, 1, 2], vec![0x63, 3, 4]]),
+            requests: Vec::new(),
+        };
+        let out = kwp_read_memory(&mut t, MemoryRegion::new(0x01_0000, 4), &mut |_| {}).unwrap();
+        assert_eq!(out, vec![1, 2, 3, 4]);
+        assert_eq!(t.requests[0], vec![0x23, 0x01, 0x00, 0x00, 0x04]);
+        assert_eq!(t.requests[1], vec![0x23, 0x01, 0x00, 0x02, 0x02]);
+        // An ECU that stops answering fails the read instead of truncating it.
+        let mut t = ScriptedTransport {
+            replies: VecDeque::from(vec![vec![0x63, 1, 2]]),
+            requests: Vec::new(),
+        };
+        assert!(kwp_read_memory(&mut t, MemoryRegion::new(0x01_0000, 4), &mut |_| {}).is_err());
     }
 
     /// DEMO ONLY — not a real OEM algorithm.
