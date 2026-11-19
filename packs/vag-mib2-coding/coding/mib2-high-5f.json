@@ -1,0 +1,1389 @@
+{
+  "id": "vag-mib2-high-5f",
+  "name": "VAG MIB2 High infotainment (5F) - long coding",
+  "module": "MQB-era MIB2 High infotainment unit, VAG module 5F (Information Electronics). Long coding read/written as UDS DID 0x0600. Byte/bit/option table from jilleb/mib2-toolbox (MIT), which edits the same coding from the unit's own engineering menu. Labels are the toolbox's (English, a few German). Synthetic-tested only: never checked against a real unit over UDS.",
+  "requires_security": false,
+  "addressing": {
+    "kind": "did",
+    "dids": [
+      1536
+    ]
+  },
+  "source": "jilleb/mib2-toolbox Toolbox/GEM/mqb-coding.esd @ a8e2f08 (MIT, (c) 2019 Chillout): persistence key 0x5018BBMM = coding byte BB/4, mask MM; DID 0x0600 'VW Coding Value' from bri3d/VW_Flash lib/constants.py @ 293f46d (BSD-2-Clause)",
+  "params": [
+    {
+      "name": "Brand",
+      "byte": 0,
+      "bit": 0,
+      "len": 4,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no Brand"
+        },
+        {
+          "value": 1,
+          "label": "Audi"
+        },
+        {
+          "value": 2,
+          "label": "VW"
+        },
+        {
+          "value": 3,
+          "label": "Skoda"
+        },
+        {
+          "value": 4,
+          "label": "Seat"
+        },
+        {
+          "value": 5,
+          "label": "Bentley"
+        },
+        {
+          "value": 6,
+          "label": "VW-NFZ"
+        },
+        {
+          "value": 7,
+          "label": "Porsche"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x5018000F"
+    },
+    {
+      "name": "Car Class",
+      "byte": 1,
+      "bit": 0,
+      "len": 4,
+      "kind": "number",
+      "source": "mqb-coding.esd key 0x5018040F"
+    },
+    {
+      "name": "Car Generation",
+      "byte": 1,
+      "bit": 4,
+      "len": 4,
+      "kind": "number",
+      "source": "mqb-coding.esd key 0x501804F0"
+    },
+    {
+      "name": "Car Derivate",
+      "byte": 2,
+      "bit": 0,
+      "len": 4,
+      "kind": "number",
+      "source": "mqb-coding.esd key 0x5018080F"
+    },
+    {
+      "name": "Car Derivate Supplement",
+      "byte": 2,
+      "bit": 4,
+      "len": 4,
+      "kind": "number",
+      "source": "mqb-coding.esd key 0x501808F0"
+    },
+    {
+      "name": "Country Navigation",
+      "byte": 3,
+      "bit": 0,
+      "len": 8,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "None"
+        },
+        {
+          "value": 1,
+          "label": "EU"
+        },
+        {
+          "value": 2,
+          "label": "NAR"
+        },
+        {
+          "value": 3,
+          "label": "MSA"
+        },
+        {
+          "value": 4,
+          "label": "Korea"
+        },
+        {
+          "value": 5,
+          "label": "China"
+        },
+        {
+          "value": 6,
+          "label": "Japan"
+        },
+        {
+          "value": 7,
+          "label": "AsiaPacific"
+        },
+        {
+          "value": 8,
+          "label": "Australia"
+        },
+        {
+          "value": 9,
+          "label": "South Africa"
+        },
+        {
+          "value": 10,
+          "label": "NEAST"
+        },
+        {
+          "value": 11,
+          "label": "NMAfrica"
+        },
+        {
+          "value": 12,
+          "label": "MEAST"
+        },
+        {
+          "value": 13,
+          "label": "CentralAsia"
+        },
+        {
+          "value": 14,
+          "label": "India"
+        },
+        {
+          "value": 15,
+          "label": "Israel"
+        },
+        {
+          "value": 16,
+          "label": "Taiwan"
+        },
+        {
+          "value": 17,
+          "label": "MSA 2 (Chile)"
+        },
+        {
+          "value": 18,
+          "label": "China 2"
+        },
+        {
+          "value": 19,
+          "label": "China 3"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50180CFF"
+    },
+    {
+      "name": "Channel 1 HT",
+      "byte": 4,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181001"
+    },
+    {
+      "name": "Channel 1 TT",
+      "byte": 4,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181002"
+    },
+    {
+      "name": "Channel 2 HT",
+      "byte": 4,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181004"
+    },
+    {
+      "name": "Channel 2 TT",
+      "byte": 4,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181008"
+    },
+    {
+      "name": "Channel 3 HT",
+      "byte": 4,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181010"
+    },
+    {
+      "name": "Channel 3 TT",
+      "byte": 4,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181020"
+    },
+    {
+      "name": "Channel 4 HT",
+      "byte": 4,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181040"
+    },
+    {
+      "name": "Channel 4 TT",
+      "byte": 4,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181080"
+    },
+    {
+      "name": "Channel 5 HT",
+      "byte": 5,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181401"
+    },
+    {
+      "name": "Channel 5 TT",
+      "byte": 5,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181402"
+    },
+    {
+      "name": "Channel 6 HT",
+      "byte": 5,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181404"
+    },
+    {
+      "name": "Channel 6 TT",
+      "byte": 5,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181408"
+    },
+    {
+      "name": "Channel 7 HT",
+      "byte": 5,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181410"
+    },
+    {
+      "name": "Channel 7 TT",
+      "byte": 5,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181420"
+    },
+    {
+      "name": "Channel 8 HT",
+      "byte": 5,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181440"
+    },
+    {
+      "name": "Channel 8 TT",
+      "byte": 5,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181480"
+    },
+    {
+      "name": "Channel 9 HT",
+      "byte": 6,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181801"
+    },
+    {
+      "name": "Channel 9 TT",
+      "byte": 6,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181802"
+    },
+    {
+      "name": "Channel 10 HT",
+      "byte": 6,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181804"
+    },
+    {
+      "name": "Channel 10 TT",
+      "byte": 6,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181808"
+    },
+    {
+      "name": "Channel 11 HT",
+      "byte": 6,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181810"
+    },
+    {
+      "name": "Channel 11 TT",
+      "byte": 6,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181820"
+    },
+    {
+      "name": "Channel 12 HT",
+      "byte": 6,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181840"
+    },
+    {
+      "name": "Channel 12 TT",
+      "byte": 6,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181880"
+    },
+    {
+      "name": "Channel 13 HT",
+      "byte": 7,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C01"
+    },
+    {
+      "name": "Channel 13 TT",
+      "byte": 7,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C02"
+    },
+    {
+      "name": "Channel 14 HT",
+      "byte": 7,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C04"
+    },
+    {
+      "name": "Channel 14 TT",
+      "byte": 7,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C08"
+    },
+    {
+      "name": "Channel 15 HT",
+      "byte": 7,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C10"
+    },
+    {
+      "name": "Channel 15 TT",
+      "byte": 7,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C20"
+    },
+    {
+      "name": "Channel 16 HT",
+      "byte": 7,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C40"
+    },
+    {
+      "name": "Channel 16 TT",
+      "byte": 7,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50181C80"
+    },
+    {
+      "name": "Microphone 1",
+      "byte": 8,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182001"
+    },
+    {
+      "name": "Microphone 2",
+      "byte": 8,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182002"
+    },
+    {
+      "name": "Headphones Output 1",
+      "byte": 8,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182004"
+    },
+    {
+      "name": "Headphones Output 2",
+      "byte": 8,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182008"
+    },
+    {
+      "name": "AUX IN",
+      "byte": 8,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182010"
+    },
+    {
+      "name": "AMI/MDI interface",
+      "byte": 8,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182020"
+    },
+    {
+      "name": "VDA-NF IN (TEL IN)",
+      "byte": 8,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182040"
+    },
+    {
+      "name": "Wake Up Over ECL",
+      "byte": 8,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50182080"
+    },
+    {
+      "name": "Bandsettings FM",
+      "byte": 9,
+      "bit": 0,
+      "len": 4,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no setting"
+        },
+        {
+          "value": 1,
+          "label": "EU (RdW)"
+        },
+        {
+          "value": 2,
+          "label": "NAR"
+        },
+        {
+          "value": 3,
+          "label": "JP"
+        },
+        {
+          "value": 4,
+          "label": "KOR"
+        },
+        {
+          "value": 5,
+          "label": "China"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x5018240F"
+    },
+    {
+      "name": "Bandsettings AM",
+      "byte": 9,
+      "bit": 4,
+      "len": 4,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no setting"
+        },
+        {
+          "value": 1,
+          "label": "EU (RdW)"
+        },
+        {
+          "value": 2,
+          "label": "NAR"
+        },
+        {
+          "value": 3,
+          "label": "JP"
+        },
+        {
+          "value": 4,
+          "label": "EU"
+        },
+        {
+          "value": 5,
+          "label": "AUS"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x501824F0"
+    },
+    {
+      "name": "Bandsettings DAB Band 1",
+      "byte": 10,
+      "bit": 0,
+      "len": 4,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "EU Band III -N"
+        },
+        {
+          "value": 2,
+          "label": "EU Band III"
+        },
+        {
+          "value": 3,
+          "label": "CANADA L-Band"
+        },
+        {
+          "value": 4,
+          "label": "KOREA Band III"
+        },
+        {
+          "value": 5,
+          "label": "CHINA Band III"
+        },
+        {
+          "value": 6,
+          "label": "Download Table 1"
+        },
+        {
+          "value": 7,
+          "label": "NEW ZEALAND Band III"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x5018280F"
+    },
+    {
+      "name": "Bandsettings DAB Band 2",
+      "byte": 10,
+      "bit": 4,
+      "len": 4,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "L-Band"
+        },
+        {
+          "value": 2,
+          "label": "Download Table 2"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x501828F0"
+    },
+    {
+      "name": "Amplifier",
+      "byte": 11,
+      "bit": 0,
+      "len": 8,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no assign"
+        },
+        {
+          "value": 1,
+          "label": "intern"
+        },
+        {
+          "value": 2,
+          "label": "external MOST"
+        },
+        {
+          "value": 3,
+          "label": "reserved"
+        },
+        {
+          "value": 4,
+          "label": "external BAP"
+        },
+        {
+          "value": 5,
+          "label": "internal Individual"
+        },
+        {
+          "value": 6,
+          "label": "external BOOSTER"
+        },
+        {
+          "value": 7,
+          "label": "external BAP with presets"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50182CFF"
+    },
+    {
+      "name": "FM Antenna",
+      "byte": 12,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183001"
+    },
+    {
+      "name": "HD FM Antenna Mode",
+      "byte": 12,
+      "bit": 1,
+      "len": 3,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "AM FM ANT"
+        },
+        {
+          "value": 1,
+          "label": "Switching"
+        },
+        {
+          "value": 2,
+          "label": "FM ANT"
+        },
+        {
+          "value": 3,
+          "label": "MRC"
+        },
+        {
+          "value": 4,
+          "label": "Testmode"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x5018300E"
+    },
+    {
+      "name": "RDS",
+      "byte": 13,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183401"
+    },
+    {
+      "name": "AF",
+      "byte": 13,
+      "bit": 1,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "persistent"
+        },
+        {
+          "value": 1,
+          "label": "temporary"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50183402"
+    },
+    {
+      "name": "HD radio coding",
+      "byte": 13,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183404"
+    },
+    {
+      "name": "Radiotext+",
+      "byte": 13,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183408"
+    },
+    {
+      "name": "PI ignore",
+      "byte": 13,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183410"
+    },
+    {
+      "name": "BWS",
+      "byte": 13,
+      "bit": 5,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no BWS"
+        },
+        {
+          "value": 1,
+          "label": "restricted"
+        },
+        {
+          "value": 2,
+          "label": "unrestricted"
+        },
+        {
+          "value": 3,
+          "label": "rest/unrest"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50183460"
+    },
+    {
+      "name": "DAB alarm",
+      "byte": 13,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183480"
+    },
+    {
+      "name": "FM PTY31 off/on",
+      "byte": 14,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183801"
+    },
+    {
+      "name": "AM sperre off/on",
+      "byte": 14,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183802"
+    },
+    {
+      "name": "HD radio coding AM",
+      "byte": 14,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183804"
+    },
+    {
+      "name": "Multiple entry switch",
+      "byte": 14,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183808"
+    },
+    {
+      "name": "RDS deactivation",
+      "byte": 14,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183810"
+    },
+    {
+      "name": "AF deactivation",
+      "byte": 14,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183820"
+    },
+    {
+      "name": "Baseplate",
+      "byte": 15,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C01"
+    },
+    {
+      "name": "Ant. Baseplate",
+      "byte": 15,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C02"
+    },
+    {
+      "name": "Force Cradle",
+      "byte": 15,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C04"
+    },
+    {
+      "name": "Handy in Cradle",
+      "byte": 15,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C08"
+    },
+    {
+      "name": "Telefon Modul",
+      "byte": 15,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C10"
+    },
+    {
+      "name": "Wireless Charger",
+      "byte": 15,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50183C20"
+    },
+    {
+      "name": "BT available",
+      "byte": 16,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184001"
+    },
+    {
+      "name": "BT Multimedia",
+      "byte": 16,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184002"
+    },
+    {
+      "name": "BT phone",
+      "byte": 16,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184004"
+    },
+    {
+      "name": "BT audio",
+      "byte": 16,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184008"
+    },
+    {
+      "name": "BT visibility",
+      "byte": 16,
+      "bit": 4,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "off"
+        },
+        {
+          "value": 1,
+          "label": "auto"
+        },
+        {
+          "value": 2,
+          "label": "on"
+        },
+        {
+          "value": 3,
+          "label": "limited"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184030"
+    },
+    {
+      "name": "BT headphones",
+      "byte": 16,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184040"
+    },
+    {
+      "name": "legal RVC",
+      "byte": 16,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50184080"
+    },
+    {
+      "name": "Skin",
+      "byte": 17,
+      "bit": 0,
+      "len": 8,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "no Skin"
+        },
+        {
+          "value": 1,
+          "label": "Skin 1"
+        },
+        {
+          "value": 2,
+          "label": "Skin 2"
+        },
+        {
+          "value": 3,
+          "label": "Skin 3"
+        },
+        {
+          "value": 4,
+          "label": "Skin 4"
+        },
+        {
+          "value": 5,
+          "label": "Skin 5"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x501844FF"
+    },
+    {
+      "name": "Screenings",
+      "byte": 18,
+      "bit": 0,
+      "len": 8,
+      "kind": "number",
+      "source": "mqb-coding.esd key 0x501848FF"
+    },
+    {
+      "name": "Boardbook",
+      "byte": 19,
+      "bit": 0,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "not displayed"
+        },
+        {
+          "value": 1,
+          "label": "displayed"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184C01"
+    },
+    {
+      "name": "Suspension arm",
+      "byte": 19,
+      "bit": 1,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "links"
+        },
+        {
+          "value": 1,
+          "label": "rechts"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184C02"
+    },
+    {
+      "name": "Kombi Track",
+      "byte": 19,
+      "bit": 2,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "n/a"
+        },
+        {
+          "value": 1,
+          "label": "long"
+        },
+        {
+          "value": 2,
+          "label": "short"
+        },
+        {
+          "value": 3,
+          "label": "reserved"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184C0C"
+    },
+    {
+      "name": "RVC",
+      "byte": 19,
+      "bit": 4,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "not active"
+        },
+        {
+          "value": 1,
+          "label": "active"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184C10"
+    },
+    {
+      "name": "MOST",
+      "byte": 19,
+      "bit": 5,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "off"
+        },
+        {
+          "value": 1,
+          "label": "on"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184C20"
+    },
+    {
+      "name": "USB",
+      "byte": 19,
+      "bit": 6,
+      "len": 2,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "off"
+        },
+        {
+          "value": 1,
+          "label": "charge"
+        },
+        {
+          "value": 2,
+          "label": "full"
+        },
+        {
+          "value": 3,
+          "label": "ipod"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50184CC0"
+    },
+    {
+      "name": "Display 1",
+      "byte": 20,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185001"
+    },
+    {
+      "name": "Display 2",
+      "byte": 20,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185002"
+    },
+    {
+      "name": "Display 3",
+      "byte": 20,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185004"
+    },
+    {
+      "name": "Display 4",
+      "byte": 20,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185008"
+    },
+    {
+      "name": "Dashboard Audio Slide",
+      "byte": 20,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185010"
+    },
+    {
+      "name": "Dashboard Phone Slide",
+      "byte": 20,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185020"
+    },
+    {
+      "name": "Dashboard Nav Slide",
+      "byte": 20,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185040"
+    },
+    {
+      "name": "Dashboard Communication",
+      "byte": 20,
+      "bit": 7,
+      "len": 1,
+      "kind": "enum",
+      "options": [
+        {
+          "value": 0,
+          "label": "BAP"
+        },
+        {
+          "value": 1,
+          "label": "DDP"
+        }
+      ],
+      "source": "mqb-coding.esd key 0x50185080"
+    },
+    {
+      "name": "VIWI",
+      "byte": 21,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185401"
+    },
+    {
+      "name": "Scrolling",
+      "byte": 21,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185410"
+    },
+    {
+      "name": "Messaging via MAP",
+      "byte": 21,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185420"
+    },
+    {
+      "name": "Pagewise scrolling",
+      "byte": 21,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185440"
+    },
+    {
+      "name": "GPS Antenna Availability",
+      "byte": 21,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185480"
+    },
+    {
+      "name": "Dashboard Graphic Variant",
+      "byte": 22,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185801"
+    },
+    {
+      "name": "Dashboard Text Replace",
+      "byte": 22,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185802"
+    },
+    {
+      "name": "SDS (byte 22)",
+      "byte": 22,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185804"
+    },
+    {
+      "name": "OnlineFunctions",
+      "byte": 22,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185808"
+    },
+    {
+      "name": "Touch Screen Remote",
+      "byte": 22,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185810"
+    },
+    {
+      "name": "Keypad Rear Keys",
+      "byte": 22,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185820"
+    },
+    {
+      "name": "Speller",
+      "byte": 23,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185C01"
+    },
+    {
+      "name": "Initial Disclaimer",
+      "byte": 23,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185C02"
+    },
+    {
+      "name": "Legal Disclaimer",
+      "byte": 23,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185C04"
+    },
+    {
+      "name": "Display Turnout Speed",
+      "byte": 23,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50185C08"
+    },
+    {
+      "name": "Emergency Call",
+      "byte": 24,
+      "bit": 0,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186001"
+    },
+    {
+      "name": "SDS (byte 24)",
+      "byte": 24,
+      "bit": 1,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186002"
+    },
+    {
+      "name": "Navigation",
+      "byte": 24,
+      "bit": 2,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186004"
+    },
+    {
+      "name": "WLAN",
+      "byte": 24,
+      "bit": 3,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186008"
+    },
+    {
+      "name": "Import media",
+      "byte": 24,
+      "bit": 4,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186010"
+    },
+    {
+      "name": "Ripping",
+      "byte": 24,
+      "bit": 5,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186020"
+    },
+    {
+      "name": "VZA",
+      "byte": 24,
+      "bit": 6,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186040"
+    },
+    {
+      "name": "PSD",
+      "byte": 24,
+      "bit": 7,
+      "len": 1,
+      "kind": "bool",
+      "source": "mqb-coding.esd key 0x50186080"
+    }
+  ]
+}
