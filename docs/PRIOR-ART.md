@@ -54,6 +54,13 @@ they are here only to indicate relative reach, not to rank quality.
 | [gmenounos/kw1281test](https://github.com/gmenounos/kw1281test) | — | MIT | Licence checked 2026-11-19 (MIT `LICENSE.txt`). The VAG adaptation workflow (read / test / save of a 16-bit channel value, save with a workshop code; KWP1281 block titles `0x21`/`0x22`/`0x2A`, basic settings `0x28`) and, for KWP2000, the startRoutineByLocalIdentifier family behind the `kwp_*` defaults of `opentune-adaptation`: routine ids `B8` (enter, `32 B8` exits), `B9` (select channel / test value), `BA` (read), `BB` (save + 6-byte workshop code), the `01 03` adaptation and `00 <group>` basic-settings selectors, the read-record layouts, and SecurityAccess level `03`/`04`. Observed there on EDC16 over K-line, so **unconfirmed** for other modules. Facts only, no code copied; its key computation is **not** used (OpenTune ships no VAG login algorithm). See [ADAPTATION.md](ADAPTATION.md#kwp2000-vag-tp20--k-line). |
 | [michaeldove/vag-diag-sim](https://github.com/michaeldove/vag-diag-sim) | ~12 | MIT | A TP2.0 KWP2000 module simulator that answers session `10 89` and the `31 B8` routine ("basic measuring blocks"): a second, independent sighting of the session byte and the `B8` routine id. |
 
+## Subaru Select Monitor (SSM2)
+
+| Project | Stars (approx) | Licence | What OpenTune learned |
+|---|---|---|---|
+| [RomRaider/RomRaider](https://github.com/RomRaider/RomRaider) | ~350 | GPL-2.0 | The SSM2 logging protocol as its logger uses it (the `80 <dst> <src> <len>` packet with an 8-bit sum checksum, tester `F0` / ECU `10` / TCU `18`, 4800 baud, `BF` init, `A8` address reads, the K-line echo) and the `logger.xml` selection rules `opentune-logdef` follows: `ecubyteindex`/`ecubit` index the init reply's data from the SSM ID, so the capability bitmap starts at index 8; `<ecuparam>` addresses are chosen by ROM ID; `target` 1/2/3 = ECU/TCU/both. GPL-2.0-only → **learn-only**: the protocol and format facts only, own implementation, no code read across. |
+| [Comer352L/FreeSSM](https://github.com/Comer352L/FreeSSM) | — | GPL-3.0 | An independent SSM2 implementation (K-line and CAN): a second description of the packet layout, the `BF`/`A8`/`A0`/`B8` commands and their `+0x40` replies, and SSM payloads carried over ISO 15765 on `7E0`/`7E8`. Facts only, no code copied. GPL-3.0 → compatible. |
+
 ## Tuning suites & map/definition formats
 
 | Project | Stars (approx) | Licence | What OpenTune learned |
@@ -125,7 +132,7 @@ above:
 - **GPL-3.0 / GPL-2.0-or-later** — compatible with our licence; code may be
   incorporated under GPL-3.0. Covers ecu_diagnostics, ultimate-nag52-fw, nisprog,
   FastECU, freediag (2-or-later), caringcaribou, rusEFI, msqur, C167BootTool,
-  NefMotoOpenSource.
+  NefMotoOpenSource, FreeSSM.
 - **GPL-2.0-only** — **not** compatible with GPL-3.0; these are **learn-only**.
   We study the format/algorithm and write our own implementation. Covers
   RomRaider, pyA2L, Speeduino and LibreTune.

@@ -8,10 +8,12 @@
 | UDS DID (`mode="22"`) | `22 <DID>` | `62 <DID> <record>` |
 | OBD-II PID (`mode="1"`) | `01 <PID>` | `41 <PID> <data>` |
 | Memory (`<address>`) | `23 14 <addr:4> <len:1>` | `63 <data>` |
+| Subaru SSM (`<protocol id="SSM">`, `--transport ssm`) | `A8 00 <addr:3>…` (batched) | `E8 <byte per address>` |
 
 The raw bytes are decoded in the channel's endian and passed through its linear
 conversion. A signed `storagetype` (`int8`/`int16`/`int32`) is sign-extended
-before the conversion; the CSV `raw` column keeps the unsigned bit pattern.
+and a `float` one is read as an IEEE-754 single before the conversion; the
+CSV `raw` column keeps the unsigned bit pattern.
 Non-linear conversions, failed reads and unknown addressing are noted per
 sample, never guessed.
 
@@ -152,6 +154,79 @@ equivalent with the standard ISO 14229-1 `0x2C` service so it works on any
 ECU that implements it. No VW_Flash code was used. Multi-DID `0x22` batching
 is a possible later addition.
 
+## Subaru SSM2
+
+Subaru Select Monitor 2 reads ECU RAM by address. `log --transport ssm` speaks
+it over a K-line, `--transport ssm-can` over CAN; the `logger.xml` is a
+RomRaider one (`<protocol id="SSM">`).
+
+```sh
+# K-line: a KKL cable or the OpenTune K-line bridge (port from OPENTUNE_PORT)
+OPENTUNE_PORT=/dev/ttyUSB0 opentune log --def logger.xml --driver kkl --transport ssm --rounds 500 --out run.csv
+# CAN (ISO 15765, 7E0/7E8), e.g. a slcan/socketcan adapter
+opentune log --def logger.xml --driver socketcan --transport ssm-can --out run.csv
+# Offline against the simulated module
+opentune log --def crates/opentune-logdef/tests/fixtures/ssm_demo_logger.xml --driver ssmsim --transport ssm --rounds 10
+```
+
+**The wire** (`opentune_core::protocol::ssm`). On K-line every packet is
+`80 <dst> <src> <len> <cmd> <data…> <checksum>` at 4800 baud 8N1: the tester
+is `F0`, the engine ECU `10`, the TCU `18` (`--ssm-target ecu|tcu`), `<len>`
+counts the command and data bytes, and the checksum is the 8-bit sum of
+everything before it. There is no wake-up, so the K-line driver is opened with
+`init=none`. The line is half duplex: a plain KKL cable hears its own packet
+first, and the transport reads that echo back and requires it to match byte
+for byte before it reads the reply (an adapter that strips the echo itself,
+the K-line bridge, says so). The reply is read by its length byte, and its
+checksum and addresses are checked. Over CAN the same `<cmd> <data…>` payload
+rides ISO-TP on `7E0`/`7E8` (`7E1`/`7E9` for the TCU) with no header, length
+or checksum.
+
+| Command | Reply | Use |
+|---|---|---|
+| `BF` | `FF <SSM ID:3> <ROM ID:5> <capability bytes…>` | identify the module (once, before logging) |
+| `A8 00 <addr:3>…` | `E8 <one byte per address>` | the logging read |
+| `A0 00 <addr:3> <count-1>` | `E0 <count bytes>` | block read (`SsmClient::read_block`; not used by `log`) |
+| `B8 <addr:3> <value>` | `F8 <value>` | **write**: `SsmClient` refuses it until `arm_writes()`; logging never arms it |
+
+A reply starting `7F <cmd> <code>` is reported as a negative response with
+the ISO 14229 NRC name.
+
+**Which parameters** (`opentune_logdef::ssm::select`). The `BF` reply's data
+is indexed the way RomRaider's `ecubyteindex`/`ecubit` attributes count it:
+bytes 0–2 are the SSM ID, 3–7 the ROM ID, and the capability bitmap starts at
+index 8. A standard `<parameter>` or `<switch>` is logged only when its
+capability bit is set; an `<ecuparam>` only for the `<ecu id>` equal to the ROM
+ID (comma-separated id lists match too); and only parameters whose `target`
+(1 = ECU, 2 = TCU, 3 = both) includes the selected module. Derived parameters
+(`<depends>`, no address of their own) are not evaluated. Everything left out
+is listed on stderr with the reason, and a parameter id given on the command
+line that is not logged gets a warning. Older definitions that give a
+multi-byte value as one `<address>` per byte are read as one value when the
+addresses are consecutive.
+
+**Batching.** Every byte address the selected channels cover is read once per
+sample, in `A8` requests that keep each request and reply packet within
+`--ssm-max-packet` bytes (default 80: 24 addresses per read, which fits the
+K-line bridge's buffers; the protocol allows up to 84 addresses). A channel's
+bytes stay in one request so a multi-byte value is not assembled from two
+moments, unless the channel alone is larger than one request (noted). A
+failed read (timeout, bad checksum, echo mismatch, NRC) is noted on the
+channels of that request only, and the next sample tries again. `--fast` does
+not apply (it is UDS `0x2C`).
+
+The session is a `LiveSession` in mode `ssm-a8`, set by
+`FastLogConfig { ssm: Some(SsmPollConfig { max_packet_len }), .. }`, so the CSV
+is the same as for every other path.
+
+**Validation state: synthetic-tested.** The SSM simulator
+(`opentune_core::protocol::ssmsim`: synthetic ROM ID, capability bitmap and
+RAM addresses that change on every read, optional echo, fault injection) and
+pseudo-terminal tests of the `kkl` and `kline-bridge` raw K-line. Not yet run
+against a Subaru, and the K-line bridge's 60 ms reply gap is not verified
+against SSM reply latency. The ELM327 drivers are not wired for SSM (see
+[DRIVERS.md](DRIVERS.md#3k-optional-raw-k-line-kline-for-ssm2)).
+
 ## GPS channels
 
 An optional GPS/GNSS receiver adds position and true ground speed to a log
@@ -261,7 +336,7 @@ s.stop(&mut diag);                                // clears the DDDIDs
 
 `Sample`, `LiveStatus` and `FastLogConfig` are `serde`-serializable, so Tauri
 commands can return them directly. `LiveStatus` carries `mode`
-(`"fast-2c"` | `"polling"`), `reason` (why polling), `dynamic_dids`
+(`"fast-2c"` | `"polling"` | `"ssm-a8"`), `reason` (why polling), `dynamic_dids`
 (`{did, record_len, channels}`), `polled`, `notes`, `redefines`, `ticks`,
 `setup_requests` and `tick_requests` (`requests_per_tick()` for display).
 Suggested commands: `log_start` → `LiveStatus`, `log_tick` →
