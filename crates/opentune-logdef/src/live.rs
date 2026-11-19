@@ -27,6 +27,7 @@
 //! adds a faster mode over UDS `0x2C` (DynamicallyDefineDataIdentifier) that
 //! reads many channels with one request and falls back to this loop.
 
+use crate::expr::LogExpr;
 use crate::model::{Addressing, ConversionFit, LogDef, LogParam, ValueKind};
 use opentune_core::ecudef::{DataType, Endian};
 use opentune_core::RawDiag;
@@ -162,7 +163,7 @@ pub(crate) fn decode_uint(bytes: &[u8], endian: Endian) -> u64 {
 /// complement `0xFF38` stored as `int16` converts as -200, exactly as the
 /// RomRaider/EcuFlash definitions intend. Anything else (unsigned, unknown,
 /// or a raw value wider than the declared type) is taken as unsigned.
-fn conversion_input(p: &LogParam, raw: u64) -> f64 {
+pub(crate) fn conversion_input(p: &LogParam, raw: u64) -> f64 {
     // A `float` storagetype is the IEEE-754 single of the 4 bytes read
     // (RomRaider's per-ROM SSM parameters are often floats).
     if p.storagetype == Some(DataType::F32) && raw >> 32 == 0 {
@@ -193,6 +194,16 @@ fn apply_conversion(s: &mut Sample, p: &LogParam, raw: u64) {
                 ConversionFit::Linear { factor, offset } => {
                     s.value = Some(x * factor + offset);
                 }
+                // Calculated: filled in by `derived::fill` once the round's
+                // referenced channels are known.
+                ConversionFit::Expression { refs } if !refs.is_empty() => {}
+                ConversionFit::Expression { .. } => match LogExpr::parse(&c.expr) {
+                    Ok(e) => match e.eval_x(x) {
+                        Ok(v) => s.value = Some(v),
+                        Err(why) => s.note = format!("conversion '{}': {why}", c.expr),
+                    },
+                    Err(why) => s.note = format!("conversion '{}': {why}", c.expr),
+                },
                 ConversionFit::NonLinear { reason } => {
                     s.note = format!("non-linear conversion not evaluated: {reason}");
                 }
@@ -206,12 +217,17 @@ fn apply_conversion(s: &mut Sample, p: &LogParam, raw: u64) {
 /// The selected parameters, in definition order: an empty `ids` selects every
 /// enabled parameter. Shared by [`poll_once`] and the fast-logging session so
 /// both sample exactly the same channels in the same order.
+///
+/// A selected calculated parameter brings the parameters it references along
+/// (placed before it, read like any other channel), so it can be computed.
 pub(crate) fn selected_params<'d>(def: &'d LogDef, ids: &[&str]) -> Vec<&'d LogParam> {
-    def.params()
-        .map(|(_proto, _ecu, p)| p)
-        .filter(|p| p.enabled != Some(false))
-        .filter(|p| ids.is_empty() || ids.contains(&p.id.as_str()))
-        .collect()
+    let picked = def
+        .params()
+        .map(|(proto, _ecu, p)| (proto, p))
+        .filter(|(_, p)| p.enabled != Some(false))
+        .filter(|(_, p)| ids.is_empty() || ids.contains(&p.id.as_str()))
+        .collect();
+    crate::derived::with_dependencies(picked)
 }
 
 /// An empty sample for `p`, before any read.
@@ -310,7 +326,17 @@ pub(crate) fn poll_param(diag: &mut dyn RawDiag, p: &LogParam) -> Sample {
                     {
                         apply_text(&mut s, p, &resp[2..]);
                     } else if resp.len() >= 3 && resp[0] == 0x41 && resp[1] == *pid {
-                        let raw = decode_uint(&resp[2..], p.endian);
+                        // A declared storagetype bounds the bytes taken: a
+                        // one-byte value of a two-value PID (A of A,B) must not
+                        // become A*256+B.
+                        let data = &resp[2..];
+                        let data = match p.storagetype {
+                            Some(t) if (t.byte_len() as usize) < data.len() => {
+                                &data[..t.byte_len() as usize]
+                            }
+                            _ => data,
+                        };
+                        let raw = decode_uint(data, p.endian);
                         s.raw = Some(raw);
                         apply_conversion(&mut s, p, raw);
                     } else if resp.first() == Some(&0x7F) {
@@ -357,6 +383,9 @@ pub(crate) fn poll_param(diag: &mut dyn RawDiag, p: &LogParam) -> Sample {
                 Err(e) => s.note = e,
             }
         }
+        Addressing::Unknown if crate::derived::is_calculated(p) => {
+            s.note = "calculated parameter: not evaluated".into();
+        }
         Addressing::Unknown => {
             s.note = "addressing could not be determined from the definition".into();
         }
@@ -372,10 +401,10 @@ pub(crate) fn poll_param(diag: &mut dyn RawDiag, p: &LogParam) -> Sample {
 /// [`crate::fast::LiveSession`] packs them into dynamically defined DIDs
 /// (UDS `0x2C`) and reads them with one request per record instead.
 pub fn poll_once(diag: &mut dyn RawDiag, def: &LogDef, ids: &[&str]) -> Vec<Sample> {
-    selected_params(def, ids)
-        .into_iter()
-        .map(|p| poll_param(diag, p))
-        .collect()
+    let params = selected_params(def, ids);
+    let mut samples: Vec<Sample> = params.iter().map(|p| poll_param(diag, p)).collect();
+    crate::derived::fill(&params, &mut samples);
+    samples
 }
 
 /// Header of the CSV [`poll_to_csv`] and [`LiveSession::run_csv`](crate::LiveSession::run_csv)

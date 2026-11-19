@@ -94,12 +94,23 @@ pub enum ConversionFit {
         /// Added after the multiply.
         offset: f64,
     },
-    /// The equation parsed but is not linear in the raw value (e.g. it calls
-    /// `GetLogParam(...)`, uses `x*x`, `x^2`, …). Flagged rather than
-    /// approximated: a correct value needs runtime expression evaluation, which
-    /// is out of scope for this def parser.
+    /// The equation is not affine but is in the safe expression grammar
+    /// ([`LogExpr`](crate::LogExpr)): `1/x`, `14.7/(1+x)`, or a calculated
+    /// parameter's `(P8*P21)/1200` / `[P7:psi]-[P24:psi]`. The live engine
+    /// evaluates [`Conversion::expr`] per sample, reading any referenced
+    /// parameters from the same round.
+    Expression {
+        /// Ids of the parameters the expression references, in first-use
+        /// order (empty when it only uses the raw value).
+        #[serde(skip_serializing_if = "Vec::is_empty", default)]
+        refs: Vec<String>,
+    },
+    /// The equation could not be used: it is outside the supported grammar
+    /// (comparisons, unknown functions, …) or the importer refused it. Flagged
+    /// rather than approximated: the live engine logs the raw value with a
+    /// note and no physical value.
     NonLinear {
-        /// Why it could not be reduced to a linear scale.
+        /// Why it could not be used.
         reason: String,
     },
 }

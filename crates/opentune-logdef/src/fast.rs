@@ -362,7 +362,8 @@ impl LiveSession {
     pub fn tick(&mut self, diag: &mut dyn RawDiag) -> Vec<Sample> {
         let mut c = Counted { inner: diag, n: 0 };
         if let Some(plan) = &self.ssm {
-            let out = crate::ssm::tick(&mut c, plan, &self.params);
+            let mut out = crate::ssm::tick(&mut c, plan, &self.params);
+            crate::derived::fill(&self.params, &mut out);
             self.status.ticks += 1;
             self.status.tick_requests += c.n;
             return out;
@@ -438,7 +439,9 @@ impl LiveSession {
 
         self.status.ticks += 1;
         self.status.tick_requests += c.n;
-        out.into_iter().flatten().collect()
+        let mut out: Vec<Sample> = out.into_iter().flatten().collect();
+        crate::derived::fill(&self.params, &mut out);
+        out
     }
 
     /// Clear the dynamic DIDs this session defined (best effort) and end it.
@@ -579,7 +582,11 @@ impl LiveSession {
                 _ => None,
             };
             let Some(element) = element else {
-                self.polled.push(idx);
+                // A calculated channel without an address is computed from the
+                // others after each read, not polled.
+                if !(p.addressing == Addressing::Unknown && crate::derived::is_calculated(p)) {
+                    self.polled.push(idx);
+                }
                 continue;
             };
             if element.size() > max {
