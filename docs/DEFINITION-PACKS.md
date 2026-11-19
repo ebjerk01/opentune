@@ -3,8 +3,8 @@
 A **definition pack** is one versioned, loadable bundle of OpenTune's data-defined
 knowledge for a vehicle or platform. It is how coverage grows by *data* instead of
 code: drop in a pack and every service engine (coding, adaptation, service
-functions, logging, auto-scan, drivetrain controller definitions) picks up what
-it needs. Implemented by the
+functions, logging, logging triggers, auto-scan, drivetrain controller
+definitions) picks up what it needs. Implemented by the
 `opentune-packs` crate; load/inspect one with `opentune packs <dir>`.
 
 ## Layout
@@ -23,11 +23,19 @@ my-pack/
   loggers/*.json       # LogDef            — live-data / logger definitions
   modules/*.json       # VehicleModules    — module lists for auto-scan
   controllers/*.json   # ControllerDef     — drivetrain TCU / AWD definitions
+  triggers/*.json      # TriggerSet        — datalogging triggers (WOT pulls, marks)
 ```
 
 `controllers/` holds the same files as the repository's built-in
 [`ctrldefs/`](../ctrldefs/) ([CONTROLLER-DEFS.md](CONTROLLER-DEFS.md)); each file
 is named after its `id`.
+
+`triggers/` holds datalogging trigger files (`"format": "opentune-triggers"`)
+for `opentune log --trigger` / `opentune obd read --trigger`
+([LIVE-LOGGING.md](LIVE-LOGGING.md#triggers)). A trigger set with an `id` is
+named after it. Its channel ids should be ones the pack's own `loggers/`
+carry (the `repo_packs` tests check the shipped packs); list alternatives to
+also match `obd read`'s channel keys.
 
 Any sub-directory is optional. Files named `TEMPLATE.json` or starting with `_`/`.`
 are treated as scaffolding and skipped, and so are pack *directories* starting with
@@ -97,14 +105,17 @@ gate), a manifest also needs:
   **validate** it. Controller definitions get `opentune-ctrldef`'s structure and
   honesty rules plus its file-name rule; their links (ecudefs, database units,
   checksum ids) need the repository and are checked by the consumer (see
-  [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md#in-definition-packs));
+  [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md#in-definition-packs)). Trigger sets
+  get `TriggerSet::validate` (format and version, unique names, non-empty
+  `all`/`any`, finite values, hold and window limits, no pre/post window on
+  a `mark`) and the file-name rule;
 - a file that fails to parse or validate is recorded in the pack's `LoadReport`
   with the reason and **skipped** — it never aborts the pack or disappears
   silently.
 
 `PackLibrary` merges several packs and offers simple cross-pack lookups
 (`coding_by_id`, `service_by_id`, `controller_by_id`, iterate all defs of a
-kind, per-kind counts).
+kind, e.g. `triggers()`, per-kind counts).
 
 ## CLI
 
@@ -179,6 +190,10 @@ to ignore, one per line, for deliberate synthetic data the heuristics flag.
      [CONTROLLER-DEFS.md](CONTROLLER-DEFS.md) (public sources with licences,
      safety notes, evidence words). Check it with
      `opentune controller validate packs/<your-id>/controllers --warnings`.
+   - **Trigger set** (`triggers/*.json`, `TriggerSet`) — copy
+     `packs/generic-obd2/triggers/wot-pull.json` and follow
+     [LIVE-LOGGING.md](LIVE-LOGGING.md#triggers); try it offline with
+     `opentune obd read --driver obdsim --rounds 20 --out t.csv --trigger <file>`.
    - **Coding / adaptation / ECU defs** follow `opentune-coding`,
      `opentune-adaptation` ([`ADAPTATION.md`](ADAPTATION.md), UDS and VAG
      KWP2000 channel kinds) and [`ECU-DEFS.md`](ECU-DEFS.md). No starter pack
