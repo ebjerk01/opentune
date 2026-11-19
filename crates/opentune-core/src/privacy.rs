@@ -358,9 +358,10 @@ mod tests {
     }
 
     // Real-looking identifiers are assembled at run time so this source file
-    // itself stays clean under the scanner.
+    // itself stays clean under the scanner. The WMI "ZZZ" is unassigned, so
+    // this cannot be any real vehicle.
     fn vin_like() -> String {
-        ["WVW", "ZZZ", "3CZ", "9E", "2", "58", "317"].concat()
+        ["ZZZ", "7AB", "2CD", "3E", "5", "91", "746"].concat()
     }
 
     #[test]
@@ -372,7 +373,7 @@ mod tests {
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].kind, PrivacyKind::Vin);
         assert_eq!((f[0].line, f[0].column), (2, 26));
-        assert_eq!(f[0].redacted(), "WVW… (17 chars)");
+        assert_eq!(f[0].redacted(), "ZZZ… (17 chars)");
         assert!(!f[0].message().contains(&v));
     }
 
@@ -399,11 +400,11 @@ mod tests {
             "12345678901234567",
             "0123456789ABCDEFA",
             "café serial: été — WVWZZZÉ",
-            "wvwzzz3cz9e258317",
-            "WVWZZZ3CZ9E25831O",
-            "WVWIZZ3CZ9E258317",
-            "WVWZZZ3CZ9E25831",
-            "WVWZZZ3CZ9E2583170",
+            "zzz7ab2cd3e591746",
+            "ZZZ7AB2CD3E59174O",
+            "ZZZ7AI2CD3E591746",
+            "ZZZ7AB2CD3E59174",
+            "ZZZ7AB2CD3E5917460",
             "sha256 9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08",
             "03L907425C 1037382088 0281011 03G906021AB",
             "\"sw\": \"1037516722\", \"hw\": \"0261206317\"",
