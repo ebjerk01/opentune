@@ -226,7 +226,8 @@ fn check_license(license: &str, loc: &str, out: &mut Vec<ValidationIssue>) {
     let forbidden_token = tokens.iter().find(|t| {
         let t = t.to_ascii_lowercase();
         FORBIDDEN_LICENSE_TOKENS.contains(&t.as_str())
-            || (t.starts_with("cc-") && t.split('-').any(|p| p == "nc"))
+            // Any NC component: `CC-BY-NC-4.0`, but also `CC BY-NC 4.0`.
+            || t.split('-').any(|p| p == "nc")
     });
     if let Some(bad) = forbidden_phrase.copied().or(forbidden_token.copied()) {
         out.push(ValidationIssue::error(
@@ -328,6 +329,11 @@ mod tests {
             "CC-BY-NC-4.0",
             "CC-BY-NC-SA-4.0",
             "MIT AND NDA",
+            // Regression: written with spaces the NC part is its own token
+            // without the `cc-` prefix, and used to pass as a mere warning.
+            "CC BY-NC 4.0",
+            "CC BY-NC-SA 4.0",
+            "CC BY NC",
         ] {
             let v = check(&ok_sources(), lic, "implemented", "");
             assert_eq!(codes(&v), vec!["provenance.license_forbidden"], "{lic}");
