@@ -19,10 +19,10 @@
     "kwp2000"
   ],
   "read_methods": {
-    "obd": "unknown",
+    "obd": "read+write",
     "bench": true,
     "boot": false,
-    "notes": "Bench over K-line (ecupinouts). OBD and boot procedures are not documented in the cited sources."
+    "notes": "OBD read/write is listed for the SEAT Arosa 1.4 AKK application. Bench diagnostics use K-line. The physical boot entry point is unknown."
   },
   "checksum": "me7",
   "ecudef": "bosch-me7",
@@ -142,6 +142,54 @@
     {
       "title": "Transpondery: VAG ME7.x pinout (ME7.5B / ME7.5.10 80-pin)",
       "url": "https://www.transpondery.com/pinouts/vag/me7x_pinout.html"
+    },
+    {
+      "title": "Alientech Japan K-Suite vehicle support list (2018), SEAT Arosa 6H1 1.4 AKK with Bosch ME7.5.10",
+      "url": "https://alientech-japan.com/wordpress/wp-content/uploads/2017/03/ksuite-list2018-1.pdf"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "K-line on T80-29. The cited sources do not identify the flash-session protocol.",
+      "notes": "Alientech lists OBD read/write for the 1999 and 2000 SEAT Arosa 1.4 AKK with ME7.5.10. Coverage of other hardware revisions is unknown.",
+      "confidence": "community",
+      "sources": [
+        3,
+        0
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "Use T80-15 for permanent +12 V, T80-27 for switched +12 V, T80-28 for ground and T80-29 for K-line diagnostics. Both pinouts agree on these numbers. Diag-Prof identifies the connector as T80 and ecupinouts labels it T94. Leave CAN pins 31 and 32 disconnected for diagnostics.",
+      "confidence": "verified",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "Alientech lists boot support for the Arosa 1.4 AKK. The cited sources identify neither an entry point nor reset timing for this board.",
+      "confidence": "unverified",
+      "sources": [
+        3,
+        0
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The support list does not specify whether a complete diagnostic read or flash write requires security access. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        3
+      ]
+    }
+  }
 }
