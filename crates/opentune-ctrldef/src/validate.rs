@@ -830,7 +830,10 @@ mod tests {
             {"name": "b", "start": 15, "len": 4, "byte_order": "big"}
         ]));
         let issues = def(v).validate();
-        let o: Vec<_> = issues.iter().filter(|i| i.code == "signal.overlap").collect();
+        let o: Vec<_> = issues
+            .iter()
+            .filter(|i| i.code == "signal.overlap")
+            .collect();
         assert_eq!(o.len(), 1, "{issues:?}");
         assert_eq!(o[0].severity, Severity::Warn);
         assert!(o[0].message.contains("'a' and 'b'"));

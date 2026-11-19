@@ -85,12 +85,20 @@ fn layouts_extract_and_insert_agree_at_every_edge() {
         let mut uniq = pos.clone();
         uniq.sort_unstable();
         uniq.dedup();
-        assert_eq!(uniq.len(), pos.len(), "a bit used twice: {start} {len} {ord:?}");
+        assert_eq!(
+            uniq.len(),
+            pos.len(),
+            "a bit used twice: {start} {len} {ord:?}"
+        );
 
         let n = r.below(66) as usize;
         let mut data = r.bytes(n);
         let got = extract(&data, start, len, ord);
-        assert_eq!(got.is_some(), n >= need, "case {case}: {start} {len} {ord:?} n={n}");
+        assert_eq!(
+            got.is_some(),
+            n >= need,
+            "case {case}: {start} {len} {ord:?} n={n}"
+        );
         if let Some(v) = got {
             assert_eq!(v & !mask(len), 0, "value wider than the signal");
             let before = data.clone();
@@ -264,7 +272,10 @@ fn clean() -> serde_json::Value {
 
 fn issues(v: &serde_json::Value) -> Vec<(&'static str, Severity)> {
     let d: ControllerDef = serde_json::from_value(v.clone()).expect("parses");
-    d.validate().into_iter().map(|i| (i.code, i.severity)).collect()
+    d.validate()
+        .into_iter()
+        .map(|i| (i.code, i.severity))
+        .collect()
 }
 
 #[test]
@@ -276,15 +287,33 @@ fn the_clean_definition_is_clean() {
 fn every_rule_fires_on_its_own_mutation() {
     type Mutation = fn(&mut serde_json::Value);
     let cases: Vec<(&str, Severity, Mutation)> = vec![
-        ("identity.empty", Severity::Error, |v| v["maker"] = json!(" ")),
-        ("sources.incomplete", Severity::Error, |v| v["sources"][0]["license"] = json!("")),
-        ("identify.empty", Severity::Warn, |v| v["identify"] = json!({})),
-        ("checksum.empty", Severity::Error, |v| v["checksum"] = json!(" ")),
-        ("ecudefs.duplicate", Severity::Error, |v| v["ecudefs"] = json!(["x-y", "x-y"])),
-        ("diag.name", Severity::Error, |v| v["diagnostics"][0]["name"] = json!("")),
-        ("diag.bitrate", Severity::Error, |v| v["diagnostics"][0]["bitrate"] = json!(0)),
-        ("diag.can_id", Severity::Error, |v| v["diagnostics"][0]["tx_id"] = json!("0x800")),
-        ("diag.isotp_ids", Severity::Error, |v| v["diagnostics"][0]["rx_id"] = json!(null)),
+        ("identity.empty", Severity::Error, |v| {
+            v["maker"] = json!(" ")
+        }),
+        ("sources.incomplete", Severity::Error, |v| {
+            v["sources"][0]["license"] = json!("")
+        }),
+        ("identify.empty", Severity::Warn, |v| {
+            v["identify"] = json!({})
+        }),
+        ("checksum.empty", Severity::Error, |v| {
+            v["checksum"] = json!(" ")
+        }),
+        ("ecudefs.duplicate", Severity::Error, |v| {
+            v["ecudefs"] = json!(["x-y", "x-y"])
+        }),
+        ("diag.name", Severity::Error, |v| {
+            v["diagnostics"][0]["name"] = json!("")
+        }),
+        ("diag.bitrate", Severity::Error, |v| {
+            v["diagnostics"][0]["bitrate"] = json!(0)
+        }),
+        ("diag.can_id", Severity::Error, |v| {
+            v["diagnostics"][0]["tx_id"] = json!("0x800")
+        }),
+        ("diag.isotp_ids", Severity::Error, |v| {
+            v["diagnostics"][0]["rx_id"] = json!(null)
+        }),
         ("diag.tp20_address", Severity::Error, |v| {
             v["diagnostics"][1]["tp20_address"] = json!(null)
         }),
@@ -294,13 +323,19 @@ fn every_rule_fires_on_its_own_mutation() {
         ("diag.identification", Severity::Error, |v| {
             v["diagnostics"][1]["identification"] = json!("1A9")
         }),
-        ("bus.name", Severity::Error, |v| v["buses"][0]["name"] = json!("Main Bus")),
+        ("bus.name", Severity::Error, |v| {
+            v["buses"][0]["name"] = json!("Main Bus")
+        }),
         ("bus.duplicate", Severity::Error, |v| {
             let b = v["buses"][0].clone();
             v["buses"].as_array_mut().unwrap().push(b)
         }),
-        ("bus.bitrate", Severity::Error, |v| v["buses"][0]["bitrate"] = json!(0)),
-        ("frame.id", Severity::Error, |v| v["buses"][0]["frames"][0]["id"] = json!("0x800")),
+        ("bus.bitrate", Severity::Error, |v| {
+            v["buses"][0]["bitrate"] = json!(0)
+        }),
+        ("frame.id", Severity::Error, |v| {
+            v["buses"][0]["frames"][0]["id"] = json!("0x800")
+        }),
         ("frame.duplicate_id", Severity::Error, |v| {
             let mut f = v["buses"][0]["frames"][0].clone();
             f["name"] = json!("G");
@@ -311,11 +346,14 @@ fn every_rule_fires_on_its_own_mutation() {
             f["id"] = json!("0x101");
             v["buses"][0]["frames"].as_array_mut().unwrap().push(f)
         }),
-        ("frame.min_len", Severity::Error, |v| v["buses"][0]["frames"][0]["min_len"] = json!(9)),
+        ("frame.min_len", Severity::Error, |v| {
+            v["buses"][0]["frames"][0]["min_len"] = json!(9)
+        }),
         ("frame.empty", Severity::Warn, |v| {
-            v["buses"][0]["frames"].as_array_mut().unwrap().push(
-                json!({"id": "0x200", "name": "E", "signals": []}),
-            )
+            v["buses"][0]["frames"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"id": "0x200", "name": "E", "signals": []}))
         }),
         ("signal.duplicate", Severity::Error, |v| {
             v["buses"][0]["frames"][0]["signals"][1]["name"] = json!("a")
@@ -346,19 +384,32 @@ fn every_rule_fires_on_its_own_mutation() {
         ("signal.overlap", Severity::Warn, |v| {
             v["buses"][0]["frames"][0]["signals"][1]["start"] = json!(7)
         }),
-        ("live.duplicate", Severity::Error, |v| v["live"][2]["name"] = json!("g1c0")),
-        ("live.ref", Severity::Error, |v| v["live"][0]["source"]["frame"] = json!("Nope")),
-        ("live.uds_len", Severity::Error, |v| v["live"][2]["source"]["len"] = json!(5)),
-        ("live.scaling", Severity::Error, |v| v["live"][2]["source"]["factor"] = json!(0.0)),
+        ("live.duplicate", Severity::Error, |v| {
+            v["live"][2]["name"] = json!("g1c0")
+        }),
+        ("live.ref", Severity::Error, |v| {
+            v["live"][0]["source"]["frame"] = json!("Nope")
+        }),
+        ("live.uds_len", Severity::Error, |v| {
+            v["live"][2]["source"]["len"] = json!(5)
+        }),
+        ("live.scaling", Severity::Error, |v| {
+            v["live"][2]["source"]["factor"] = json!(0.0)
+        }),
         ("live.kwp_duplicate", Severity::Error, |v| {
-            v["live"].as_array_mut().unwrap().push(json!({"name": "again",
+            v["live"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"name": "again",
                 "source": {"kind": "kwp_measuring_block", "group": 1, "cell": 0}}))
         }),
         ("adaptation.duplicate", Severity::Error, |v| {
             let a = v["adaptations"][0].clone();
             v["adaptations"].as_array_mut().unwrap().push(a)
         }),
-        ("adaptation.table", Severity::Error, |v| v["adaptations"][0]["table"] = json!("zz")),
+        ("adaptation.table", Severity::Error, |v| {
+            v["adaptations"][0]["table"] = json!("zz")
+        }),
         ("table.duplicate", Severity::Error, |v| {
             let t = v["tables"][0].clone();
             v["tables"].as_array_mut().unwrap().push(t)
@@ -376,8 +427,12 @@ fn every_rule_fires_on_its_own_mutation() {
             v["tables"][0]["rows"] = json!(0);
             v["tables"][0]["y_axis"] = json!(null)
         }),
-        ("table.source", Severity::Warn, |v| v["tables"][0]["source"] = json!(" ")),
-        ("table.confidence", Severity::Error, |v| v["tables"][0]["confidence"] = json!("high")),
+        ("table.source", Severity::Warn, |v| {
+            v["tables"][0]["source"] = json!(" ")
+        }),
+        ("table.confidence", Severity::Error, |v| {
+            v["tables"][0]["confidence"] = json!("high")
+        }),
         ("table.storage", Severity::Error, |v| {
             v["tables"][0]["confidence"] = json!("low");
             v["tables"][0]["storage"] = json!({"address": 0, "data_type": "u8",
@@ -387,10 +442,18 @@ fn every_rule_fires_on_its_own_mutation() {
             v["tables"][0]["confidence"] = json!("low");
             v["tables"][0]["ecudef_map"] = json!({"ecudef": "x-y", "map": "m"})
         }),
-        ("gearset.empty", Severity::Error, |v| v["gearsets"][0]["gears"] = json!([])),
-        ("gearset.duplicate", Severity::Error, |v| v["gearsets"][0]["gears"][1]["gear"] = json!("1")),
-        ("gearset.ratio", Severity::Error, |v| v["gearsets"][0]["gears"][1]["ratio"] = json!(0.0)),
-        ("gearset.order", Severity::Warn, |v| v["gearsets"][0]["gears"][1]["ratio"] = json!(5.0)),
+        ("gearset.empty", Severity::Error, |v| {
+            v["gearsets"][0]["gears"] = json!([])
+        }),
+        ("gearset.duplicate", Severity::Error, |v| {
+            v["gearsets"][0]["gears"][1]["gear"] = json!("1")
+        }),
+        ("gearset.ratio", Severity::Error, |v| {
+            v["gearsets"][0]["gears"][1]["ratio"] = json!(0.0)
+        }),
+        ("gearset.order", Severity::Warn, |v| {
+            v["gearsets"][0]["gears"][1]["ratio"] = json!(5.0)
+        }),
         ("flash.region", Severity::Error, |v| {
             v["flash"]["regions"][0]["region"]["length"] = json!(4097)
         }),
@@ -419,7 +482,10 @@ fn every_rule_fires_on_its_own_mutation() {
 #[test]
 fn hex_fields_refuse_values_that_do_not_fit() {
     for (path, bad) in [
-        (vec!["buses", "0", "frames", "0", "id"], json!("0x100000000")),
+        (
+            vec!["buses", "0", "frames", "0", "id"],
+            json!("0x100000000"),
+        ),
         (vec!["buses", "0", "frames", "0", "id"], json!("256")),
         (vec!["diagnostics", "1", "tp20_address"], json!("0x100")),
         (vec!["diagnostics", "0", "tx_id"], json!("7E1")),
@@ -450,7 +516,9 @@ fn random_definitions_never_panic_the_validator_or_decoder() {
     let mut r = Rng(0xDEF5_0000);
     for _ in 0..300 {
         let mut v = clean();
-        let sigs = v["buses"][0]["frames"][0]["signals"].as_array_mut().unwrap();
+        let sigs = v["buses"][0]["frames"][0]["signals"]
+            .as_array_mut()
+            .unwrap();
         for _ in 0..r.below(6) {
             let s = random_signal(&mut r);
             let mut j = serde_json::to_value(&s).unwrap();

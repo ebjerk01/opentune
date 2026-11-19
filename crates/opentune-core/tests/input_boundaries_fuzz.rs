@@ -95,7 +95,10 @@ fn records_of_any_length_split_into_whole_cells_only() {
         let cells = vagmeas::cells(&rec);
         assert_eq!(cells.len(), n / 3);
         for (i, c) in cells.iter().enumerate() {
-            assert_eq!((c.formula, c.a, c.b), (rec[3 * i], rec[3 * i + 1], rec[3 * i + 2]));
+            assert_eq!(
+                (c.formula, c.a, c.b),
+                (rec[3 * i], rec[3 * i + 1], rec[3 * i + 2])
+            );
             let s = vagmeas::scale(c.formula, c.a, c.b);
             assert_eq!(c.value, s.map(|x| x.0));
             assert_eq!(c.unit, s.map(|x| x.1).unwrap_or(""));
@@ -123,9 +126,7 @@ fn real_looking_vin(r: &mut Rng) -> String {
 
 fn word(r: &mut Rng) -> String {
     let n = 1 + r.below(10) as usize;
-    (0..n)
-        .map(|_| (b'a' + r.below(26) as u8) as char)
-        .collect()
+    (0..n).map(|_| (b'a' + r.below(26) as u8) as char).collect()
 }
 
 /// Random filler: words, punctuation, JSON noise and some non-ASCII text.
@@ -192,10 +193,22 @@ fn arbitrary_bytes_never_panic_and_findings_are_exact() {
 fn planted_identifiers_are_found_and_placeholders_are_not() {
     let mut r = Rng(0x0D47_A000);
     let tlds = ["de", "no", "com", "org", "co"];
-    let reserved = ["example.com", "example.org", "mail.example", "x.test", "a.invalid"];
+    let reserved = [
+        "example.com",
+        "example.org",
+        "mail.example",
+        "x.test",
+        "a.invalid",
+    ];
     for case in 0..CASES {
         let vin = real_looking_vin(&mut r);
-        let email = format!("{}.{}@{}.{}", word(&mut r), word(&mut r), word(&mut r), r.pick(&tlds));
+        let email = format!(
+            "{}.{}@{}.{}",
+            word(&mut r),
+            word(&mut r),
+            word(&mut r),
+            r.pick(&tlds)
+        );
         let fake = format!("{}@{}", word(&mut r), r.pick(&reserved));
         let serial = format!("{}{}", word(&mut r), 100_000 + r.below(900_000));
         let text = format!(
@@ -208,8 +221,14 @@ fn planted_identifiers_are_found_and_placeholders_are_not() {
         );
         let f = check_findings_point_at_their_value(&text);
         let has = |k: PrivacyKind, v: &str| f.iter().any(|x| x.kind == k && x.value == v);
-        assert!(has(PrivacyKind::Vin, &vin), "case {case}: VIN missed in {text:?}");
-        assert!(has(PrivacyKind::Email, &email), "case {case}: e-mail missed");
+        assert!(
+            has(PrivacyKind::Vin, &vin),
+            "case {case}: VIN missed in {text:?}"
+        );
+        assert!(
+            has(PrivacyKind::Email, &email),
+            "case {case}: e-mail missed"
+        );
         assert!(
             !f.iter().any(|x| x.value.contains(&fake)),
             "case {case}: reserved-domain address flagged"
@@ -233,7 +252,9 @@ fn vin_embedded_in_a_longer_token_is_not_a_vin() {
         let vin = real_looking_vin(&mut r);
         for t in [format!("{vin}0"), format!("A{vin}"), format!("{vin}{vin}")] {
             assert!(
-                !privacy::scan(&t, &[]).iter().any(|f| f.kind == PrivacyKind::Vin),
+                !privacy::scan(&t, &[])
+                    .iter()
+                    .any(|f| f.kind == PrivacyKind::Vin),
                 "{t}"
             );
         }
@@ -265,7 +286,15 @@ fn provenance_checks_never_panic_and_classify_consistently() {
         "\t",
         "nc",
     ];
-    let sources = ["own read", "ISO 14229", "WinOLS", "x.clb", "kessler notes", "", "ödis"];
+    let sources = [
+        "own read",
+        "ISO 14229",
+        "WinOLS",
+        "x.clb",
+        "kessler notes",
+        "",
+        "ödis",
+    ];
     for _ in 0..CASES {
         let lic: String = (0..r.below(6))
             .map(|_| format!("{} ", r.pick(&pieces)))
