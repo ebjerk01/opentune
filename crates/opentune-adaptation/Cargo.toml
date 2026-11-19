@@ -6,7 +6,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/ebjerk01/opentune"
 authors = ["OpenTune contributors"]
 rust-version = "1.75"
-description = "Adaptation / basic-settings / actuator-test engine (RoutineControl, Read/WriteDataByIdentifier, InputOutputControlByIdentifier) for OpenTune, driven by data-defined adaptation-channel sets over UDS"
+description = "Adaptation / basic-settings / actuator-test engine for OpenTune, driven by data-defined adaptation-channel sets: UDS (RoutineControl, Read/WriteDataByIdentifier, InputOutputControlByIdentifier) and VAG KWP2000 over TP2.0 / K-line (measuring blocks, basic settings, adaptation read/test/save)"
 publish = false
 
 [dependencies]

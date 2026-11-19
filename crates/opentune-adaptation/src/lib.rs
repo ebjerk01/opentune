@@ -53,9 +53,28 @@
 //!   field with linear scaling and an optional raw min/max range.
 //! * **InputOutputControlByIdentifier (0x2F)** — actuator / output test: drive
 //!   an IO DID with shortTermAdjustment, then return control to the ECU.
+//!
+//! ## KWP2000 (VAG KWP over TP2.0 and K-line)
+//!
+//! Older VAG modules speak KWP2000 (ISO 14230), over a VW TP2.0 channel on
+//! CAN or directly on the K-line. Three more channel kinds address them —
+//! `kwp_group` (measuring block, `0x21`), `kwp_basic_settings` and
+//! `kwp_adaptation` (the startRoutineByLocalIdentifier family `0x31`/`0x32`)
+//! — each with an optional `kwp` addressing object ([`KwpAddressing`]). The
+//! engine for them is the [`kwp`] module: session and SecurityAccess are
+//! explicit per flow ([`kwp::KwpLogin`], the key from a caller-supplied
+//! [`SeedKey`](opentune_core::protocol::seedkey::SeedKey) — OpenTune ships no
+//! VAG login algorithm), and every write is gated
+//! ([`kwp::KwpWriteOptions::confirmed`]). [`sim`] is a synthetic KWP module
+//! for tests and offline demos.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod kwp;
+pub mod sim;
+
+pub use kwp::KwpAddressing;
 
 use serde::{Deserialize, Serialize};
 
@@ -107,6 +126,22 @@ pub enum AdaptationError {
         /// DID that failed to verify.
         did: u16,
     },
+    /// A KWP2000 negative response (`7F <service> <code>`), named from the
+    /// ISO 14230-3 table.
+    NegativeResponse {
+        /// The refused service id.
+        service: u8,
+        /// The negative-response code.
+        code: u8,
+        /// Its ISO 14230-3 name.
+        name: &'static str,
+    },
+    /// SecurityAccess was refused (invalid key, attempts exceeded, delay not
+    /// expired) or the seed/key handler failed. Nothing was written.
+    SecurityDenied(String),
+    /// A write was refused before any I/O: not confirmed, no session, or no
+    /// seed/key handler for the required SecurityAccess.
+    NotConfirmed(String),
 }
 
 impl std::fmt::Display for AdaptationError {
@@ -125,11 +160,21 @@ impl std::fmt::Display for AdaptationError {
                 write!(f, "`{field}` byte {offset} out of range (len {len})")
             }
             AdaptationError::InvalidDef(s) => write!(f, "invalid adaptation definition: {s}"),
-            AdaptationError::Protocol(s) => write!(f, "UDS protocol error: {s}"),
+            AdaptationError::Protocol(s) => write!(f, "protocol error: {s}"),
             AdaptationError::Transport(s) => write!(f, "transport error: {s}"),
             AdaptationError::VerifyMismatch { did } => {
                 write!(f, "read-back verify mismatch for DID 0x{did:04X}")
             }
+            AdaptationError::NegativeResponse {
+                service,
+                code,
+                name,
+            } => write!(
+                f,
+                "KWP2000 negative response 0x{code:02X} ({name}) to service 0x{service:02X}"
+            ),
+            AdaptationError::SecurityDenied(s) => write!(f, "security access denied: {s}"),
+            AdaptationError::NotConfirmed(s) => write!(f, "refused before sending anything: {s}"),
         }
     }
 }
@@ -208,8 +253,10 @@ impl Default for NumericField {
     }
 }
 
-/// The UDS mechanism and parameters of an [`AdaptationChannel`]. Serialized with
-/// a `"kind"` tag: `"routine"`, `"value"` or `"actuator"`.
+/// The mechanism and parameters of an [`AdaptationChannel`]. Serialized with a
+/// `"kind"` tag: `"routine"`, `"value"` or `"actuator"` (UDS), or
+/// `"kwp_group"`, `"kwp_basic_settings"` or `"kwp_adaptation"` (KWP2000, see
+/// [`kwp`]). Definitions written before the KWP kinds existed parse unchanged.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ChannelKind {
@@ -257,6 +304,65 @@ pub enum ChannelKind {
         #[serde(default)]
         status: Option<NumericField>,
     },
+    /// **KWP2000 readDataByLocalIdentifier (0x21)**: a VAG measuring block
+    /// (group) read as 3-byte `(formula, a, b)` cells. Read-only.
+    KwpGroup {
+        /// Measuring-block group number (the local identifier).
+        group: u8,
+    },
+    /// **KWP2000 basic settings** for one group: start / poll / stop through
+    /// the startRoutineByLocalIdentifier family (see [`kwp`]). Starting it is a
+    /// write.
+    KwpBasicSettings {
+        /// Basic-settings group number.
+        group: u8,
+        /// Routine local identifiers and selectors (VAG community defaults).
+        #[serde(default)]
+        kwp: KwpAddressing,
+    },
+    /// **KWP2000 adaptation channel**: read / test / save a 16-bit value
+    /// through the startRoutineByLocalIdentifier family (see [`kwp`]). Test and
+    /// save are writes.
+    KwpAdaptation {
+        /// Adaptation channel number.
+        channel: u8,
+        /// Scaling of the raw 16-bit value for presentation.
+        #[serde(default)]
+        scaling: Scaling,
+        /// Inclusive minimum raw value accepted on test/save (if set).
+        #[serde(default)]
+        min: Option<u16>,
+        /// Inclusive maximum raw value accepted on test/save (if set).
+        #[serde(default)]
+        max: Option<u16>,
+        /// Routine local identifiers and selectors (VAG community defaults).
+        #[serde(default)]
+        kwp: KwpAddressing,
+    },
+}
+
+impl ChannelKind {
+    /// The `kind` tag this channel serializes with.
+    pub fn tag(&self) -> &'static str {
+        match self {
+            ChannelKind::Routine { .. } => "routine",
+            ChannelKind::Value { .. } => "value",
+            ChannelKind::Actuator { .. } => "actuator",
+            ChannelKind::KwpGroup { .. } => "kwp_group",
+            ChannelKind::KwpBasicSettings { .. } => "kwp_basic_settings",
+            ChannelKind::KwpAdaptation { .. } => "kwp_adaptation",
+        }
+    }
+
+    /// Whether this is one of the KWP2000 kinds.
+    pub fn is_kwp(&self) -> bool {
+        matches!(
+            self,
+            ChannelKind::KwpGroup { .. }
+                | ChannelKind::KwpBasicSettings { .. }
+                | ChannelKind::KwpAdaptation { .. }
+        )
+    }
 }
 
 /// One named adaptation channel: a mechanism plus its parameters.
@@ -352,6 +458,19 @@ impl AdaptationDef {
                 ChannelKind::Actuator { status, .. } => {
                     if let Some(s) = status {
                         check_width(&ch.name, s.width)?;
+                    }
+                }
+                ChannelKind::KwpGroup { .. } => {}
+                ChannelKind::KwpBasicSettings { kwp, .. } => kwp.validate(&ch.name)?,
+                ChannelKind::KwpAdaptation { min, max, kwp, .. } => {
+                    kwp.validate(&ch.name)?;
+                    if let (Some(lo), Some(hi)) = (min, max) {
+                        if lo > hi {
+                            return Err(AdaptationError::InvalidDef(format!(
+                                "`{}` range is inverted (min {lo} > max {hi})",
+                                ch.name
+                            )));
+                        }
                     }
                 }
             }

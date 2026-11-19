@@ -1,0 +1,16 @@
+{
+  "id": "kwp-sim",
+  "name": "Synthetic KWP2000 module",
+  "module": "synthetic (opentune_adaptation::sim) - no real module's data",
+  "channels": [
+    { "name": "Group 1", "kind": "kwp_group", "group": 1,
+      "note": "synthetic measuring block" },
+    { "name": "Basic settings 60", "kind": "kwp_basic_settings", "group": 60 },
+    { "name": "Adaptation 1", "kind": "kwp_adaptation", "channel": 1,
+      "min": 0, "max": 4096, "scaling": { "factor": 0.5, "unit": "rpm" } },
+    { "name": "Adaptation 5", "kind": "kwp_adaptation", "channel": 5,
+      "kwp": { "enumerate": false } },
+    { "name": "Adaptation 9", "kind": "kwp_adaptation", "channel": 9,
+      "note": "the simulated module has no channel 9" }
+  ]
+}
