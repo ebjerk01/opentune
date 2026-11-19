@@ -298,6 +298,27 @@ fn rule_connector_boot_point_must_be_a_boot_pin() {
 }
 
 #[test]
+fn rule_connect_is_for_debug_probe_entries_only() {
+    let mut v = base();
+    v["access"]["boot"]["points"][0]["action"] = json!("connect");
+    assert_issue(
+        &v,
+        "action 'connect' (attach a debug probe) needs entry 'bdm-jtag'",
+    );
+    v["access"]["boot"]["entry"] = json!("bdm-jtag");
+    assert_eq!(issues(&v), Vec::<String>::new());
+
+    let mut v = base();
+    v["connectors"] = json!([{"name": "A", "pins": [
+        {"pin": "7", "function": "Boot", "signal": "boot", "sources": [0],
+         "strap": {"action": "connect"}}]}]);
+    assert_issue(
+        &v,
+        "A-7: strap.action 'connect' is for bdm-jtag boot points, not a pin strap",
+    );
+}
+
+#[test]
 fn rule_strap_only_on_boot_pins() {
     let mut v = base();
     v["connectors"] = json!([{"name": "A", "pins": [

@@ -12,6 +12,9 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- Control-unit database: boot points accept `action: "connect"` (attach a
+  BDM / JTAG probe to a header or pads), allowed only with `entry: bdm-jtag`
+  and never as a pin `strap`.
 - Control-unit database: `access.boot.possible` and `access.bench.possible`
   accept `"unknown"` (no public source documents a route) next to `true` /
   `false` (a source says there is none); plain booleans are still accepted.

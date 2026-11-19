@@ -90,7 +90,7 @@
         "resistor_ohms": { "type": "integer", "minimum": 1 }
       }
     },
-    "strap_action": { "enum": ["pull-to-gnd", "pull-to-vcc", "bridge"] },
+    "strap_action": { "enum": ["pull-to-gnd", "pull-to-vcc", "bridge", "connect"] },
     "confidence": { "enum": ["verified", "community", "unverified"], "description": "As for pins: 'verified' needs 2+ distinct sources." },
     "source_refs": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 0 }, "description": "Indices into the unit's sources." },
     "access": {

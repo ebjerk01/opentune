@@ -209,6 +209,10 @@ pub enum StrapAction {
     /// Bridge two points.
     #[serde(rename = "bridge")]
     Bridge,
+    /// Attach a debug probe (BDM / JTAG header or pads). Not a strap: only on
+    /// a boot point whose entry is `bdm-jtag`, never on a pin's `strap`.
+    #[serde(rename = "connect")]
+    Connect,
 }
 
 /// The strap of a `signal: boot` connector pin.
@@ -988,6 +992,11 @@ fn validate_access(u: &Unit, a: &Access, err: &mut dyn FnMut(String)) {
         if p.resistor_ohms == Some(0) {
             err(format!("{at}: resistor_ohms must be > 0"));
         }
+        if p.action == StrapAction::Connect && b.entry != BootEntry::BdmJtag {
+            err(format!(
+                "{at}: action 'connect' (attach a debug probe) needs entry 'bdm-jtag'"
+            ));
+        }
         if p.confidence == Confidence::Verified && boot_sources.len() < 2 {
             err(format!(
                 "{at}: 'verified' needs 2+ independent boot sources"
@@ -1121,6 +1130,12 @@ fn validate_unit(u: &Unit, path: &Path, ecudefs: Option<&BTreeSet<String>>, out:
                 if s.resistor_ohms == Some(0) {
                     err(format!(
                         "{}-{}: strap.resistor_ohms must be > 0",
+                        c.name, p.pin
+                    ));
+                }
+                if s.action == StrapAction::Connect {
+                    err(format!(
+                        "{}-{}: strap.action 'connect' is for bdm-jtag boot points, not a pin strap",
                         c.name, p.pin
                     ));
                 }

@@ -44,7 +44,7 @@ list, like pins); every part needs at least one source.
              "mcu_mode": "the processor's boot mode in plain words" | null,
              "points": [ { "name": "...",
                            "location": "connector:<connector>-<pin>" | "pcb:<label>",
-                           "action": "pull-to-gnd | pull-to-vcc | bridge",
+                           "action": "pull-to-gnd | pull-to-vcc | bridge | connect",
                            "resistor_ohms": 8000,          // optional
                            "note": "...",                 // optional
                            "confidence": "..." } ],
@@ -63,7 +63,7 @@ list, like pins); every part needs at least one source.
 | `obd.mode` | What works through the vehicle's diagnostic socket: `read+write`, `read` (complete read, no programming), `write-only` (programming, but a complete original read needs bench or boot), `none`, `unknown` (no source either way, never guessed). |
 | `bench` | Talking to the unit on the desk through **its own connector, case closed**. `how` says which pins and what it gives you. |
 | `boot` | A processor boot / service mode. `possible` is a tri-state: `true` (a documented route), `false` (a source says there is **no** route; `entry: none`), or `"unknown"` (no public source documents one either way; `entry: unknown`). Prefer `"unknown"` over `false` when nobody says. `reachable: open-case` means the case must be opened. `bench.possible` takes the same three values. |
-| `boot.points` | Where to strap. `connector:<connector>-<pin>` must name a `signal: boot` pin of the unit; `pcb:<label>` names a pad, component pin or test point. A point's confidence may not exceed the boot block's. |
+| `boot.points` | Where to strap. `connector:<connector>-<pin>` must name a `signal: boot` pin of the unit; `pcb:<label>` names a pad, component pin or test point. A point's confidence may not exceed the boot block's. `action`: `pull-to-gnd` / `pull-to-vcc` (a strap, optionally through `resistor_ohms`), `bridge` (short two points), or `connect` (attach a BDM / JTAG probe to a header or pads; only with `entry: bdm-jtag`, never as a pin `strap`). |
 | `security` | Whether a complete **read over the diagnostic protocol** (`diag_read`) and **programming** (`flash_write`) need security access. Facts only. |
 
 Related optional fields:

@@ -80,7 +80,7 @@
 
   // --- Access profile -------------------------------------------------------
   const ENTRY = { "connector-pin": "connector pin", "board-pad": "board pad", "bdm-jtag": "BDM / JTAG header", none: "none", unknown: "unknown" };
-  const ACTION = { "pull-to-gnd": "pull to ground", "pull-to-vcc": "pull to Vcc", bridge: "bridge" };
+  const ACTION = { "pull-to-gnd": "pull to ground", "pull-to-vcc": "pull to Vcc", bridge: "bridge", connect: "connect probe" };
   const NEED = { required: "required", "not-required": "not required", unknown: "unknown" };
   const confPill = (c) => { const x = CONF[c] || CONF.unverified; return `<span class="pill ${x[0]}" title="${esc(x[1])}">${esc(c || "unverified")}</span>`; };
   // Source refs are indices into u.sources; the Sources card numbers from 1.

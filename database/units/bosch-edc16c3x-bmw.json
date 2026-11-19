@@ -24,8 +24,8 @@
   "read_methods": {
     "obd": "unknown",
     "bench": true,
-    "boot": false,
-    "notes": "Bench over K-line per ecupinouts (with auxiliary GPT lines for some tools). OBD read/write capability is not documented in the cited public sources."
+    "boot": true,
+    "notes": "K-line bench diagnostics through X2412. Open-case BDM is reported for the C35. Complete OBD flash read coverage across the listed variants is unknown."
   },
   "checksum": "edc16",
   "ecudef": null,
@@ -229,6 +229,67 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "ETP Solutions forum: BMW 118d owner reports a BDM read through a connector on the board pads",
+      "url": "https://www.etpsolutions.com/forums/topic/46872-informazioni-edc16-bmw-letturascrittura/"
+    },
+    {
+      "title": "ETP Solutions forum: BMW EDC16C35 OBD and BDM access reports",
+      "url": "https://www.etpsolutions.com/forums/topic/48810-intervenire-su-bmw-con-edc16c35/"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": null,
+      "notes": "A BMW EDC16C35 forum report describes OBD reading and writing. It does not establish which flash regions can be read over OBD or identify the programming protocol across the listed variants.",
+      "confidence": "unverified",
+      "sources": [
+        6
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "For K-line diagnostics, use X2412-7 for permanent +12 V, X2412-1 for ignition +12 V, X2412-2 for ground and X2412-8 for K-line. The C31 and C35 pinouts also identify CAN-H on X2412-46 and CAN-L on X2412-33. Their use for bench programming is undocumented here.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "bdm-jtag",
+      "mcu_mode": "Background debug mode (BDM)",
+      "points": [
+        {
+          "name": "BDM connector pads (C35)",
+          "location": "pcb:BDM connector pads",
+          "action": "connect",
+          "note": "A BDM probe is attached to these board contacts. The report gives no pad numbering or orientation.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": null,
+      "reachable": "open-case",
+      "notes": "An owner reports a BDM read through a connector attached to the board pads on a BMW 118d. A separate C35 report confirms BDM access. The pad layout and reset timing for other revisions are unknown.",
+      "confidence": "community",
+      "sources": [
+        5,
+        6
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The C35 access report does not state the security requirements for a complete diagnostic read or for flash programming. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        6
+      ]
+    }
+  }
 }
