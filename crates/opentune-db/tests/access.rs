@@ -4,7 +4,7 @@
 //! Synthetic units only, apart from the repository checks.
 
 use opentune_db::{
-    load_access_pending, Database, ObdAccess, Unit, ACCESS_PENDING_FILE, NO_KEY_PHRASE,
+    ecudef_ids, load_access_pending, Database, ObdAccess, Unit, ACCESS_PENDING_FILE, NO_KEY_PHRASE,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -282,6 +282,66 @@ fn rule_texts_not_empty() {
 // ---------------------------------------------------------------------------
 // Shipped data and the .access-pending gate
 // ---------------------------------------------------------------------------
+
+const FILLED: [&str; 4] = [
+    "bosch-edc15c6-mercedes",
+    "mercedes-egs52-7226",
+    "temic-dq250-vag",
+    "haldex-gen4",
+];
+
+#[test]
+fn filled_units_validate() {
+    let db = Database::load_dir(&repo().join("database")).unwrap();
+    let ids = ecudef_ids(&repo().join("ecudefs")).unwrap();
+    let issues = db.validate(Some(&ids));
+    assert!(issues.is_empty(), "{issues:?}");
+    for id in FILLED {
+        let u = db.unit(id).unwrap_or_else(|| panic!("{id} missing"));
+        let a = u
+            .access
+            .as_ref()
+            .unwrap_or_else(|| panic!("{id}: no access"));
+        assert!(a.security.notes.contains(NO_KEY_PHRASE), "{id}");
+    }
+    // The worked example: board-level boot through the flash's DQ4 pin.
+    let a = db
+        .unit("bosch-edc15c6-mercedes")
+        .unwrap()
+        .access
+        .clone()
+        .unwrap();
+    assert!(a.boot.possible);
+    assert_eq!(
+        serde_json::to_value(a.boot.reachable).unwrap(),
+        json!("open-case")
+    );
+    assert!(a.boot.points.iter().any(|p| p.location.contains("DQ4")
+        && serde_json::to_value(p.confidence).unwrap() == json!("unverified")));
+}
+
+#[test]
+fn repository_access_gate() {
+    let dir = repo().join("database");
+    let db = Database::load_dir(&dir).unwrap();
+    let pending = load_access_pending(&dir).unwrap();
+    let gate = db.access_gate(&pending);
+    assert!(gate.errors.is_empty(), "{:?}", gate.errors);
+    assert_eq!(gate.warnings.len(), pending.ids.len());
+    // The list only shrinks: 16 units predate the profile. Lower this number
+    // when you fill one; never raise it (a new unit must carry `access`).
+    assert!(
+        pending.ids.len() <= 16,
+        "{ACCESS_PENDING_FILE} grew to {} ids",
+        pending.ids.len()
+    );
+    for id in FILLED {
+        assert!(
+            !pending.ids.contains(id),
+            "{id} is filled but still pending"
+        );
+    }
+}
 
 fn write_unit(dir: &Path, v: &Value) {
     let id = v["id"].as_str().unwrap();
