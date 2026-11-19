@@ -2,6 +2,13 @@
   "id": "bmw-ms4x-ms41",
   "name": "BMW Siemens MS41 (M52) — ms4x-net 1429861",
   "maker": "BMW",
+  "provenance": {
+    "sources": [
+      "ms4x-net/ms41 definitions/Siemens_MS41_1429861_ENG_256K_v1.0.xdf @ c3763f8 (GPL-3.0, upstream LICENSE GNU GPL v3); definitions only, no ROM - see docs/BMW-MS4X-IMPORT.md"
+    ],
+    "license": "GPL-3.0-only",
+    "evidence": "implemented"
+  },
   "family": "Siemens MS41",
   "notes": "BMW petrol DME, Siemens MS41 (Siemens C167-family 16-bit MCU), as fitted to M52 inline-6 (E36/E39). Map and identity definitions imported from the GPL-3 ms4x-net project (see docs/BMW-MS4X-IMPORT.md); only the DEFINITIONS were taken — no ROM/firmware binaries. Addresses are for software 1429861 indexed in the FULL 256 KiB image (calibration region based at 0x14000); the 24 KiB calibration read uses base 0x0 (do NOT mix the two bases). flash_size, regions and all map addresses are valid for this exact software at this base — confirm per software variant before any read or write. English table names follow the Siemens naming known from MS42/MS43; each map's notes keep the original German DAMOS name. protocol/diag_layer/bitrate/tx_id/rx_id are PLACEHOLDERS (confirm per unit): BMW MS4x diagnose over K-line (BMW DS2 / KWP2000); a complete original (full read) and any write need a bench/boot (BDM) tool — stock MS4x is not OBD-flashable. Checksum support is intentionally out of scope here (checksum=null).",
   "protocol": "iso9141",

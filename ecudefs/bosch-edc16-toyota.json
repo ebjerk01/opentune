@@ -2,6 +2,13 @@
   "id": "bosch-edc16-toyota",
   "name": "Bosch EDC16 (Toyota)",
   "maker": "Bosch",
+  "provenance": {
+    "sources": [
+      "public Bosch EDC16 family facts (ISO 15765-4, UDS); addresses and maps are EXAMPLE ONLY placeholders"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "implemented"
+  },
   "family": "EDC16",
   "notes": "Toyota 1.4 D-4D, EDC16 family over CAN (ISO 15765-4, UDS). CAN identifiers, memory map and flash_size are family placeholders and must be confirmed per software variant before any read or write.",
   "protocol": "iso_tp",

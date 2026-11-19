@@ -2,6 +2,13 @@
   "id": "bosch-dq381",
   "name": "VAG DQ381 DSG TCU (Bosch, 0GC)",
   "maker": "Bosch",
+  "provenance": {
+    "sources": [
+      "own full bench read of a DQ381 TCU (not committed): id strings and the CAL block CRC-32 verified - see docs/DSG.md"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "real-image-tested"
+  },
   "family": "DQ381",
   "notes": "VAG DQ381 7-speed wet-clutch DSG transmission control unit (0GC mechatronic, Bosch TCU on a Renesas SH725xx - the dump carries the id strings '0GC927373K', '1137D10_VW_DQ380', 'BJR_DQ380_MQB.LNO', 'BOSCH TCU' and 'RB___TCU2-8.2'). Diagnostics over CAN (ISO 15765-4, UDS). flash_size 1605632 is the 0x188000-byte full bench read the checksum was validated against; a complete original needs a bench/boot read, while calibration flashing may be possible over OBD. checksum 'dq381' (CRC32-VW: big-endian zlib CRC-32 over a self-describing CAL block based at 0x140200) is validated: 'opentune checksum verify --algo dq381' reports the CAL block OK (stored==computed 0x3D34EE10) on a real DQ381 full dump. Addresses are family-level placeholders and must be confirmed per unit before any read or write. No calibration maps are shipped yet - TCU map work (clutch pressure / torque limits) is sensitive and will be added, diff-confirmed and labelled, in follow-up PRs (see docs/CONTRIBUTING-ECUDEFS.md). Calibration only: no launch-RPM or torque-limiter defeat.",
   "protocol": "iso_tp",

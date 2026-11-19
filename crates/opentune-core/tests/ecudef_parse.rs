@@ -92,6 +92,8 @@ fn all_ecudefs_pass_validation() {
         let def = ecudef::EcuDef::from_json(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
         let mut issues = def.validate();
         issues.extend(def.validate_filename(&name));
+        // Shipped definitions must carry provenance (the CI gate's rule).
+        opentune_core::provenance::require(&mut issues);
         let errs: Vec<_> = issues
             .iter()
             .filter(|i| i.severity == validate::Severity::Error)

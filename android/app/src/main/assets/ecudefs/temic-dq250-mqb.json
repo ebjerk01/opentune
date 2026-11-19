@@ -2,6 +2,17 @@
   "id": "temic-dq250-mqb",
   "name": "VAG DQ250-MQB 6-speed DSG TCU (Temic, 0D9)",
   "maker": "Temic",
+  "provenance": {
+    "sources": [
+      "bri3d/VW_Flash lib/modules/dq250mqb.py (BSD-2-Clause)",
+      "bri3d/mqb-flash-rs (MIT)",
+      "TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3.0)",
+      "commaai/opendbc (MIT): UDS ids 0x7E1/0x7E9",
+      "checksum checked on algorithm vectors and synthetic images only (no real 0D9 read)"
+    ],
+    "license": "GPL-3.0-or-later",
+    "evidence": "synthetic-tested"
+  },
   "family": "DQ250",
   "notes": "DQ250 for the MQB platform (software 0D9300xxx, Infineon TC1766 TriCore per the open bench-flash tool). Layout from open references (bri3d/VW_Flash lib/modules/dq250mqb.py, BSD-2; bri3d/mqb-flash-rs, MIT; TheFlashBold/DQ250-MQB-Bench-Flash, GPL-3): the 0x180000-byte bin file holds the DRIVER block (0x80E bytes) at 0x0, CAL (0x20000) at 0x30000 and ASW (0x130000) at 0x50000; the CAL carries the box code at CAL+0x1FFC0 and its software version at CAL+0x1FFE0. checksum 'dq250' (JAMCRC = !crc32, little-endian in the last 4 bytes of CAL and ASW) is algorithm-vector + synthetic validated only - no real 0D9 dump was available, so it refuses to write until a block's stored value validates. UDS on CAN at 0x7E1/0x7E9 (VW_Flash/opendbc). A full read needs the SBOOT bench path (DQ250-MQB-Bench-Flash); OBD flashing of CAL/ASW over UDS is what VW_Flash implements and is not yet validated in OpenTune. Identify only: no maps are shipped (no 0D9 read was available to locate them).",
   "protocol": "iso_tp",
