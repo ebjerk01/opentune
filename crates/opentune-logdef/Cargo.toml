@@ -22,6 +22,8 @@ description = "Parse RomRaider-style logger.xml live-data definitions into an Op
 roxmltree = "0.20.0"
 # serde for the (de)serializable live-data model (workspace-pinned).
 serde = { workspace = true }
+# Trigger files (src/trigger/) are JSON.
+serde_json = { workspace = true }
 opentune-core = { path = "../opentune-core" }
 opentune-xdf = { path = "../opentune-xdf" }
 # Optional GPS channels (src/gps.rs): parser + replay only, no serial port.
