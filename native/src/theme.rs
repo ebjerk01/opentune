@@ -570,7 +570,9 @@ mod tests {
 
     #[test]
     fn tokens_differ_and_are_opaque_where_needed() {
-        assert!(DARK.dark && !LIGHT.dark);
+        let (dark, light) = (DARK, LIGHT);
+        assert_ne!(dark.dark, light.dark);
+        assert!(dark.dark);
         for t in [LIGHT, DARK] {
             for c in [t.bg, t.surface, t.fg, t.accent, t.border] {
                 assert_eq!(c.a(), 255);
