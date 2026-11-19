@@ -1,0 +1,77 @@
+name: Definition pack submission
+description: Propose a definition pack (or an ECU / controller definition) you have written, before or alongside a pull request.
+title: "Pack: <pack-id>"
+labels: [definition-pack, data]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Packs grow OpenTune's coverage as **data**. Format and rules:
+        `docs/DEFINITION-PACKS.md` (packs), `docs/CONTRIBUTING-ECUDEFS.md`
+        (ECU definitions), `CONTRIBUTING.md` (provenance and privacy). The best
+        way to submit is a pull request; this form is for discussing it first or
+        when you cannot open one.
+  - type: input
+    id: id
+    attributes:
+      label: Pack id and version
+      placeholder: vag-mqb-community 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: contents
+    attributes:
+      label: Contents
+      description: Which kinds (modules, loggers, services, coding, adaptation, ecudefs) and which vehicles / modules they cover.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources (the pack.json `sources`)
+      description: One line per source - a standard, an open project with path/commit and licence, or "own capture".
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Licence of the data (SPDX)
+      placeholder: GPL-3.0-or-later
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence level (the pack.json `evidence`)
+      description: The validation state the pack as a whole has reached (docs/DEVELOPMENT.md section 7). Pick the lower one if parts differ.
+      options:
+        - implemented
+        - synthetic-tested
+        - real-image-tested
+        - bench-tested
+        - vehicle-tested
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validator output
+      description: Paste the summary of `opentune packs validate <your-pack>` and `opentune privacy-scan <your-pack>`.
+      render: text
+  - type: checkboxes
+    id: provenance
+    attributes:
+      label: Provenance and privacy
+      options:
+        - label: Every non-standard fact has a cited, openly licensed source or is my own measurement; nothing is copied from commercial / OEM tools, their label or coding files, or decompiled software.
+          required: true
+        - label: The pack contains no seed/key algorithms, keys or other security secrets.
+          required: true
+        - label: The pack contains no VINs, plates, serial numbers, e-mail addresses or other personal data (the privacy scan is clean).
+          required: true
+        - label: The evidence level is what I actually tested, not more.
+          required: true
+        - label: Calibration / diagnostics only - no immobiliser, odometer or emissions-control defeat.
+          required: true
+        - label: I can sign off my commits (DCO, `git commit -s`).
+          required: true

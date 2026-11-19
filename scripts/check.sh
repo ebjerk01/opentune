@@ -74,6 +74,15 @@ opentune() {
     cargo run -p opentune-cli --quiet -- "$@"
 }
 
+# The CI privacy scan over the data directories (VINs, e-mails, serials).
+privacy_scan_data() {
+    local d dirs=()
+    for d in ecudefs packs ctrldefs catalog database samples android/app/src/main/assets/ecudefs; do
+        [ -d "$ROOT/$d" ] && dirs+=("$d")
+    done
+    opentune privacy-scan "${dirs[@]}"
+}
+
 node_check_ui() {
     local f rc=0
     shopt -s nullglob
@@ -125,7 +134,12 @@ step "workspace clippy -D warnings" cargo clippy --workspace --all-targets -- -D
 if [ "$fast" = 0 ]; then
     step "workspace test" cargo test --workspace
     # --- data gates (CI job: ecudefs) --------------------------------------
-    step "ecudefs validate" opentune ecudefs validate ecudefs
+    step "ecudefs validate" opentune ecudefs validate ecudefs --require-provenance
+    step "packs validate" opentune packs validate packs
+    if [ -d "$ROOT/ctrldefs" ]; then
+        step "controller defs validate" opentune controller validate ctrldefs
+    fi
+    step "privacy scan of data dirs" privacy_scan_data
     if [ -d "$ROOT/database" ] && opentune db --help >/dev/null 2>&1; then
         step "db validate" opentune db validate
     fi

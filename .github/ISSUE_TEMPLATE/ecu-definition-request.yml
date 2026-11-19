@@ -1,0 +1,61 @@
+name: New ECU definition request
+description: Ask for (or offer to help with) support for an ECU / TCU that OpenTune does not know yet.
+title: "ECU definition: <maker> <family>"
+labels: [ecu-definition, data]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Definitions are built from **public facts and contributors' own reads**
+        only (see `docs/CONTRIBUTING-ECUDEFS.md`). Share identification numbers,
+        not dumps: never attach an ECU image, and redact VINs and serial numbers.
+        A request is most useful when it says where each fact comes from.
+  - type: input
+    id: ecu
+    attributes:
+      label: ECU / TCU
+      description: Maker and family, e.g. Bosch EDC17C46, Siemens PCR2.1, Temic DQ200.
+    validations:
+      required: true
+  - type: textarea
+    id: vehicles
+    attributes:
+      label: Vehicles / engines
+      description: Models, years, engine codes the unit is fitted to.
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: Identification numbers
+      description: Hardware / part numbers and software numbers as the ECU reports them (e.g. `opentune identify`), or as printed on the label. No serial numbers.
+      render: text
+  - type: textarea
+    id: facts
+    attributes:
+      label: Known public facts and their sources
+      description: Protocol, CAN ids, flash size, checksum family, map locations - each with a link and the source's licence (open projects, standards, your own measurements).
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: What can you test with?
+      options:
+        - Nothing yet (request only)
+        - My own stock read of this ECU (not shared)
+        - The ECU on a bench
+        - A car with this ECU
+    validations:
+      required: true
+  - type: checkboxes
+    id: provenance
+    attributes:
+      label: Provenance and privacy
+      options:
+        - label: Nothing here comes from commercial tools (map packs, damos/A2L, OEM label or coding files) or decompiled firmware.
+          required: true
+        - label: I am not sharing seed/key algorithms, keys or other security secrets.
+          required: true
+        - label: I removed VINs, plates, serial numbers and other personal data, and attached no ECU image.
+          required: true
+        - label: This is calibration / diagnostics only - not immobiliser, odometer or emissions-control defeat.
+          required: true
