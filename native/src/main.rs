@@ -4,8 +4,13 @@
 mod app;
 mod bench;
 mod hex;
+mod icons;
 mod image;
 mod mapview;
+mod settings;
+mod shell;
+mod theme;
+mod views;
 
 use bench::{BenchCfg, Scene};
 use std::path::PathBuf;
@@ -83,8 +88,10 @@ fn main() -> eframe::Result {
     };
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 800.0])
-            .with_title("OpenTune (native prototype)"),
+            .with_inner_size([1440.0, 900.0])
+            .with_min_inner_size([960.0, 600.0])
+            .with_title("OpenTune"),
+        persist_window: true,
         renderer: eframe::Renderer::Wgpu,
         wgpu_options,
         ..Default::default()

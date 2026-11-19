@@ -1,83 +1,59 @@
-//! The window: top bar (open, identity, definition), left panel (maps,
-//! checksum), central view (hex / map / all maps), status bar (frame time).
+//! The window: persistent global top bar, sidebar navigation, status bar,
+//! and the routed view in the middle.
 
-use crate::bench::{self, Bench, Scene};
-use crate::hex::HexView;
-use crate::image::Image;
-use crate::mapview::draw_map;
+use crate::bench::{self, Bench};
+use crate::settings::{Settings, STORAGE_KEY};
+use crate::shell::{sidebar, topbar::TopBar};
+use crate::theme::{self, font, Tokens, MONO_MEDIUM};
+use crate::views::{self, flash::FlashView, View};
 use crate::Args;
-use eframe::egui::{self, Color32, RichText};
-use opentune_checksum::{Recognition, Representation};
+use eframe::egui::{self, Margin, RichText};
 use opentune_core::ecudef::EcuDef;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Tab {
-    Hex,
-    Map,
-    AllMaps,
-}
-
-struct Identity {
-    family: String,
-    def_match: Option<String>,
-    took_ms: f64,
-}
-
-struct Block {
-    name: String,
-    ok: bool,
-    recognised: bool,
-}
-
-struct ChecksumResult {
-    algo: String,
-    blocks: Vec<Block>,
-    took_ms: f64,
-}
-
 pub struct App {
+    settings: Settings,
+    top: TopBar,
+    view: View,
     defs: Vec<EcuDef>,
     defs_note: String,
-    image: Option<Image>,
-    identity: Option<Identity>,
-    def_idx: Option<usize>,
-    map_idx: usize,
-    tab: Tab,
-    hex: HexView,
-    maps_scroll_to: Option<f32>,
-    maps_max: f32,
-    hex_max: f32,
-    algo: String,
-    checksum: Option<Result<ChecksumResult, String>>,
-    bench: Option<Bench>,
+    flash: FlashView,
     env: String,
-    error: Option<String>,
     last_frame: Option<Instant>,
     frame_ms: f64,
 }
 
 fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
     explicit.or_else(|| {
-        ["ecudefs", "../ecudefs"]
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+        let mut c: Vec<PathBuf> = ["ecudefs", "../ecudefs"]
             .iter()
             .map(PathBuf::from)
-            .find(|p| p.is_dir())
+            .collect();
+        if let Some(d) = exe_dir {
+            c.push(d.join("ecudefs"));
+        }
+        c.into_iter().find(|p| p.is_dir())
     })
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> Self {
+        let mut settings: Settings = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, STORAGE_KEY))
+            .unwrap_or_default();
+        theme::setup(&cc.egui_ctx, settings.theme);
+
         let adapter = cc
             .wgpu_render_state
             .as_ref()
             .map(|rs| {
                 let i = rs.adapter.get_info();
-                format!(
-                    "{} / {:?} / {} {}",
-                    i.name, i.backend, i.driver, i.driver_info
-                )
+                format!("{} / {:?}", i.name, i.backend)
             })
             .unwrap_or_else(|| "no wgpu adapter".into());
         let session = if std::env::var("WAYLAND_DISPLAY").is_ok_and(|v| !v.is_empty()) {
@@ -93,371 +69,91 @@ impl App {
         let (defs, defs_note) = match find_defs_dir(args.defs.clone()) {
             Some(d) => match opentune_core::ecudef::load_dir(&d) {
                 Ok(v) => {
-                    let n = format!("{} definitions from {}", v.len(), d.display());
+                    let n = format!("{} definitions", v.len());
                     (v, n)
                 }
                 Err(e) => (Vec::new(), format!("definitions not loaded: {e}")),
             },
-            None => (Vec::new(), "no ecudefs directory found (--defs DIR)".into()),
+            None => (Vec::new(), "no ecudefs directory (--defs DIR)".into()),
         };
-        let mut app = Self {
-            defs,
-            defs_note,
-            image: None,
-            identity: None,
-            def_idx: None,
-            map_idx: 0,
-            tab: Tab::Hex,
-            hex: HexView::default(),
-            maps_scroll_to: None,
-            maps_max: 0.0,
-            hex_max: 0.0,
-            algo: String::new(),
-            checksum: None,
-            bench: args.bench.map(Bench::new),
-            env,
-            error: None,
-            last_frame: None,
-            frame_ms: 0.0,
-        };
-        if let Some(id) = &args.def {
-            app.select_def(app.defs.iter().position(|d| &d.id == id));
+        let mut flash = FlashView::new(args.bench.clone().map(Bench::new));
+        let def_id = args.def.clone().or_else(|| settings.last_def.clone());
+        if let Some(id) = &def_id {
+            flash.select_def(&defs, defs.iter().position(|d| &d.id == id));
         }
-        if let Some(f) = args.file {
-            app.open(f);
+        let file = args.file.clone().or_else(|| {
+            settings
+                .last_file
+                .clone()
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+        });
+        if let Some(f) = file {
+            flash.open(&defs, f, &mut settings);
+            // An explicit --def wins over the scanner's match.
+            if let Some(id) = &args.def {
+                flash.select_def(&defs, defs.iter().position(|d| &d.id == id));
+            }
         }
-        if let Some(b) = &app.bench {
-            app.tab = match b.cfg.scene {
-                Scene::Hex => Tab::Hex,
-                Scene::Maps => Tab::AllMaps,
-            };
+        if let Some(b) = &flash.bench {
             eprintln!(
                 "bench: {} scroll, {} frames, {} px/frame | {}",
                 b.cfg.scene.name(),
                 b.cfg.frames,
                 b.cfg.px_per_frame,
-                app.env
+                env
             );
         }
-        app
-    }
-
-    fn select_def(&mut self, idx: Option<usize>) {
-        self.def_idx = idx;
-        self.map_idx = 0;
-        if let Some(c) = idx.and_then(|i| self.defs[i].checksum.clone()) {
-            self.algo = c;
+        Self {
+            settings,
+            top: TopBar::default(),
+            view: View::Flash,
+            defs,
+            defs_note,
+            flash,
+            env,
+            last_frame: None,
+            frame_ms: 0.0,
         }
     }
 
-    fn open(&mut self, path: PathBuf) {
-        match Image::open(path) {
-            Ok(img) => {
-                // Identify in-process with the same scanner the CLI and the
-                // webview app use.
-                let t = Instant::now();
-                let ctx = opentune_scan::ScanContext {
-                    catalog: Vec::new(),
-                    ecudefs: self.defs.clone(),
-                };
-                let root = img.path.parent().unwrap_or(Path::new(".")).to_path_buf();
-                let rec = opentune_scan::scan_file(&ctx, &root, &img.path, &img.bytes);
-                let def_match = rec.ecudef_match.as_ref().map(|h| h.id.clone());
-                let conf = rec
-                    .family_confidence
-                    .map(|c| format!(" [{c:?}]"))
-                    .unwrap_or_default();
-                self.identity = Some(Identity {
-                    family: format!(
-                        "{}{}{}",
-                        rec.ecu_family,
-                        rec.ecu_variant
-                            .map(|v| format!(" ({v})"))
-                            .unwrap_or_default(),
-                        conf
-                    ),
-                    def_match: def_match.clone(),
-                    took_ms: t.elapsed().as_secs_f64() * 1000.0,
-                });
-                if let Some(id) = def_match {
-                    let idx = self.defs.iter().position(|d| d.id == id);
-                    self.select_def(idx);
-                }
-                self.checksum = None;
-                self.error = None;
-                self.image = Some(img);
-            }
-            Err(e) => self.error = Some(format!("open failed: {e}")),
-        }
-    }
-
-    fn verify(&mut self) {
-        let Some(img) = &self.image else { return };
-        let id = self.algo.clone();
-        self.checksum = Some(match opentune_checksum::get(&id) {
-            None => Err(format!("unknown checksum '{id}'")),
-            Some(a) => {
-                let t = Instant::now();
-                a.verify_report(&img.bytes, Representation::RawFullImage)
-                    .map(|v| ChecksumResult {
-                        algo: id.clone(),
-                        blocks: v
-                            .into_iter()
-                            .map(|r| Block {
-                                name: r.status.name,
-                                ok: r.status.ok,
-                                recognised: r.recognition == Recognition::Recognised,
-                            })
-                            .collect(),
-                        took_ms: t.elapsed().as_secs_f64() * 1000.0,
-                    })
-                    .map_err(|e| e.to_string())
-            }
-        });
-    }
-
-    fn top_bar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if ui.button("Open…").clicked() {
-                if let Some(p) = rfd::FileDialog::new()
-                    .add_filter("flash image", &["bin", "ori", "mod", "hex"])
-                    .pick_file()
-                {
-                    self.open(p);
-                }
-            }
-            match &self.image {
-                Some(img) => {
-                    ui.label(RichText::new(img.name()).strong());
-                    ui.label(format!("{} KiB", img.bytes.len() / 1024));
-                }
-                None => {
-                    ui.label("no image open");
-                }
-            }
-            if let Some(id) = &self.identity {
-                ui.separator();
-                ui.label(format!("Family: {}", id.family))
-                    .on_hover_text(format!(
-                        "identified in-process in {:.1} ms; definition match: {}",
-                        id.took_ms,
-                        id.def_match.as_deref().unwrap_or("none")
-                    ));
-            }
-            ui.separator();
-            let current = self
-                .def_idx
-                .map(|i| self.defs[i].name.clone())
-                .unwrap_or_else(|| "(no definition)".into());
-            let mut pick = None;
-            egui::ComboBox::from_id_salt("def")
-                .selected_text(current)
-                .width(220.0)
-                .show_ui(ui, |ui| {
-                    for (i, d) in self.defs.iter().enumerate() {
-                        if ui
-                            .selectable_label(self.def_idx == Some(i), &d.name)
-                            .clicked()
-                        {
-                            pick = Some(i);
-                        }
-                    }
-                });
-            if pick.is_some() {
-                self.select_def(pick);
-            }
-            ui.separator();
-            ui.selectable_value(&mut self.tab, Tab::Hex, "Hex");
-            ui.selectable_value(&mut self.tab, Tab::Map, "Map");
-            ui.selectable_value(&mut self.tab, Tab::AllMaps, "All maps");
-        });
-    }
-
-    fn side_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Maps");
-        match self.def_idx.map(|i| &self.defs[i]) {
-            Some(d) if !d.maps.is_empty() => {
-                egui::ScrollArea::vertical()
-                    .id_salt("maplist")
-                    .max_height(260.0)
-                    .show(ui, |ui| {
-                        for (i, m) in d.maps.iter().enumerate() {
-                            let r = ui.selectable_label(self.map_idx == i, &m.name);
-                            if r.clicked() {
-                                self.map_idx = i;
-                                if self.tab == Tab::Hex {
-                                    self.hex.scroll_to = Some(
-                                        (m.address as usize / crate::hex::BYTES_PER_ROW) as f32
-                                            * self.hex.row_height,
-                                    );
-                                } else {
-                                    self.tab = Tab::Map;
-                                }
-                            }
-                        }
-                    });
-            }
-            Some(_) => {
-                ui.label("this definition has no maps");
-            }
-            None => {
-                ui.label("pick a definition");
-            }
-        }
-        ui.separator();
-        ui.heading("Checksum");
-        ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("algo")
-                .selected_text(if self.algo.is_empty() {
-                    "(algorithm)".to_string()
-                } else {
-                    self.algo.clone()
-                })
-                .show_ui(ui, |ui| {
-                    for a in opentune_checksum::algorithms() {
-                        ui.selectable_value(&mut self.algo, a.id.to_string(), a.id)
-                            .on_hover_text(a.name);
-                    }
-                });
-            let can = self.image.is_some() && !self.algo.is_empty();
-            if ui.add_enabled(can, egui::Button::new("Verify")).clicked() {
-                self.verify();
-            }
-        });
-        match &self.checksum {
-            Some(Ok(r)) => {
-                let bad = r.blocks.iter().filter(|b| !b.ok).count();
-                let rec = r.blocks.iter().all(|b| b.recognised) && !r.blocks.is_empty();
-                let (col, txt) = if r.blocks.is_empty() {
-                    (Color32::LIGHT_RED, "no protected blocks found".to_string())
-                } else if bad == 0 {
-                    (
-                        Color32::LIGHT_GREEN,
-                        format!("{}: all {} blocks OK", r.algo, r.blocks.len()),
-                    )
-                } else {
-                    (
-                        Color32::LIGHT_RED,
-                        format!("{}: {bad} of {} blocks BAD", r.algo, r.blocks.len()),
-                    )
-                };
-                ui.colored_label(col, txt);
-                ui.label(format!(
-                    "{} · {:.1} ms in-process",
-                    if rec {
-                        "recognised family"
-                    } else {
-                        "consistent only"
-                    },
-                    r.took_ms
-                ));
-                egui::ScrollArea::vertical()
-                    .id_salt("blocks")
-                    .max_height(220.0)
-                    .show(ui, |ui| {
-                        for b in &r.blocks {
-                            ui.label(
-                                RichText::new(format!(
-                                    "{} {}",
-                                    if b.ok { "OK " } else { "BAD" },
-                                    b.name
-                                ))
-                                .monospace()
-                                .color(if b.ok {
-                                    ui.visuals().text_color()
-                                } else {
-                                    Color32::LIGHT_RED
-                                }),
-                            );
-                        }
-                    });
-            }
-            Some(Err(e)) => {
-                ui.colored_label(Color32::LIGHT_RED, e);
-            }
-            None => {}
-        }
-        ui.separator();
-        ui.small(&self.defs_note);
-    }
-
-    fn central(&mut self, ui: &mut egui::Ui) {
-        let Some(img) = &self.image else {
-            ui.centered_and_justified(|ui| {
-                ui.label("Open a flash image (File → Open…, or pass it on the command line).")
-            });
-            return;
+    fn status_bar(&self, ui: &mut egui::Ui, t: &Tokens) {
+        let st = self.flash.status();
+        let m = |s: String, c| RichText::new(s).font(font(MONO_MEDIUM, 11.5)).color(c);
+        let sep = |ui: &mut egui::Ui| {
+            ui.label(m("•".into(), t.border));
         };
-        let def = self.def_idx.map(|i| &self.defs[i]);
-        let sel = def.and_then(|d| d.maps.get(self.map_idx));
-        match self.tab {
-            Tab::Hex => {
-                let hl = sel.map(|m| m.address as usize..(m.address + m.byte_len()) as usize);
-                if let Some(b) = &self.bench {
-                    let y = wrap(b.offset(), self.hex_max);
-                    self.hex.scroll_to = Some(y);
-                }
-                let rows = img.bytes.len().div_ceil(crate::hex::BYTES_PER_ROW) as f32;
-                self.hex.show(ui, &img.bytes, hl);
-                self.hex_max = (rows * self.hex.row_height - ui.available_height()).max(1.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            match &st.path {
+                Some(p) => ui.label(m(p.clone(), t.fg_dim)),
+                None => ui.label(m("no dump open".into(), t.fg_faint)),
+            };
+            if let Some(o) = st.offset {
+                sep(ui);
+                ui.label(m(format!("offset 0x{o:08X}"), t.fg_dim));
             }
-            Tab::Map => match sel {
-                Some(m) => {
-                    ui.label(RichText::new(&m.name).heading());
-                    ui.label(format!(
-                        "{}×{} {:?} {:?} @0x{:06X} · {}",
-                        m.rows, m.cols, m.data_type, m.endian, m.address, m.unit
-                    ));
-                    egui::ScrollArea::both()
-                        .id_salt("map")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            draw_map(ui, &img.bytes, m);
-                        });
-                }
-                None => {
-                    ui.label("pick a definition and a map");
-                }
-            },
-            Tab::AllMaps => {
-                let Some(d) = def else {
-                    ui.label("pick a definition");
-                    return;
+            if let Some(f) = &st.family {
+                sep(ui);
+                ui.label(m(f.clone(), t.fg_dim));
+            }
+            sep(ui);
+            ui.label(m(self.defs_note.clone(), t.fg_faint));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(m(
+                    format!("OpenTune native {}", env!("CARGO_PKG_VERSION")),
+                    t.accent,
+                ));
+                sep(ui);
+                let fps = if self.frame_ms > 0.0 {
+                    1000.0 / self.frame_ms
+                } else {
+                    0.0
                 };
-                if let Some(b) = &self.bench {
-                    self.maps_scroll_to = Some(wrap(b.offset(), self.maps_max));
-                }
-                let mut area = egui::ScrollArea::both()
-                    .id_salt("allmaps")
-                    .auto_shrink([false, false]);
-                if let Some(y) = self.maps_scroll_to.take() {
-                    area = area.vertical_scroll_offset(y);
-                }
-                let out = area.show(ui, |ui| {
-                    for m in &d.maps {
-                        ui.label(
-                            RichText::new(format!(
-                                "{} — {}×{} @0x{:06X} {}",
-                                m.name, m.rows, m.cols, m.address, m.unit
-                            ))
-                            .strong(),
-                        );
-                        draw_map(ui, &img.bytes, m);
-                        ui.add_space(12.0);
-                    }
-                });
-                self.maps_max = (out.content_size.y - out.inner_rect.height()).max(1.0);
-            }
-        }
-    }
-}
-
-/// Scripted scroll position, wrapping back to the top at the end.
-fn wrap(y: f32, max: f32) -> f32 {
-    if max <= 1.0 {
-        0.0
-    } else {
-        y % max
+                ui.label(m(format!("egui · wgpu · {fps:.0} fps"), t.fg_faint))
+                    .on_hover_text(&self.env);
+            });
+        });
     }
 }
 
@@ -467,36 +163,56 @@ impl eframe::App for App {
         let start = Instant::now();
         if let Some(prev) = self.last_frame {
             let dt = start.duration_since(prev).as_secs_f64() * 1000.0;
-            self.frame_ms = self.frame_ms * 0.9 + dt * 0.1;
+            self.frame_ms = if self.frame_ms == 0.0 {
+                dt
+            } else {
+                self.frame_ms * 0.9 + dt * 0.1
+            };
         }
         self.last_frame = Some(start);
+        let t = theme::tokens(&ctx);
 
-        egui::Panel::top("top").show(ui, |ui| self.top_bar(ui));
-        egui::Panel::bottom("status").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.small(format!(
-                    "frame {:.1} ms (~{:.0} fps)",
-                    self.frame_ms,
-                    if self.frame_ms > 0.0 {
-                        1000.0 / self.frame_ms
-                    } else {
-                        0.0
-                    }
-                ));
-                ui.separator();
-                ui.small(&self.env);
-                if let Some(e) = &self.error {
-                    ui.separator();
-                    ui.colored_label(Color32::LIGHT_RED, e);
+        egui::Panel::top("gbar")
+            .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
+            .show(ui, |ui| self.top.ui(ui, &t, &mut self.settings));
+        let flash_size = self
+            .flash
+            .image
+            .as_ref()
+            .map(|i| views::flash::size_label(i.bytes.len()));
+        let map_count = self
+            .flash
+            .def_idx
+            .map(|i| self.defs[i].maps.len())
+            .filter(|n| *n > 0);
+        let defs_count = self.defs.len();
+        let counts = move |v: View| match v {
+            View::Flash => flash_size.clone(),
+            View::Maps => map_count.map(|n| n.to_string()),
+            View::EcuDb => Some(defs_count.to_string()),
+            View::Drivers => Some(crate::shell::topbar::DRIVERS.len().to_string()),
+            _ => None,
+        };
+        egui::Panel::left("nav")
+            .exact_size(230.0)
+            .resizable(false)
+            .frame(egui::Frame::new().fill(t.surface))
+            .show(ui, |ui| {
+                if let Some(v) = sidebar::ui(ui, &t, self.view, &counts) {
+                    self.view = v;
                 }
             });
-        });
-        egui::Panel::left("side")
-            .default_size(290.0)
-            .show(ui, |ui| self.side_panel(ui));
-        egui::CentralPanel::default().show(ui, |ui| self.central(ui));
+        egui::Panel::bottom("status")
+            .frame(theme::bar_frame(&t, Margin::symmetric(14, 6)))
+            .show(ui, |ui| self.status_bar(ui, &t));
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(t.bg))
+            .show(ui, |ui| match self.view {
+                View::Flash => self.flash.ui(ui, &t, &self.defs, &mut self.settings),
+                other => views::placeholder::ui(ui, &t, other),
+            });
 
-        if let Some(b) = &mut self.bench {
+        if let Some(b) = &mut self.flash.bench {
             if !b.done {
                 let cpu = start.elapsed().as_secs_f64() * 1000.0;
                 if b.record(start, cpu) {
@@ -513,5 +229,9 @@ impl eframe::App for App {
             }
             ctx.request_repaint();
         }
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, STORAGE_KEY, &self.settings);
     }
 }

@@ -22,5 +22,9 @@ opentune-checksum = { path = "../crates/opentune-checksum" }
 opentune-scan = { path = "../crates/opentune-scan" }
 
 # GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
-eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
 rfd = "0.18"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
