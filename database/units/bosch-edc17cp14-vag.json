@@ -20,8 +20,8 @@
   "read_methods": {
     "obd": "write-only",
     "bench": true,
-    "boot": true,
-    "notes": "Per OpenTune's bosch-edc17cp14 definition: calibration flashing works over OBD, but a complete original needs a bench or boot read. Bench over CAN; ecupinouts notes some bench tools also drive two auxiliary GPT lines."
+    "boot": false,
+    "notes": "OBD writing and virtual reads are documented. Complete original reads over OBD are unconfirmed across revisions. Closed-case bench communication uses CAN. A usable boot entry point is unconfirmed."
   },
   "checksum": "edc17",
   "ecudef": "bosch-edc17cp14",
@@ -176,6 +176,63 @@
     {
       "title": "Infineon TC1796 data sheet (2 MB program flash, 128 KB data flash)",
       "url": "https://www.mouser.com/datasheet/2/196/Infineon_SAK_TC1796_256F150E_BE_DS_v01_00_EN-1732136.pdf"
+    },
+    {
+      "title": "AUTOM8-OBD supported vehicles (VAG EDC17CP14 2.0 TDI TP20)",
+      "url": "https://autom8-obd.com/pages/supported-vehicles"
+    },
+    {
+      "title": "Microtronik HexProg 1.0.33 support announcement (VAG EDC17CP14 read support and flash variants)",
+      "url": "https://www.microtronik.com/info/softwarenews/hexprog-software-version-1-0-33"
+    },
+    {
+      "title": "Infineon TC1796 data sheet V1.0, section 3.2 and Table 7 (on-chip memory and boot selections)",
+      "url": "https://www.infineon.com/assets/row/public/documents/10/49/infineon-sak-tc1796-256f150e-be-ds-en.pdf"
     }
-  ]
+  ],
+  "flash_note": "The 2048 KiB figure covers the TC1796's internal program flash (Infineon, section 3.2). Microtronik also lists external-flash versions of the VAG EDC17CP14. External flash capacity is unknown.",
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": "TP2.0 over CAN for the 2.0 TDI listed by AUTOM8",
+      "notes": "AUTOM8 lists writing and virtual reads. A virtual read does not capture the installed flash. Microtronik also reports direct reads on some versions, without specifying their coverage or the revisions involved.",
+      "confidence": "community",
+      "sources": [
+        4,
+        5
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "The T94 connector carries +12 V permanent on T94-87, ignition on T94-5, CAN high on T94-68 and CAN low on T94-67. The primary layout uses ground T94-1 and auxiliary GPT1 on T60-52 and GPT2 on T60-44 for bench programming. The second ecupinouts layout uses ground T94-2 and omits both GPT lines. Neither layout lists a K-line. Confirm the ground by continuity before applying power.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "boot": {
+      "possible": false,
+      "entry": "unknown",
+      "mcu_mode": "The TC1796 supports serial bootstrap over ASC0 or CAN (Infineon, Table 7). The mode used on this ECU is unknown.",
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "The processor data sheet describes chip-level boot choices. The available pinout evidence does not establish a usable point, strap action and reset sequence for an identified EDC17CP14 board revision.",
+      "confidence": "unverified",
+      "sources": [
+        0,
+        6
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The OBD support list does not specify security access requirements for a complete diagnostic read or for flash programming. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        5
+      ]
+    }
+  }
 }

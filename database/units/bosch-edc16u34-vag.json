@@ -213,6 +213,58 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "OpenTune EDC16U34 definition (GPL-3.0-or-later): OBD read scope and diagnostic protocol configuration",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/ecudefs/bosch-edc16u34.json"
+    },
+    {
+      "title": "Microtronik Volkswagen EDC16U34 support list: OBD read/write and open-case access",
+      "url": "https://www.microtronik.com/support/hexprogeculist/Volkswagen/EDC16U34"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "read+write",
+      "protocol": "OpenTune configures KWP2000 over ISO-TP on CAN and lists UDS as vehicle-dependent.",
+      "notes": "Microtronik lists OBD reading and writing. OpenTune defines a full OBD read of the 2 MiB flash and a writable calibration region. The support list does not specify read length or confirm the protocol for each vehicle.",
+      "confidence": "community",
+      "sources": [
+        5,
+        6
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "At the closed-case connector, permanent +12 V is T94-18, switched +12 V is T94-5, and ground is T94-1. K-line diagnostics use T94-72. Diag-Prof identifies CAN high on T94-89 and CAN low on T94-66.",
+      "confidence": "community",
+      "sources": [
+        0,
+        2
+      ]
+    },
+    "boot": {
+      "possible": false,
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "open-case",
+      "notes": "Microtronik lists open-case access for this ECU. The listing does not identify a board point, entry action or reset sequence, so a usable boot route cannot be specified.",
+      "confidence": "unverified",
+      "sources": [
+        6
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "Neither the unit definition nor the support list states the access requirement for a complete diagnostic read or for programming. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        5,
+        6
+      ]
+    }
+  }
 }

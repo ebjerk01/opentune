@@ -20,8 +20,8 @@
   "read_methods": {
     "obd": "write-only",
     "bench": true,
-    "boot": true,
-    "notes": "Per OpenTune's siemens-pcr21 definition: calibration flashing over OBD, complete original via bench/boot read. Bench over CAN (ecupinouts)."
+    "boot": false,
+    "notes": "Calibration programming over OBD. A complete OBD read is undocumented. The T94 connector supports bench CAN communication. A usable boot entry point is unknown."
   },
   "checksum": "pcr21",
   "ecudef": "siemens-pcr21",
@@ -161,6 +161,56 @@
     {
       "title": "OpenTune vehicle catalog (catalog/manual, engine to ECU-family mapping)",
       "url": "https://github.com/ebjerk01/opentune/tree/main/catalog/manual"
+    },
+    {
+      "title": "OpenTune (GPL-3.0): Siemens PCR2.1 family definition and diagnostic transport",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/ecudefs/siemens-pcr21.json"
+    },
+    {
+      "title": "AutoTuner: supported OBD and boot operations for VAG 1.6 TDI PCR2.1",
+      "url": "https://www.autotuner.com/blogs/news/volkswagen-skoda-audi-seat-1-6-tdi"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": "UDS over CAN",
+      "notes": "OpenTune lists OBD calibration programming and says a complete original typically needs bench or boot access. AutoTuner lists OBD reading on the 1.6 TDI without specifying the memory range.",
+      "confidence": "community",
+      "sources": [
+        4,
+        5
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "For bench CAN communication, supply +12 V to T94-5, T94-87 and T94-92, with ground on T94-1. CAN-H is T94-68 and CAN-L is T94-67. The pinout lists no K-line.",
+      "confidence": "community",
+      "sources": [
+        0
+      ]
+    },
+    "boot": {
+      "possible": false,
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "AutoTuner lists boot support for the 1.6 TDI PCR2.1. The public capability listing does not identify a board point, connector pin or reset timing for this unit.",
+      "confidence": "unverified",
+      "sources": [
+        5
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "AutoTuner reports write protection on the 1.6 TDI PCR2.1. Its support listing does not specify diagnostic security-access requirements for a complete read or for programming. OpenTune ships no OEM key.",
+      "confidence": "unverified",
+      "sources": [
+        5
+      ]
+    }
+  }
 }
