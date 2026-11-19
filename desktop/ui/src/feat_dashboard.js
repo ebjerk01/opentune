@@ -283,7 +283,16 @@
         });
       } else push(k, v);
     });
-    if (reshape) drawTiles();
+    if (reshape) pendingReshape = true;
+    lastVals = vals;
+    // Polling goes on while the panel is hidden (it feeds the Drive view);
+    // only the painting waits until the panel is shown again.
+    if (panel.classList.contains("active")) paintAll();
+  }
+  let lastVals = {}, pendingReshape = false;
+  function paintAll() {
+    if (pendingReshape) { pendingReshape = false; drawTiles(); }
+    const vals = lastVals;
     const bar = pUnit === "bar";
     const [max, red] = REDLINE[preset === "petrol" ? "petrol" : "diesel"];
     setGauge("gR", vals.rpm != null ? vals.rpm : null, 0, max, "rpm", 0, red);
@@ -456,6 +465,7 @@
   // window closes (polling itself carries on as before).
   new MutationObserver(() => {
     if (rec && !panel.classList.contains("active")) stopRecord("panel hidden");
+    if (timer && panel.classList.contains("active")) paintAll();
   }).observe(panel, { attributes: true, attributeFilter: ["class"] });
   window.addEventListener("beforeunload", () => stopRecord("window closed"));
   if (window.OT && window.OT.gate) {
