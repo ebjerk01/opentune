@@ -115,16 +115,29 @@ fn all_ecudefs_pass_validation() {
 #[test]
 fn example_definitions_never_match_a_real_unit() {
     let defs = ecudef::load_dir(&ecudefs_dir()).expect("ecudefs parse");
-    let toyota = defs.iter().find(|d| d.id == "bosch-edc16-toyota").expect("toyota def");
+    let toyota = defs
+        .iter()
+        .find(|d| d.id == "bosch-edc16-toyota")
+        .expect("toyota def");
     assert!(toyota.is_example(), "placeholder def is evidence `example`");
-    assert!(toyota.name.contains("Example — placeholder data"), "{}", toyota.name);
+    assert!(
+        toyota.name.contains("Example — placeholder data"),
+        "{}",
+        toyota.name
+    );
     // Every key the example def carries, alone and together.
     let mut ids = Vec::new();
     for p in &toyota.identify.part_numbers {
-        ids.push(opentune_core::EcuId { hw_number: Some(format!("{p}999")), ..Default::default() });
+        ids.push(opentune_core::EcuId {
+            hw_number: Some(format!("{p}999")),
+            ..Default::default()
+        });
     }
     for s in &toyota.identify.sw_numbers {
-        ids.push(opentune_core::EcuId { sw_number: Some(format!("{s}382088")), ..Default::default() });
+        ids.push(opentune_core::EcuId {
+            sw_number: Some(format!("{s}382088")),
+            ..Default::default()
+        });
     }
     for id in &ids {
         assert!(!toyota.matches_id(id), "example matched {id:?}");
@@ -139,7 +152,10 @@ fn example_definitions_never_match_a_real_unit() {
         sw_number: Some("1037382088".into()),
         ..Default::default()
     };
-    assert_eq!(ecudef::match_ecu(&defs, &u34).map(|d| d.id.as_str()), Some("bosch-edc16u34"));
+    assert_eq!(
+        ecudef::match_ecu(&defs, &u34).map(|d| d.id.as_str()),
+        Some("bosch-edc16u34")
+    );
 }
 
 #[test]
