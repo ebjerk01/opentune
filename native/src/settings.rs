@@ -26,7 +26,7 @@ impl Units {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AdapterSettings {
-    /// Driver id, e.g. "elm327-obd", "kkl", "socketcan" (empty = none).
+    /// Driver id, e.g. "elm327obd", "kkl", "socketcan" (empty = none).
     pub driver: String,
     /// Serial port / interface, e.g. "/dev/ttyUSB0", "can0".
     pub port: String,
@@ -35,6 +35,9 @@ pub struct AdapterSettings {
     /// Request / response CAN ids (hex, blank = definition default).
     pub tx: String,
     pub rx: String,
+    /// Serial baud an ELM327 answered at during auto-detect / connect; tried
+    /// first on the next connect (0 = try the common bauds).
+    pub baud: u32,
 }
 
 /// Pane splits of the Flash dump view, as fractions of the available space.

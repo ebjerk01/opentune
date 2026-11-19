@@ -471,12 +471,18 @@ pub fn pill(ui: &mut Ui, t: &Tokens, text: &str, tone: Tone, mono_text: bool) ->
     } else {
         font(UI_STRONG, 11.0)
     };
-    egui::Frame::new()
-        .fill(bg)
-        .corner_radius(CornerRadius::same(255))
-        .inner_margin(Margin::symmetric(8, 2))
-        .show(ui, |ui| ui.label(RichText::new(text).font(f).color(fg)))
-        .response
+    // Measure first, then allocate the exact size: a wrapping parent can
+    // then move the whole pill to the next line (a Frame cannot tell its
+    // size in advance), and the pill never wraps its own text.
+    let galley = ui.painter().layout_no_wrap(text.to_string(), f, fg);
+    let size = galley.size() + Vec2::new(16.0, 4.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_filled(rect, CornerRadius::same(255), bg);
+        ui.painter()
+            .galley(rect.center() - galley.size() / 2.0, galley, fg);
+    }
+    resp
 }
 
 /// Small uppercase section label (nav groups, menu headings).

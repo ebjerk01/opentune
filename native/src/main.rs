@@ -1,6 +1,7 @@
 //! OpenTune native frontend (prototype): egui/eframe on wgpu, calling the Rust
 //! core in-process. See README.md.
 
+mod adapters;
 mod app;
 mod bench;
 mod hex;

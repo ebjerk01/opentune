@@ -293,6 +293,11 @@ const DRIVERS: &[Driver] = &[
 ];
 
 /// Card columns for a content width (cards are at least `MIN_CARD` wide).
+/// Number of driver cards (sidebar count).
+pub fn count() -> usize {
+    DRIVERS.len()
+}
+
 const MIN_CARD: f32 = 300.0;
 fn columns(width: f32, gap: f32) -> usize {
     (((width + gap) / (MIN_CARD + gap)).floor() as usize).clamp(1, 4)

@@ -233,7 +233,7 @@ impl eframe::App for App {
             View::Flash => flash_size.clone(),
             View::Maps => map_count.map(|n| n.to_string()),
             View::EcuDb => db_count.map(|n| n.to_string()),
-            View::Drivers => Some(crate::shell::topbar::DRIVERS.len().to_string()),
+            View::Drivers => Some(views::drivers::count().to_string()),
             _ => None,
         };
         egui::Panel::left("nav")
@@ -270,7 +270,7 @@ impl eframe::App for App {
             let r = ctx.content_rect();
             let p = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Foreground,
-                egui::Id::new("drop"),
+                egui::Id::unique("drop"),
             ));
             p.rect_filled(r, 0.0, t.bg.gamma_multiply(0.85));
             p.rect_stroke(
