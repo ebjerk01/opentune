@@ -581,6 +581,9 @@ pub struct Confirms {
     /// key → (request, state, typed text, target module shown).
     #[allow(clippy::type_complexity)]
     open: BTreeMap<String, (ConfirmRequest, ConfirmState, String, Option<DiagTarget>)>,
+    /// key → (module name, the app's target described when it is NOT this
+    /// module): dialogs from [`Host::confirm_ecu_for`].
+    modules: BTreeMap<String, (String, Option<String>)>,
 }
 
 impl Confirms {
@@ -592,6 +595,29 @@ impl Confirms {
     /// can be consumed later.
     pub(crate) fn withdraw(&mut self, key: &str) {
         self.open.remove(key);
+        self.modules.remove(key);
+    }
+
+    /// Like `ask_with`, naming the module (`module`) and, when it is not the
+    /// app's current target, saying so prominently (`off_target`: the app's
+    /// target, described).
+    pub(crate) fn ask_for(
+        &mut self,
+        req: ConfirmRequest,
+        target: DiagTarget,
+        module: &str,
+        off_target: Option<String>,
+    ) -> ConfirmResult {
+        let key = req.key.clone();
+        if !self.open.contains_key(&key) {
+            self.modules
+                .insert(key.clone(), (module.to_string(), off_target));
+        }
+        let r = self.ask_with(req, Some(target));
+        if !matches!(r, ConfirmResult::Pending) {
+            self.modules.remove(&key);
+        }
+        r
     }
 
     /// Like `ask`, for an operation on module `target`: the dialog shows it
@@ -632,6 +658,7 @@ impl Confirms {
             return;
         };
         let key = key.clone();
+        let module = self.modules.get(&key).cloned();
         let mut decided = None;
         egui::Modal::new(egui::Id::unique("host-confirm")).show(ctx, |ui| {
             ui.set_max_width(460.0);
@@ -642,6 +669,33 @@ impl Confirms {
             );
             ui.add_space(6.0);
             ui.label(egui::RichText::new(&req.body).color(t.fg_dim));
+            if let Some((name, app_target)) = &module {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(format!("Module: {name}"))
+                        .font(theme::font(theme::DISPLAY, 15.0))
+                        .color(t.fg),
+                );
+                if let Some(app) = app_target {
+                    ui.add_space(6.0);
+                    egui::Frame::new()
+                        .fill(t.crit_soft)
+                        .stroke(egui::Stroke::new(1.5, t.crit))
+                        .corner_radius(egui::CornerRadius::same(8))
+                        .inner_margin(egui::Margin::symmetric(10, 8))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}  This is NOT the app's current target ({app}). \
+                                     Check that {name} is the module you mean.",
+                                    crate::icons::WARNING
+                                ))
+                                .font(theme::font(theme::UI_STRONG, 13.0))
+                                .color(t.crit),
+                            );
+                        });
+                }
+            }
             if let Some(tg) = target {
                 ui.add_space(8.0);
                 egui::Frame::new()
@@ -1402,6 +1456,34 @@ impl<'a> Host<'a> {
         }
     }
 
+    /// Confirm an operation that changes the explicit module `target`, named
+    /// `module` (e.g. "Gearbox (TCU)"), which need not be the app's target.
+    /// The dialog names the module prominently, warns prominently when it is
+    /// NOT the app's current target, and the [`Ack`] carries `target`.
+    /// Declined at once without a module name.
+    ///
+    /// One confirmation covers one module: an operation over several modules
+    /// must confirm each one (there is deliberately no fan-out confirmation).
+    pub fn confirm_ecu_for(
+        &mut self,
+        req: ConfirmRequest,
+        target: DiagTarget,
+        module: &str,
+    ) -> ConfirmResult {
+        if module.trim().is_empty() {
+            self.confirms.withdraw(&req.key);
+            *self.status = Some("name the module the change goes to".into());
+            return ConfirmResult::Declined;
+        }
+        let off_target = match &self.target {
+            Ok(app) if *app == target => None,
+            Ok(app) => Some(app.to_string()),
+            Err(_) => Some("none usable".to_string()),
+        };
+        self.confirms
+            .ask_for(req, target, module.trim(), off_target)
+    }
+
     pub fn spawn_job<T, F>(&self, name: &str, f: F) -> JobHandle<T>
     where
         T: Send + 'static,
@@ -2052,6 +2134,62 @@ mod tests {
             typed: None,
             confirm_label: "ok".into(),
         }
+    }
+
+    /// An explicit-module confirmation: the dialog names the module, warns
+    /// when it is not the app's target, and the Ack carries the module.
+    #[test]
+    fn confirm_ecu_for_names_the_module_warns_off_target_and_stamps_it() {
+        let mut fx = Fixture::new();
+        // The app targets the engine; the change is for the TCU.
+        assert!(matches!(
+            fx.host(Ok(DiagTarget::ENGINE), |h| h.confirm_ecu_for(
+                req("tcu"),
+                TCU,
+                "Gearbox (TCU)"
+            )),
+            ConfirmResult::Pending
+        ));
+        assert_eq!(fx.confirms.open["tcu"].3, Some(TCU), "the dialog shows it");
+        let (name, off) = fx.confirms.modules["tcu"].clone();
+        assert_eq!(name, "Gearbox (TCU)");
+        assert_eq!(
+            off.as_deref(),
+            Some("tx 0x7E0 / rx 0x7E8"),
+            "NOT the app's target"
+        );
+        fx.confirms.answer("tcu", true);
+        match fx.host(Ok(DiagTarget::ENGINE), |h| {
+            h.confirm_ecu_for(req("tcu"), TCU, "Gearbox (TCU)")
+        }) {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.ecu_target(), Ok(TCU)),
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            !fx.confirms.modules.contains_key("tcu"),
+            "cleared once answered"
+        );
+        // Same module as the app's target: named, no off-target warning.
+        fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("same"), TCU, "Gearbox"));
+        assert_eq!(fx.confirms.modules["same"].1, None);
+        // An unusable app target counts as "not the app's target".
+        fx.host(Err("half set".into()), |h| {
+            h.confirm_ecu_for(req("err"), TCU, "Gearbox")
+        });
+        assert_eq!(fx.confirms.modules["err"].1.as_deref(), Some("none usable"));
+        // No module name: declined, nothing opened.
+        assert!(matches!(
+            fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("anon"), TCU, "  ")),
+            ConfirmResult::Declined
+        ));
+        assert!(!fx.confirms.open.contains_key("anon"));
+        // A declined dialog leaves nothing behind.
+        fx.confirms.answer("same", false);
+        assert!(matches!(
+            fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("same"), TCU, "Gearbox")),
+            ConfirmResult::Declined
+        ));
+        assert!(!fx.confirms.modules.contains_key("same"));
     }
 
     const TCU: DiagTarget = DiagTarget::can(0x7E1, 0x7E9);

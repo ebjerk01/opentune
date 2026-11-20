@@ -79,6 +79,14 @@ impl Unlocker {
         &self.id
     }
 
+    /// The resolved seed/key algorithm, for core engines that take one
+    /// directly (a secured actuator test's login, a service script's key
+    /// provider, a KWP login). It only computes keys: an ECU change still
+    /// needs `Host::confirm_ecu` + a backup + `mutate` / `actuate`.
+    pub fn seed_key(&self) -> Result<Box<dyn opentune_core::protocol::seedkey::SeedKey>, String> {
+        self.keys.require(&self.id)
+    }
+
     fn key(&self, seed: &[u8], level: u8) -> Result<Vec<u8>, String> {
         let h = self.keys.require(&self.id)?;
         opentune_hub::seedkeys::compute(h.as_ref(), seed, level)
@@ -165,6 +173,14 @@ mod tests {
                 _ => Ok(vec![0x7F, req[0], 0x11]),
             }
         }
+    }
+
+    #[test]
+    fn seed_key_hands_out_the_resolved_algorithm() {
+        let u = Unlocker::new(keys(), "test-not").unwrap();
+        let sk = u.seed_key().unwrap();
+        assert_eq!(sk.id(), "test-not");
+        assert_eq!(sk.compute(&[0x12, 0x34], 1).unwrap(), vec![0xED, 0xCB]);
     }
 
     #[test]
