@@ -21,6 +21,7 @@ mod security;
 mod settings;
 mod shell;
 pub mod theme;
+pub mod transfer;
 mod views;
 
 use bench::{BenchCfg, Scene};

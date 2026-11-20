@@ -675,6 +675,43 @@ impl opentune_core::protocol::DiagTransport for RawTransport<'_> {
     }
 }
 
+/// Test-only constructors for the proof types (other modules' tests).
+#[cfg(test)]
+pub(crate) fn test_ack(t: DiagTarget) -> Ack {
+    Ack { target: Some(t) }
+}
+#[cfg(test)]
+pub(crate) fn test_backup(dir: &Path, data: &[u8]) -> BackupReceipt {
+    backup_into_vault(dir, "test", data).unwrap()
+}
+
+thread_local! {
+    static IN_MUTATION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Is the current thread running the closure of an `adapter.mutate(…)`?
+/// (Write helpers such as [`crate::transfer::download`] refuse otherwise.)
+pub(crate) fn in_mutation() -> bool {
+    IN_MUTATION.with(|c| c.get())
+}
+
+/// Marks the closure of a `mutate` while it runs (on whichever thread the
+/// adapter runs it). Only the host creates one.
+pub(crate) struct MutationScope(bool);
+
+impl MutationScope {
+    pub(crate) fn enter() -> Self {
+        Self(IN_MUTATION.with(|c| c.replace(true)))
+    }
+}
+
+impl Drop for MutationScope {
+    fn drop(&mut self) {
+        let prev = self.0;
+        IN_MUTATION.with(|c| c.set(prev));
+    }
+}
+
 fn boxed<R, F>(f: F) -> DiagJob
 where
     R: Send + 'static,
@@ -711,6 +748,11 @@ impl dyn AdapterAccess {
         R: Send + 'static,
         F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
     {
+        // The closure runs as a mutation (the write helpers check for it).
+        let f = move |d: &mut dyn RawDiag| {
+            let _scope = MutationScope::enter();
+            f(d)
+        };
         unbox(self.mutate_job(op, ack, backup, boxed(f)))
     }
 }

@@ -116,6 +116,14 @@ definition's `seedkey` field names the id; `Host::unlocker()` resolves it
 the view passes it. A rejected key is never retried; an all-zero seed means
 already unlocked.
 
+**Block download.** `transfer::download(d, &Download::new(addr, &data),
+&progress)` runs `34` → `36` blocks (ECU-sized, counter wrap, every echo
+checked, nothing re-sent) → `37`. It only runs inside `adapter.mutate(…)`
+(it refuses, sending nothing, anywhere else); the caller drives session,
+security access and routines around it. Cancel is honoured before the start
+and between blocks only, and `TransferError` says what the ECU was left with
+(not started / PARTIALLY WRITTEN / exit failed).
+
 **Diagnostics.** `NativeConfig::diagnostics` is an optional upload seam
 (`DiagnosticsSink`); it is `None` in the public build, which never uploads
 anything.
