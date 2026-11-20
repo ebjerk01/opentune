@@ -1317,7 +1317,9 @@ pub(crate) mod tests {
                 if done(v) {
                     return;
                 }
-                assert!(t0.elapsed() < Duration::from_secs(10), "timed out");
+                // Generous: the analysis job loads the real catalog, which is
+                // slow when the build machine is busy (a 10 s limit flaked).
+                assert!(t0.elapsed() < Duration::from_secs(60), "timed out");
                 std::thread::sleep(Duration::from_millis(5));
             }
         }
