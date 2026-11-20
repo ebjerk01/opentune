@@ -2,7 +2,7 @@
 
 **An open-source car diagnostics, coding and tuning suite — read fault codes, live data, code and adapt modules, flash ECUs and edit calibrations, over cheap and open hardware you already own.**
 
-> ⚠️ **Early alpha — not ready for use on a real car.** The offline tooling (working on a `.bin` or a definition file) is solid and tested; the on-car paths — live diagnostics, coding, adaptation and flashing — are **implemented but almost entirely unproven on a vehicle** (only a first read-only identity read has been done on a car), the desktop app is a **public alpha** ([v0.7.0](https://github.com/ebjerk01/opentune/releases)) and the Android app is unreleased. Reading, coding, or reflashing a control unit can permanently damage it. **Do not use this on a real vehicle yet.** Expect breaking changes. Use entirely at your own risk — see [Safety](#safety).
+> ⚠️ **Early alpha — not ready for use on a real car.** The offline tooling (working on a `.bin` or a definition file) is solid and tested; the on-car paths — live diagnostics, coding, adaptation and flashing — are **implemented but almost entirely unproven on a vehicle** (only a first read-only identity read has been done on a car), the **native desktop app** is a **public beta pre-release** ([v1.0.0-beta.1](https://github.com/ebjerk01/opentune/releases)) and the Android app is unreleased. Reading, coding, or reflashing a control unit can permanently damage it. **Do not use this on a real vehicle yet.** Expect breaking changes. Use entirely at your own risk — see [Safety](#safety).
 
 ---
 
@@ -36,7 +36,8 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 - **Interface drivers** — OpenPort 2.0 (J2534/CDC-ACM), generic J2534 PassThru, SocketCAN, slcan, gs_usb/candleLight, ELM327 (serial OBD, K-line, and WiFi/Bluetooth), KKL 409.1 (raw K-line), an Arduino K-line bridge and an ESP32-S3 open interface (both with OpenTune firmware), the EFI EFP02C USB-CAN box, the open ESP32 ISO-TP BLE bridge, and **DoIP** over Ethernet (with vehicle discovery).
 - **Protocol layer** — ISO-TP (hardened), UDS, KWP2000, VW TP2.0 (hardened: ACK-loss retransmit, recovery, re-open after a break; fuzz-tested), CAN-FD (+ ISO-TP-FD) and **DoIP** (ISO 13400, incl. UDP discovery), with security access (`0x27`) wired into every write path — *you supply the seed/key algorithm; OpenTune ships none*.
 - **Flash orchestrator** — voltage gate → verified backup → write → read-back verify, resumable/recoverable, with a backup vault and a full session transcript.
-- **Apps** — a Tauri **desktop** app (identify, checksums, map viewer/editor, compare, flash, vault, log viewer, ECU database, in-app help, plus an adapter bar and capability-gated live panels for coding, auto-scan + DTCs, adaptation, service functions, logging, an OBD dashboard, OBD inspection, CAN capture, GPS and DoIP discovery — the live panels sit in the Bench section of alpha builds until they are vehicle-tested; offline **Controllers** and **SA2 script** panels; a shared definition-pack picker; plugins can add panels) — try every live panel offline against the built-in **virtual car** (`vcar` driver) and an **Android** app over the same core (UniFFI).
+- **Native desktop app** (`native/`, egui/wgpu, from v1.0.0-beta.1) — the desktop app, one native window with no web view: flash dump (hex, maps, checksums), Analyze bin, map editor, compare, project, vault, log viewer with map overlay and a Drive view; the vehicle panels (OBD dashboard and inspection, live log, auto-scan, coding, adaptation, actuator tests, service functions, Haldex AWD, CAN capture, aftermarket ECUs and the read-only **Check my car** wizard) sit in the Bench section of alpha/bench builds until they are vehicle-tested; plus the ECU database, drivers with a probe, controllers, utilities, the SA2 script viewer and the guide. Every module change needs a typed confirmation and a backup first. Pick **Virtual car (simulator)** as the cable and press **Connect** to try the live panels offline. Linux AppImage and Windows zip on the releases page; macOS builds from source.
+- **Apps (earlier)** — the Tauri **desktop** app in `desktop/` (still built for this release, to be retired in favour of the native app) (identify, checksums, map viewer/editor, compare, flash, vault, log viewer, ECU database, in-app help, plus an adapter bar and capability-gated live panels for coding, auto-scan + DTCs, adaptation, service functions, logging, an OBD dashboard, OBD inspection, CAN capture, GPS and DoIP discovery — the live panels sit in the Bench section of alpha builds until they are vehicle-tested; offline **Controllers** and **SA2 script** panels; a shared definition-pack picker; plugins can add panels) — try every live panel offline against the built-in **virtual car** (`vcar` driver) and an **Android** app over the same core (UniFFI).
 - **Plugin API** — the desktop app and the CLI are both libraries: embedders add panels, commands, drivers, checksum algorithms and caller-supplied seed/key handlers without forking (`docs/PLUGINS.md`). OpenTune itself ships no OEM seed/key algorithms.
 
 ## Architecture
@@ -44,7 +45,7 @@ Every feature is a *service* built on a shared protocol layer, so it works acros
 One core, many interfaces, data-driven features:
 
 ```
-  Apps        CLI  ·  Desktop (Tauri)  ·  Android            ← one shared core
+  Apps        CLI  ·  Desktop (native egui)  ·  Android      ← one shared core
   ───────────────────────────────────────────────────────
   Services    Diagnostics · Live data · Coding · Adaptation ·
               Service functions · Flashing · Tuning          ← features, written once
@@ -91,7 +92,16 @@ No manufacturer firmware, calibration data or security keys are included in this
 cargo build --workspace
 cargo test  --workspace
 cargo run -p opentune-cli -- --help
+
+# the native desktop app (its own workspace in native/)
+cd native && cargo run --release
+# alpha channel: Bench drivers and the vehicle panels
+cd native && cargo run --release --features alpha
 ```
+
+Packaging: `native/packaging/build-appimage.sh` (Linux),
+`build-windows.sh` (cross-compiled from Linux with llvm-mingw) and
+`build-macos.sh` (run on a Mac).
 
 ## Live diagnostics (experimental)
 
@@ -155,9 +165,10 @@ short version:
 - ✅ **Drivetrain** — DQ250 02E checksum + shift maps, Haldex Gen4 read-only + OpenHaldex, DSG/TCU recognition, controller definitions incl. Mercedes 722.6, read-only DQ250 diagnostics, a desktop Controllers panel
 - ✅ **Aftermarket ECUs** — Speeduino / rusEFI / MegaSquirt (TunerStudio INI + `.msq`, serial read/write/burn, live data)
 - ✅ **Plugin API** — desktop + CLI host APIs, seed/key and checksum resolvers
-- ✅ **Signed releases** with desktop auto-update (v0.7.0; [CHANGELOG](CHANGELOG.md))
+- ✅ **Native desktop app** — every panel rebuilt as a native egui/wgpu app (v1.0.0-beta.1, pre-release)
+- ✅ **Signed releases** with desktop auto-update for the Tauri app (v0.7.0; [CHANGELOG](CHANGELOG.md))
 - ✅ **Datalogging triggers** — start/stop/mark on conditions, log splitting, a `triggers/` pack kind
-- ✅ **Guided "Check my car" wizard** (desktop, read-only)
+- ✅ **Guided "Check my car" wizard** (desktop and native app, read-only)
 - ✅ **Contribution workflow** — provenance + privacy checks on every definition and pack, issue/PR templates
 
 **Next**

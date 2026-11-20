@@ -11,7 +11,36 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - 2026-11-20
+
+The first beta of the **native desktop app**: every panel of the desktop app
+rebuilt as a native egui/wgpu application (`native/`), over the same Rust
+core. It is a pre-release: the on-car paths are still unproven on a vehicle
+(see the warning in the README), and GitHub pre-releases are not offered by the
+in-app updater, so install it by hand.
+
 ### Added
+- **Native desktop app** (Linux AppImage, Windows zip; macOS builds from
+  source with `native/packaging/build-macos.sh`). One window, no web view:
+  - Calibration: flash dump (hex, maps, checksums), Analyze bin, map editor,
+    compare, project, vault, log viewer with a map-hits overlay, Drive view
+    (live tiles and log replay).
+  - Vehicle (Bench section of alpha/bench builds until vehicle-tested):
+    OBD dashboard, OBD inspection, live log, auto-scan, coding, adaptation,
+    actuator tests, service functions, Haldex AWD (OpenHaldex, Gen4 read, CAN
+    log decode), CAN capture (candump / CSV / ASC), aftermarket ECUs
+    (TunerStudio INI / `.msq`; writing a tune stays in `opentune ts write`)
+    and the read-only **Check my car** wizard.
+  - Reference: ECU database, interface drivers with a probe, controller
+    definitions with link checks and CAN-log decode, utilities (VIN, part
+    number, DTC lookup, generic seed/key transforms), SA2 script viewer, and
+    the in-app guide.
+  - Every change to a module goes through a typed confirmation, a backup that
+    must succeed first, and either a guarded write or an action that always
+    restores the previous state; reads stay on an allow-list of read-only
+    services.
+  - Try every live panel offline with the built-in **virtual car**: pick
+    "Virtual car (simulator)" as the cable and press **Connect**.
 - **Desktop: "What's new" after an update.** The first start after an update
   shows that version's highlights once, from the changelog built into the app
   (nothing is fetched); a fresh install shows nothing. Updates from 0.7.x are
@@ -477,7 +506,8 @@ First signed public release: desktop app (Linux AppImage/.deb, Windows installer
 with signed auto-update, and the `opentune` CLI for Linux, Windows and macOS. See
 the [README](README.md) for the feature set at that point.
 
-[Unreleased]: https://github.com/ebjerk01/opentune/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/ebjerk01/opentune/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/ebjerk01/opentune/compare/v0.7.0...v1.0.0-beta.1
 [0.7.0]: https://github.com/ebjerk01/opentune/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ebjerk01/opentune/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ebjerk01/opentune/releases/tag/v0.5.0

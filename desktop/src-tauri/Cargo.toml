@@ -1,6 +1,6 @@
 [package]
 name = "opentune-desktop"
-version = "0.7.0"
+version = "1.0.0-beta.1"
 description = "OpenTune desktop app"
 edition = "2021"
 license = "GPL-3.0-or-later"
