@@ -13,8 +13,8 @@ use opentune_core::{
 };
 // The pure image <-> value codecs live in `opentune_hub::maps`, shared with
 // other front ends.
-use opentune_hub::maps::encode_elem;
 pub(crate) use opentune_hub::maps::decode_map_value;
+use opentune_hub::maps::encode_elem;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::path::Path;
