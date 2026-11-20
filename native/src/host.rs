@@ -131,7 +131,10 @@ struct JobShared {
     done: AtomicBool,
 }
 
-/// Handed to a job: report progress, check for cancellation.
+/// Handed to a job: report progress, check for cancellation. Cheap to clone,
+/// so a job can move a copy into an adapter closure (e.g. progress per block
+/// of a download).
+#[derive(Clone)]
 pub struct ProgressSink {
     shared: Arc<JobShared>,
     ctx: egui::Context,
@@ -1289,13 +1292,20 @@ mod tests {
         let adapter: Arc<dyn AdapterAccess> = mock.clone();
         let a = adapter.clone();
         let mut h = jobs.spawn("identify", move |p| {
-            let reply = a.read("identify", DiagTarget::ENGINE, |d| {
-                d.request(&[0x22, 0xF1, 0x90])
+            // A clone of the sink travels into the adapter closure (which runs
+            // on the adapter's own thread) and reports from there.
+            let inner = p.clone();
+            let reply = a.read("identify", DiagTarget::ENGINE, move |d| {
+                inner.set(0.5, "block 1 of 2");
+                let r = d.request(&[0x22, 0xF1, 0x90])?;
+                Ok((r, inner.cancelled()))
             })?;
-            p.set(1.0, "done");
             Ok(reply)
         });
-        assert_eq!(wait(&mut h), Ok(vec![0x62]));
+        let (reply, cancelled) = wait(&mut h).unwrap();
+        assert_eq!(reply, vec![0x62]);
+        assert!(!cancelled);
+        assert_eq!(h.progress(), (0.5, "block 1 of 2".to_string()));
         assert_eq!(adapter.link().battery_v, Some(12.6));
 
         let d = tmp("mut");
