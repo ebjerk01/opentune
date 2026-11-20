@@ -1,15 +1,27 @@
-//! Controller definitions browser (`ctrldefs/` via `opentune-ctrldef`):
-//! drivetrain units (TCU, AWD couplings, transfer cases, differentials).
+//! Controller definitions browser (`opentune-ctrldef`): drivetrain units
+//! (TCU, AWD couplings, transfer cases, differentials). Port of the webview
+//! app's Controllers panel (`feat_ctrl.rs`, `feat_ctrl.js`).
 //!
-//! The definitions are loaded lazily the first time the view is shown, from
-//! the first existing of `ctrldefs`, `../ctrldefs` or `<exe dir>/ctrldefs`.
+//! The list ([`catalog`]) is loaded lazily the first time the view is shown:
+//! the built-in `ctrldefs/` (first existing of `ctrldefs`, `../ctrldefs`,
+//! `<exe dir>/ctrldefs`, ...), the `controllers/` of every bundled pack
+//! (`packs/`), pack folders the user loads and single definition files the
+//! user opens. Every definition is validated: structure, honesty, file name
+//! and links (bundled ECU definitions, database units, checksum ids, the
+//! pack's own ECU definitions); files that do not load are listed, never
+//! dropped.
 //! Left: search + kind filter + the definitions (name, maker / family,
-//! protocols). Right: safety notes, identity and identification keys, the
-//! diagnostic channels (transport and addressing), CAN broadcast frames with
-//! their signals, live channels, adaptations, tables, gear sets, an inline
-//! flash layout, the definition's own structural checks and its sources.
+//! protocols, source, check counts). Right: safety notes, identity and
+//! identification keys, the diagnostic channels (transport and addressing),
+//! CAN broadcast frames with their signals, live channels, adaptations,
+//! tables, gear sets, an inline flash layout, the checks, the sources, and
+//! an offline CAN-log decode with the definition's frame sets ([`decode`]).
 //! Read-only: nothing here talks to a unit.
 
+mod catalog;
+mod decode;
+
+use self::catalog::{Entry, FailedFile, Loaded, Sources};
 use crate::icons;
 use crate::theme::{self, font, Tokens, Tone, MONO_MEDIUM, UI_MEDIUM, UI_STRONG};
 use crate::views::maps::{kv, two_pane};
@@ -28,19 +40,7 @@ use std::path::PathBuf;
 /// Height of a definition row in the list.
 const ROW_H: f32 = 46.0;
 
-enum State {
-    Loaded {
-        defs: Vec<(PathBuf, ControllerDef)>,
-        dir: PathBuf,
-    },
-    Missing {
-        tried: Vec<PathBuf>,
-    },
-    Failed {
-        dir: PathBuf,
-        err: String,
-    },
-}
+type State = Loaded;
 
 /// The kind filter chips.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,33 +64,23 @@ impl KindFilter {
 #[derive(Default)]
 pub struct ControllersView {
     state: Option<State>,
+    /// Pack folders and definition files the user added (kept on reload).
+    extra: Vec<String>,
+    files: Vec<PathBuf>,
     search: String,
     kind: Option<KindFilter>,
     selected: Option<usize>,
     filter_key: Option<(String, Option<KindFilter>)>,
     filtered: Vec<usize>,
+    decode: decode::Decode,
 }
 
-/// Where the definitions folder is looked for, in order.
-fn candidates() -> Vec<PathBuf> {
-    crate::paths::candidates("ctrldefs")
-}
-
-fn load_from(tried: Vec<PathBuf>) -> State {
-    let Some(dir) = tried.iter().find(|p| p.is_dir()).cloned() else {
-        return State::Missing { tried };
-    };
-    match opentune_ctrldef::load_dir(&dir) {
-        Ok(defs) if defs.is_empty() => State::Failed {
-            err: format!("no controller definitions in {}", dir.display()),
-            dir,
-        },
-        Ok(defs) => State::Loaded { defs, dir },
-        Err(e) => State::Failed {
-            err: e.to_string(),
-            dir,
-        },
-    }
+/// What the list pane asked for.
+enum ListAction {
+    None,
+    Reload,
+    AddPack(PathBuf),
+    AddFile(PathBuf),
 }
 
 /// Transports and service layers of the diagnostic channels, plus CAN
@@ -135,15 +125,15 @@ fn def_matches(d: &ControllerDef, q: &str) -> bool {
 
 /// Indices of the definitions matching `kind` and the query, sorted by
 /// maker then name.
-fn filter_defs(defs: &[(PathBuf, ControllerDef)], kind: Option<KindFilter>, q: &str) -> Vec<usize> {
+fn filter_defs(defs: &[Entry], kind: Option<KindFilter>, q: &str) -> Vec<usize> {
     let mut v: Vec<usize> = defs
         .iter()
         .enumerate()
-        .filter(|(_, (_, d))| kind.is_none_or(|k| k.accepts(d.kind)) && def_matches(d, q))
+        .filter(|(_, e)| kind.is_none_or(|k| k.accepts(e.def.kind)) && def_matches(&e.def, q))
         .map(|(i, _)| i)
         .collect();
     v.sort_by_cached_key(|&i| {
-        let d = &defs[i].1;
+        let d = &defs[i].def;
         (d.maker.to_lowercase(), d.name.to_lowercase())
     });
     v
@@ -465,7 +455,7 @@ impl ControllersView {
         }
         let mut retry = false;
         match self.state.as_ref() {
-            Some(State::Missing { tried }) => {
+            Some(Loaded::Missing { tried }) => {
                 let list = tried
                     .iter()
                     .map(|p| p.display().to_string())
@@ -483,7 +473,7 @@ impl ControllersView {
                 );
                 retry = retry_button(ui, t);
             }
-            Some(State::Failed { dir, err }) => {
+            Some(Loaded::Failed { dir, err }) => {
                 theme::empty_state(
                     ui,
                     t,
@@ -493,12 +483,12 @@ impl ControllersView {
                 );
                 retry = retry_button(ui, t);
             }
-            Some(State::Loaded { .. }) | None => {}
+            Some(Loaded::Ok { .. }) | None => {}
         }
         if retry {
             self.reload();
         }
-        let Some(State::Loaded { defs, dir }) = &self.state else {
+        let Some(Loaded::Ok { defs, failed, dir }) = &self.state else {
             return;
         };
         let key = (self.search.clone(), self.kind);
@@ -512,13 +502,14 @@ impl ControllersView {
 
         let (left, right) = two_pane(ui);
         let dir = dir.display().to_string();
-        let mut reload = false;
+        let mut action = ListAction::None;
         let mut pick = None;
         ui.scope_builder(UiBuilder::new().max_rect(left), |ui| {
-            let (p, r) = list_pane(
+            let (p, a) = list_pane(
                 ui,
                 t,
                 defs,
+                failed,
                 &self.filtered,
                 self.selected,
                 &mut self.search,
@@ -526,14 +517,15 @@ impl ControllersView {
                 &dir,
             );
             pick = p;
-            reload = r;
+            action = a;
         });
         if pick.is_some() {
             self.selected = pick;
         }
+        let decode = &mut self.decode;
         ui.scope_builder(UiBuilder::new().max_rect(right), |ui| {
             match self.selected.and_then(|i| defs.get(i)) {
-                Some((path, d)) => detail_pane(ui, t, path, d),
+                Some(e) => detail_pane(ui, t, e, decode),
                 None => {
                     theme::panel(
                         ui,
@@ -553,15 +545,50 @@ impl ControllersView {
                 }
             }
         });
-        if reload {
-            self.reload();
+        match action {
+            ListAction::None => {}
+            ListAction::Reload => self.reload(),
+            ListAction::AddPack(p) => {
+                let p = p.display().to_string();
+                if !self.extra.contains(&p) {
+                    self.extra.push(p);
+                }
+                self.reload();
+            }
+            ListAction::AddFile(p) => {
+                if !self.files.contains(&p) {
+                    self.files.push(p.clone());
+                }
+                self.reload();
+                self.select_path(&p);
+            }
+        }
+    }
+
+    fn sources(&self) -> Sources {
+        Sources {
+            extra: self.extra.clone(),
+            files: self.files.clone(),
+            ..Sources::bundled()
         }
     }
 
     fn reload(&mut self) {
-        self.state = Some(load_from(candidates()));
+        self.state = Some(catalog::load(&self.sources()));
         self.filter_key = None;
         self.selected = None;
+    }
+
+    /// Select the definition loaded from `p` (clearing the filter so it is
+    /// visible).
+    fn select_path(&mut self, p: &std::path::Path) {
+        if let Some(Loaded::Ok { defs, .. }) = &self.state {
+            if let Some(i) = defs.iter().position(|e| e.path == p) {
+                self.search.clear();
+                self.kind = None;
+                self.selected = Some(i);
+            }
+        }
     }
 }
 
@@ -573,20 +600,21 @@ fn retry_button(ui: &mut Ui, t: &Tokens) -> bool {
     .inner
 }
 
-/// Returns (clicked definition, reload requested).
+/// Returns (clicked definition, what else the pane asked for).
 #[allow(clippy::too_many_arguments)]
 fn list_pane(
     ui: &mut Ui,
     t: &Tokens,
-    defs: &[(PathBuf, ControllerDef)],
+    defs: &[Entry],
+    failed: &[FailedFile],
     filtered: &[usize],
     selected: Option<usize>,
     search: &mut String,
     kind: &mut Option<KindFilter>,
     dir: &str,
-) -> (Option<usize>, bool) {
+) -> (Option<usize>, ListAction) {
     let mut pick = None;
-    let mut reload = false;
+    let mut action = ListAction::None;
     theme::panel(
         ui,
         t,
@@ -595,7 +623,25 @@ fn list_pane(
             if theme::icon_button(ui, t, icons::ARROWS_CLOCKWISE, &format!("Reload {dir}"))
                 .clicked()
             {
-                reload = true;
+                action = ListAction::Reload;
+            }
+            if theme::icon_button(ui, t, icons::FILE_PLUS, "Open a definition file…").clicked() {
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_title("Controller definition")
+                    .add_filter("Controller definition", &["json"])
+                    .pick_file()
+                {
+                    action = ListAction::AddFile(p);
+                }
+            }
+            if theme::icon_button(ui, t, icons::FOLDER_PLUS, "Load a definition pack…").clicked()
+            {
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_title("Definition pack folder")
+                    .pick_folder()
+                {
+                    action = ListAction::AddPack(p);
+                }
             }
             let txt = if filtered.len() == defs.len() {
                 defs.len().to_string()
@@ -630,6 +676,36 @@ fn list_pane(
                             }
                         }
                     });
+                    if !failed.is_empty() {
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new(
+                            RichText::new(format!(
+                                "{} {} file{} did not load",
+                                icons::WARNING,
+                                failed.len(),
+                                if failed.len() == 1 { "" } else { "s" }
+                            ))
+                            .color(t.warn),
+                        )
+                        .id_salt("ctrl-failed")
+                        .show(ui, |ui| {
+                            for f in failed {
+                                let name = std::path::Path::new(&f.file)
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| f.file.clone());
+                                ui.add(
+                                    Label::new(
+                                        RichText::new(format!("{name} — {}", f.message))
+                                            .small()
+                                            .color(t.fg_dim),
+                                    )
+                                    .wrap(),
+                                )
+                                .on_hover_text(&f.file);
+                            }
+                        });
+                    }
                 });
             theme::hline(ui, t.border_soft);
             if filtered.is_empty() {
@@ -647,10 +723,10 @@ fn list_pane(
                 .auto_shrink([false, false])
                 .show_rows(ui, ROW_H, filtered.len(), |ui, range| {
                     for &i in &filtered[range] {
-                        let d = &defs[i].1;
+                        let e = &defs[i];
                         let w = ui.available_width();
                         let (r, resp) = ui.allocate_exact_size(Vec2::new(w, ROW_H), Sense::click());
-                        def_row(ui, t, r, &resp, d, selected == Some(i));
+                        def_row(ui, t, r, &resp, e, selected == Some(i));
                         if resp.clicked() {
                             pick = Some(i);
                         }
@@ -658,17 +734,11 @@ fn list_pane(
                 });
         },
     );
-    (pick, reload)
+    (pick, action)
 }
 
-fn def_row(
-    ui: &mut Ui,
-    t: &Tokens,
-    r: Rect,
-    resp: &egui::Response,
-    d: &ControllerDef,
-    selected: bool,
-) {
+fn def_row(ui: &mut Ui, t: &Tokens, r: Rect, resp: &egui::Response, e: &Entry, selected: bool) {
+    let d = &e.def;
     let bg = r.shrink2(Vec2::new(6.0, 1.0));
     if selected {
         ui.painter()
@@ -693,6 +763,20 @@ fn def_row(
         font(UI_STRONG, 10.0),
         t.fg_faint,
     );
+    let (errs, warns) = (e.errors(), e.warnings());
+    if errs + warns > 0 {
+        ui.painter().text(
+            egui::pos2(inner.right(), inner.bottom() - 8.0),
+            egui::Align2::RIGHT_CENTER,
+            if errs > 0 {
+                format!("{errs} ERR")
+            } else {
+                format!("{warns} WARN")
+            },
+            font(UI_STRONG, 9.5),
+            if errs > 0 { t.crit } else { t.warn },
+        );
+    }
     let text = Rect::from_min_max(inner.min, egui::pos2(inner.right() - 40.0, inner.bottom()));
     ui.scope_builder(
         UiBuilder::new()
@@ -711,9 +795,12 @@ fn def_row(
             );
             ui.add(
                 Label::new(
-                    RichText::new(format!("{} · {} · {}", d.maker, d.family, protocols(d)))
-                        .font(font(MONO_MEDIUM, 11.0))
-                        .color(t.fg_faint),
+                    RichText::new(match e.source {
+                        "builtin" => format!("{} · {} · {}", d.maker, d.family, protocols(d)),
+                        _ => format!("{} · {} · {}", e.source_label(), d.maker, d.family),
+                    })
+                    .font(font(MONO_MEDIUM, 11.0))
+                    .color(t.fg_faint),
                 )
                 .truncate()
                 .selectable(false),
@@ -722,7 +809,8 @@ fn def_row(
     );
 }
 
-fn detail_pane(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDef) {
+fn detail_pane(ui: &mut Ui, t: &Tokens, e: &Entry, dec: &mut decode::Decode) {
+    let d = &e.def;
     theme::panel(
         ui,
         t,
@@ -737,6 +825,9 @@ fn detail_pane(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDe
             )
             .on_hover_text("evidence level of this definition");
             theme::pill(ui, t, kind_label(d.kind), Tone::Muted, false);
+            if e.source != "builtin" {
+                theme::pill(ui, t, &e.source_label(), Tone::Accent, false);
+            }
         },
         |ui| {
             egui::ScrollArea::vertical()
@@ -747,14 +838,19 @@ fn detail_pane(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDe
                         .inner_margin(Margin::symmetric(16, 14))
                         .show(ui, |ui| {
                             ui.set_width(ui.available_width());
-                            body(ui, t, path, d);
+                            body(ui, t, e);
+                            if !d.buses.is_empty() {
+                                section(ui, t, "Decode a CAN log", 0);
+                                dec.ui(ui, t, &e.path, d);
+                            }
                         });
                 });
         },
     );
 }
 
-fn body(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDef) {
+fn body(ui: &mut Ui, t: &Tokens, e: &Entry) {
+    let (path, d) = (&e.path, &e.def);
     if !d.safety.is_empty() {
         callout(ui, t, &d.safety);
         ui.add_space(12.0);
@@ -791,6 +887,7 @@ fn body(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDef) {
                 kv(ui, t, "Database units", &d.units.join(", "));
             }
             kv(ui, t, "Checksum", d.checksum.as_deref().unwrap_or("–"));
+            kv(ui, t, "Source", &e.source_label());
             kv(ui, t, "File", &path.display().to_string());
         });
     if !d.notes.is_empty() {
@@ -1117,18 +1214,21 @@ fn body(ui: &mut Ui, t: &Tokens, path: &std::path::Path, d: &ControllerDef) {
         }
     }
 
-    let issues = d.validate();
+    let issues = &e.issues;
     section(ui, t, "Definition checks", issues.len());
     if issues.is_empty() {
-        ui.horizontal(|ui| {
-            theme::pill(ui, t, "structure OK", Tone::Ok, false);
+        ui.horizontal_wrapped(|ui| {
+            theme::pill(ui, t, "checks OK", Tone::Ok, false);
             ui.label(
-                RichText::new("opentune-ctrldef's structural and honesty rules pass.")
-                    .color(t.fg_dim),
+                RichText::new(
+                    "opentune-ctrldef's structure, honesty and file-name rules pass, and every \
+                     link (ECU definitions, database units, checksum ids) resolves.",
+                )
+                .color(t.fg_dim),
             );
         });
     }
-    for i in &issues {
+    for i in issues {
         ui.horizontal_wrapped(|ui| {
             let tone = match i.severity {
                 Severity::Error => Tone::Crit,
@@ -1307,7 +1407,17 @@ mod tests {
         serde_json::from_value(json).unwrap_or_else(|e| panic!("ctrldef: {e}"))
     }
 
-    fn sample() -> Vec<(PathBuf, ControllerDef)> {
+    fn entry(path: &str, d: ControllerDef) -> Entry {
+        Entry {
+            path: PathBuf::from(path),
+            def: d,
+            source: "builtin",
+            pack: None,
+            issues: Vec::new(),
+        }
+    }
+
+    fn sample() -> Vec<Entry> {
         let base = |id: &str, name: &str, kind: &str, maker: &str, family: &str| {
             serde_json::json!({
                 "id": id, "name": name, "kind": kind, "maker": maker, "family": family,
@@ -1330,9 +1440,9 @@ mod tests {
         b["buses"] = serde_json::json!([{"name": "pq", "bitrate": 500000, "frames": []}]);
         let c = base("x-diff", "Active diff", "differential", "Acme", "AD1");
         vec![
-            (PathBuf::from("a.json"), def(a)),
-            (PathBuf::from("b.json"), def(b)),
-            (PathBuf::from("c.json"), def(c)),
+            entry("a.json", def(a)),
+            entry("b.json", def(b)),
+            entry("c.json", def(c)),
         ]
     }
 
@@ -1359,16 +1469,16 @@ mod tests {
     #[test]
     fn labels() {
         let d = sample();
-        assert_eq!(protocols(&d[0].1), "ISO-TP UDS");
-        assert_eq!(protocols(&d[1].1), "TP2.0 KWP2000 · CAN broadcast");
-        assert_eq!(protocols(&d[2].1), "no diagnostics defined");
+        assert_eq!(protocols(&d[0].def), "ISO-TP UDS");
+        assert_eq!(protocols(&d[1].def), "TP2.0 KWP2000 · CAN broadcast");
+        assert_eq!(protocols(&d[2].def), "no diagnostics defined");
         assert_eq!(rate(500_000, false), "500 kbit/s");
         assert_eq!(rate(10_400, true), "10400 baud");
         assert_eq!(rate(33_333, false), "33333 bit/s");
         assert_eq!(can_id(0x7E1, false), "0x7E1");
         assert_eq!(can_id(0x18DA10F1, true), "0x18DA10F1");
-        assert_eq!(diag_address(&d[1].1.diagnostics[0]), "TP2.0 0x0A");
-        assert_eq!(diag_address(&d[0].1.diagnostics[0]), "–");
+        assert_eq!(diag_address(&d[1].def.diagnostics[0]), "TP2.0 0x0A");
+        assert_eq!(diag_address(&d[0].def.diagnostics[0]), "–");
         assert_eq!(linear(0.75, -48.0), "× 0.75 − 48");
         assert_eq!(linear(1.0, 0.0), "× 1");
         assert_eq!(web_link(" https://x.org/a "), Some("https://x.org/a"));
@@ -1396,40 +1506,176 @@ mod tests {
         );
     }
 
+    fn builtin_only(dirs: Vec<PathBuf>) -> Sources {
+        Sources {
+            builtin: dirs,
+            ..Default::default()
+        }
+    }
+
+    fn tmp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!(
+            "ot-native-ctrl-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap_or_else(|e| panic!("{e}"));
+        d
+    }
+
+    /// A synthetic definition named after its file.
+    fn synthetic(id: &str, extra: serde_json::Value) -> String {
+        let mut v = serde_json::json!({
+            "id": id, "name": "Synthetic", "kind": "awd", "maker": "Acme", "family": "SYN",
+            "validation": "implemented", "safety": ["s"],
+            "sources": [{"title": "t", "license": "facts", "used_for": "u"}]
+        });
+        if let (Some(o), Some(x)) = (v.as_object_mut(), extra.as_object()) {
+            o.extend(x.clone());
+        }
+        v.to_string()
+    }
+
     #[test]
     fn missing_directory_and_first_existing_wins() {
-        let base = std::env::temp_dir().join(format!("ot-native-ctrl-{}", std::process::id()));
+        let base = tmp("missing");
         let none = base.join("none");
         assert!(matches!(
-            load_from(vec![none.clone()]),
-            State::Missing { .. }
+            catalog::load(&builtin_only(vec![none.clone()])),
+            Loaded::Missing { .. }
         ));
         let empty = base.join("empty");
         std::fs::create_dir_all(&empty).unwrap_or_else(|e| panic!("{e}"));
         assert!(matches!(
-            load_from(vec![none, empty.clone()]),
-            State::Failed { .. }
+            catalog::load(&builtin_only(vec![none.clone(), empty.clone()])),
+            Loaded::Failed { .. }
         ));
+        let full = base.join("full");
+        std::fs::create_dir_all(&full).unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(
+            full.join("syn-a.json"),
+            synthetic("syn-a", serde_json::json!({})),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let Loaded::Ok { defs, dir, .. } = catalog::load(&builtin_only(vec![none, full.clone()]))
+        else {
+            panic!("did not load");
+        };
+        assert_eq!((defs.len(), dir), (1, full));
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// The repository's own definitions load, and every one renders its
-    /// labels and passes its own structural checks.
+    /// Packs and opened files join the list with their source; broken files
+    /// are listed, not dropped; links are checked.
+    #[test]
+    fn packs_files_failures_and_link_checks() {
+        let base = tmp("packs");
+        let builtin = base.join("ctrldefs");
+        std::fs::create_dir_all(&builtin).unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(
+            builtin.join("syn-a.json"),
+            synthetic("syn-a", serde_json::json!({})),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        // A link to an ECU definition that does not exist.
+        std::fs::write(
+            builtin.join("syn-link.json"),
+            synthetic(
+                "syn-link",
+                serde_json::json!({"ecudefs": ["no-such-ecudef"]}),
+            ),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(builtin.join("broken.json"), "{ not json").unwrap_or_else(|e| panic!("{e}"));
+        let pack = base.join("my-pack");
+        std::fs::create_dir_all(pack.join("controllers")).unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(
+            pack.join("pack.json"),
+            r#"{"id":"ctrl-test","name":"Controller test pack","version":"0.1.0","license":"GPL-3.0-or-later"}"#,
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(
+            pack.join("controllers/syn-p.json"),
+            synthetic("syn-p", serde_json::json!({})),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let loose = base.join("renamed.json");
+        std::fs::write(&loose, synthetic("syn-loose", serde_json::json!({})))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let src = Sources {
+            builtin: vec![builtin.clone()],
+            extra: vec![pack.display().to_string(), pack.display().to_string()],
+            files: vec![
+                loose.clone(),
+                builtin.join("syn-a.json"),
+                base.join("missing.json"),
+            ],
+            ..Default::default()
+        };
+        let Loaded::Ok { defs, failed, .. } = catalog::load(&src) else {
+            panic!("did not load");
+        };
+        let by = |id: &str| {
+            defs.iter()
+                .find(|e| e.def.id == id)
+                .unwrap_or_else(|| panic!("{id}"))
+        };
+        assert_eq!(
+            defs.iter().filter(|e| e.def.id == "syn-a").count(),
+            1,
+            "no duplicates"
+        );
+        assert_eq!(
+            defs.iter().filter(|e| e.def.id == "syn-p").count(),
+            1,
+            "pack listed once"
+        );
+        assert_eq!(by("syn-a").source_label(), "built-in");
+        assert_eq!(by("syn-a").errors(), 0);
+        assert_eq!(by("syn-p").source_label(), "pack ctrl-test v0.1.0");
+        let l = by("syn-link");
+        assert!(
+            l.issues.iter().any(|i| i.code == "link.ecudef"),
+            "{:?}",
+            l.issues
+        );
+        assert!(l.errors() > 0);
+        let f = by("syn-loose");
+        assert_eq!(f.source_label(), "file");
+        assert!(f.issues.iter().any(|i| i.code == "id.filename"));
+        assert!(failed.iter().any(|x| x.file.ends_with("broken.json")));
+        assert!(failed.iter().any(|x| x.file.ends_with("missing.json")));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The repository's own definitions (and bundled packs) load, every one
+    /// renders its labels, and the shipped set passes every check incl. links.
     #[test]
     fn repository_ctrldefs_load() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ctrldefs");
-        if !dir.is_dir() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        if !root.join("ctrldefs").is_dir() {
             return;
         }
-        let State::Loaded { defs, .. } = load_from(vec![dir]) else {
+        let src = Sources {
+            builtin: vec![root.join("ctrldefs")],
+            packs: Some(root.join("packs")).filter(|p| p.is_dir()),
+            ecudefs: Some(root.join("ecudefs")),
+            database: Some(root.join("database")),
+            ..Default::default()
+        };
+        let Loaded::Ok { defs, .. } = catalog::load(&src) else {
             panic!("ctrldefs did not load");
         };
         assert_eq!(filter_defs(&defs, None, "").len(), defs.len());
-        for (_, d) in &defs {
+        for e in &defs {
+            let d = &e.def;
             assert!(!protocols(d).is_empty());
             assert!(d.tables.iter().all(|x| !table_storage(x).is_empty()));
             assert!(d.live.iter().all(|l| !live_source(&l.source).is_empty()));
-            assert!(!opentune_ctrldef::has_errors(&d.validate()), "{}", d.id);
+            if e.source == "builtin" {
+                assert_eq!(e.errors(), 0, "{}: {:?}", d.id, e.issues);
+            }
         }
     }
 }
