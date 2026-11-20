@@ -10,6 +10,7 @@
 use opentune_core::{MemoryRegion, Result};
 
 pub mod dsg;
+pub mod ecm3;
 pub mod edc15;
 pub mod edc16;
 pub mod edc17;
@@ -256,6 +257,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
         "haldex" | "haldex-gen5" => Some(Box::new(tcu::HaldexGen5)),
         "simos-crc" | "conti-crc" => Some(Box::new(simos::SimosCrc)),
+        "ecm3" | "simos-ecm3" => Some(Box::new(ecm3::Ecm3)),
         _ => None,
     }
 }
@@ -433,6 +435,19 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     Standalone correct needs one header still verifying (single-header \
                     Ford/EMS3120 reads: pass the stock read as reference) and refuses \
                     an image whose startup-boot header fails (BMW MSD8x).",
+        },
+        AlgoInfo {
+            id: "ecm3",
+            name: "VAG Simos ECM3 calibration-monitor sum",
+            family: "simos",
+            needs_reference: true,
+            notes: "Alias: simos-ecm3. VW_Flash-documented 64-bit additive monitor sum \
+                    (init words + LE u32 words over an address list in CAL +0x418 or ASW1 \
+                    0x520/0x540) on an extracted Simos 8/10/12/16/18 CAL block, stored \
+                    high word first at CAL +0x400 (or +0x438). Synthetic only (no real \
+                    Simos image): always Consistent; standalone correct refuses a mismatch \
+                    — correct_with_reference with a verifying stock CAL block of the same \
+                    software is required; full reads refused.",
         },
     ]
 }
@@ -623,6 +638,8 @@ mod tests {
             "haldex-gen5",
             "simos-crc",
             "conti-crc",
+            "ecm3",
+            "simos-ecm3",
         ];
         let infos = algorithms();
         for id in resolvable {
