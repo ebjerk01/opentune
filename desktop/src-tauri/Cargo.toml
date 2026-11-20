@@ -54,6 +54,9 @@ opentune-a2l = { path = "../../crates/opentune-a2l" }
 # lookup, build channel, map codecs, vault listing), shared with other front
 # ends; the interface drivers are wired into its registry.
 opentune-hub = { path = "../../crates/opentune-hub" }
+# The local diagnostics log (records, masking, rotation, panic hook,
+# read-back), shared with other front ends; src/diaglog.rs adds the Tauri side.
+opentune-diaglog = { path = "../../crates/opentune-diaglog" }
 
 # Service engines + conformance sim, wired into the (alpha) Debug panel.
 opentune-coding = { path = "../../crates/opentune-coding" }

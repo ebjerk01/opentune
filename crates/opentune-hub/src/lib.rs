@@ -16,6 +16,9 @@
 //! * [`channel`] — the [`BuildChannel`] that gates debug / Bench-tier features.
 //! * [`maps`] — map cell / axis decoding and single-cell encoding.
 //! * [`vault`] — listing a backup vault directory.
+//! * [`livelog`] — the live datalogging session engine (UDS `0x2C` fast
+//!   mode, Subaru SSM, link-loss detection and opt-in reconnect) held as one
+//!   long-running hub operation, plus the stateless per-tick poll.
 //!
 //! Features: `alpha` registers the Bench-tier drivers and makes
 //! [`BuildChannel::compiled`] report `alpha`; `testkit` exposes the simulated
@@ -24,10 +27,14 @@
 
 pub mod adapter;
 pub mod channel;
+pub mod compare;
 pub mod drivers;
+pub mod livelog;
 pub mod maps;
+pub mod ops;
 pub mod sa2script;
 pub mod seedkeys;
 pub mod vault;
+pub mod whatsnew;
 
 pub use channel::BuildChannel;

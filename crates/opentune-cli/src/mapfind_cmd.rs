@@ -1,5 +1,6 @@
 //! `opentune findmaps <image>` — the single-file map finder
-//! (`opentune-mapfind`). The two-file diff mode stays in `main.rs`.
+//! (`opentune-mapfind`). The two-file diff mode is in `commands/image.rs`
+//! (clustering from `opentune_mapfind::diff`).
 use anyhow::{anyhow, Context, Result};
 use clap::Args;
 use opentune_mapfind::{find_maps, match_defs, FindOptions, MapCandidate, MatchKind};
