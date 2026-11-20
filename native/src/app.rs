@@ -37,6 +37,9 @@ pub struct App {
     jobs: Jobs,
     confirms: Confirms,
     host_status: Option<String>,
+    /// Closing with unsaved edits: asking, or the user already agreed.
+    quit_ask: bool,
+    quit_ok: bool,
     /// Scripted runs (bench / screenshot) never save settings.
     scripted: bool,
     shot: Option<crate::screenshot::Shot>,
@@ -144,6 +147,8 @@ impl App {
             adapter: config.adapter,
             jobs: Jobs::new(cc.egui_ctx.clone()),
             confirms: Confirms::default(),
+            quit_ask: false,
+            quit_ok: false,
             host_status: None,
             scripted,
             shot: args.screenshot.clone().map(crate::screenshot::Shot::new),
@@ -225,6 +230,12 @@ impl App {
                 }
                 HostAction::SelectMap(m) => self.flash.open_map(m),
                 HostAction::HexJump(addr) => self.flash.hex_jump(addr),
+                HostAction::EditCells { map, cells } => {
+                    match self.flash.apply_edits(&self.defs, map, &cells) {
+                        Ok(n) => self.host_status = Some(format!("{n} cell(s) edited")),
+                        Err(e) => self.host_status = Some(format!("edit refused: {e}")),
+                    }
+                }
             }
         }
     }
@@ -282,6 +293,29 @@ impl eframe::App for App {
             }
         }
         let hovering_file = ctx.input(|i| !i.raw.hovered_files.is_empty());
+
+        // Closing the window with unsaved map edits asks first.
+        if ctx.input(|i| i.viewport().close_requested()) && self.flash.is_dirty() && !self.quit_ok {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.quit_ask = true;
+        }
+        if self.quit_ask {
+            match self.confirms.ask(crate::host::ConfirmRequest {
+                key: "quit-unsaved".into(),
+                title: "Quit without saving?".into(),
+                body: "The opened dump has unsaved map edits. Quitting discards them.".into(),
+                typed: None,
+                confirm_label: "Discard & quit".into(),
+            }) {
+                crate::host::ConfirmResult::Pending => {}
+                crate::host::ConfirmResult::Declined => self.quit_ask = false,
+                crate::host::ConfirmResult::Accepted(_) => {
+                    self.quit_ask = false;
+                    self.quit_ok = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+        }
 
         egui::Panel::top("gbar")
             .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
@@ -358,7 +392,10 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(t.bg))
             .show(ui, |ui| match self.view {
-                View::Flash => self.flash.ui(ui, &t, &self.defs, &mut self.settings),
+                View::Flash => {
+                    self.flash
+                        .ui(ui, &t, &self.defs, &mut self.settings, &mut self.confirms)
+                }
                 View::Maps => {
                     if let Some((d, m)) =
                         self.maps.ui(ui, &t, &self.defs, self.flash.image.as_ref())
@@ -401,6 +438,7 @@ impl eframe::App for App {
                             tokens: t,
                             image_path: img.map(|i| i.path.as_path()),
                             image: img.map(|i| i.bytes.as_slice()),
+                            image_edited: img.is_some_and(|i| i.is_dirty()),
                             defs: &self.defs,
                             def_idx: self.flash.def_idx,
                             map_idx: self.flash.map_idx,

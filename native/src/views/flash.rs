@@ -3,9 +3,10 @@
 
 use crate::bench::{Bench, Scene};
 use crate::hex::{parse_addr, HexView, BYTES_PER_ROW};
+use crate::host::{ConfirmRequest, ConfirmResult, Confirms};
 use crate::icons;
-use crate::image::{fmt_val, Image};
-use crate::mapview::{self, draw_map};
+use crate::image::{fmt_val, CellEdit, Image};
+use crate::mapview::{self, CellCommand, CellCursor};
 use crate::settings::Settings;
 use crate::theme::{self, font, Tokens, Tone, DISPLAY, MONO_MEDIUM, UI_STRONG};
 use eframe::egui::{
@@ -67,6 +68,22 @@ pub struct FlashView {
     /// Extra checksum algorithms from the embedding build (before the core).
     pub checksums: Vec<crate::host::ChecksumResolver>,
     pub note: Option<String>,
+    cursor: CellCursor,
+    /// An operation waiting for the user's confirmation.
+    pending: Option<Pending>,
+}
+
+/// Operations that need the user's OK first.
+#[derive(Clone, Debug, PartialEq)]
+enum Pending {
+    /// Replace the opened file with the edited image.
+    Save,
+    /// Replace another, existing file.
+    SaveAs(PathBuf),
+    /// Open another dump, discarding unsaved edits.
+    Open(PathBuf),
+    /// Drop every unsaved edit.
+    Revert,
 }
 
 impl FlashView {
@@ -103,7 +120,22 @@ impl FlashView {
         }
     }
 
+    /// Unsaved map edits present?
+    pub fn is_dirty(&self) -> bool {
+        self.image.as_ref().is_some_and(Image::is_dirty)
+    }
+
+    /// Open a dump; with unsaved edits the user is asked first.
     pub fn open(&mut self, defs: &[EcuDef], path: PathBuf, settings: &mut Settings) {
+        if self.is_dirty() {
+            self.pending = Some(Pending::Open(path));
+            return;
+        }
+        self.open_now(defs, path, settings);
+    }
+
+    fn open_now(&mut self, defs: &[EcuDef], path: PathBuf, settings: &mut Settings) {
+        self.cursor = CellCursor::default();
         match Image::open(path) {
             Ok(img) => {
                 let t = Instant::now();
@@ -233,6 +265,267 @@ impl FlashView {
         }
     }
 
+    /// Apply edits to map `map` of the current definition (plugins, scripted
+    /// changes). Stops at the first refused cell; edits before it stay (undo
+    /// walks them back one by one).
+    pub fn apply_edits(
+        &mut self,
+        defs: &[EcuDef],
+        map: usize,
+        cells: &[(usize, f64)],
+    ) -> Result<usize, String> {
+        let m = self
+            .def_idx
+            .and_then(|d| defs[d].maps.get(map))
+            .ok_or("no such map in the selected definition")?;
+        let img = self.image.as_mut().ok_or("no dump open")?;
+        let mut n = 0;
+        for &(i, v) in cells {
+            img.edit_cell(m, i, CellEdit::Set(v))?;
+            n += 1;
+        }
+        self.reverify();
+        Ok(n)
+    }
+
+    /// Re-check after an edit (results always describe the working bytes).
+    fn reverify(&mut self) {
+        if self.image.is_some() && !self.algo.is_empty() {
+            self.verify();
+        }
+    }
+
+    fn run_cell_command(&mut self, defs: &[EcuDef], cmd: CellCommand) {
+        let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) else {
+            return;
+        };
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        match cmd {
+            CellCommand::Invalid(s) => self.error = Some(format!("'{s}' is not a number")),
+            CellCommand::Edit(i, e) => match img.edit_cell(m, i, e) {
+                Ok(_) => {
+                    self.error = None;
+                    self.reverify();
+                }
+                Err(e) => self.error = Some(format!("Not changed: {e}")),
+            },
+        }
+    }
+
+    fn undo(&mut self, defs: &[EcuDef]) {
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        if let Some(off) = img.undo() {
+            if let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) {
+                let w = m.data_type.byte_len() as usize;
+                let a = m.address as usize;
+                if (a..a + m.byte_len() as usize).contains(&off) {
+                    self.cursor.select((off - a) / w, m.cols as usize);
+                }
+            }
+            self.hex.jump(off);
+            self.reverify();
+        }
+    }
+
+    /// Is the shown checksum result a recognised family for this algorithm?
+    fn checksum_recognised(&self) -> bool {
+        matches!(&self.checksum, Some(Ok(r)) if r.recognised && r.algo == self.algo)
+    }
+
+    /// The bytes a save writes: the edited image with its checksums corrected
+    /// when the selected algorithm recognises it (and verified afterwards).
+    fn prepared(&self) -> Result<(Vec<u8>, String), String> {
+        let img = self.image.as_ref().ok_or("no dump open")?;
+        let mut out = img.bytes.clone();
+        if !self.checksum_recognised() {
+            return Ok((
+                out,
+                "checksums NOT corrected: do not flash this file until they are".into(),
+            ));
+        }
+        let algo = crate::host::resolve_checksum(&self.checksums, &self.algo)
+            .ok_or_else(|| format!("unknown checksum '{}'", self.algo))?;
+        let fixes = algo
+            .correct(&mut out)
+            .map_err(|e| format!("checksum correction refused ({e}); nothing was saved"))?;
+        let ok = algo
+            .verify_report(&out, Representation::RawFullImage)
+            .map(|v| !v.is_empty() && v.iter().all(|r| r.status.ok))
+            .unwrap_or(false);
+        if !ok {
+            return Err(format!(
+                "{} checksums still fail after correction; nothing was saved",
+                self.algo
+            ));
+        }
+        Ok((
+            out,
+            format!("{} {} block(s) corrected", fixes.len(), self.algo),
+        ))
+    }
+
+    /// Write the edited image to `target` (the vault gets the old contents).
+    fn save_to(&mut self, ack: crate::host::Ack, target: PathBuf) {
+        let (out, cks) = match self.prepared() {
+            Ok(p) => p,
+            Err(e) => {
+                self.error = Some(e);
+                return;
+            }
+        };
+        match crate::host::guarded_write(ack, &target, &out) {
+            Ok(r) => {
+                let vault = r
+                    .backup
+                    .as_ref()
+                    .map(|b| format!("; the previous file is in the vault ({})", b.path.display()))
+                    .unwrap_or_default();
+                self.note = Some(format!("Saved {} ({cks}){vault}.", target.display()));
+                self.error = None;
+                if let Some(img) = self.image.as_mut() {
+                    img.mark_saved(target, out);
+                }
+                self.reverify();
+            }
+            Err(e) => self.error = Some(format!("Not saved: {e}")),
+        }
+    }
+
+    /// Save as: a new file is written directly; replacing one is confirmed.
+    fn save_as(&mut self) {
+        let Some(img) = &self.image else { return };
+        let stem = img
+            .path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "image".into());
+        let dir = img.path.parent().map(Path::to_path_buf).unwrap_or_default();
+        let Some(out) = rfd::FileDialog::new()
+            .set_directory(dir)
+            .set_file_name(format!("{stem}_mod.bin"))
+            .save_file()
+        else {
+            return;
+        };
+        if out == img.path {
+            self.pending = Some(Pending::Save);
+        } else if out.exists() {
+            self.pending = Some(Pending::SaveAs(out));
+        } else {
+            let (bytes, cks) = match self.prepared() {
+                Ok(p) => p,
+                Err(e) => {
+                    self.error = Some(e);
+                    return;
+                }
+            };
+            match crate::host::atomic_write(&out, &bytes) {
+                Ok(()) => {
+                    self.note = Some(format!("Saved {} ({cks}).", out.display()));
+                    self.error = None;
+                    if let Some(img) = self.image.as_mut() {
+                        img.mark_saved(out, bytes);
+                    }
+                    self.reverify();
+                }
+                Err(e) => self.error = Some(format!("Not saved: {e}")),
+            }
+        }
+    }
+
+    /// Ask for (and act on) the confirmation of a pending operation.
+    fn pending_ui(&mut self, defs: &[EcuDef], settings: &mut Settings, confirms: &mut Confirms) {
+        let Some(op) = self.pending.clone() else {
+            return;
+        };
+        let (name, n) = match &self.image {
+            Some(i) => (i.name(), i.changed_bytes()),
+            None => {
+                self.pending = None;
+                return;
+            }
+        };
+        let cks = if self.checksum_recognised() {
+            format!("Checksums are corrected with {} first.", self.algo)
+        } else {
+            "No checksum algorithm recognises this image, so checksums are NOT corrected: \
+             do not flash the file until they are."
+                .to_string()
+        };
+        let file = |p: &Path| {
+            p.file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        };
+        let req = match &op {
+            Pending::Save => ConfirmRequest {
+                key: "flash-save".into(),
+                title: format!("Save {n} changed byte(s) to {name}?"),
+                body: format!(
+                    "The current {name} is archived in the vault first, then replaced. {cks}"
+                ),
+                typed: None,
+                confirm_label: "Back up & save".into(),
+            },
+            Pending::SaveAs(p) => ConfirmRequest {
+                key: "flash-save-as".into(),
+                title: format!("Replace {}?", file(p)),
+                body: format!(
+                    "{} already exists. It is archived in the vault first, then replaced \
+                     with the edited image. {cks}",
+                    p.display()
+                ),
+                typed: None,
+                confirm_label: "Back up & replace".into(),
+            },
+            Pending::Open(p) => ConfirmRequest {
+                key: "flash-discard-open".into(),
+                title: "Discard unsaved edits?".into(),
+                body: format!(
+                    "{n} edited byte(s) in {name} are not saved. Opening {} discards them.",
+                    file(p)
+                ),
+                typed: None,
+                confirm_label: "Discard & open".into(),
+            },
+            Pending::Revert => ConfirmRequest {
+                key: "flash-revert".into(),
+                title: "Revert all edits?".into(),
+                body: format!("{n} edited byte(s) in {name} go back to what the file holds."),
+                typed: None,
+                confirm_label: "Revert".into(),
+            },
+        };
+        match confirms.ask(req) {
+            ConfirmResult::Pending => {}
+            ConfirmResult::Declined => self.pending = None,
+            ConfirmResult::Accepted(ack) => {
+                self.pending = None;
+                match op {
+                    Pending::Save => {
+                        let p = self.image.as_ref().map(|i| i.path.clone());
+                        if let Some(p) = p {
+                            self.save_to(ack, p);
+                        }
+                    }
+                    Pending::SaveAs(p) => self.save_to(ack, p),
+                    Pending::Open(p) => self.open_now(defs, p, settings),
+                    Pending::Revert => {
+                        if let Some(i) = self.image.as_mut() {
+                            i.revert();
+                        }
+                        self.cursor.text = None;
+                        self.reverify();
+                    }
+                }
+            }
+        }
+    }
+
     pub fn status(&self) -> Status {
         Status {
             path: self.image.as_ref().map(|i| i.path.display().to_string()),
@@ -246,7 +539,22 @@ impl FlashView {
 
     // -----------------------------------------------------------------------
 
-    pub fn ui(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef], settings: &mut Settings) {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        t: &Tokens,
+        defs: &[EcuDef],
+        settings: &mut Settings,
+        confirms: &mut Confirms,
+    ) {
+        self.pending_ui(defs, settings, confirms);
+        if self.pending.is_none()
+            && !ui.ctx().egui_wants_keyboard_input()
+            && self.image.as_ref().is_some_and(Image::can_undo)
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z))
+        {
+            self.undo(defs);
+        }
         egui::Frame::new()
             .fill(t.surface)
             .inner_margin(Margin::symmetric(18, 11))
@@ -353,9 +661,24 @@ impl FlashView {
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let can_fix = matches!(&self.checksum, Some(Ok(r)) if r.blocks.iter().any(|b| !b.ok));
-                if ui.add_enabled_ui(can_fix, |ui| theme::primary_button(ui, t, Some(icons::CHECK), "Fix & save")).inner.on_hover_text("Write a copy with corrected checksums (the opened dump is never overwritten)").clicked() {
-                    self.fix_and_save();
+                let dirty = self.is_dirty();
+                if dirty {
+                    let n = self.image.as_ref().map_or(0, Image::changed_bytes);
+                    if theme::primary_button(ui, t, Some(icons::CHECK), "Save").on_hover_text("Archive the opened file in the vault, then write the edits (checksums corrected when the algorithm recognises the image)").clicked() {
+                        self.pending = Some(Pending::Save);
+                    }
+                    if theme::button(ui, t, None, "Save as…").on_hover_text("Write the edited image to another file").clicked() {
+                        self.save_as();
+                    }
+                    if theme::button(ui, t, None, "Revert").clicked() {
+                        self.pending = Some(Pending::Revert);
+                    }
+                    theme::pill(ui, t, &format!("{n} byte(s) edited"), Tone::Warn, true).on_hover_text("Ctrl+Z undoes the last edit");
+                } else {
+                    let can_fix = matches!(&self.checksum, Some(Ok(r)) if r.blocks.iter().any(|b| !b.ok));
+                    if ui.add_enabled_ui(can_fix, |ui| theme::primary_button(ui, t, Some(icons::CHECK), "Fix & save")).inner.on_hover_text("Write a copy with corrected checksums (the opened dump is never overwritten)").clicked() {
+                        self.fix_and_save();
+                    }
                 }
                 if theme::button(ui, t, Some(icons::FOLDER_OPEN), "Open dump").clicked() {
                     if let Some(p) = rfd::FileDialog::new().add_filter("flash image", &["bin", "ori", "mod", "hex", "BIN"]).pick_file() {
@@ -494,6 +817,12 @@ impl FlashView {
         let mut map_idx = self.map_idx;
         let mut all = self.show_all_maps;
         let mut jump_to = None;
+        let mut cell_cmd = None;
+        let editable = !show_all && self.pending.is_none();
+        if let Some(m) = sel {
+            self.cursor.follow(m);
+        }
+        let cursor = &mut self.cursor;
         theme::panel(
             ui,
             t,
@@ -585,15 +914,35 @@ impl FlashView {
                                     meta(ui, t, "@", &format!("0x{:06X}", m.address));
                                 });
                                 ui.add_space(6.0);
-                                let range = draw_map(ui, t, &img.bytes, m);
+                                let out = mapview::draw_map_ex(
+                                    ui,
+                                    t,
+                                    &img.bytes,
+                                    m,
+                                    editable.then_some(&mut *cursor),
+                                    &|i| img.cell_changed(m, i),
+                                );
                                 ui.add_space(8.0);
-                                if let Some((lo, hi)) = range {
+                                if let Some(o) = out {
+                                    if o.cmd.is_some() {
+                                        cell_cmd = o.cmd;
+                                    }
                                     ui.horizontal(|ui| {
-                                        mapview::legend(ui, t, 160.0, &fmt_val(lo), &fmt_val(hi));
+                                        mapview::legend(
+                                            ui,
+                                            t,
+                                            160.0,
+                                            &fmt_val(o.lo),
+                                            &fmt_val(o.hi),
+                                        );
                                         ui.label(
-                                            RichText::new("hover a cell for its value")
-                                                .small()
-                                                .color(t.fg_faint),
+                                            RichText::new(if editable {
+                                                "click a cell, type a value + Enter · +/− step · Ctrl+Z undo"
+                                            } else {
+                                                "hover a cell for its value"
+                                            })
+                                            .small()
+                                            .color(t.fg_faint),
                                         );
                                     });
                                 }
@@ -607,6 +956,9 @@ impl FlashView {
         self.show_all_maps = all;
         if map_idx != self.map_idx {
             self.map_idx = map_idx;
+        }
+        if let Some(c) = cell_cmd {
+            self.run_cell_command(defs, c);
         }
         if let Some(a) = jump_to {
             self.hex.jump(a);
@@ -871,6 +1223,83 @@ pub fn size_label(n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Edit → Save: nothing is written until the user confirms; then the old
+    /// file goes to the vault and the edited bytes replace it. Declining
+    /// leaves the file alone; a refused value changes nothing.
+    #[test]
+    fn save_is_confirmed_and_backs_up_first() {
+        let dir = std::env::temp_dir().join(format!("ot-native-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("synthetic.bin");
+        let orig: Vec<u8> = (0u8..64).collect();
+        std::fs::write(&path, &orig).unwrap();
+
+        let mut d = def("t", "Test", "test");
+        d.maps.push(opentune_core::ecudef::MapDef {
+            name: "m".into(),
+            address: 8,
+            rows: 2,
+            cols: 2,
+            max: Some(100.0),
+            ..Default::default()
+        });
+        let defs = vec![d];
+        let mut fv = FlashView {
+            image: Some(Image::open(path.clone()).unwrap()),
+            def_idx: Some(0),
+            ..Default::default()
+        };
+
+        assert!(fv.apply_edits(&defs, 0, &[(1, 200.0)]).is_err(), "over max");
+        assert!(!fv.is_dirty());
+        assert_eq!(fv.apply_edits(&defs, 0, &[(0, 99.0), (3, 7.0)]), Ok(2));
+        assert!(fv.is_dirty());
+
+        let mut settings = Settings::default();
+        let mut confirms = Confirms::default();
+        // Declined: nothing written, edits kept.
+        fv.pending = Some(Pending::Save);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        confirms.answer("flash-save", false);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(fv.pending, None);
+        assert_eq!(std::fs::read(&path).unwrap(), orig);
+        assert!(fv.is_dirty());
+
+        // Opening another file while dirty waits for the user too.
+        fv.open(&defs, dir.join("other.bin"), &mut settings);
+        assert!(matches!(fv.pending, Some(Pending::Open(_))));
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        confirms.answer("flash-discard-open", false);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert!(fv.is_dirty() && fv.image.as_ref().unwrap().path == path);
+
+        // Accepted: the vault gets the old file, then the edits land.
+        fv.pending = Some(Pending::Save);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(std::fs::read(&path).unwrap(), orig, "not before the OK");
+        confirms.answer("flash-save", true);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(fv.error, None);
+        let saved = std::fs::read(&path).unwrap();
+        let mut want = orig.clone();
+        want[8] = 99;
+        want[11] = 7;
+        assert_eq!(saved, want);
+        assert!(!fv.is_dirty());
+        let vault = crate::views::vault::vault_dir_for(&path);
+        let backups: Vec<_> = std::fs::read_dir(&vault)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|x| x == "bin"))
+            .map(|e| std::fs::read(e.path()).unwrap())
+            .collect();
+        assert!(backups.contains(&orig), "the original is in the vault");
+        assert!(fv.note.as_deref().unwrap_or("").contains("NOT corrected"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn def(id: &str, name: &str, family: &str) -> EcuDef {
         let mut d = EcuDef::from_json(&format!(

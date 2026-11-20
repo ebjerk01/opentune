@@ -93,10 +93,30 @@ The host enforces the safety rules: `write_file` needs an `Ack` (only
 `AdapterAccess::mutate` needs an `Ack` and a `BackupReceipt` (only `backup`
 creates one). Neither type can be constructed outside this crate.
 
+A view edits map cells with `HostAction::EditCells { map, cells }` (physical
+values, applied to the working image; `Host::image()` shows them and
+`Host::image_edited()` says there are unsaved edits). Views never save the
+dump themselves: the user saves from the Flash view, which runs the same
+confirm → vault backup → atomic replace sequence and corrects checksums with
+the configured resolvers.
+
 ## Safety
 
 - Nothing here writes to an ECU. The adapter layer only sends ELM327 AT
   commands (identification, battery voltage) and never opens K-line, CAN or
   unknown ports during auto-detect.
-- "Fix & save" writes corrected checksums to a NEW file chosen in a save
-  dialog; the opened dump is never overwritten.
+- "Fix & save" (no edits) writes corrected checksums to a NEW file chosen
+  in a save dialog; the opened dump is never overwritten by it.
+- Map editing: click a cell, type a value + Enter (or `+`/`-` to step one
+  raw LSB, Shift for 10, Ctrl+Z to undo). Values are refused, never clamped
+  or wrapped, when they do not fit the data type or the map's `min`/`max`.
+  Edited cells are marked; the dump bar shows the edited byte count.
+- **Save** replaces the opened dump only after a confirmation; its current
+  contents are archived in the vault first (the write is refused if the
+  backup fails) and the new file is written atomically. Checksums are
+  corrected first when the selected algorithm *recognises* the image and
+  must verify afterwards, else nothing is written; with no recognising
+  algorithm the dialog says checksums are NOT corrected. **Save as…**
+  writes a new file (replacing an existing one goes through the same
+  confirm + backup). Opening another dump, reverting or quitting with
+  unsaved edits asks first.

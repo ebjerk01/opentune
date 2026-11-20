@@ -301,7 +301,7 @@ pub struct Confirms {
 }
 
 impl Confirms {
-    fn ask(&mut self, req: ConfirmRequest) -> ConfirmResult {
+    pub(crate) fn ask(&mut self, req: ConfirmRequest) -> ConfirmResult {
         match self.open.get(&req.key).map(|(_, s, _)| *s) {
             Some(ConfirmState::Accepted) => {
                 self.open.remove(&req.key);
@@ -379,7 +379,7 @@ impl Confirms {
     }
 
     #[cfg(test)]
-    fn answer(&mut self, key: &str, accept: bool) {
+    pub(crate) fn answer(&mut self, key: &str, accept: bool) {
         if let Some(e) = self.open.get_mut(key) {
             e.1 = if accept {
                 ConfirmState::Accepted
@@ -413,7 +413,7 @@ fn backup_into_vault(near: &Path, label: &str, data: &[u8]) -> Result<BackupRece
 }
 
 /// Write through a temporary file and rename, so a crash never leaves half a file.
-fn atomic_write(target: &Path, data: &[u8]) -> Result<(), String> {
+pub(crate) fn atomic_write(target: &Path, data: &[u8]) -> Result<(), String> {
     let tmp = target.with_extension("opentune-tmp");
     std::fs::write(&tmp, data).map_err(|e| format!("write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, target).map_err(|e| {
@@ -475,6 +475,14 @@ pub enum HostAction {
     SelectDefinition(String),
     SelectMap(usize),
     HexJump(usize),
+    /// Change cells of map `map` of the selected definition in the working
+    /// image: `(cell index row-major, physical value)`. Nothing is written to
+    /// disk; the user saves through the Flash view's confirm + backup-first
+    /// path, with checksums corrected by the configured resolvers.
+    EditCells {
+        map: usize,
+        cells: Vec<(usize, f64)>,
+    },
 }
 
 /// What a view gets every frame.
@@ -482,6 +490,7 @@ pub struct Host<'a> {
     pub(crate) tokens: Tokens,
     pub(crate) image_path: Option<&'a Path>,
     pub(crate) image: Option<&'a [u8]>,
+    pub(crate) image_edited: bool,
     pub(crate) defs: &'a [EcuDef],
     pub(crate) def_idx: Option<usize>,
     pub(crate) map_idx: usize,
@@ -503,6 +512,10 @@ impl<'a> Host<'a> {
     }
     pub fn image_path(&self) -> Option<&Path> {
         self.image_path
+    }
+    /// Does the working image hold unsaved edits? ([`Host::image`] shows them.)
+    pub fn image_edited(&self) -> bool {
+        self.image_edited
     }
     pub fn definitions(&self) -> &[EcuDef] {
         self.defs
@@ -580,7 +593,7 @@ impl<'a> Host<'a> {
     }
 }
 
-fn guarded_write(_ack: Ack, target: &Path, data: &[u8]) -> Result<WriteReceipt, String> {
+pub(crate) fn guarded_write(_ack: Ack, target: &Path, data: &[u8]) -> Result<WriteReceipt, String> {
     let backup = match std::fs::read(target) {
         Ok(old) => Some(backup_into_vault(target, "before write", &old)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -816,8 +829,9 @@ mod tests {
             job: None,
             confirm: None,
         };
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let mut host = Host {
+                image_edited: false,
                 tokens: crate::theme::DARK,
                 image_path: Some(Path::new("/tmp/x.bin")),
                 image: Some(&image),
@@ -833,6 +847,8 @@ mod tests {
             };
             view.ui(ui, &mut host);
         });
+        // Headless: nothing uploads the font atlas.
+        out.textures_delta.clear();
         assert_eq!(view.seen_len, Some(64));
         assert_eq!(view.seen_def, None);
         assert!(
