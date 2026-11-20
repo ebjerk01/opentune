@@ -7,7 +7,7 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs, vault listing and the drivetrain controller catalog."
+description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs, vault listing, the drivetrain controller catalog and the log map overlay."
 
 [dependencies]
 opentune-core = { path = "../opentune-core" }
@@ -42,6 +42,10 @@ opentune-packs = { path = "../opentune-packs" }
 opentune-db = { path = "../opentune-db" }
 opentune-checksum = { path = "../opentune-checksum" }
 opentune-haldex = { path = "../opentune-haldex" }
+
+# Log map overlay (src/logoverlay.rs): the log reader and binning, joined
+# with this crate's map codecs (so not in opentune-logview itself).
+opentune-logview = { path = "../opentune-logview" }
 
 # Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
 opentune-driver-isotp-ble = { path = "../drivers/isotp-ble-bridge", optional = true }

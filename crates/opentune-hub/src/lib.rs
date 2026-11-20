@@ -19,6 +19,8 @@
 //! * [`controllers`] — the drivetrain controller catalog (built-in
 //!   definitions plus definition packs), cross-link validation and the
 //!   offline CAN-log decode with a definition's frame sets.
+//! * [`logoverlay`] — a log's map overlay: axis breakpoints from the
+//!   definition and image, channel/axis unit checks and the binned payload.
 //!
 //! Features: `alpha` registers the Bench-tier drivers and makes
 //! [`BuildChannel::compiled`] report `alpha`; `testkit` exposes the simulated
@@ -29,6 +31,7 @@ pub mod adapter;
 pub mod channel;
 pub mod controllers;
 pub mod drivers;
+pub mod logoverlay;
 pub mod maps;
 pub mod sa2script;
 pub mod seedkeys;

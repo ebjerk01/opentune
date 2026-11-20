@@ -52,7 +52,10 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
   It also holds panel logic that joins several crates:
   `opentune_hub::controllers` (the controller catalog over `ctrldefs/` and
-  definition packs, link validation, CAN-log decode).
+  definition packs, link validation, CAN-log decode) and
+  `opentune_hub::logoverlay` (a log's map overlay: axis breakpoints from the
+  definition and image, unit checks, the binned payload over
+  `opentune_logview::overlay`).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).

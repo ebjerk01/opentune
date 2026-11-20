@@ -1494,6 +1494,7 @@ dependencies = [
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
  "opentune-haldex",
+ "opentune-logview",
  "opentune-packs",
  "opentune-sa2",
  "opentune-seedkey-loader",

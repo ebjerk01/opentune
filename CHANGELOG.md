@@ -191,6 +191,9 @@ section (alpha/bench builds) until they are vehicle-tested.
     packs), link-validation context, list / detail rows and the CAN-log
     decode → `opentune_hub::controllers` (not `opentune-ctrldef`:
     `opentune-packs` depends on it).
+  - The Log viewer's map overlay (axis breakpoints, unit checks, the binned
+    payload) → `opentune_hub::logoverlay` (it reads axes and cells with the
+    hub's map codecs).
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
