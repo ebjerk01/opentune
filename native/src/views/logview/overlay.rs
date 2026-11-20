@@ -315,6 +315,8 @@ pub struct Overlay {
     pub result: Option<Result<Hits, String>>,
     metric: Metric,
     show_map: bool,
+    /// "Open in Maps" was pressed for this map of the app's definition.
+    pub open_maps: Option<String>,
 }
 
 impl Overlay {
@@ -538,24 +540,43 @@ impl Overlay {
                 if self.map.is_none() {
                     self.map = maps.first().map(|m| m.0.clone());
                 }
-                egui::ComboBox::from_id_salt("lv-ov-map")
-                    .selected_text(self.map.clone().unwrap_or_else(|| {
-                        if def.is_some() {
-                            "(no maps with axes)".into()
-                        } else {
-                            "—".into()
-                        }
-                    }))
-                    .width(320.0)
-                    .show_ui(ui, |ui| {
-                        for (n, r, c) in &maps {
-                            ui.selectable_value(
-                                &mut self.map,
-                                Some(n.clone()),
-                                format!("{n} — {r}×{c}"),
-                            );
-                        }
-                    });
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("lv-ov-map")
+                        .selected_text(self.map.clone().unwrap_or_else(|| {
+                            if def.is_some() {
+                                "(no maps with axes)".into()
+                            } else {
+                                "—".into()
+                            }
+                        }))
+                        .width(320.0)
+                        .show_ui(ui, |ui| {
+                            for (n, r, c) in &maps {
+                                ui.selectable_value(
+                                    &mut self.map,
+                                    Some(n.clone()),
+                                    format!("{n} — {r}×{c}"),
+                                );
+                            }
+                        });
+                    // The Maps view shows the app's definition over the open
+                    // image: offered for that pairing only.
+                    let can =
+                        self.src == Some(DefSrc::App) && cx.image.is_some() && self.map.is_some();
+                    let r = ui
+                        .add_enabled_ui(can, |ui| theme::button(ui, t, None, "Open in Maps"))
+                        .inner;
+                    let r = if can {
+                        r.on_hover_text("Show this map in the Maps view")
+                    } else {
+                        r.on_disabled_hover_text(
+                            "Needs the app's definition and an open dump (Maps shows those)",
+                        )
+                    };
+                    if r.clicked() {
+                        self.open_maps = self.map.clone();
+                    }
+                });
                 ui.end_row();
                 let m = def
                     .as_ref()

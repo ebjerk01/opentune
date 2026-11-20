@@ -230,7 +230,9 @@ impl App {
             vault: Default::default(),
             project: Default::default(),
             logview: Default::default(),
-            controllers: Default::default(),
+            controllers: views::controllers::ControllersView::with_checksums(
+                config.checksums.clone(),
+            ),
             drivers: Default::default(),
             env,
             branding: config.branding,
@@ -604,6 +606,22 @@ impl eframe::App for App {
                     self.logview.ui_with(ui, &t, cx);
                     if self.logview.take_show_drive() {
                         self.apply(vec![HostAction::ShowView("drive".into())]);
+                    }
+                    if let Some(name) = self.logview.take_open_map() {
+                        let idx = self
+                            .flash
+                            .def_idx
+                            .and_then(|i| self.defs[i].maps.iter().position(|m| m.name == name));
+                        match idx {
+                            Some(m) => self.apply(vec![
+                                HostAction::SelectMap(m),
+                                HostAction::ShowView("maps".into()),
+                            ]),
+                            None => {
+                                self.host_status =
+                                    Some(format!("'{name}' is not in the selected definition"))
+                            }
+                        }
                     }
                 }
                 View::Controllers => self.controllers.ui(ui, &t),
