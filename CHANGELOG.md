@@ -184,6 +184,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the live-log request building (logger definition, SSM or UDS
+  addressing with the engine assumed when no ids are given, fast / SSM poll
+  options, idle stop, reconnect policy) moved from the desktop's `log_start`
+  into `opentune_hub::livelog::live_request`, so the native app starts the
+  same sessions. No behaviour change.
 - Internal: the desktop's live-log session engine (the `0x2C` fast / SSM
   live session held on the adapter hub, link-loss detection and reconnect,
   the stateless poll and the logger-definition loader) moved from
