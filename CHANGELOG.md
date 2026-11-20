@@ -233,6 +233,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- **Backup vault: two backups in the same second no longer overwrite each other.**
+  Backup files were named by ECU, address and Unix second, so a second backup
+  of the same ECU within one second replaced the first (e.g. the original dump
+  before a quick re-save). A new backup now gets a `_2`, `_3`, … suffix and is
+  created exclusively, so no backup is ever replaced.
 - ECU identification: the four reference Mercedes EDC15C6 calibrations
   (SW 1037351686 / 351637 / 351736 / 351737) now match the `bosch-edc15c6`
   definition instead of `bosch-edc16u34`, whose broad `1037` software key

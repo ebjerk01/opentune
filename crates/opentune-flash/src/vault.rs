@@ -25,6 +25,11 @@ fn sanitize(s: &str) -> String {
 
 /// Save `data` read from `region` as a backup in `dir`. Returns the image path.
 /// Writes `<stem>.bin` and a human-readable `<stem>.meta` sidecar.
+///
+/// An existing backup is never overwritten: when `<stem>.bin` already exists
+/// (two backups of the same ECU within one second) the new one gets a
+/// `_2`, `_3`, … suffix. The image file is created exclusively, so even two
+/// concurrent saves cannot replace each other.
 pub fn save_backup(dir: &Path, ecu: &EcuId, region: MemoryRegion, data: &[u8]) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let when = SystemTime::now()
@@ -36,9 +41,8 @@ pub fn save_backup(dir: &Path, ecu: &EcuId, region: MemoryRegion, data: &[u8]) -
         .clone()
         .or_else(|| ecu.sw_number.clone())
         .unwrap_or_else(|| "ecu".into());
-    let stem = format!("{}_{:08X}_{}", sanitize(&name), region.address, when);
-    let bin = dir.join(format!("{stem}.bin"));
-    std::fs::write(&bin, data)?;
+    let base = format!("{}_{:08X}_{}", sanitize(&name), region.address, when);
+    let (stem, bin) = create_unique(dir, &base, data)?;
 
     let meta = format!(
         "ecu_name = {}\nsw_number = {}\nhw_number = {}\nvin = {}\n\
@@ -56,9 +60,69 @@ pub fn save_backup(dir: &Path, ecu: &EcuId, region: MemoryRegion, data: &[u8]) -
     Ok(bin)
 }
 
+/// Write `data` to `<base>.bin`, or `<base>_N.bin` for the first N ≥ 2 that
+/// does not exist yet, creating the file exclusively (never replacing one).
+fn create_unique(dir: &Path, base: &str, data: &[u8]) -> Result<(String, PathBuf)> {
+    use std::io::Write;
+    for n in 1u32.. {
+        let stem = if n == 1 {
+            base.to_string()
+        } else {
+            format!("{base}_{n}")
+        };
+        let bin = dir.join(format!("{stem}.bin"));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&bin)
+        {
+            Ok(mut f) => {
+                f.write_all(data)?;
+                f.sync_all()?;
+                return Ok((stem, bin));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    unreachable!("u32 suffixes exhausted")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn same_second_backups_never_overwrite() {
+        let dir = std::env::temp_dir().join(format!("opentune_vault_dup_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ecu = EcuId {
+            ecu_name: Some("before write".into()),
+            ..Default::default()
+        };
+        let region = MemoryRegion::new(0, 4);
+        // Same ECU, same address, back to back: same second in practice.
+        let a = save_backup(&dir, &ecu, region, b"ORIG").unwrap();
+        let b = save_backup(&dir, &ecu, region, b"EDIT").unwrap();
+        let c = save_backup(&dir, &ecu, region, b"MORE").unwrap();
+        assert_ne!(a, b);
+        assert_ne!(b, c);
+        assert_eq!(
+            std::fs::read(&a).unwrap(),
+            b"ORIG",
+            "the first backup survives"
+        );
+        assert_eq!(std::fs::read(&b).unwrap(), b"EDIT");
+        assert_eq!(std::fs::read(&c).unwrap(), b"MORE");
+        for p in [&a, &b, &c] {
+            assert!(
+                p.with_extension("meta").exists(),
+                "{} has its sidecar",
+                p.display()
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn crc32_vector() {
