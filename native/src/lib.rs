@@ -30,6 +30,7 @@ pub mod widgets;
 // Engine crates the scaffold pre-added for the feature batches (so no batch
 // edits Cargo.toml). Anchored here until a view uses them; a batch may drop
 // its line once its view does.
+use egui_commonmark as _;
 use opentune_a2l as _;
 use opentune_adaptation as _;
 use opentune_autoscan as _;

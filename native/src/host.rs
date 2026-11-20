@@ -955,6 +955,41 @@ pub trait AdapterAccess: Send + Sync {
         Err(UNSUPPORTED.into())
     }
 
+    /// Start a raw CAN capture to a file (Bench tier; refused in the backend
+    /// on other channels). Read-only: the capture opens its own driver for
+    /// the link's cable, listen-only where supported, and holds the adapter
+    /// until [`capture_stop`](AdapterAccess::capture_stop) or its duration.
+    /// Blocking until the monitor runs: call it from a job. Returns
+    /// `{ ok, adapter }`.
+    fn capture_start(&self, spec: CaptureSpec) -> Result<serde_json::Value, String> {
+        let _ = spec;
+        Err(UNSUPPORTED.into())
+    }
+
+    /// The current (or last) capture: frames, bytes, rate, ids, error, ...
+    fn capture_status(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
+    /// Stop the capture, finish the file and release the adapter (blocking).
+    fn capture_stop(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
+    /// "Is it there?" for a cable (`driver` + `port` / `baud` / `bus`): a
+    /// fresh handshake, nothing sent to an ECU. Returns the driver's probe
+    /// report (`connected`, identification, capabilities, error, busy).
+    fn probe(
+        &self,
+        driver: &str,
+        port: &str,
+        baud: u32,
+        bus: &str,
+    ) -> Result<serde_json::Value, String> {
+        let _ = (driver, port, baud, bus);
+        Err(UNSUPPORTED.into())
+    }
+
     fn raw_job(
         &self,
         op: &str,
@@ -1087,6 +1122,24 @@ pub(crate) fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Resul
     r?.downcast::<R>()
         .map(|b| *b)
         .map_err(|_| "adapter returned an unexpected result type".into())
+}
+
+/// A raw CAN capture request (see [`AdapterAccess::capture_start`]). The
+/// capture opens its OWN driver for the link's cable (listen-only where the
+/// adapter supports it) and records frames to `path`; it sends nothing.
+#[derive(Clone, Debug, Default)]
+pub struct CaptureSpec {
+    /// File to create (an existing file is replaced only by the caller's
+    /// own choice in a save dialog).
+    pub path: String,
+    /// `candump`, `csv`, ... (as `opentune_candump::Format`).
+    pub format: String,
+    /// CAN ids to keep (empty: all), each at most 29 bits.
+    pub filter_ids: Vec<u32>,
+    /// Stop by itself after this long (None: until stopped).
+    pub duration_s: Option<u32>,
+    /// Bus bitrate (None / 0: the driver's default).
+    pub bitrate: Option<u32>,
 }
 
 /// A live-logging session request (see [`AdapterAccess::live_start`]): the

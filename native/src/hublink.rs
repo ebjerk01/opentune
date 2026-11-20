@@ -67,6 +67,8 @@ pub struct HubAdapter {
     ending: Arc<Mutex<Option<String>>>,
     /// The live-logging session (the hub's live-log engine state).
     live: opentune_hub::livelog::LiveLogState,
+    /// The raw CAN capture (the hub's candump op state).
+    capture: opentune_hub::ops::candump::CandumpState,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -89,6 +91,7 @@ impl HubAdapter {
             channel: BuildChannel::compiled(),
             ending: Arc::new(Mutex::new(None)),
             live: Default::default(),
+            capture: Default::default(),
         }
     }
 
@@ -400,6 +403,81 @@ impl AdapterAccess for HubAdapter {
         }
     }
 
+    fn capture_start(&self, spec: crate::host::CaptureSpec) -> Result<serde_json::Value, String> {
+        use opentune_hub::ops::candump::{
+            await_start, begin_capture, registry_driver, StartRequest,
+        };
+        if !bench_channel(&self.channel) {
+            return Err("CAN capture is a Bench-tier tool; not available in this build".into());
+        }
+        let cfg = self
+            .link_cfg()
+            .ok_or("no adapter connected: pick a cable and connect it in the top bar")?;
+        if let Some(bad) = spec.filter_ids.iter().find(|&&id| id > 0x1FFF_FFFF) {
+            return Err(format!("filter id {bad:X} is larger than 29 bits"));
+        }
+        let format: opentune_candump::Format = spec.format.parse()?;
+        let baud = (cfg.baud != 0).then(|| cfg.baud.to_string());
+        let opts = opentune_candump::monitor_opts(
+            Some(cfg.port.as_str()).filter(|p| !p.trim().is_empty()),
+            baud.as_deref(),
+            Some(cfg.bus.as_str()).filter(|b| !b.trim().is_empty()),
+            spec.bitrate.filter(|&b| b > 0),
+            spec.filter_ids,
+        );
+        let deadline = Instant::now() + POLL_WAIT;
+        loop {
+            let req = StartRequest {
+                driver: cfg.driver.trim().to_string(),
+                opts: opts.clone(),
+                path: spec.path.clone(),
+                format,
+                duration: spec
+                    .duration_s
+                    .filter(|&d| d > 0)
+                    .map(|d| Duration::from_secs(d.into())),
+            };
+            match begin_capture(&self.hub, &self.capture, req, registry_driver) {
+                // A battery poll holds the adapter for a moment: wait for it.
+                Err(e) if self.retry_after_poll(&e, || true, deadline) => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(e) => return Err(e),
+                Ok(rx) => {
+                    let adapter = await_start(rx)?;
+                    return Ok(serde_json::json!({ "ok": true, "adapter": adapter }));
+                }
+            }
+        }
+    }
+
+    fn capture_status(&self) -> Result<serde_json::Value, String> {
+        Ok(opentune_hub::ops::candump::capture_status(&self.capture))
+    }
+
+    fn capture_stop(&self) -> Result<serde_json::Value, String> {
+        opentune_hub::ops::candump::stop_capture(&self.hub, &self.capture)
+    }
+
+    fn probe(
+        &self,
+        driver: &str,
+        port: &str,
+        baud: u32,
+        bus: &str,
+    ) -> Result<serde_json::Value, String> {
+        let baud = (baud != 0).then(|| baud.to_string());
+        let key = ConnKey::new(
+            driver.trim(),
+            Some(port),
+            baud.as_deref(),
+            Some(bus),
+            Addr::ENGINE,
+        );
+        let (v, _log) = opentune_hub::drivers::probe_json(&self.hub, key, driver.trim());
+        Ok(v)
+    }
+
     fn live_tick(&self) -> Result<serde_json::Value, String> {
         opentune_hub::livelog::tick_live(&self.live)
     }
@@ -587,6 +665,64 @@ mod tests {
             bus: "hs".into(),
         }));
         (opens, a)
+    }
+
+    /// CAN capture: Bench tier in the backend, refusals before any file, and
+    /// a real capture through the registry's mock driver (start, status,
+    /// stop, the file written). Probe: a fresh handshake reports back.
+    #[test]
+    fn capture_and_probe_through_the_hub() {
+        use crate::host::CaptureSpec;
+        let dir = std::env::temp_dir().join(format!("ot-native-cap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let spec = |name: &str| CaptureSpec {
+            path: dir.join(name).display().to_string(),
+            format: "candump".into(),
+            filter_ids: Vec::new(),
+            duration_s: None,
+            bitrate: None,
+        };
+        let mock = || LinkCfg {
+            driver: "mock".into(),
+            port: String::new(),
+            baud: 0,
+            bus: String::new(),
+        };
+        // Stable channel: refused in the adapter, no file created.
+        let stable =
+            HubAdapter::with_registry().with_channel(BuildChannel::new(BuildChannel::STABLE));
+        stable.set_link(Some(mock()));
+        let e = AdapterAccess::capture_start(&stable, spec("stable.log")).unwrap_err();
+        assert!(e.contains("Bench"), "{e}");
+        assert!(!dir.join("stable.log").exists());
+        // Bench channel.
+        let a = HubAdapter::with_registry().with_channel(BuildChannel::new(BuildChannel::BENCH));
+        let e = AdapterAccess::capture_start(&a, spec("nocable.log")).unwrap_err();
+        assert!(e.contains("no adapter connected"), "{e}");
+        a.set_link(Some(mock()));
+        let mut wide = spec("wide.log");
+        wide.filter_ids = vec![0x2000_0000];
+        let e = AdapterAccess::capture_start(&a, wide).unwrap_err();
+        assert!(e.contains("29 bits"), "{e}");
+        assert!(!dir.join("wide.log").exists());
+        // A real capture on the mock bus.
+        let r = AdapterAccess::capture_start(&a, spec("cap.log")).unwrap();
+        assert_eq!(r["ok"], serde_json::json!(true));
+        let st = AdapterAccess::capture_status(&a).unwrap();
+        assert_eq!(st["running"], serde_json::json!(true));
+        let done = AdapterAccess::capture_stop(&a).unwrap();
+        assert!(done.is_object(), "{done}");
+        assert!(dir.join("cap.log").exists());
+        assert_eq!(
+            AdapterAccess::capture_status(&a).unwrap()["running"],
+            serde_json::json!(false)
+        );
+        assert_eq!(a.busy(), None, "the adapter is free again");
+        // Probe the mock cable.
+        let p = AdapterAccess::probe(&a, "mock", "", 0, "").unwrap();
+        assert!(p.is_object(), "{p}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Live logging goes through the hub's live-log engine with the link's

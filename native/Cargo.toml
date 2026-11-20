@@ -36,6 +36,8 @@ opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
 opentune-hub = { path = "../crates/opentune-hub" }
 # The local diagnostics log (masked records, rotation, panic hook).
 opentune-diaglog = { path = "../crates/opentune-diaglog" }
+# The Guide view's Markdown (MIT OR Apache-2.0; pinned: the egui-0.37 release).
+egui_commonmark = { version = "=0.26.0", default-features = false, features = ["pulldown_cmark"] }
 # Engines the ported panels use (added once by the scaffold batch so the
 # feature batches never touch this file).
 opentune-packs = { path = "../crates/opentune-packs" }
