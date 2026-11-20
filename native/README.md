@@ -102,6 +102,11 @@ it; `AdapterAccess::mutate` addresses `Ack::ecu_target()`, so a write reaches
 exactly the module the user confirmed, and a plain `confirm` Ack (file
 writes) cannot drive a mutation.
 
+**Protocol clients.** Inside an adapter job, wrap the `RawDiag` in
+`RawTransport::new(d)` to use the core `UdsClient` / `Kwp2000Client`. The
+responsePending (0x78) wait is done once by the driver's transport, which
+never re-sends a request.
+
 **Diagnostics.** `NativeConfig::diagnostics` is an optional upload seam
 (`DiagnosticsSink`); it is `None` in the public build, which never uploads
 anything.

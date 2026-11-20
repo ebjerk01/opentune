@@ -23,7 +23,7 @@ pub mod theme;
 mod views;
 
 use bench::{BenchCfg, Scene};
-pub use host::{Branding, Host, NativeConfig, NativeView};
+pub use host::{Branding, Host, NativeConfig, NativeView, RawTransport};
 use std::path::PathBuf;
 
 pub(crate) struct Args {

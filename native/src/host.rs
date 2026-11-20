@@ -615,6 +615,54 @@ pub trait AdapterAccess: Send + Sync {
     ) -> Result<Box<dyn Any + Send>, String>;
 }
 
+/// Run the core protocol clients (`UdsClient`, `Kwp2000Client`) over the
+/// [`RawDiag`] an adapter job gets:
+///
+/// ```ignore
+/// adapter.read("identify", host.target()?, |d| {
+///     let mut t = RawTransport::new(d);
+///     UdsClient::new(&mut t).read_data_by_id(0xF187).map_err(|e| e.to_string())
+/// })?;
+/// ```
+///
+/// The responsePending (`7F <sid> 78`) wait happens once, below the
+/// `RawDiag`, in the driver's transport (ISO-TP, TP2.0, DoIP, K-line), which
+/// keeps receiving and never re-sends the request. A pending reply that still
+/// reaches this bridge (the transport gave up waiting) is an error here: the
+/// request is never sent again, so a write cannot be duplicated. Negative
+/// responses pass through as raw `7F` bytes, which the clients turn into
+/// `Error::NegativeResponse`; a lost link becomes `Error::AdapterReset`.
+/// The per-request timeout is the adapter's (`timeout_ms` is ignored).
+pub struct RawTransport<'a> {
+    inner: &'a mut dyn RawDiag,
+}
+
+impl<'a> RawTransport<'a> {
+    pub fn new(inner: &'a mut dyn RawDiag) -> Self {
+        Self { inner }
+    }
+}
+
+impl opentune_core::protocol::DiagTransport for RawTransport<'_> {
+    fn request(&mut self, req: &[u8], _timeout_ms: u64) -> opentune_core::Result<Vec<u8>> {
+        use opentune_core::resilient::LINK_LOST_PREFIX;
+        match self.inner.request(req) {
+            Ok(resp) if opentune_core::protocol::diag::is_response_pending(req, &resp) => {
+                Err(opentune_core::Error::Protocol(format!(
+                    "service 0x{:02X}: the ECU was still answering responsePending (0x78) \
+                     when the adapter stopped waiting; the request was not re-sent",
+                    req.first().copied().unwrap_or(0)
+                )))
+            }
+            Ok(resp) => Ok(resp),
+            Err(e) => Err(match e.strip_prefix(LINK_LOST_PREFIX) {
+                Some(why) => opentune_core::Error::AdapterReset(why.to_string()),
+                None => opentune_core::Error::Protocol(e),
+            }),
+        }
+    }
+}
+
 fn boxed<R, F>(f: F) -> DiagJob
 where
     R: Send + 'static,
@@ -1052,6 +1100,42 @@ mod tests {
         } else {
             panic!("expected Accepted");
         }
+    }
+
+    #[test]
+    fn raw_transport_runs_the_core_clients() {
+        use opentune_core::protocol::UdsClient;
+        let mut sent: Vec<Vec<u8>> = Vec::new();
+        let mut raw = |req: &[u8]| -> Result<Vec<u8>, String> {
+            sent.push(req.to_vec());
+            match req {
+                [0x22, 0xF1, 0x87] => Ok(b"\x62\xF1\x87PART".to_vec()),
+                [0x22, ..] => Ok(vec![0x7F, 0x22, 0x31]),
+                [0x31, ..] => Ok(vec![0x7F, 0x31, 0x78]),
+                [0x3E, ..] => Err(format!(
+                    "{}adapter reset",
+                    opentune_core::resilient::LINK_LOST_PREFIX
+                )),
+                _ => Err("timeout".into()),
+            }
+        };
+        {
+            let mut t = RawTransport::new(&mut raw);
+            let mut uds = UdsClient::new(&mut t);
+            assert_eq!(uds.read_data_by_id(0xF187).unwrap(), b"PART");
+            let e = uds.read_data_by_id(0xF190).unwrap_err();
+            assert!(
+                matches!(e, opentune_core::Error::NegativeResponse { code: 0x31, .. }),
+                "{e:?}"
+            );
+            use opentune_core::protocol::DiagTransport;
+            let e = t.request(&[0x31, 0x01, 0xFF, 0x00], 100).unwrap_err();
+            assert!(e.to_string().contains("not re-sent"), "{e}");
+            let e = t.request(&[0x3E, 0x00], 100).unwrap_err();
+            assert!(opentune_core::resilient::is_link_lost(&e), "{e:?}");
+        }
+        // The pending routine was sent exactly once.
+        assert_eq!(sent.iter().filter(|r| r[0] == 0x31).count(), 1);
     }
 
     /// A mock adapter: answers every request with a fixed reply and counts
