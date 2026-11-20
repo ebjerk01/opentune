@@ -17,7 +17,6 @@ pub mod ecudb;
 pub mod flash;
 pub mod logview;
 pub mod maps;
-pub mod placeholder;
 pub mod project;
 pub mod vault;
 
