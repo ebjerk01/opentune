@@ -31,6 +31,7 @@ pub struct App {
     project: views::project::ProjectView,
     logview: views::logview::LogView,
     controllers: views::controllers::ControllersView,
+    drivers: views::drivers::DriversView,
     env: String,
     branding: Branding,
     /// Built-in NativeViews (`views::builtin`), registered for the channel.
@@ -230,6 +231,7 @@ impl App {
             project: Default::default(),
             logview: Default::default(),
             controllers: Default::default(),
+            drivers: Default::default(),
             env,
             branding: config.branding,
             builtin_views,
@@ -566,7 +568,9 @@ impl eframe::App for App {
                     self.apply(acts);
                 }
                 View::EcuDb => self.ecudb.ui(ui, &t),
-                View::Drivers => views::drivers::ui(ui, &t),
+                View::Drivers => self
+                    .drivers
+                    .show(ui, &t, self.adapter.as_ref(), Some(&self.jobs)),
                 View::Vault => {
                     let img = self.flash.image.as_ref().map(|i| i.path.clone());
                     if let Some(p) = self.vault.ui(ui, &t, img.as_deref()) {

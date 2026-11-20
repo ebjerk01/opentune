@@ -16,7 +16,7 @@ use crate::icons;
 use crate::theme::{self, font, Tokens, Tone, DISPLAY, DISPLAY_MEDIUM, MONO_MEDIUM, UI_MEDIUM};
 use crate::widgets::caps::{self, Need};
 use eframe::egui::{self, Align, CornerRadius, Label, Layout, Margin, RichText, Stroke, Ui, Vec2};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 /// How a driver reaches the vehicle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,19 +501,6 @@ impl Default for DriversView {
     }
 }
 
-/// The app routes the Drivers view here until it keeps a [`DriversView`]
-/// itself and calls [`DriversView::show`] with its adapter and jobs: the
-/// state then lives in egui memory, and the probe is unavailable.
-pub fn ui(ui: &mut Ui, t: &Tokens) {
-    let id = egui::Id::unique("opentune-drivers-view");
-    let state = ui.data_mut(|d| {
-        d.get_temp_mut_or_insert_with(id, || Arc::new(Mutex::new(DriversView::default())))
-            .clone()
-    });
-    let mut v = state.lock().unwrap_or_else(|p| p.into_inner());
-    v.show(ui, t, None, None);
-}
-
 impl DriversView {
     /// Start the probe of the probe bar's request (refused when the request
     /// is invalid, a probe is running, or there is no adapter / job runner).
@@ -897,6 +884,7 @@ mod tests {
     use std::any::Any;
     use std::collections::BTreeSet;
     use std::path::Path;
+    use std::sync::Mutex;
 
     #[test]
     fn notes_are_unique_and_complete() {
