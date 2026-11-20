@@ -2120,7 +2120,6 @@ mod tests {
     /// Two guarded writes of the same file in quick succession (e.g. Save,
     /// then Save again): the vault must still hold the ORIGINAL contents.
     #[test]
-    #[ignore = "BUG: vault backups are named <label>_<address>_<unix seconds>, so a second backup with the same label within one second overwrites the first (the original contents are lost)"]
     fn two_writes_in_one_second_keep_both_vault_copies() {
         let d = tmp("write-twice");
         let f = d.join("image.bin");
