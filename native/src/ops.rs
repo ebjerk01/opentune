@@ -13,10 +13,11 @@
 //!   CAN monitoring, TP2.0 and the SSM wire. The wrapper refuses every
 //!   flash-writing method, so raw access cannot bypass `mutate`.
 //!
-//! The read-only paths (scan, and the raw interface's diagnostic transport)
-//! refuse the ECU-changing services in [`ECU_CHANGING_SERVICES`] before a
-//! byte is sent. That is a guard rail, not a protocol parser: it looks at the
-//! service id (and `10 02`, the programming session) only.
+//! Every read-only path (`read`, `start`, `scan`, and the raw interface's
+//! diagnostic transport) admits only the services in [`READ_SERVICES`]
+//! ([`ReadOnlyDiag`] / [`refuse_ecu_changing`]); anything else is refused
+//! before a byte is sent. An allow-list, so an unknown service is refused
+//! too. A guard rail on the service id, not a protocol parser.
 
 use opentune_core::protocol::DiagTransport;
 use opentune_core::{
@@ -35,33 +36,57 @@ pub const UNSUPPORTED: &str = "unsupported by this adapter";
 // Read-only guard
 // ---------------------------------------------------------------------------
 
-/// Service ids a read-only path refuses (UDS / KWP2000, plus the SSM write
-/// commands): clear DTCs (OBD `04`, `14`), ECU reset (`11`), communication
-/// control (`28`), write by identifier / local id (`2E`, `3B`), I/O control
-/// (`2F`, KWP `30`), routines (`31`, KWP `32`), the download / transfer
-/// services (`34`, `36`, `37`, `38`), write memory by address (`3D`), DTC
-/// setting control (`85`) and SSM write address / block (`B8`, `B0`).
-/// `10 02` (programming session) is refused separately.
-pub const ECU_CHANGING_SERVICES: &[u8] = &[
-    0x04, 0x11, 0x14, 0x28, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x34, 0x36, 0x37, 0x38, 0x3B, 0x3D, 0x85,
-    0xB0, 0xB8,
+/// The services a READ-ONLY path admits (an allow-list: everything else is
+/// refused unsent, so no ECU change is possible without a confirmation).
+///
+/// * UDS / KWP2000: session control `10` (any session: it changes no data,
+///   and every write service stays refused in it), security access `27`,
+///   read by identifier `22`, read memory by address `23`, read DTCs `19`,
+///   tester present `3E`, and the upload trio `35` requestUpload / `36`
+///   transferData / `37` requestTransferExit (`34` requestDownload is
+///   refused, so `36` can never carry a download).
+/// * KWP2000 reads: `1A` read ECU identification, `21` read data by local
+///   identifier, `17` / `18` read DTCs (status / by status), `12` read
+///   freeze frame.
+/// * OBD-II read modes: `01` `02` `03` `06` `07` `09` `0A` (never `04`
+///   clear DTCs or `08` control of on-board systems).
+/// * SSM (Subaru): `A0` read memory block, `A8` read address, `BF` ECU init
+///   / identification.
+///
+/// Refused, for example: `2E` `3B` `3D` writes, `34` download, `31` / KWP `32`
+/// routines, `14` / OBD `04` clear DTCs, `2F` / KWP `30` I/O control, `11`
+/// reset, `28` communication control, `85` DTC setting, `2C` dynamic DID
+/// definition, SSM `B0` / `B8` writes.
+pub const READ_SERVICES: &[u8] = &[
+    // UDS / KWP2000
+    0x10, 0x27, 0x22, 0x23, 0x19, 0x3E, 0x35, 0x36, 0x37, // KWP2000 reads
+    0x1A, 0x21, 0x17, 0x18, 0x12, // OBD-II read modes
+    0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x0A, // SSM reads
+    0xA0, 0xA8, 0xBF,
 ];
 
-/// `Err` (nothing to send) when `req` is an ECU-changing request; see
-/// [`ECU_CHANGING_SERVICES`]. Public so an embedder's own adapter can apply
-/// the same rule on its read-only paths.
+/// `Err` (nothing to send) unless `req` is a read-path service; see
+/// [`READ_SERVICES`]. Public so an embedder's own adapter can apply the same
+/// rule on its read-only paths.
 pub fn refuse_ecu_changing(req: &[u8]) -> Result<(), String> {
     match req {
         [] => Err("empty request".into()),
-        [0x10, 0x02, ..] => Err(
-            "read-only operation: the programming session (10 02) was refused; nothing was sent"
-                .into(),
-        ),
-        [sid, ..] if ECU_CHANGING_SERVICES.contains(sid) => Err(format!(
-            "read-only operation: service 0x{sid:02X} changes the ECU and was refused; nothing \
-             was sent (use mutate or actuate with a confirmation)"
+        [sid, ..] if READ_SERVICES.contains(sid) => Ok(()),
+        [sid, ..] => Err(format!(
+            "read-only operation: service 0x{sid:02X} is not a read service and was refused; \
+             nothing was sent (ECU changes go through confirm_ecu + mutate or actuate)"
         )),
-        _ => Ok(()),
+    }
+}
+
+/// A [`RawDiag`] that admits only [`READ_SERVICES`]: what every read-only
+/// adapter path hands its job.
+pub struct ReadOnlyDiag<'a>(pub &'a mut dyn RawDiag);
+
+impl RawDiag for ReadOnlyDiag<'_> {
+    fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String> {
+        refuse_ecu_changing(req)?;
+        self.0.request(req)
     }
 }
 
@@ -456,14 +481,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_read_only_guard_refuses_ecu_changing_requests() {
+    fn the_read_only_guard_admits_only_read_services() {
         for ok in [
             &[0x22, 0xF1, 0x90][..],
             &[0x19, 0x02, 0xFF],
             &[0x10, 0x03],
+            &[0x10, 0x02], // any session: it changes no data
             &[0x3E, 0x00],
             &[0x27, 0x01],
+            &[0x23, 0x24, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00],
+            &[0x35, 0x00, 0x44],
+            &[0x36, 0x01],
+            &[0x37],
             &[0x21, 0x01],
+            &[0x1A, 0x9B],
+            &[0x01, 0x0C],
+            &[0x09, 0x02],
             &[0xA8, 0x00],
         ] {
             refuse_ecu_changing(ok).unwrap();
@@ -472,19 +505,37 @@ mod tests {
             &[0x2E, 0xF1, 0x90, 0x00][..],
             &[0x14, 0xFF, 0xFF, 0xFF],
             &[0x04],
+            &[0x08, 0x01],
             &[0x31, 0x01, 0xFF, 0x00],
+            &[0x32, 0x01],
             &[0x34, 0x00, 0x44],
-            &[0x36, 0x01],
             &[0x3D, 0x14],
             &[0x2F, 0x00, 0x01, 0x03],
-            &[0x10, 0x02],
+            &[0x30, 0x01],
             &[0x11, 0x01],
+            &[0x28, 0x00, 0x01],
+            &[0x85, 0x02],
+            &[0x2C, 0x03, 0xF2, 0x00],
             &[0x3B, 0x01],
+            &[0xB0, 0x00],
             &[0xB8, 0x00],
+            &[0x99], // unknown: refused too (allow-list)
             &[],
         ] {
             assert!(refuse_ecu_changing(bad).is_err(), "{bad:02X?}");
         }
+        // ReadOnlyDiag never forwards a refused request.
+        let mut sent: Vec<Vec<u8>> = Vec::new();
+        let mut inner = |r: &[u8]| -> Result<Vec<u8>, String> {
+            sent.push(r.to_vec());
+            Ok(vec![r[0] + 0x40])
+        };
+        {
+            let mut ro = ReadOnlyDiag(&mut inner);
+            assert!(ro.request(&[0x2E, 0xF1, 0x90, 0x00]).is_err());
+            assert_eq!(ro.request(&[0x22, 0xF1, 0x90]).unwrap(), vec![0x62]);
+        }
+        assert_eq!(sent, vec![vec![0x22, 0xF1, 0x90]]);
     }
 
     #[test]

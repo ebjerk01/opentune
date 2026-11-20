@@ -309,6 +309,9 @@ impl AdapterAccess for HubAdapter {
         target: DiagTarget,
         job: DiagJob,
     ) -> Result<Box<dyn Any + Send>, String> {
+        // Also for a direct `read_job` call: only READ_SERVICES go out.
+        let job: DiagJob =
+            Box::new(move |d: &mut dyn RawDiag| job(&mut crate::ops::ReadOnlyDiag(d)));
         self.run_job(READ_TIMEOUT_MS, op, target, job)
     }
 
@@ -375,7 +378,8 @@ impl AdapterAccess for HubAdapter {
             let r = self.hub.start_op(op, move |s| {
                 let mut job = lock(&sl).take();
                 let r = s.with_diag(&k, READ_TIMEOUT_MS, |d| match job.take() {
-                    Some(j) => j.run(d),
+                    // Also for a direct `start_job` call: read services only.
+                    Some(j) => j.run(&mut crate::ops::ReadOnlyDiag(d)),
                     None => Err("internal error: job already ran".into()),
                 });
                 if let (Err(e), Some(j)) = (r, job) {
@@ -466,6 +470,53 @@ mod tests {
             bus: "hs".into(),
         }));
         (opens, a)
+    }
+
+    /// `read` and `start` (typed or direct) only send read services: a write
+    /// is refused by the guard before the wire, and the same module still
+    /// answers reads afterwards.
+    #[test]
+    fn read_paths_refuse_ecu_changing_services_unsent() {
+        let (_opens, a) = sim();
+        let dynamic: Arc<dyn AdapterAccess> = a.clone();
+        let refused = |e: String| assert!(e.contains("not a read service"), "{e}");
+        // Typed read: a write, a routine, a DTC clear, a download.
+        for req in [
+            vec![0x2E, 0xF1, 0x90, 0x41],
+            vec![0x31, 0x01, 0xFF, 0x00],
+            vec![0x14, 0xFF, 0xFF, 0xFF],
+            vec![0x34, 0x00, 0x44, 0, 0, 0, 0, 0, 0, 0, 1],
+        ] {
+            refused(
+                dynamic
+                    .read("sneaky", DiagTarget::ENGINE, move |d| d.request(&req))
+                    .unwrap_err(),
+            );
+        }
+        // A direct read_job (no typed wrapper) is guarded by the adapter.
+        let job: DiagJob = Box::new(|d: &mut dyn RawDiag| {
+            d.request(&[0x2E, 0xF1, 0x90, 0x41])
+                .map(|r| Box::new(r) as Box<dyn Any + Send>)
+        });
+        match a.read_job("direct", DiagTarget::ENGINE, job) {
+            Err(e) => refused(e),
+            Ok(_) => panic!("a write went through read_job"),
+        }
+        // A long operation is read-only too.
+        let h = dynamic
+            .start("long", DiagTarget::ENGINE, |d, _stop| {
+                d.request(&[0x2E, 0xF1, 0x90, 0x41])
+            })
+            .unwrap();
+        refused(h.join().unwrap_err());
+        // Reads (incl. a session change and security access) still work.
+        let r: Vec<u8> = dynamic
+            .read("reads", DiagTarget::ENGINE, |d| {
+                d.request(&[0x10, 0x03])?;
+                d.request(&[0x3E, 0x00])
+            })
+            .unwrap();
+        assert_eq!(r[0], 0x7E);
     }
 
     #[test]

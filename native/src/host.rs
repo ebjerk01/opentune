@@ -56,7 +56,7 @@ pub type ChecksumResolver = fn(&str) -> Option<Box<dyn ChecksumAlgo>>;
 pub use crate::livefeed::{FeedEvent, FeedValue, LiveFeed};
 pub use crate::ops::{
     refuse_ecu_changing, run_then_restore, Actuation, LongJob, ModuleSession, OpHandle, RawBinding,
-    RawInterface, RestoreJob, StopFlag, ECU_CHANGING_SERVICES, UNSUPPORTED,
+    RawInterface, ReadOnlyDiag, RestoreJob, StopFlag, READ_SERVICES, UNSUPPORTED,
 };
 pub use crate::security::{Unlocked, Unlocker};
 pub use opentune_core::protocol::seedkey::SeedKey;
@@ -924,6 +924,9 @@ impl dyn AdapterAccess {
         R: Send + 'static,
         F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
     {
+        // Read-only means read-only: only READ_SERVICES reach the adapter;
+        // an ECU change needs confirm_ecu + mutate / actuate.
+        let f = move |d: &mut dyn RawDiag| f(&mut ReadOnlyDiag(d));
         unbox(self.read_job(op, target, boxed(f)))
     }
 
@@ -978,6 +981,8 @@ impl dyn AdapterAccess {
         R: Send + 'static,
         F: FnOnce(&mut dyn RawDiag, &StopFlag) -> Result<R, String> + Send + 'static,
     {
+        // Long operations are read-only too (READ_SERVICES only).
+        let f = move |d: &mut dyn RawDiag, stop: &StopFlag| f(&mut ReadOnlyDiag(d), stop);
         let (job, handle) = LongJob::new(f);
         self.start_job(op, target, job)?;
         Ok(handle)
