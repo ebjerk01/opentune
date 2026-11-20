@@ -36,7 +36,7 @@ target="$(cd "$native" && cargo metadata --format-version 1 --no-deps | sed -n '
 exe="$target/$t/release/opentune-native.exe"
 
 # Refuse to ship if the exe needs a DLL Windows does not provide.
-extra="$(llvm-objdump -p "$exe" | sed -n 's/.*DLL Name: //p' | grep -viE '^(api-ms-win-|advapi32|bcrypt|bcryptprimitives|cfgmgr32|combase|comctl32|comdlg32|d3d|dwmapi|dxgi|gdi32|hid|imm32|kernel32|ntdll|ole32|oleaut32|opengl32|propsys|setupapi|shell32|shlwapi|user32|uxtheme|winmm|ws2_32|userenv|version|crypt32|secur32|ncrypt|dbghelp|powrprof|winhttp|iphlpapi|psapi)' || true)"
+extra="$(llvm-objdump -p "$exe" | sed -n 's/.*DLL Name: //p' | grep -viE '^(api-ms-win-|advapi32|bcrypt|bcryptprimitives|cfgmgr32|combase|comctl32|comdlg32|d3d|dwmapi|dxgi|gdi32|hid|imm32|kernel32|ntdll|ole32|oleaut32|opengl32|propsys|setupapi|shell32|shlwapi|user32|uxtheme|winmm|ws2_32|userenv|version|crypt32|secur32|ncrypt|dbghelp|powrprof|winhttp|iphlpapi|psapi|winusb)' || true)"
 if [ -n "$extra" ]; then
     echo "non-system DLL imports, not bundled: $extra" >&2
     exit 1

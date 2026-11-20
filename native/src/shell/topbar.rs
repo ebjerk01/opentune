@@ -185,10 +185,11 @@ impl TopBar {
                 .horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
                     self.cable_select(ui, t, settings, &link);
+                    self.link_button(ui, t, settings, &link);
                     self.detect_button(ui, t, settings, &link);
                     theme::vsep(ui, t, 26.0);
                     self.battery_stat(ui, t, &link);
-                    self.link_stat(ui, t, settings, &link);
+                    self.link_stat(ui, t, &link);
                     theme::vsep(ui, t, 26.0);
                     self.help_menu(ui, t);
                     self.settings_menu(ui, t, settings);
@@ -549,32 +550,58 @@ impl TopBar {
         );
     }
 
-    /// The Link stat doubles as the connect / disconnect button.
-    fn link_stat(&mut self, ui: &mut Ui, t: &Tokens, settings: &Settings, link: &LinkState) {
+    /// The Link readout: a display only (like Batt). Connecting is the
+    /// [`TopBar::link_button`] next to the cable select.
+    fn link_stat(&mut self, ui: &mut Ui, t: &Tokens, link: &LinkState) {
         let (icon, txt, col) = match link.status {
             LinkStatus::Connected => (icons::PLUGS_CONNECTED, "Connected", t.ok),
             LinkStatus::Connecting => (icons::PLUGS, "Connecting…", t.warn),
             LinkStatus::Idle => (icons::PLUGS, "Not connected", t.fg_dim),
         };
-        let r = theme::stat(ui, t, icon, "Link", txt, col);
-        let r = ui
-            .interact(r.rect, ui.make_persistent_id("link-stat"), Sense::click())
-            .on_hover_cursor(CursorIcon::PointingHand);
         let tip = match link.status {
             LinkStatus::Connected => format!(
-                "{} on {} at {} baud\nCan do: {}\nClick to disconnect",
+                "{} on {} at {} baud\nCan do: {}",
                 link.ident.as_deref().unwrap_or("ELM327"),
                 link.port,
                 link.baud,
                 crate::widgets::caps::summary(self.hub.capabilities().as_ref()),
             ),
-            LinkStatus::Connecting => format!("Opening {}…\nClick to cancel", link.port),
+            LinkStatus::Connecting => format!("Opening {}…", link.port),
             LinkStatus::Idle => match &link.error {
-                Some(e) => format!("Click to connect\nLast attempt: {e}"),
-                None => "Click to connect".to_string(),
+                Some(e) => format!("Not connected. Last attempt: {e}"),
+                None => "Not connected: pick a cable, then press Connect".to_string(),
             },
         };
-        if r.on_hover_text(tip).clicked() {
+        theme::stat(ui, t, icon, "Link", txt, col).on_hover_text(tip);
+    }
+
+    /// The connect / disconnect action: a real button next to the cable
+    /// select (accent-filled "Connect" while not connected, so the first
+    /// step is obvious; "Cancel" / "Disconnect" otherwise).
+    fn link_button(&mut self, ui: &mut Ui, t: &Tokens, settings: &Settings, link: &LinkState) {
+        let r = match link.status {
+            LinkStatus::Idle => {
+                let ready = !settings.adapter.driver.is_empty();
+                let r = ui
+                    .add_enabled_ui(ready, |ui| {
+                        theme::primary_button(ui, t, Some(icons::PLUGS), "Connect")
+                    })
+                    .inner;
+                if ready {
+                    r.on_hover_text(match &link.error {
+                        Some(e) => format!("Connect to the selected cable\nLast attempt: {e}"),
+                        None => "Connect to the selected cable".to_string(),
+                    })
+                } else {
+                    r.on_disabled_hover_text("Pick a cable first (or run Auto-detect)")
+                }
+            }
+            LinkStatus::Connecting => theme::button(ui, t, None, "Cancel")
+                .on_hover_text(format!("Stop opening {}", link.port)),
+            LinkStatus::Connected => theme::button(ui, t, Some(icons::PLUGS), "Disconnect")
+                .on_hover_text("Close the link to the cable"),
+        };
+        if r.clicked() {
             self.toggle_link(ui.ctx(), settings, link);
         }
     }
