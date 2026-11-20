@@ -42,6 +42,14 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   subcommands, drivers, checksum and seed-key resolvers (see
   [`PLUGINS.md`](PLUGINS.md#cli-host-api)).
 - **`desktop/`** — a Tauri app (lives outside the workspace, builds on its own).
+  Its adapter/session layer lives in the workspace crate **`opentune-hub`**
+  so another front end can use the same code: the app-wide adapter hub (one
+  worker thread owning the opened driver, one operation at a time, a reused
+  connection), module addressing (`Addr`, `ConnKey`, `resolve`, refusal of
+  writes to an unknown target), the driver registry and adapter probe,
+  plugin seed/key lookup with the built-in SA2 interpreter, the build
+  channel, map cell codecs and vault listing. The desktop re-exports it under
+  its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).

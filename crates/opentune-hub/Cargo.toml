@@ -1,0 +1,53 @@
+[package]
+name = "opentune-hub"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs and vault listing."
+
+[dependencies]
+opentune-core = { path = "../opentune-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# VAG SA2 seed/key interpreter + the user's own seed/key definitions loader.
+opentune-sa2 = { path = "../opentune-sa2" }
+opentune-seedkey-loader = { path = "../opentune-seedkey-loader" }
+
+# Interface drivers, wired into the registry.
+opentune-driver-mock = { path = "../drivers/mock" }
+opentune-driver-openport2 = { path = "../drivers/j2534-openport" }
+opentune-driver-socketcan = { path = "../drivers/socketcan" }
+opentune-driver-slcan = { path = "../drivers/slcan" }
+opentune-driver-elm327 = { path = "../drivers/kline-elm327" }
+opentune-driver-elm327-obd = { path = "../drivers/elm327" }
+opentune-driver-elm327net = { path = "../drivers/elm327net" }
+opentune-driver-gsusb = { path = "../drivers/gsusb" }
+opentune-driver-j2534 = { path = "../drivers/j2534" }
+opentune-driver-kkl = { path = "../drivers/kkl" }
+opentune-driver-vcar = { path = "../drivers/vcar" }
+opentune-driver-efp02c = { path = "../drivers/efp02c" }
+opentune-udssim = { path = "../opentune-udssim" }
+# Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
+opentune-driver-isotp-ble = { path = "../drivers/isotp-ble-bridge", optional = true }
+# Bench tier: DoIP (ISO 13400, UDS over Ethernet), loopback-tested only, alpha builds only.
+opentune-driver-doip = { path = "../drivers/doip", optional = true }
+# Bench tier: OpenTune's own ESP32-S3 interface (firmware never flashed), alpha builds only.
+opentune-driver-esp32 = { path = "../drivers/esp32-opentune", optional = true }
+
+[features]
+# Alpha channel: registers the Bench-tier drivers and makes
+# `BuildChannel::compiled()` report `alpha`. The desktop's `alpha` feature
+# turns this on.
+alpha = [
+    "dep:opentune-driver-isotp-ble",
+    "dep:opentune-driver-doip",
+    "dep:opentune-driver-esp32",
+]
+# Test support for a front end's own tests: the simulated multi-module bus
+# (`adapter::testkit`) and test-only seed/key resolvers (`seedkeys::testkeys`).
+testkit = []

@@ -71,7 +71,7 @@ section (alpha/bench builds) until they are vehicle-tested.
   new unit without a profile (`database/units/.access-pending` lists the older
   units, and only shrinks). Filled: Bosch EDC15C6 (worked example), EDC15
   (VAG), EDC16U34, EDC16C3x, EDC17CP14, ME7.5, ME7.5.10, Siemens MS41/MS42/MS43,
-  PCR2.1, Mercedes EGS52, DQ250 02E, DQ200, DQ381, DL382, ZF 8HP Gen1 and Haldex
+  PCR2.1, Mercedes EGS52, DQ250 02E, DQ250 MQB, DQ200, DQ381, DL382, ZF 8HP Gen1 and Haldex
   Gen4/Gen5, each from public sources with stated licences; where nobody
   documents a route the profile says "unknown". The ECU database panel shows an
   **Access** card. Docs: [UNIT-ACCESS-PROFILE.md](docs/UNIT-ACCESS-PROFILE.md).
@@ -184,6 +184,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the desktop's adapter/session layer (adapter hub, sessions,
+  module addressing, driver registry and probe, seed/key lookup, build
+  channel, SA2 script decoding, map cell codecs, vault listing) moved into
+  the new workspace crate `opentune-hub`, so a second front end can share it.
+  No behaviour change; the desktop re-exports it under the same public paths.
 - CI and `scripts/check.sh` build, lint and test with `--locked` (the
   workspace, `desktop/src-tauri` and the release builds), so a stale
   `Cargo.lock` fails the run instead of being silently updated.
@@ -228,6 +233,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- ECU identification: the four reference Mercedes EDC15C6 calibrations
+  (SW 1037351686 / 351637 / 351736 / 351737) now match the `bosch-edc15c6`
+  definition instead of `bosch-edc16u34`, whose broad `1037` software key
+  matches any Bosch number. Scanning every owner fixture before and after
+  shows no other match changed.
 - EDC15C6: `checksum verify` reports a real EDC15C6 (or VAG TDI v4.1v2) image
   as a recognised family instead of "mathematical match only"; the
   `bosch-edc15c6` definition now names the `edc15c6` checksum (map write-back
