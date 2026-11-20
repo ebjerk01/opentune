@@ -73,6 +73,19 @@ pub struct ControllersView {
     filter_key: Option<(String, Option<KindFilter>)>,
     filtered: Vec<usize>,
     decode: decode::Decode,
+    /// The app's checksum resolvers (an embedder's ids pass the link check).
+    checksums: Vec<crate::host::ChecksumResolver>,
+}
+
+impl ControllersView {
+    /// A view whose link check also accepts the checksum ids `checksums`
+    /// (the app's configured resolvers) know.
+    pub fn with_checksums(checksums: Vec<crate::host::ChecksumResolver>) -> Self {
+        Self {
+            checksums,
+            ..Self::default()
+        }
+    }
 }
 
 /// What the list pane asked for.
@@ -569,6 +582,7 @@ impl ControllersView {
         Sources {
             extra: self.extra.clone(),
             files: self.files.clone(),
+            checksums: self.checksums.clone(),
             ..Sources::bundled()
         }
     }
@@ -1677,5 +1691,36 @@ mod tests {
                 assert_eq!(e.errors(), 0, "{}: {:?}", d.id, e.issues);
             }
         }
+    }
+
+    /// A checksum id only the app's (an embedder's) resolver knows passes the
+    /// link check; without that resolver it is a `link.checksum` error.
+    #[test]
+    fn a_plugin_checksum_id_passes_with_the_apps_resolvers() {
+        fn plugin(id: &str) -> Option<Box<dyn opentune_checksum::ChecksumAlgo>> {
+            let builtin = opentune_checksum::algorithms().first()?.id;
+            (id == "syn-plugin-sum")
+                .then(|| opentune_checksum::get(builtin))
+                .flatten()
+        }
+        let dir = tmp("plugin-sum");
+        std::fs::write(
+            dir.join("syn-p.json"),
+            synthetic("syn-p", serde_json::json!({"checksum": "syn-plugin-sum"})),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let flagged = |src: &Sources| {
+            let Loaded::Ok { defs, .. } = catalog::load(src) else {
+                panic!("not loaded")
+            };
+            defs[0].issues.iter().any(|i| i.code == "link.checksum")
+        };
+        assert!(flagged(&builtin_only(vec![dir.clone()])));
+        let with = Sources {
+            checksums: vec![plugin],
+            ..builtin_only(vec![dir.clone()])
+        };
+        assert!(!flagged(&with));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

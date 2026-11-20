@@ -63,6 +63,9 @@ pub(crate) struct Sources {
     /// For the link checks.
     pub ecudefs: Option<PathBuf>,
     pub database: Option<PathBuf>,
+    /// The app's checksum resolvers: a checksum id one of them knows passes
+    /// the link check (an embedder's algorithm).
+    pub checksums: Vec<crate::host::ChecksumResolver>,
 }
 
 impl Sources {
@@ -131,7 +134,10 @@ pub(crate) fn load(src: &Sources) -> Loaded {
         return Loaded::Failed { dir, err };
     }
     let base = base_context(src);
-    let defs = found.into_iter().map(|f| entry(f, &base)).collect();
+    let defs = found
+        .into_iter()
+        .map(|f| entry(f, &base, &src.checksums))
+        .collect();
     Loaded::Ok { defs, failed, dir }
 }
 
@@ -151,11 +157,10 @@ pub(crate) fn base_context(src: &Sources) -> LinkContext {
     link_context(ecudefs, src.database.as_deref())
 }
 
-fn entry(f: Found, base: &LinkContext) -> Entry {
-    // A checksum id only an embedder's resolver knows is not visible here
-    // (core view without the app's resolvers): it is checked against the
-    // public ids.
-    let issues = all_issues(&f, &ctx_for(base, &|_| false, &f));
+fn entry(f: Found, base: &LinkContext, resolvers: &[crate::host::ChecksumResolver]) -> Entry {
+    // A checksum id only an embedder's resolver knows passes too.
+    let plugin = |id: &str| resolvers.iter().any(|r| r(id).is_some());
+    let issues = all_issues(&f, &ctx_for(base, &plugin, &f));
     let pack = f.pack.as_ref().map(|p| {
         let id = p["id"].as_str().unwrap_or("?");
         match p["version"].as_str().filter(|v| !v.is_empty()) {
