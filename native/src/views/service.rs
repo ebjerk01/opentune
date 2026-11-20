@@ -21,22 +21,25 @@
 //! | Operation | SIDs sent (in order) | Path | Backup source |
 //! |---|---|---|---|
 //! | Plan (dry run) | none (no adapter touched) | offline | n/a |
-//! | Run a READ script | the script's steps (all on `READ_SERVICES`) | `read` (the script's module, else the app target) | n/a (read only) |
-//! | Run an OUTPUT-TEST script | 1. confirm (`Host::confirm_ecu`); 2. run: the script's steps; restore (always): `2F <did> 00` for every IO DID the run may have left driven (all of them if the run reported nothing), then `10 01` when the script opened a session | `actuate` (the `Ack`'s module) | n/a (non-persistent) |
-//! | Run a DTC-CLEAR script | 1. read: OBD `01 00`, `03` (the stored codes) → a NEW DTC report file (panel record); 2. confirm (typed `CLEAR`, "clears stored fault codes — not reversible"); 3. run: `01 00`, `03` again (must equal the report, else NOTHING is sent further), then the script's steps (incl. `04`); restore as an output-test script | `read` → `actuate` | n/a (not reversible; the report is the record) |
-//! | Run a DATA-CHANGING script — 1. confirm | none | `Host::confirm_ecu` (typed `WRITE`) | — |
+//! | Run a READ script | the script's steps (all on `READ_SERVICES`; a `security_access` step gets its key from `Unlocker::seed_key`) | `read` (the script's module, else the app target) | n/a (read only) |
+//! | Run an OUTPUT-TEST script | 1. confirm (`Host::confirm_ecu_for(req, module, "<script name> (<ids>)")`, per-module key); 2. (`ack.target() == module` re-checked) run: the script's steps; restore (always): `2F <did> 00` for every IO DID the run may have left driven (all of them if the run reported nothing), then `10 01` when the script opened a session | `actuate` (the `Ack`'s module) | n/a (non-persistent) |
+//! | Run a DTC-CLEAR script | 1. read: OBD `01 00`, `03` (the stored codes) → a NEW DTC report file (panel record); 2. confirm (`confirm_ecu_for`, typed `CLEAR`, "It clears stored fault codes — not reversible."); 3. (`ack.target() == module` re-checked) run: `01 00`, `03` again (must equal the report, else NOTHING is sent further), then the script's steps (incl. `04`); restore as an output-test script | `read` → `actuate` | n/a (not reversible; the report is the record) |
+//! | Run a DATA-CHANGING script — 1. confirm | none | `Host::confirm_ecu_for(req, module, "<script name> (<ids>)")` (typed `WRITE`; per-module key) | — |
 //! | 2. pre-read | `22 <did>` for every DID the script writes, verifies or reads (in step order, each once) | `read` (the confirmed module) | — |
 //! | 3. backup | none | `Host::backup` (refused when empty: a script that names NO DID is refused, nothing sent) | the step-2 records, concatenated in that order (label lists DID:len) |
-//! | 4. run | `22 <did>` per backed-up DID (must equal the backup, else NOTHING is written); the script's steps (stops at the first failure); then always `2F <did> 00` for any IO DID it may have left driven, `10 01` when it opened a session. A script with `04` also gets the DTC report of the DTC-clear row first | `mutate` (the `Ack`'s module; receipt must match the step-2 bytes) | as step 3 |
+//! | 4. run | (`ack.target() == module` re-checked first) `22 <did>` per backed-up DID (must equal the backup, else NOTHING is written); the script's steps (stops at the first failure; `security_access` steps: `27 <lvl>`, `27 <lvl+1> <key>` with the key from `Unlocker::seed_key`, a rejected key ends the run, never retried); then always `2F <did> 00` for any IO DID it may have left driven, `10 01` when it opened a session. A script with `04` also gets the DTC report of the DTC-clear row first | `mutate` (the `Ack`'s module; receipt must match the step-2 bytes) | as step 3 |
 //!
-//! Not ported: scripts that need SecurityAccess (the executor computes the
-//! key through a `KeyProvider`; `Host::unlocker` cannot hand one over). They
-//! can be planned, and running them is refused before anything is sent.
+//! Secured scripts run when their `seedkey` id resolves through the build's
+//! seed/key resolvers (`Host::unlocker_for` → `Unlocker::seed_key` as the
+//! executor's `KeyProvider`); otherwise they can be planned, and running them
+//! is refused before anything is sent. Every change is confirmed with
+//! `Host::confirm_ecu_for` for the script's module (`req_id` / `resp_id`,
+//! else the app target), named by the script.
 
 use super::coding::plumbing as pl;
 use crate::host::{
     Ack, Actuation, AdapterAccess, BackupReceipt, ConfirmRequest, ConfirmResult, DiagTarget, Host,
-    JobHandle, NativeView, Tier, ViewGroup,
+    JobHandle, NativeView, Tier, Unlocker, ViewGroup,
 };
 use crate::icons;
 use crate::theme::{self, Tone};
@@ -194,12 +197,29 @@ pub(crate) fn plan(s: &ServiceScript) -> Result<Vec<String>, String> {
     }
 }
 
-fn exec(d: &mut dyn RawDiag, s: &ServiceScript) -> Result<RunReport, String> {
+/// Run the script. A secured script's `security_access` steps get their key
+/// from `key` (`Unlocker::seed_key`: it only computes keys); the executor
+/// stops at the first failure, so a rejected key is never retried.
+fn exec(
+    d: &mut dyn RawDiag,
+    s: &ServiceScript,
+    key: Option<&Unlocker>,
+) -> Result<RunReport, String> {
     let opts = RunOptions {
         dry_run: false,
         skip_waits: false,
     };
-    run_script(d, s, None, &opts).map_err(|e| e.to_string())
+    let r = match key {
+        Some(u) => {
+            let h = u.seed_key()?;
+            let kp = move |seed: &[u8], level: u8| {
+                opentune_hub::seedkeys::compute(h.as_ref(), seed, level)
+            };
+            run_script(d, s, Some(&kp), &opts)
+        }
+        None => run_script(d, s, None, &opts),
+    };
+    r.map_err(|e| e.to_string())
 }
 
 fn summary(r: &RunReport) -> Result<RunReport, String> {
@@ -218,12 +238,13 @@ pub(crate) fn run_read_op(
     a: &Arc<dyn AdapterAccess>,
     target: DiagTarget,
     s: ServiceScript,
+    key: Option<Unlocker>,
 ) -> Result<RunReport, String> {
     if classify(&s) != Class::Read {
         return Err("not a read-only script".into());
     }
     a.read("service script (read)", target, move |d| {
-        exec(d, &s).and_then(|r| summary(&r))
+        exec(d, &s, key.as_ref()).and_then(|r| summary(&r))
     })
 }
 
@@ -304,6 +325,7 @@ pub(crate) fn run_actuate_op(
     module: DiagTarget,
     s: ServiceScript,
     reported: Option<Vec<Dtc>>,
+    key: Option<Unlocker>,
 ) -> Result<Actuation<RunReport>, String> {
     check_ack(&ack, module)?;
     match classify(&s) {
@@ -327,7 +349,7 @@ pub(crate) fn run_actuate_op(
                     return Err(e);
                 }
             }
-            let r = exec(d, &s);
+            let r = exec(d, &s, key.as_ref());
             *l1.lock().unwrap_or_else(|p| p.into_inner()) = match &r {
                 Ok(rep) => left_driven(&s, rep),
                 Err(_) => Vec::new(), // refused before anything was sent
@@ -360,6 +382,7 @@ pub(crate) fn blob(old: &[(u16, Vec<u8>)]) -> Vec<u8> {
 
 /// Run a DATA-CHANGING script on the confirmed module (`mutate`). The
 /// receipt must be the backup of `old` exactly.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_mutate_op(
     a: &Arc<dyn AdapterAccess>,
     ack: Ack,
@@ -368,6 +391,7 @@ pub(crate) fn run_mutate_op(
     s: ServiceScript,
     old: Vec<(u16, Vec<u8>)>,
     reported: Option<Vec<Dtc>>,
+    key: Option<Unlocker>,
 ) -> Result<RunReport, String> {
     check_ack(&ack, module)?;
     if classify(&s) != Class::Data {
@@ -398,7 +422,7 @@ pub(crate) fn run_mutate_op(
         if let Some(codes) = &reported {
             recheck_codes(d, module, codes)?;
         }
-        let r = exec(d, &s);
+        let r = exec(d, &s, key.as_ref());
         let left = match &r {
             Ok(rep) => left_driven(&s, rep),
             Err(_) => Vec::new(),
@@ -437,6 +461,8 @@ pub struct ServiceView {
     pub(crate) last_backup: Option<PathBuf>,
     pub(crate) last_report: Option<PathBuf>,
     pub(crate) records: pl::Records,
+    /// The unlocker of a secured script (its `seedkey` id), set by a run.
+    key: Option<Unlocker>,
     pub(crate) msg: Option<(Tone, String)>,
 }
 
@@ -451,6 +477,7 @@ impl Default for ServiceView {
             last_backup: None,
             last_report: None,
             records: Default::default(),
+            key: None,
             msg: None,
         }
     }
@@ -473,19 +500,40 @@ impl ServiceView {
         !matches!(self.step, Step::Idle)
     }
 
+    /// The module's name in the confirmation: the script's name + ids.
+    fn module_name(&self, module: DiagTarget) -> String {
+        let name = self
+            .loaded
+            .as_ref()
+            .map(|l| l.script.name.clone())
+            .unwrap_or_default();
+        pl::module_label(&name, module)
+    }
+
     /// Run the loaded script: a read script runs at once (read path); any
     /// other first saves its DTC report (when it clears codes) and asks for
-    /// the confirmation. Refused, sending nothing, for secured scripts, a
-    /// module that is not the app target, or a missing records folder.
+    /// the confirmation for the script's module, by name. Refused, sending
+    /// nothing, for a secured script whose seed/key id does not resolve, or a
+    /// missing records folder.
     pub(crate) fn request_run(&mut self, host: &mut Host<'_>) {
         let Some(l) = self.loaded.clone() else { return };
+        self.key = None;
         if needs_key(&l.script) {
-            return self.msg = Some((
-                Tone::Crit,
-                "this script needs SecurityAccess, which this panel cannot provide yet; it can \
-                 be planned, not run"
-                    .into(),
-            ));
+            let id = l.script.seedkey.clone().unwrap_or_default();
+            match host.unlocker_for(&id) {
+                Ok(u) if !id.trim().is_empty() => self.key = Some(u),
+                Ok(_) | Err(_) => {
+                    return self.msg = Some((
+                        Tone::Crit,
+                        format!(
+                            "this script needs SecurityAccess with seed/key id '{}', which no \
+                             configured resolver provides (OpenTune ships none); it can be \
+                             planned, not run",
+                            id.trim()
+                        ),
+                    ))
+                }
+            }
         }
         let module = match pl::module_of(host, l.module) {
             Ok(m) => m,
@@ -495,12 +543,12 @@ impl ServiceView {
         let class = classify(&l.script);
         if class == Class::Read {
             let s = l.script.clone();
-            let job = host.spawn_job("service script", move |_| Ok(run_read_op(&a, module, s)));
+            let key = self.key.clone();
+            let job = host.spawn_job("service script", move |_| {
+                Ok(run_read_op(&a, module, s, key))
+            });
             self.step = Step::Running(job);
             return;
-        }
-        if let Some(why) = pl::change_blocker(host, module) {
-            return self.msg = Some((Tone::Crit, why));
         }
         if (class == Class::Data || has_clear(&l.script)) && self.records.near(host).is_none() {
             return self.msg = Some((
@@ -520,11 +568,11 @@ impl ServiceView {
             let job = host.spawn_job("read DTCs", move |_| read_codes_op(&a, module));
             self.step = Step::ReadCodes(job, module);
         } else {
-            self.step = Step::Confirm(self.confirm_req(None), module, None);
+            self.step = Step::Confirm(self.confirm_req(module, None), module, None);
         }
     }
 
-    fn confirm_req(&self, report: Option<(&Path, usize)>) -> ConfirmRequest {
+    fn confirm_req(&self, module: DiagTarget, report: Option<(&Path, usize)>) -> ConfirmRequest {
         let l = self.loaded.as_ref().expect("loaded");
         let class = classify(&l.script);
         let mut body = format!("{}\n\n", l.script.description);
@@ -547,7 +595,7 @@ impl ServiceView {
             ));
         }
         ConfirmRequest {
-            key: "service-run".into(),
+            key: pl::confirm_key("service-run", module),
             title: format!("Run service function: {}", l.script.name),
             body,
             typed: match (class, report.is_some()) {
@@ -570,14 +618,16 @@ impl ServiceView {
                 }
                 Some(Ok(codes)) => self.save_report(host, module, codes),
             },
-            Step::Confirm(req, module, codes) => match host.confirm_ecu(req.clone()) {
-                ConfirmResult::Pending => Step::Confirm(req, module, codes),
-                ConfirmResult::Declined => {
-                    self.msg = Some((Tone::Muted, "cancelled: nothing was sent".into()));
-                    Step::Idle
+            Step::Confirm(req, module, codes) => {
+                match host.confirm_ecu_for(req.clone(), module, &self.module_name(module)) {
+                    ConfirmResult::Pending => Step::Confirm(req, module, codes),
+                    ConfirmResult::Declined => {
+                        self.msg = Some((Tone::Muted, "cancelled: nothing was sent".into()));
+                        Step::Idle
+                    }
+                    ConfirmResult::Accepted(ack) => self.accepted(host, ack, module, codes),
                 }
-                ConfirmResult::Accepted(ack) => self.accepted(host, ack, module, codes),
-            },
+            }
             Step::PreRead(ack, mut job, module, codes) => match job.take() {
                 None => Step::PreRead(ack, job, module, codes),
                 Some(Err(e)) => {
@@ -616,7 +666,7 @@ impl ServiceView {
         }
         match pl::save_dtc_report(&near, &format!("service-{:X}", module.tx), &text) {
             Ok(p) => {
-                let req = self.confirm_req(Some((&p, codes.len())));
+                let req = self.confirm_req(module, Some((&p, codes.len())));
                 self.last_report = Some(p);
                 Step::Confirm(req, module, Some(codes))
             }
@@ -643,8 +693,9 @@ impl ServiceView {
             Step::PreRead(ack, job, module, codes)
         } else {
             let s = l.script;
+            let key = self.key.clone();
             Step::Running(host.spawn_job("service script", move |_| {
-                Ok(run_actuate_op(&a, ack, module, s, codes).and_then(Actuation::into_result))
+                Ok(run_actuate_op(&a, ack, module, s, codes, key).and_then(Actuation::into_result))
             }))
         }
     }
@@ -681,8 +732,9 @@ impl ServiceView {
         };
         self.last_backup = Some(receipt.path.clone());
         let s = l.script;
+        let key = self.key.clone();
         Step::Running(host.spawn_job("service script", move |_| {
-            Ok(run_mutate_op(&a, ack, module, &receipt, s, old, codes))
+            Ok(run_mutate_op(&a, ack, module, &receipt, s, old, codes, key))
         }))
     }
 }
@@ -766,17 +818,21 @@ impl NativeView for ServiceView {
                             ui,
                             host,
                             Tone::Warn,
-                            "Needs SecurityAccess: plan only in this panel.",
+                            &format!(
+                                "Needs SecurityAccess with seed/key id '{}' (a configured \
+                                 resolver must provide it; OpenTune ships none).",
+                                l.script.seedkey.as_deref().unwrap_or("")
+                            ),
                         );
                     }
                     let blocker = match (&module, class) {
                         (Err(e), _) => Some(e.clone()),
                         (Ok(_), Class::Read) => None,
-                        (Ok(m), _) => pl::change_blocker(host, *m),
+                        (Ok(m), _) => pl::off_target_note(host, *m),
                     };
                     let can =
                         crate::widgets::caps::gate(ui, host, &[crate::widgets::caps::Need::Diag]);
-                    let ok = can && blocker.is_none() && !self.busy() && !needs_key(&l.script);
+                    let ok = can && module.is_ok() && !self.busy();
                     if ui
                         .add_enabled_ui(ok, |ui| {
                             theme::primary_button(ui, &t, Some(icons::PLAY), "Run…")
@@ -907,11 +963,14 @@ mod tests {
             {"op":"write_data_by_identifier","did":1553,"data":[0,0]},
             {"op":"verify","did":1553,"equals":[0,0]}]}"#;
         let mut v = view_with(&fx, json);
-        fx.host(CLU, |h| v.request_run(h));
-        fx.host(CLU, |h| v.tick(h));
+        // The app target is the engine; the script names the cluster, which
+        // is confirmed by name and is the only module changed.
+        fx.host(ECU, |h| v.request_run(h));
+        fx.host(ECU, |h| v.tick(h));
         assert!(bus.wire().is_empty(), "nothing before the confirmation");
-        fx.confirms.answer("service-run", true);
-        run(&mut v, &mut fx, CLU);
+        fx.confirms
+            .answer(&pl::confirm_key("service-run", CLU), true);
+        run(&mut v, &mut fx, ECU);
         assert!(v.last.as_ref().unwrap().is_ok(), "{:?}", v.last);
         let backup = v.last_backup.clone().unwrap();
         assert_eq!(std::fs::read(backup).unwrap(), vec![0x27, 0x10]);
@@ -943,11 +1002,9 @@ mod tests {
         // Declined.
         fx.host(CLU, |h| v.request_run(h));
         fx.host(CLU, |h| v.tick(h));
-        fx.confirms.answer("service-run", false);
+        fx.confirms
+            .answer(&pl::confirm_key("service-run", CLU), false);
         fx.host(CLU, |h| v.tick(h));
-        assert!(matches!(v.step, Step::Idle));
-        // Not the app target.
-        fx.host(ECU, |h| v.request_run(h));
         assert!(matches!(v.step, Step::Idle));
         // A routine-only script names nothing to back up.
         let mut v2 = view_with(
@@ -975,9 +1032,11 @@ mod tests {
         let ConfirmResult::Accepted(plain) = fx.host(CLU, |h| h.confirm(req)) else {
             panic!()
         };
-        assert!(run_mutate_op(&a, plain, CLU, &receipt, s.clone(), old.clone(), None).is_err());
+        assert!(
+            run_mutate_op(&a, plain, CLU, &receipt, s.clone(), old.clone(), None, None).is_err()
+        );
         let eng = fx.ecu_ack(ECU);
-        assert!(run_mutate_op(&a, eng, CLU, &receipt, s, old, None).is_err());
+        assert!(run_mutate_op(&a, eng, CLU, &receipt, s, old, None, None).is_err());
         assert!(bus.wire().is_empty(), "{:02X?}", bus.wire());
     }
 
@@ -989,7 +1048,7 @@ mod tests {
         // The routine 0x1234 is unknown: the script fails after driving IO
         // 0x0500; the hand-back returns it and leaves the session.
         let ack = fx.ecu_ack(ECU);
-        let act = run_actuate_op(&a, ack, ECU, fan(), None).unwrap();
+        let act = run_actuate_op(&a, ack, ECU, fan(), None, None).unwrap();
         assert!(act.result.is_err());
         assert!(act.restored.is_ok(), "{:?}", act.restored);
         let sent = bus.sent_to(0x7E0);
@@ -1042,10 +1101,92 @@ mod tests {
         };
         assert!(req.body.contains("not reversible"));
         fx.host(ECU, |h| v.tick(h));
-        fx.confirms.answer("service-run", true);
+        fx.confirms
+            .answer(&pl::confirm_key("service-run", ECU), true);
         run(&mut v, &mut fx, ECU);
         assert!(v.last.as_ref().unwrap().is_ok(), "{:?}", v.last);
         assert_eq!(bus.with_sid(0x04).len(), 1);
         assert!(codes.lock().unwrap().is_empty());
+    }
+
+    fn secured_script(fx: &Fixture, server: UdsServer) -> (Bus, ServiceView) {
+        let bus = Bus::default().uds(0x714, 0x77E, server);
+        let v = view_with(
+            fx,
+            r#"{"id":"sec","name":"Secured reset","req_id":"714","resp_id":"77E",
+               "requires_security":true,"seedkey":"xor-5a","steps":[
+                {"op":"diagnostic_session","subfunction":3},
+                {"op":"security_access","level":1},
+                {"op":"write_data_by_identifier","did":1553,"data":[0,0]},
+                {"op":"verify","did":1553,"equals":[0,0]}]}"#,
+        );
+        (bus, v)
+    }
+
+    fn secured_server(
+        checker: Box<dyn opentune_udssim::security::SecurityChecker + Send>,
+    ) -> UdsServer {
+        let mut s = UdsServer::new();
+        s.set_did(0x0611, vec![0x27, 0x10]);
+        s.set_security_checker(checker);
+        s
+    }
+
+    fn run_secured(fx: &mut Fixture, bus: &Bus, v: &mut ServiceView) {
+        fx.adapter = Some(bus.access("sim"));
+        fx.keys = super::super::coding::simkit::xor_keys();
+        fx.host(CLU, |h| v.request_run(h));
+        fx.host(CLU, |h| v.tick(h));
+        fx.confirms
+            .answer(&pl::confirm_key("service-run", CLU), true);
+        run(v, fx, CLU);
+    }
+
+    #[test]
+    fn a_secured_script_runs_with_the_resolved_key() {
+        let mut fx = Fixture::new("svc-sec");
+        let (bus, mut v) = secured_script(
+            &fx,
+            secured_server(Box::new(opentune_udssim::security::XorSecurity::new(0x5A))),
+        );
+        run_secured(&mut fx, &bus, &mut v);
+        assert!(v.last.as_ref().unwrap().is_ok(), "{:?}", v.last);
+        assert_eq!(bus.with_sid(0x27).len(), 2, "seed + key, once");
+        assert_eq!(
+            std::fs::read(v.last_backup.clone().unwrap()).unwrap(),
+            vec![0x27, 0x10]
+        );
+    }
+
+    #[test]
+    fn a_rejected_script_key_is_never_retried_and_writes_nothing() {
+        let mut fx = Fixture::new("svc-sec-bad");
+        let (bus, mut v) = secured_script(
+            &fx,
+            secured_server(Box::new(opentune_udssim::security::AlwaysReject)),
+        );
+        run_secured(&mut fx, &bus, &mut v);
+        assert!(v.last.as_ref().unwrap().is_err());
+        let keys = bus
+            .with_sid(0x27)
+            .into_iter()
+            .filter(|(_, r)| r.get(1) == Some(&0x02))
+            .count();
+        assert_eq!(keys, 1, "one key, never retried");
+        assert!(bus.with_sid(0x2E).is_empty());
+    }
+
+    #[test]
+    fn a_secured_script_without_a_resolver_is_refused_unsent() {
+        let mut fx = Fixture::new("svc-sec-none");
+        let (bus, mut v) = secured_script(
+            &fx,
+            secured_server(Box::new(opentune_udssim::security::XorSecurity::new(0x5A))),
+        );
+        fx.adapter = Some(bus.access("sim"));
+        fx.host(CLU, |h| v.request_run(h));
+        assert!(matches!(v.step, Step::Idle));
+        assert!(v.msg.as_ref().unwrap().1.contains("xor-5a"));
+        assert!(bus.wire().is_empty());
     }
 }
