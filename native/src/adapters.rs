@@ -9,11 +9,14 @@
 //!   none is forwarded to the vehicle.
 //! - K-line (KKL) cables, J2534 / OpenPort, slcan, SocketCAN and unknown
 //!   serial ports are listed but never opened.
-//! - No ECU request is ever sent from here.
+//! - No ECU request is ever sent from here. A connected cable is handed to
+//!   the app's adapter hub (`crate::hublink`), whose link poll only opens the
+//!   driver (adapter set-up) and reads the battery voltage.
 //!
 //! All serial I/O runs on background threads; the UI polls results and the
 //! threads request a repaint when something changes.
 
+use crate::hublink::{HubAdapter, LinkCfg};
 use eframe::egui;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -96,33 +99,6 @@ pub fn keep_port(name: &str, kind: &Transport) -> bool {
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn is_can_type(sysfs_type: &str) -> bool {
     sysfs_type.trim() == "280"
-}
-
-/// Parse an `ATRV` reply ("12.6V", "12.6 V\r>", "ATRV\r13.8V\r\r>") into
-/// volts. Echo, prompt and whitespace are ignored; anything without a
-/// plausible voltage (`?`, `NO DATA`, garbage) is `None`.
-pub fn parse_atrv(reply: &str) -> Option<f32> {
-    for line in reply.split(['\r', '\n', '>']) {
-        let line = line.trim();
-        if line.is_empty() || line.to_ascii_uppercase().starts_with("AT") {
-            continue;
-        }
-        let num: String = line
-            .trim_end_matches(['V', 'v'])
-            .trim()
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        if num.is_empty() || !num.chars().all(|c| c.is_ascii_digit() || c == '.') {
-            continue;
-        }
-        if let Ok(v) = num.parse::<f32>() {
-            if (0.0..=40.0).contains(&v) {
-                return Some(v);
-            }
-        }
-    }
-    None
 }
 
 /// The identification line of an ELM327 reply to `ATI` / `ATZ`
@@ -493,6 +469,7 @@ pub enum LinkStatus {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LinkState {
     pub status: LinkStatus,
+    pub driver: String,
     pub port: String,
     pub baud: u32,
     /// ELM327 identification (`ATI`).
@@ -516,24 +493,28 @@ impl Link {
         self.state.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
-    /// Open `port`, init the ELM327 (ATZ, ATE0) and poll ATRV every 2 s.
-    pub fn connect(&mut self, ctx: egui::Context, port: String, baud_hint: u32) {
+    /// Bind `cfg` to the app's adapter hub and poll the battery every 2 s.
+    /// An ELM327 is first found at its baud with `ATI` (the port is released
+    /// again before the hub opens it).
+    pub fn connect(&mut self, ctx: egui::Context, hub: Arc<HubAdapter>, cfg: LinkCfg) {
         let previous = self.shutdown();
         self.stop = Arc::new(AtomicBool::new(false));
         self.state = Arc::new(Mutex::new(LinkState {
             status: LinkStatus::Connecting,
-            port: port.clone(),
+            driver: cfg.driver.clone(),
+            port: cfg.port.clone(),
             ..Default::default()
         }));
         let (state, stop) = (self.state.clone(), self.stop.clone());
         self.worker = thread::Builder::new()
-            .name("elm327-link".into())
+            .name("adapter-link".into())
             .spawn(move || {
-                // The previous worker must have released the port first.
+                // The previous worker must have released the link first.
                 if let Some(h) = previous {
                     let _ = h.join();
                 }
-                run_link(&ctx, &port, baud_hint, &state, &stop);
+                run_link(&ctx, &hub, cfg, &state, &stop);
+                hub.set_link(None);
             })
             .ok();
     }
@@ -566,11 +547,13 @@ impl Drop for Link {
 
 fn run_link(
     ctx: &egui::Context,
-    port: &str,
-    baud_hint: u32,
+    hub: &HubAdapter,
+    mut cfg: LinkCfg,
     state: &Mutex<LinkState>,
     stop: &AtomicBool,
 ) {
+    let port = cfg.port.clone();
+    let port = port.as_str();
     let set = |f: &dyn Fn(&mut LinkState)| {
         if let Ok(mut s) = state.lock() {
             f(&mut s);
@@ -588,68 +571,68 @@ fn run_link(
     };
     let stopped = || stop.load(Ordering::Relaxed);
 
-    let (mut p, baud, ident) = match find_elm(port, baud_hint, Some(stop)) {
+    // An ELM327: find the baud it answers ATI at, then let go of the port.
+    let mut elm_ident = None;
+    if cfg.driver == ELM_DRIVER {
+        match find_elm(port, cfg.baud, Some(stop)) {
+            Ok((p, baud, ident)) => {
+                drop(p);
+                cfg.baud = baud;
+                elm_ident = Some(ident);
+            }
+            Err(e) => {
+                if !stopped() {
+                    fail(e);
+                }
+                return;
+            }
+        }
+    }
+    if stopped() {
+        return;
+    }
+    let baud = cfg.baud;
+    hub.set_link(Some(cfg));
+    // First poll: opens the driver (adapter set-up only) and reads the battery.
+    let (ident, v) = match hub.poll_link() {
         Ok(x) => x,
         Err(e) => {
             if !stopped() {
-                fail(e);
+                fail(format!("{port}: {e}"));
             }
             return;
         }
     };
-    // Reset (the reply is the banner; ~1 s on most adapters), echo off.
-    let init = at(&mut p, "ATZ", Duration::from_millis(2500))
-        .and_then(|_| at(&mut p, "ATE0", Duration::from_millis(800)));
-    match init {
-        Ok(r) if r.to_ascii_uppercase().contains("OK") => {}
-        Ok(r) => {
-            fail(format!(
-                "{port}: ELM327 init failed (ATE0 replied {:?})",
-                r.trim()
-            ));
-            return;
-        }
-        Err(e) => {
-            fail(format!("{port}: {e}"));
-            return;
-        }
-    }
     set(&|s| {
         s.status = LinkStatus::Connected;
         s.baud = baud;
-        s.ident = Some(ident.clone());
+        s.ident = Some(elm_ident.clone().unwrap_or_else(|| ident.clone()));
+        s.battery_v = v;
     });
 
-    let mut misses = 0;
     while !stopped() {
-        match at(&mut p, "ATRV", Duration::from_millis(1000)) {
-            Ok(r) => match parse_atrv(&r) {
-                Some(v) => {
-                    misses = 0;
-                    let changed = state
-                        .lock()
-                        .map(|s| s.battery_v != Some(v))
-                        .unwrap_or(false);
-                    if changed {
-                        set(&|s| s.battery_v = Some(v));
-                    }
+        let until = Instant::now() + POLL_INTERVAL;
+        while Instant::now() < until && !stopped() {
+            thread::sleep(Duration::from_millis(100));
+        }
+        // Never queue behind a view's operation; skip this tick instead.
+        if stopped() || hub.busy().is_some() {
+            continue;
+        }
+        match hub.poll_link() {
+            Ok((_, v)) => {
+                let changed = state.lock().map(|s| s.battery_v != v).unwrap_or(false);
+                if changed {
+                    set(&|s| s.battery_v = v);
                 }
-                None => misses += 1,
-            },
+            }
+            Err(e) if e.starts_with("adapter busy") => {}
             Err(e) => {
                 if !stopped() {
                     fail(format!("{port}: {e} (unplugged?)"));
                 }
                 return;
             }
-        }
-        if misses >= 3 {
-            fail(format!("{port}: adapter stopped answering ATRV"));
-            return;
-        }
-        let until = Instant::now() + POLL_INTERVAL;
-        while Instant::now() < until && !stopped() {
-            thread::sleep(Duration::from_millis(100));
         }
     }
 }
@@ -718,21 +701,6 @@ mod tests {
         assert!(is_can_type("280\n"));
         assert!(!is_can_type("1\n"));
         assert!(!is_can_type(""));
-    }
-
-    #[test]
-    fn atrv_replies() {
-        assert_eq!(parse_atrv("12.6V"), Some(12.6));
-        assert_eq!(parse_atrv("12.6 V\r>"), Some(12.6));
-        assert_eq!(parse_atrv("ATRV\r13.8V\r\r>"), Some(13.8));
-        assert_eq!(parse_atrv("\r\n 11.9v \r\n>"), Some(11.9));
-        assert_eq!(parse_atrv("14V\r>"), Some(14.0));
-        assert_eq!(parse_atrv("?\r\r>"), None);
-        assert_eq!(parse_atrv("NO DATA\r>"), None);
-        assert_eq!(parse_atrv(""), None);
-        assert_eq!(parse_atrv(">"), None);
-        assert_eq!(parse_atrv("99.9V>"), None);
-        assert_eq!(parse_atrv("1.2.3V>"), None);
     }
 
     #[test]

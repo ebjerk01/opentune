@@ -34,6 +34,8 @@ pub struct App {
     branding: Branding,
     plugin_views: Vec<Box<dyn NativeView>>,
     adapter: Option<Arc<dyn AdapterAccess>>,
+    /// The built-in adapter (the top bar's link; the views' default adapter).
+    hub: Arc<crate::hublink::HubAdapter>,
     diagnostics: Option<Arc<dyn crate::host::DiagnosticsSink>>,
     jobs: Jobs,
     confirms: Confirms,
@@ -54,6 +56,7 @@ fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, args: Args, config: NativeConfig) -> Self {
+        let hub = Arc::new(crate::hublink::HubAdapter::with_registry());
         let mut settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
@@ -127,7 +130,7 @@ impl App {
         }
         Self {
             settings,
-            top: TopBar::default(),
+            top: TopBar::new(hub.clone()),
             view: args
                 .view
                 .as_deref()
@@ -145,7 +148,12 @@ impl App {
             env,
             branding: config.branding,
             plugin_views: config.views,
-            adapter: config.adapter,
+            // An embedding build may bring its own adapter for the views;
+            // by default they share the top bar's hub session.
+            adapter: config
+                .adapter
+                .or_else(|| Some(hub.clone() as Arc<dyn AdapterAccess>)),
+            hub,
             diagnostics: config.diagnostics,
             jobs: Jobs::new(cc.egui_ctx.clone()),
             confirms: Confirms::default(),
@@ -295,6 +303,16 @@ impl eframe::App for App {
             }
         }
         let hovering_file = ctx.input(|i| !i.raw.hovered_files.is_empty());
+
+        // The one diagnostic target, for the hub link and every view.
+        let target = crate::host::resolve_target(
+            &self.settings.adapter.tx,
+            &self.settings.adapter.rx,
+            self.flash.def_idx.map(|i| &self.defs[i]),
+        );
+        if let Ok(t) = &target {
+            self.hub.set_target(*t);
+        }
 
         // Closing the window with unsaved map edits asks first.
         if ctx.input(|i| i.viewport().close_requested()) && self.flash.is_dirty() && !self.quit_ok {
@@ -447,11 +465,7 @@ impl eframe::App for App {
                             checksums: &self.flash.checksums,
                             adapter: self.adapter.as_ref(),
                             diagnostics: self.diagnostics.as_ref(),
-                            target: crate::host::resolve_target(
-                                &self.settings.adapter.tx,
-                                &self.settings.adapter.rx,
-                                self.flash.def_idx.map(|i| &self.defs[i]),
-                            ),
+                            target: target.clone(),
                             jobs: &self.jobs,
                             confirms: &mut self.confirms,
                             actions: &mut actions,

@@ -11,6 +11,7 @@ mod app;
 mod bench;
 mod hex;
 pub mod host;
+mod hublink;
 pub mod icons;
 mod image;
 mod mapview;

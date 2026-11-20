@@ -6,6 +6,7 @@
 //! its results and draws them.
 
 use crate::adapters::{self, BusyPort, Candidate, DetectReport, Link, LinkState, LinkStatus};
+use crate::hublink::{HubAdapter, LinkCfg};
 use crate::icons;
 use crate::settings::{Settings, Units};
 use crate::theme::{
@@ -16,6 +17,7 @@ use eframe::egui::{
     Stroke, Ui, Vec2,
 };
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Known driver ids and their labels for the cable select.
@@ -46,9 +48,9 @@ struct Toast {
     until: Instant,
 }
 
-#[derive(Default)]
 pub struct TopBar {
     link: Link,
+    hub: Arc<HubAdapter>,
     /// Status seen last frame (to toast transitions such as a lost link).
     last_status: LinkStatus,
     /// Running scan and whether it was the Auto-detect button (pick + toast).
@@ -65,6 +67,21 @@ pub struct TopBar {
 }
 
 impl TopBar {
+    pub fn new(hub: Arc<HubAdapter>) -> Self {
+        Self {
+            link: Link::default(),
+            hub,
+            last_status: LinkStatus::default(),
+            scan: None,
+            candidates: Vec::new(),
+            detect_note: None,
+            toast: None,
+            right_w: 0.0,
+            adapter_window: false,
+            about_window: false,
+        }
+    }
+
     pub fn ui(
         &mut self,
         ui: &mut Ui,
@@ -78,8 +95,7 @@ impl TopBar {
         // Any change of driver / port (select, auto-detect, settings window)
         // drops a live link that no longer matches it.
         if link.status != LinkStatus::Idle
-            && (settings.adapter.driver != adapters::ELM_DRIVER
-                || settings.adapter.port.trim() != link.port)
+            && (settings.adapter.driver != link.driver || settings.adapter.port.trim() != link.port)
         {
             self.link.disconnect();
             self.last_status = LinkStatus::Idle;
@@ -276,24 +292,26 @@ impl TopBar {
         }
         let driver = settings.adapter.driver.as_str();
         let port = settings.adapter.port.trim();
+        // Serial / netdev cables need a port; USB and simulated ones do not.
+        let needs_port = matches!(
+            driver,
+            adapters::ELM_DRIVER | "kkl" | "slcan" | "socketcan" | "openport2"
+        );
         if driver.is_empty() {
             self.notify("Pick a cable first (or run Auto-detect)", Tone::Warn);
-        } else if driver != adapters::ELM_DRIVER {
-            self.notify(
-                &format!(
-                    "{}: connect is not available in the native app yet",
-                    driver_label(driver)
-                ),
-                Tone::Warn,
-            );
-        } else if port.is_empty() {
+        } else if needs_port && port.is_empty() {
             self.notify(
                 "No port set: run Auto-detect or pick a port in the cable list",
                 Tone::Warn,
             );
         } else {
-            self.link
-                .connect(ctx.clone(), port.to_string(), settings.adapter.baud);
+            let cfg = LinkCfg {
+                driver: driver.to_string(),
+                port: port.to_string(),
+                baud: settings.adapter.baud,
+                bus: settings.adapter.can_bus.clone(),
+            };
+            self.link.connect(ctx.clone(), self.hub.clone(), cfg);
             self.last_status = LinkStatus::Connecting;
         }
     }

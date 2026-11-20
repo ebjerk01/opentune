@@ -115,9 +115,14 @@ the configured resolvers.
 
 ## Safety
 
-- Nothing here writes to an ECU. The adapter layer only sends ELM327 AT
-  commands (identification, battery voltage) and never opens K-line, CAN or
-  unknown ports during auto-detect.
+- The core views never write to an ECU. Auto-detect only sends ELM327 AT
+  commands (`ATI`) to ELM-looking ports and never opens K-line, CAN or
+  unknown ports. A connected cable (any registry driver) is owned by one
+  `opentune-hub` session: the top bar's link only opens the driver (its
+  adapter set-up) and reads the battery voltage, and views run their
+  diagnostics through the same session (`Host::adapter()`), one operation
+  at a time. A view's ECU write needs `Host::confirm_ecu` + a vault backup
+  and goes to the module named in that confirmation.
 - "Fix & save" (no edits) writes corrected checksums to a NEW file chosen
   in a save dialog; the opened dump is never overwritten by it.
 - Map editing: click a cell, type a value + Enter (or `+`/`-` to step one

@@ -32,6 +32,8 @@ opentune-flash = { path = "../crates/opentune-flash" }
 opentune-logview = { path = "../crates/opentune-logview" }
 # Controllers view: drivetrain controller definitions (ctrldefs/).
 opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
+# The shared adapter session (driver registry, one owner of the hardware).
+opentune-hub = { path = "../crates/opentune-hub" }
 
 # GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
@@ -47,3 +49,6 @@ png = "0.18"
 serialport = "4"
 
 [dev-dependencies]
+# Simulated multi-module CAN bus for the hub adapter tests.
+opentune-hub = { path = "../crates/opentune-hub", features = ["testkit"] }
+opentune-udssim = { path = "../crates/opentune-udssim" }
