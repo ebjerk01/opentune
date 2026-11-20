@@ -47,7 +47,9 @@ pub struct EcuDef {
 
 /// Identification keys: how an ECU's self-reported identity (part number, SW
 /// number) maps to this definition. Matching is prefix/substring based so a
-/// family prefix (e.g. "03G906") covers many exact numbers. See `identify`.
+/// family prefix (e.g. "03G906") covers many exact numbers. Keys shorter than
+/// [`MIN_IDENTIFY_KEY_LEN`] never match, and when several definitions match,
+/// the one with the longest (most specific) hitting key wins; see [`match_ecu`].
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Identify {
     /// Hardware / spare-part numbers or prefixes (e.g. "0281011", "03G906").
@@ -65,13 +67,25 @@ fn norm(s: &str) -> String {
         .to_ascii_uppercase()
 }
 
-/// Does `value` match any of `keys` (case/space-insensitive prefix or substring)?
-fn key_hit(value: &str, keys: &[String]) -> bool {
+/// Shortest identify key (after removing whitespace) that may ever match.
+///
+/// A shorter key is a generic prefix, not an identity: every Bosch software
+/// number starts with `1037`, so a `"1037"` key matched nearly every Bosch
+/// dump and claimed a Mercedes EDC15C6 as an EDC16U34. The matcher ignores such
+/// keys and the validator rejects them (`identify.key_short`). Six characters
+/// still admits a VAG family prefix such as `03G906`.
+pub const MIN_IDENTIFY_KEY_LEN: usize = 6;
+
+/// Normalised length of the longest of `keys` that `value` hits
+/// (case/space-insensitive prefix or substring), or `None` when none does.
+/// Keys shorter than [`MIN_IDENTIFY_KEY_LEN`] are ignored.
+fn best_key_hit(value: &str, keys: &[String]) -> Option<usize> {
     let v = norm(value);
-    keys.iter().any(|k| {
-        let k = norm(k);
-        !k.is_empty() && (v.starts_with(&k) || v.contains(&k))
-    })
+    keys.iter()
+        .map(|k| norm(k))
+        .filter(|k| k.len() >= MIN_IDENTIFY_KEY_LEN && v.contains(k.as_str()))
+        .map(|k| k.len())
+        .max()
 }
 
 impl EcuDef {
@@ -83,30 +97,51 @@ impl EcuDef {
             .is_some_and(|p| p.evidence == crate::provenance::EXAMPLE)
     }
 
+    /// How specifically an ECU reporting `id` matches this definition: the
+    /// normalised length of the longest identify key that hits (a part number
+    /// against `hw_number`, a software number against `sw_number`), or `None`
+    /// when nothing hits. An `example` definition never matches.
+    pub fn match_specificity(&self, id: &EcuId) -> Option<usize> {
+        // Placeholder data must never identify a real unit.
+        if self.is_example() {
+            return None;
+        }
+        let hw = id
+            .hw_number
+            .as_deref()
+            .and_then(|hw| best_key_hit(hw, &self.identify.part_numbers));
+        let sw = id
+            .sw_number
+            .as_deref()
+            .and_then(|sw| best_key_hit(sw, &self.identify.sw_numbers));
+        hw.max(sw)
+    }
+
     /// True if an ECU reporting `id` matches this definition's identify keys.
     /// An `example` definition never matches.
     pub fn matches_id(&self, id: &EcuId) -> bool {
-        // Placeholder data must never identify a real unit.
-        if self.is_example() {
-            return false;
-        }
-        if let Some(hw) = &id.hw_number {
-            if key_hit(hw, &self.identify.part_numbers) {
-                return true;
-            }
-        }
-        if let Some(sw) = &id.sw_number {
-            if key_hit(sw, &self.identify.sw_numbers) {
-                return true;
-            }
-        }
-        false
+        self.match_specificity(id).is_some()
     }
 }
 
-/// Find the first definition whose identify keys match a reported ECU id.
+/// Find the definition that matches a reported ECU id most specifically.
+///
+/// Every definition is scored by [`EcuDef::match_specificity`] (the longest
+/// identify key that hits) and the highest score wins, so a full software
+/// number beats a family prefix whatever order `defs` is in. Equal scores keep
+/// the earlier definition (`load_dir` sorts by id), as the old first-hit rule did.
 pub fn match_ecu<'a>(defs: &'a [EcuDef], id: &EcuId) -> Option<&'a EcuDef> {
-    defs.iter().find(|d| d.matches_id(id))
+    let mut best: Option<(&EcuDef, usize)> = None;
+    for d in defs {
+        let Some(score) = d.match_specificity(id) else {
+            continue;
+        };
+        match best {
+            Some((_, b)) if score <= b => {}
+            _ => best = Some((d, score)),
+        }
+    }
+    best.map(|(d, _)| d)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -416,5 +451,79 @@ mod tests {
         }"#;
         let def = EcuDef::from_json(json).expect("parse without maps");
         assert!(def.maps.is_empty());
+    }
+
+    /// A synthetic definition with the given identify keys (no provenance, so
+    /// not an `example`).
+    fn keyed(id: &str, parts: &[&str], sws: &[&str]) -> EcuDef {
+        let mut d = EcuDef::from_json(&format!(
+            r#"{{ "id": "{id}", "name": "X", "maker": "M", "family": "F",
+                "protocol": "iso_tp", "diag_layer": "uds", "bitrate": 500000 }}"#
+        ))
+        .expect("synthetic def parses");
+        d.identify.part_numbers = parts.iter().map(|s| s.to_string()).collect();
+        d.identify.sw_numbers = sws.iter().map(|s| s.to_string()).collect();
+        d
+    }
+
+    fn ecu(hw: Option<&str>, sw: Option<&str>) -> EcuId {
+        EcuId {
+            hw_number: hw.map(str::to_string),
+            sw_number: sw.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn most_specific_key_wins_in_any_order() {
+        // A 7-character hardware family prefix against a full software number.
+        let family = keyed("a-family", &["0281011"], &[]);
+        let exact = keyed("b-exact", &[], &["1037999999"]);
+        let id = ecu(Some("0281011999"), Some("1037999999"));
+        assert_eq!(family.match_specificity(&id), Some(7));
+        assert_eq!(exact.match_specificity(&id), Some(10));
+        for defs in [
+            vec![family.clone(), exact.clone()],
+            vec![exact.clone(), family.clone()],
+        ] {
+            assert_eq!(
+                match_ecu(&defs, &id).map(|d| d.id.as_str()),
+                Some("b-exact")
+            );
+        }
+        // Only the family prefix hits: the family definition still matches.
+        let id = ecu(Some("0281011999"), Some("1037888888"));
+        let defs = [exact, family];
+        assert_eq!(
+            match_ecu(&defs, &id).map(|d| d.id.as_str()),
+            Some("a-family")
+        );
+    }
+
+    #[test]
+    fn equal_specificity_keeps_the_earlier_definition() {
+        let a = keyed("a-one", &["03G906"], &[]);
+        let b = keyed("b-two", &["03G906"], &[]);
+        let id = ecu(Some("03G906021XX"), None);
+        let defs = [a, b];
+        assert_eq!(match_ecu(&defs, &id).map(|d| d.id.as_str()), Some("a-one"));
+    }
+
+    #[test]
+    fn keys_shorter_than_the_minimum_never_match() {
+        // `1037` begins every Bosch SW number; a definition that still carries
+        // it (e.g. from an old pack) must not claim anything with it.
+        let generic = keyed("a-generic", &["0281"], &["1037"]);
+        let id = ecu(Some("0281010999"), Some("1037351686"));
+        assert_eq!(generic.match_specificity(&id), None);
+        assert!(!generic.matches_id(&id));
+        assert!(match_ecu(std::slice::from_ref(&generic), &id).is_none());
+        // Whitespace does not count towards the length, case is ignored.
+        let spaced = keyed("b-spaced", &["03g 906"], &["10 37"]);
+        assert_eq!(
+            spaced.match_specificity(&ecu(Some("03G906021AB"), None)),
+            Some(MIN_IDENTIFY_KEY_LEN)
+        );
+        assert!(!spaced.matches_id(&ecu(None, Some("1037999999"))));
     }
 }

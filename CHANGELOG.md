@@ -189,6 +189,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   the stateless poll and the logger-definition loader) moved from
   `feat_logging.rs` into `opentune_hub::livelog`, so a second front end can
   share it. No behaviour change; the `log_*` commands are thin glue over it.
+- Internal: the desktop's local diagnostics log (records, write-time masking
+  of SecurityAccess seeds/keys and long hex payloads, size caps and rotation,
+  the process-wide log, the chained panic hook, rate-limited frontend reports
+  and read-back) moved into the new workspace crate `opentune-diaglog`, so a
+  second front end can share it. No behaviour change; the desktop keeps its
+  `init` and `diag_log*` commands and re-exports the rest under the same
+  `opentune_desktop::diaglog` paths.
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
@@ -238,6 +245,27 @@ section (alpha/bench builds) until they are vehicle-tested.
   must add `seedkey_loader: None` (or use `..Default::default()`).
 
 ### Fixed
+- **Backup vault: two backups in the same second no longer overwrite each other.**
+  Backup files were named by ECU, address and Unix second, so a second backup
+  of the same ECU within one second replaced the first (e.g. the original dump
+  before a quick re-save). A new backup now gets a `_2`, `_3`, … suffix and is
+  created exclusively, so no backup is ever replaced.
+- ECU identification no longer lets a generic prefix claim an ECU. Every
+  Bosch software number starts with `1037`, and `bosch-edc16u34`, `bosch-me7`
+  and the EDC16 example carried a bare `1037` software key, so an EDC15C6
+  with an unlisted software number, any ME7 and most other Bosch dumps were
+  identified as EDC16U34 (and map write-back with checksum fix took that
+  definition's checksum). The keys are removed (definitions, the Android
+  copies and the demo sample keep their part numbers). The matcher now picks
+  the definition whose longest identify key hits instead of the first one in
+  file order, ignores keys shorter than 6 characters, and `ecudefs validate`
+  rejects such keys as an error (`identify.key_short`, was a warning below
+  3). Synthetic tests cover the EDC15C6 case in both load orders and check
+  that every shipped key still resolves to its own definition. Pack authors:
+  a community definition pack whose identify key is shorter than 6
+  characters is now refused when the pack loads (`identify.key_short`); use
+  the full part or software number, or a family prefix of at least 6
+  characters (e.g. `03G906`).
 - ECU identification: the four reference Mercedes EDC15C6 calibrations
   (SW 1037351686 / 351637 / 351736 / 351737) now match the `bosch-edc15c6`
   definition instead of `bosch-edc16u34`, whose broad `1037` software key

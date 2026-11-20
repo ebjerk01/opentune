@@ -55,6 +55,7 @@ members = [
     "crates/opentune-gps",
     "crates/opentune-seedkey-loader",
     "crates/opentune-hub",
+    "crates/opentune-diaglog",
 ]
 
 [workspace.package]
