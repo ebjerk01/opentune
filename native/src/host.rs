@@ -626,7 +626,19 @@ impl Confirms {
 
 /// Archive `data` into the vault beside `near` (an image path, or a directory
 /// to use as the vault's parent).
+///
+/// SAFETY INVARIANT: a [`BackupReceipt`] means "a real, NON-EMPTY backup was
+/// written". Zero-length data is refused here and no receipt is issued (an
+/// empty read must never stand in for the data a write is about to
+/// replace). Only the length counts: all-zero bytes are a valid backup.
 fn backup_into_vault(near: &Path, label: &str, data: &[u8]) -> Result<BackupReceipt, String> {
+    if data.is_empty() {
+        return Err(
+            "backup refused: there is no data to back up (0 bytes); nothing was \
+                    written and no receipt was issued"
+                .into(),
+        );
+    }
     let dir = if near.is_dir() {
         near.join("opentune-vault")
     } else {
@@ -660,7 +672,8 @@ pub(crate) fn atomic_write(target: &Path, data: &[u8]) -> Result<(), String> {
 #[derive(Debug)]
 pub struct WriteReceipt {
     pub target: PathBuf,
-    /// The vault copy of what the target held before (None: it did not exist).
+    /// The vault copy of what the target held before (None: it did not exist
+    /// or was empty).
     pub backup: Option<BackupReceipt>,
 }
 
@@ -886,6 +899,18 @@ where
     Box::new(move |d: &mut dyn RawDiag| f(d).map(|r| Box::new(r) as Box<dyn Any + Send>))
 }
 
+/// `Err` for a zero-length [`BackupReceipt`]: the mutate path never runs on
+/// a backup that holds nothing (see `backup_into_vault`).
+pub(crate) fn refuse_empty_receipt(op: &str, backup: &BackupReceipt) -> Result<(), String> {
+    if backup.len == 0 {
+        return Err(format!(
+            "{op}: the backup {} is empty (0 bytes); nothing was sent",
+            backup.path.display()
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Result<R, String> {
     r?.downcast::<R>()
         .map(|b| *b)
@@ -914,6 +939,10 @@ impl dyn AdapterAccess {
         R: Send + 'static,
         F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
     {
+        // SAFETY INVARIANT (see backup_into_vault): a receipt for 0 bytes
+        // backs nothing up. Refused here, before any adapter sees the job,
+        // so no AdapterAccess implementation can be reached with one.
+        refuse_empty_receipt(op, backup)?;
         // The closure runs as a mutation (the write helpers check for it).
         let f = move |d: &mut dyn RawDiag| {
             let _scope = MutationScope::enter();
@@ -1279,6 +1308,9 @@ impl<'a> Host<'a> {
 
 pub(crate) fn guarded_write(_ack: Ack, target: &Path, data: &[u8]) -> Result<WriteReceipt, String> {
     let backup = match std::fs::read(target) {
+        // An existing EMPTY file holds nothing to lose: no backup (and no
+        // receipt, per the invariant), as for a file that did not exist.
+        Ok(old) if old.is_empty() => None,
         Ok(old) => Some(backup_into_vault(target, "before write", &old)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("read {} for the backup: {e}", target.display())),
@@ -2465,5 +2497,79 @@ mod tests {
         }
         assert_eq!(ViewGroup::Workspace.label(), "Calibration");
         assert_eq!(ViewGroup::Custom("Plugins".into()).label(), "Plugins");
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant: a BackupReceipt means a real, NON-EMPTY backup was written
+    // -----------------------------------------------------------------------
+
+    fn vault_files(d: &Path) -> usize {
+        std::fs::read_dir(d.join("opentune-vault"))
+            .map(|r| r.count())
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn an_empty_backup_is_refused_and_writes_nothing() {
+        let d = tmp("empty-backup");
+        let mut f = Fixture::new();
+        let e = f
+            .host(Ok(TCU), |h| h.backup(&d, "before write", &[]))
+            .unwrap_err();
+        assert!(e.contains("0 bytes") && e.contains("no receipt"), "{e}");
+        assert_eq!(vault_files(&d), 0, "nothing reached the vault");
+        // Only the length counts: all-zero bytes are a real backup.
+        let r = f
+            .host(Ok(TCU), |h| h.backup(&d, "before write", &[0u8; 16]))
+            .unwrap();
+        assert_eq!(r.len, 16);
+        assert_eq!(std::fs::read(&r.path).unwrap(), vec![0u8; 16]);
+        // Replacing an existing EMPTY file: nothing to lose, no receipt.
+        let target = d.join("empty.bin");
+        std::fs::write(&target, b"").unwrap();
+        let w = guarded_write(Ack { target: None }, &target, b"NEW").unwrap();
+        assert!(w.backup.is_none());
+        assert_eq!(std::fs::read(&target).unwrap(), b"NEW");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn mutate_refuses_a_zero_length_receipt_before_the_adapter() {
+        let d = tmp("empty-receipt");
+        let mock = Arc::new(MockAdapter {
+            mutations: Mutex::new(0),
+            targets: Mutex::new(Vec::new()),
+        });
+        let a: Arc<dyn AdapterAccess> = mock.clone();
+        // An in-crate receipt for an existing file but 0 bytes (only the
+        // crate can build one; Host::backup never issues it).
+        let path = d.join("present.bin");
+        std::fs::write(&path, b"X").unwrap();
+        let empty = BackupReceipt {
+            path,
+            crc32: 0,
+            len: 0,
+        };
+        let e = a
+            .mutate("write coding", test_ack(TCU), &empty, |dg| {
+                dg.request(&[0x2E])
+            })
+            .unwrap_err();
+        assert!(
+            e.contains("empty (0 bytes)") && e.contains("nothing was sent"),
+            "{e}"
+        );
+        assert_eq!(
+            *mock.mutations.lock().unwrap(),
+            0,
+            "mutate_job never called"
+        );
+        assert!(mock.targets.lock().unwrap().is_empty(), "nothing sent");
+        // actuate takes no receipt and is unaffected.
+        let act = a
+            .actuate("output test", test_ack(TCU), |_d| Ok(1u8), |_d| Ok(()))
+            .unwrap_err();
+        assert_eq!(act, UNSUPPORTED, "(the mock predates actuate)");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

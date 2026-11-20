@@ -327,6 +327,10 @@ impl AdapterAccess for HubAdapter {
                 backup.path.display()
             ));
         }
+        // SAFETY INVARIANT: a receipt means a real, NON-EMPTY backup. The
+        // typed `mutate` wrapper refuses an empty one too; this covers a
+        // direct `mutate_job` call.
+        crate::host::refuse_empty_receipt(op, backup)?;
         self.run_job(MUTATE_TIMEOUT_MS, op, target, job)
     }
 
@@ -1233,6 +1237,155 @@ mod tests {
         // The raw use dropped the session: the next operation reopens.
         tester_present(&d, TCU).unwrap();
         assert_eq!(opened(&fault), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant: a BackupReceipt means a real, NON-EMPTY backup was written
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn mutate_job_refuses_a_zero_length_receipt_and_actuate_needs_none() {
+        let (a, fault, opens) = sim_faulty();
+        let dir = std::env::temp_dir().join(format!("ot-hublink-empty-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut empty = crate::host::test_backup(&dir, b"OLD");
+        empty.len = 0; // the file exists; the receipt claims 0 bytes
+                       // Straight at the trait method (bypassing the typed wrapper).
+        let job: DiagJob = Box::new(|d: &mut dyn RawDiag| {
+            d.request(&[0x2E, 0xF1, 0x90, 0x00])
+                .map(|r| Box::new(r) as Box<dyn Any + Send>)
+        });
+        let e = a
+            .mutate_job("write", crate::host::test_ack(TCU), &empty, job)
+            .unwrap_err();
+        assert!(e.contains("empty (0 bytes)"), "{e}");
+        assert!(
+            lock(&opens).is_empty() && opened(&fault) == 0,
+            "nothing sent"
+        );
+        // actuate takes no receipt at all.
+        let d: Arc<dyn AdapterAccess> = a;
+        let act = d
+            .actuate(
+                "output test",
+                crate::host::test_ack(TCU),
+                |dg| dg.request(&[0x3E, 0x00]),
+                |_dg| Ok(()),
+            )
+            .unwrap();
+        assert!(act.into_result().is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A representative PERSISTENT write, end to end through the host's
+    /// seams: confirm_ecu (accepted) -> read the old value from the module
+    /// -> Host::backup -> adapter.mutate(ack, &backup, write) over the hub's
+    /// simulated bus. The old bytes are in the vault, the write reached the
+    /// confirmed module only, and the backup is still there afterwards.
+    #[test]
+    fn a_persistent_write_end_to_end_confirm_backup_mutate() {
+        const DID: u16 = 0xF1A0;
+        let hub = AdapterHub::spawn(|| {
+            let bus = SimBus::default();
+            let mut engine = UdsServer::new();
+            engine.set_did(DID, b"ENGINE-CODING".to_vec());
+            let mut tcu = UdsServer::new();
+            tcu.set_did(DID, b"OLD-CODING".to_vec());
+            bus.add(0x7E0, 0x7E8, engine);
+            bus.add(0x7E1, 0x7E9, tcu);
+            bus.opener()
+        });
+        let a = Arc::new(HubAdapter::new(hub));
+        a.set_link(Some(LinkCfg {
+            driver: "sim".into(),
+            port: String::new(),
+            baud: 0,
+            bus: "hs".into(),
+        }));
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let read_did = |t: DiagTarget| {
+            d.read("read coding", t, |dg| {
+                let r = dg.request(&[0x22, (DID >> 8) as u8, DID as u8])?;
+                match r.first() {
+                    Some(0x62) => Ok(r[3..].to_vec()),
+                    _ => Err(format!("negative reply {r:02X?}")),
+                }
+            })
+        };
+        let dir = std::env::temp_dir().join(format!("ot-hublink-e2e-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // The app's global target is the engine; the user works on the TCU.
+        a.set_target(DiagTarget::ENGINE);
+        let jobs = crate::host::Jobs::new(eframe::egui::Context::default());
+        let mut confirms = crate::host::Confirms::default();
+        let (mut actions, mut status) = (Vec::new(), None);
+        let shared = crate::host::HostShared::default();
+        let keys = opentune_hub::seedkeys::SeedKeys::default();
+        let req = || ConfirmRequest {
+            key: "write-coding".into(),
+            title: "Write coding?".into(),
+            body: "b".into(),
+            typed: None,
+            confirm_label: "Write".into(),
+        };
+        let mut frame = |confirms: &mut crate::host::Confirms| {
+            let mut h = crate::host::Host {
+                tokens: crate::theme::DARK,
+                image_path: None,
+                image: None,
+                image_edited: false,
+                defs: &[],
+                def_idx: None,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                seedkeys: &keys,
+                target: Ok(TCU),
+                jobs: &jobs,
+                confirms,
+                actions: &mut actions,
+                status: &mut status,
+                shared: &shared,
+            };
+            match h.confirm_ecu(req()) {
+                crate::host::ConfirmResult::Accepted(ack) => {
+                    // 1. read the value the write will replace, 2. back it up.
+                    let old = read_did(ack.ecu_target().unwrap()).unwrap();
+                    let backup = h.backup(&dir, "coding before write", &old).unwrap();
+                    Some((ack, backup, old))
+                }
+                _ => None,
+            }
+        };
+        assert!(frame(&mut confirms).is_none(), "the dialog opens");
+        confirms.answer("write-coding", true);
+        let (ack, backup, old) = frame(&mut confirms).expect("accepted");
+        assert_eq!(old, b"OLD-CODING");
+        assert_eq!(std::fs::read(&backup.path).unwrap(), b"OLD-CODING");
+        assert!(backup.path.starts_with(dir.join("opentune-vault")));
+
+        // 3. the write, on the module the user confirmed.
+        let reply: Vec<u8> = d
+            .mutate("write coding", ack, &backup, |dg| {
+                let mut req = vec![0x2E, (DID >> 8) as u8, DID as u8];
+                req.extend_from_slice(b"NEW-CODING");
+                assert!(crate::host::in_mutation());
+                dg.request(&req)
+            })
+            .unwrap();
+        assert_eq!(reply, vec![0x6E, 0xF1, 0xA0]);
+        assert_eq!(read_did(TCU).unwrap(), b"NEW-CODING");
+        assert_eq!(
+            read_did(DiagTarget::ENGINE).unwrap(),
+            b"ENGINE-CODING",
+            "the engine (the global target) was not written"
+        );
+        assert!(backup.path.is_file(), "the backup is kept");
+        assert_eq!(std::fs::read(&backup.path).unwrap(), b"OLD-CODING");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
