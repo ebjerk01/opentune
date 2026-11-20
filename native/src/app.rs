@@ -57,6 +57,24 @@ pub struct App {
     frame_ms: f64,
 }
 
+/// The view with `id`: a core view, a built-in, or a plugin view
+/// (`HostAction::ShowView`).
+fn view_by_id(
+    id: &str,
+    builtin: &[Box<dyn NativeView>],
+    plugin: &[Box<dyn NativeView>],
+) -> Option<View> {
+    View::parse(id)
+        .or_else(|| {
+            let i = builtin.iter().position(|v| v.id() == id)?;
+            Some(View::Builtin(i as u16))
+        })
+        .or_else(|| {
+            let i = plugin.iter().position(|v| v.id() == id)?;
+            Some(View::Plugin(i as u16))
+        })
+}
+
 /// Open the local diagnostics log (masked records, size caps, rotation) in
 /// the app's storage dir and chain the panic hook into it. Local only:
 /// nothing is uploaded (see `NativeConfig::diagnostics`). A failure only
@@ -297,6 +315,10 @@ impl App {
 
 impl App {
     /// Carry out what a plugin view asked for.
+    fn view_by_id(&self, id: &str) -> Option<View> {
+        view_by_id(id, &self.builtin_views, &self.plugin_views)
+    }
+
     fn apply(&mut self, actions: Vec<HostAction>) {
         for a in actions {
             match a {
@@ -310,6 +332,10 @@ impl App {
                 }
                 HostAction::SelectMap(m) => self.flash.open_map(m),
                 HostAction::HexJump(addr) => self.flash.hex_jump(addr),
+                HostAction::ShowView(id) => match self.view_by_id(&id) {
+                    Some(v) => self.view = v,
+                    None => self.host_status = Some(format!("no view '{id}'")),
+                },
                 HostAction::EditCells { map, cells } => {
                     match self.flash.apply_edits(&self.defs, map, &cells) {
                         Ok(n) => self.host_status = Some(format!("{n} cell(s) edited")),
@@ -647,5 +673,32 @@ impl eframe::App for App {
         if !self.scripted {
             eframe::set_value(storage, STORAGE_KEY, &self.settings);
         }
+    }
+}
+
+#[cfg(test)]
+mod show_view_tests {
+    use super::*;
+
+    #[test]
+    fn show_view_resolves_core_builtin_and_plugin_ids() {
+        let builtin = views::builtin::views(&crate::host::BuildChannel::compiled());
+        let analyze = builtin.iter().position(|v| v.id() == "analyze").unwrap();
+        let plugin: Vec<Box<dyn NativeView>> = Vec::new();
+        assert_eq!(view_by_id("flash", &builtin, &plugin), Some(View::Flash));
+        assert_eq!(view_by_id("maps", &builtin, &plugin), Some(View::Maps));
+        assert_eq!(
+            view_by_id("analyze", &builtin, &plugin),
+            Some(View::Builtin(analyze as u16))
+        );
+        assert_eq!(view_by_id("no-such-view", &builtin, &plugin), None);
+        assert_eq!(
+            HostAction::ShowView("flash".into()),
+            HostAction::ShowView("flash".into())
+        );
+        assert_ne!(
+            HostAction::ShowView("flash".into()),
+            HostAction::ShowView("maps".into())
+        );
     }
 }

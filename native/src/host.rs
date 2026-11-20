@@ -1167,6 +1167,9 @@ pub enum HostAction {
     SelectDefinition(String),
     SelectMap(usize),
     HexJump(usize),
+    /// Switch the app to the view with this id (`flash`, `maps`, a built-in
+    /// or plugin view's `NativeView::id`). Unknown ids leave the view as is.
+    ShowView(String),
     /// Change cells of map `map` of the selected definition in the working
     /// image: `(cell index row-major, physical value)`. Nothing is written to
     /// disk; the user saves through the Flash view's confirm + backup-first
@@ -1189,6 +1192,7 @@ impl PartialEq for HostAction {
             (SelectDefinition(a), SelectDefinition(b)) => a == b,
             (SelectMap(a), SelectMap(b)) => a == b,
             (HexJump(a), HexJump(b)) => a == b,
+            (ShowView(a), ShowView(b)) => a == b,
             (EditCells { map: m, cells: c }, EditCells { map: n, cells: d }) => m == n && c == d,
             // EcuDef has no PartialEq: compare the serialized definitions.
             (AddDefinition(a), AddDefinition(b)) => {

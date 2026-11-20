@@ -552,6 +552,7 @@ impl CompareView {
         };
         host.act(HostAction::SelectDefinition(def.id.clone()));
         host.act(HostAction::SelectMap(idx));
+        host.act(HostAction::ShowView("flash".into()));
         if let Some(m) = def.maps.get(idx) {
             host.status(format!("Flash view: map {} of {}", m.name, def.name));
         }
@@ -801,6 +802,7 @@ impl CompareView {
             });
         if let Some(a) = jump {
             host.act(HostAction::HexJump(a));
+            host.act(HostAction::ShowView("flash".into()));
             host.status(format!("Flash view: hex at 0x{a:06X}"));
         }
         if let Some(m) = pick_map {
@@ -990,14 +992,16 @@ mod tests {
         v.tab = Tab::Regions;
         rig.frame(&mut v);
 
-        // Open in Flash selects the definition, then the map.
+        // Open in Flash selects the definition, then the map, and switches
+        // to the Flash view.
         rig.actions.clear();
         v.open_for_test(&mut rig, 0);
         assert_eq!(
             rig.actions,
             vec![
                 HostAction::SelectDefinition("syn".into()),
-                HostAction::SelectMap(0)
+                HostAction::SelectMap(0),
+                HostAction::ShowView("flash".into()),
             ]
         );
         let _ = std::fs::remove_file(&tuned_path);

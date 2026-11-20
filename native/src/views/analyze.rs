@@ -965,6 +965,7 @@ fn report_body(
                             .clicked()
                         {
                             acts.push(HostAction::HexJump(f.offset as usize));
+                            acts.push(HostAction::ShowView("flash".into()));
                             *status = Some(format!("Flash view: hex at 0x{:06X}", f.offset));
                         }
                     } else {
@@ -1128,6 +1129,7 @@ fn report_body(
                     if ui.link(RichText::new(name).color(t.fg)).clicked() {
                         acts.push(HostAction::SelectDefinition(d.id.clone()));
                         acts.push(HostAction::SelectMap(i));
+                        acts.push(HostAction::ShowView("flash".into()));
                         *status = Some(format!("Flash view: map {name}"));
                     }
                 }
