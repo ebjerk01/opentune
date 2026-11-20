@@ -2869,6 +2869,7 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-logdef",
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",

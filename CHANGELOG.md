@@ -184,6 +184,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the desktop's live-log session engine (the `0x2C` fast / SSM
+  live session held on the adapter hub, link-loss detection and reconnect,
+  the stateless poll and the logger-definition loader) moved from
+  `feat_logging.rs` into `opentune_hub::livelog`, so a second front end can
+  share it. No behaviour change; the `log_*` commands are thin glue over it.
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into

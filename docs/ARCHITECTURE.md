@@ -48,8 +48,11 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   connection), module addressing (`Addr`, `ConnKey`, `resolve`, refusal of
   writes to an unknown target), the driver registry and adapter probe,
   plugin seed/key lookup with the built-in SA2 interpreter, the build
-  channel, map cell codecs and vault listing. The desktop re-exports it under
-  its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
+  channel, map cell codecs, vault listing and the live-log session engine
+  (`opentune_hub::livelog`: the `0x2C` fast / SSM live session held as one
+  long hub operation, link-loss detection and opt-in reconnect, the stateless
+  poll). The desktop re-exports it under its old paths
+  (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).
