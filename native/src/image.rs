@@ -430,4 +430,218 @@ mod tests {
         };
         assert_eq!(axis_values(&img, Some(&stored), 2), vec![10.0, 20.0]);
     }
+
+    // -----------------------------------------------------------------------
+    // Edge cases of cell editing
+    // -----------------------------------------------------------------------
+
+    fn map(dt: DataType, en: Endian, factor: f64, offset: f64) -> MapDef {
+        MapDef {
+            name: "edge".into(),
+            address: 1,
+            data_type: dt,
+            endian: en,
+            rows: 1,
+            cols: 2,
+            scaling: Scaling { factor, offset },
+            ..Default::default()
+        }
+    }
+
+    fn image(len: usize) -> Image {
+        Image::from_bytes(PathBuf::from("edge.bin"), vec![0; len])
+    }
+
+    #[test]
+    fn s8_with_a_negative_factor_and_offset() {
+        // phys = raw * -0.5 + 10
+        let m = map(DataType::S8, Endian::Big, -0.5, 10.0);
+        let mut img = image(3);
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Set(12.0)), Ok(12.0));
+        assert_eq!(img.bytes[1], 0xFC, "raw -4");
+        // raw 127 and -128 are the type's ends; one more step is refused.
+        assert_eq!(img.edit_cell(&m, 1, CellEdit::Set(-53.5)), Ok(-53.5));
+        assert_eq!(img.bytes[2], 0x7F);
+        assert!(
+            img.edit_cell(&m, 1, CellEdit::Set(-54.0)).is_err(),
+            "raw 128"
+        );
+        assert!(img.edit_cell(&m, 1, CellEdit::Step(1)).is_err(), "past 127");
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Set(74.0)), Ok(74.0));
+        assert_eq!(img.bytes[1], 0x80, "raw -128");
+        assert!(
+            img.edit_cell(&m, 0, CellEdit::Set(74.5)).is_err(),
+            "raw -129"
+        );
+        assert!(img.edit_cell(&m, 0, CellEdit::Step(-1)).is_err());
+        // A raw +1 step lowers the physical value with a negative factor.
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Step(1)), Ok(73.5));
+        assert_eq!(img.bytes[1], 0x81);
+        assert_eq!(map_values(&img.bytes, &m), Some(vec![73.5, -53.5]));
+    }
+
+    #[test]
+    fn s32_little_endian_with_a_negative_factor_at_the_type_limits() {
+        // phys = raw * -0.25 - 100
+        let m = map(DataType::S32, Endian::Little, -0.25, -100.0);
+        let mut img = image(9);
+        let at_min = i32::MIN as f64 * -0.25 - 100.0;
+        let at_max = i32::MAX as f64 * -0.25 - 100.0;
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Set(at_min)), Ok(at_min));
+        assert_eq!(&img.bytes[1..5], &[0x00, 0x00, 0x00, 0x80]);
+        assert_eq!(img.edit_cell(&m, 1, CellEdit::Set(at_max)), Ok(at_max));
+        assert_eq!(&img.bytes[5..9], &[0xFF, 0xFF, 0xFF, 0x7F]);
+        let before = img.bytes.clone();
+        assert!(img.edit_cell(&m, 0, CellEdit::Set(at_min + 0.25)).is_err());
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(at_max - 0.25)).is_err());
+        assert!(img.edit_cell(&m, 1, CellEdit::Step(1)).is_err());
+        assert_eq!(img.bytes, before, "refused edits change nothing");
+        // An ordinary negative raw value, little-endian.
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Set(-99.5)), Ok(-99.5));
+        assert_eq!(&img.bytes[1..5], &[0xFE, 0xFF, 0xFF, 0xFF], "raw -2");
+        assert_eq!(img.changed_bytes(), 8);
+    }
+
+    #[test]
+    fn f32_little_endian_with_a_negative_factor() {
+        // phys = raw * -2 + 1
+        let m = map(DataType::F32, Endian::Little, -2.0, 1.0);
+        let mut img = image(9);
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Set(0.0)), Ok(0.0));
+        assert_eq!(&img.bytes[1..5], &0.5f32.to_le_bytes(), "raw 0.5");
+        // A float steps by 1.0 raw.
+        assert_eq!(img.edit_cell(&m, 0, CellEdit::Step(1)), Ok(-2.0));
+        assert_eq!(&img.bytes[1..5], &1.5f32.to_le_bytes());
+        // Not stored exactly: the stored value is reported.
+        let got = img.edit_cell(&m, 1, CellEdit::Set(0.8)).unwrap();
+        assert_eq!(got, (0.1f32 as f64) * -2.0 + 1.0);
+        // Beyond f32, NaN and infinity are refused.
+        let before = img.bytes.clone();
+        let huge = f32::MAX as f64 * 4.0;
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(-huge)).is_err());
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(f64::NAN)).is_err());
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(f64::INFINITY)).is_err());
+        assert_eq!(img.bytes, before);
+        // The largest finite f32 raw is accepted.
+        let top = f32::MAX as f64 * -2.0 + 1.0;
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(top)).is_ok());
+        assert_eq!(&img.bytes[5..9], &f32::MAX.to_le_bytes());
+    }
+
+    #[test]
+    fn map_limits_are_inclusive_and_exact() {
+        // phys = raw * 0.1: the limits are not exactly representable.
+        let m = MapDef {
+            min: Some(0.5),
+            max: Some(25.5),
+            ..map(DataType::U8, Endian::Big, 0.1, 0.0)
+        };
+        let mut img = image(3);
+        assert!(img.edit_cell(&m, 0, CellEdit::Set(25.5)).is_ok());
+        assert_eq!(img.bytes[1], 255);
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(0.5)).is_ok());
+        assert_eq!(img.bytes[2], 5);
+        assert!(
+            img.edit_cell(&m, 1, CellEdit::Step(-1)).is_err(),
+            "0.4 < min"
+        );
+        assert!(img.edit_cell(&m, 0, CellEdit::Set(25.6)).is_err());
+        // Rounding to the nearest step can land inside the limits.
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(0.46)).is_ok(), "-> 0.5");
+        assert!(img.edit_cell(&m, 1, CellEdit::Set(0.44)).is_err(), "-> 0.4");
+        // Negative factor: the limits are physical, not raw.
+        let n = MapDef {
+            min: Some(-200.0),
+            max: Some(-10.0),
+            ..map(DataType::U8, Endian::Big, -1.0, 0.0)
+        };
+        let mut img = image(3);
+        assert_eq!(img.edit_cell(&n, 0, CellEdit::Set(-200.0)), Ok(-200.0));
+        assert_eq!(img.edit_cell(&n, 1, CellEdit::Set(-10.0)), Ok(-10.0));
+        assert!(img.edit_cell(&n, 0, CellEdit::Step(1)).is_err(), "-201");
+        assert!(img.edit_cell(&n, 1, CellEdit::Step(-1)).is_err(), "-9");
+        assert_eq!(img.edit_cell(&n, 1, CellEdit::Step(1)), Ok(-11.0));
+    }
+
+    #[test]
+    fn undo_after_revert_and_edits_that_change_nothing() {
+        let m = map(DataType::U16, Endian::Little, 1.0, 0.0);
+        let mut img = Image::from_bytes(PathBuf::from("u.bin"), vec![7, 0x34, 0x12, 0, 0]);
+        // Setting the stored value again records no edit.
+        assert_eq!(
+            img.edit_cell(&m, 0, CellEdit::Set(0x1234 as f64)),
+            Ok(4660.0)
+        );
+        assert!(!img.can_undo() && !img.is_dirty());
+        img.edit_cell(&m, 0, CellEdit::Set(1.0)).unwrap();
+        img.edit_cell(&m, 1, CellEdit::Set(2.0)).unwrap();
+        img.revert();
+        assert_eq!(img.undo(), None, "nothing to undo after a revert");
+        assert_eq!(img.bytes, vec![7, 0x34, 0x12, 0, 0]);
+        assert!(!img.is_dirty());
+        // Edit again; undo returns to the file's bytes.
+        assert_eq!(
+            img.edit_cell(&m, 0, CellEdit::Set(0x12FF as f64)),
+            Ok(4863.0)
+        );
+        assert_eq!(img.changed_bytes(), 1, "only the low byte differs");
+        assert!(img.cell_changed(&m, 0) && !img.cell_changed(&m, 1));
+        assert_eq!(img.undo(), Some(1));
+        assert!(!img.is_dirty() && !img.can_undo());
+        // A cell past the image end is refused; it is not a panic.
+        let past = MapDef {
+            address: 4,
+            ..map(DataType::U16, Endian::Little, 1.0, 0.0)
+        };
+        let e = img.edit_cell(&past, 0, CellEdit::Set(1.0)).unwrap_err();
+        assert!(e.contains("past the end"), "{e}");
+        assert!(!img.cell_changed(&past, 5), "beyond the image: unchanged");
+        // After a save, the old undo history is gone.
+        img.edit_cell(&m, 1, CellEdit::Set(9.0)).unwrap();
+        let now = img.bytes.clone();
+        img.mark_saved(PathBuf::from("u.bin"), now);
+        assert_eq!(img.undo(), None);
+    }
+
+    #[test]
+    fn encode_elem_limits_rounding_and_byte_order() {
+        use DataType::*;
+        let ok = |raw: f64, dt| encode_elem(raw, dt, Endian::Big).is_ok();
+        for (dt, lo, hi) in [
+            (U8, 0.0, u8::MAX as f64),
+            (S8, i8::MIN as f64, i8::MAX as f64),
+            (U16, 0.0, u16::MAX as f64),
+            (S16, i16::MIN as f64, i16::MAX as f64),
+            (U32, 0.0, u32::MAX as f64),
+            (S32, i32::MIN as f64, i32::MAX as f64),
+        ] {
+            assert!(ok(lo, dt) && ok(hi, dt), "{dt:?} ends");
+            assert!(!ok(lo - 1.0, dt) && !ok(hi + 1.0, dt), "{dt:?} beyond");
+            // Rounding happens before the range check.
+            assert!(ok(hi + 0.49, dt) && !ok(hi + 0.5, dt), "{dt:?} round up");
+            assert!(ok(lo - 0.49, dt), "{dt:?} round to lo");
+        }
+        assert_eq!(encode_elem(-0.4, U8, Endian::Big).unwrap(), vec![0]);
+        assert!(encode_elem(f64::INFINITY, U32, Endian::Big).is_err());
+        assert!(encode_elem(f64::NEG_INFINITY, F32, Endian::Big).is_err());
+        assert!(encode_elem(f32::MAX as f64 * 2.0, F32, Endian::Big).is_err());
+        // Byte order of every width.
+        assert_eq!(
+            encode_elem(-2.0, S32, Endian::Little).unwrap(),
+            vec![0xFE, 0xFF, 0xFF, 0xFF]
+        );
+        assert_eq!(
+            encode_elem(0x1234 as f64, U16, Endian::Little).unwrap(),
+            vec![0x34, 0x12]
+        );
+        assert_eq!(
+            encode_elem(0x1234 as f64, S16, Endian::Big).unwrap(),
+            vec![0x12, 0x34]
+        );
+        assert_eq!(encode_elem(-1.0, S8, Endian::Little).unwrap(), vec![0xFF]);
+        assert_eq!(
+            encode_elem(-1.5, F32, Endian::Big).unwrap(),
+            (-1.5f32).to_be_bytes().to_vec()
+        );
+    }
 }

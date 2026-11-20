@@ -243,6 +243,14 @@ mod tests {
     struct Ecu {
         max: u16,
         fail_at: Option<usize>,
+        /// The NRC a refused block gets (default 0x72).
+        fail_nrc: u8,
+        /// Block (0-based) whose 0x76 echoes the wrong counter.
+        bad_echo_at: Option<usize>,
+        /// Block (0-based) answered with a bare responsePending.
+        pending_at: Option<usize>,
+        /// Replaces the whole 0x34 reply.
+        dl_reply: Option<Vec<u8>>,
         exit_nrc: Option<u8>,
         sent: Vec<Vec<u8>>,
     }
@@ -251,6 +259,10 @@ mod tests {
             Self {
                 max,
                 fail_at: None,
+                fail_nrc: 0x72,
+                bad_echo_at: None,
+                pending_at: None,
+                dl_reply: None,
                 exit_nrc: None,
                 sent: Vec::new(),
             }
@@ -263,11 +275,18 @@ mod tests {
         fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String> {
             self.sent.push(req.to_vec());
             Ok(match req[0] {
-                0x34 => vec![0x74, 0x20, (self.max >> 8) as u8, self.max as u8],
+                0x34 => match &self.dl_reply {
+                    Some(r) => r.clone(),
+                    None => vec![0x74, 0x20, (self.max >> 8) as u8, self.max as u8],
+                },
                 0x36 => {
                     let n = self.blocks().len() - 1; // 0-based index of this block
                     if self.fail_at == Some(n) {
-                        vec![0x7F, 0x36, 0x72]
+                        vec![0x7F, 0x36, self.fail_nrc]
+                    } else if self.bad_echo_at == Some(n) {
+                        vec![0x76, req[1].wrapping_add(1)]
+                    } else if self.pending_at == Some(n) {
+                        vec![0x7F, 0x36, 0x78]
                     } else {
                         vec![0x76, req[1]]
                     }
@@ -532,5 +551,284 @@ mod tests {
             matches!(e, TransferError::ExitFailed { bytes: 30, .. }),
             "{e}"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Edge cases
+    // -----------------------------------------------------------------------
+
+    /// Records every progress report; never cancels.
+    #[derive(Default)]
+    struct Record(RefCell<Vec<(f32, String)>>);
+    impl TransferProgress for Record {
+        fn report(&self, frac: f32, msg: String) {
+            self.0.borrow_mut().push((frac, msg));
+        }
+        fn cancelled(&self) -> bool {
+            false
+        }
+    }
+
+    /// The data the ECU received, block by block, in order.
+    fn received(ecu: &Ecu) -> Vec<u8> {
+        ecu.blocks()
+            .iter()
+            .flat_map(|b| b[2..].iter().copied())
+            .collect()
+    }
+
+    fn counters(ecu: &Ecu) -> Vec<u8> {
+        ecu.blocks().iter().map(|b| b[1]).collect()
+    }
+
+    #[test]
+    fn data_an_exact_multiple_of_the_payload() {
+        let mut ecu = Ecu::new(10);
+        let d = data(24);
+        let r =
+            in_mutation(|| download(&mut ecu, &Download::new(0x1000, &d), &NoProgress)).unwrap();
+        assert_eq!((r.blocks, r.bytes, r.payload_per_block), (3, 24, 8));
+        assert!(ecu.blocks().iter().all(|b| b.len() == 10), "full blocks");
+        assert_eq!(received(&ecu), d);
+        assert_eq!(counters(&ecu), vec![1, 2, 3]);
+        assert_eq!(
+            ecu.sent.len(),
+            1 + 3 + 1,
+            "34, three 36, 37; no empty block"
+        );
+    }
+
+    #[test]
+    fn a_single_byte() {
+        let mut ecu = Ecu::new(0xFFFF);
+        let r =
+            in_mutation(|| download(&mut ecu, &Download::new(0x8000_0000, &[0xA5]), &NoProgress))
+                .unwrap();
+        assert_eq!((r.blocks, r.bytes), (1, 1));
+        assert_eq!(
+            ecu.sent,
+            vec![
+                vec![0x34, 0x00, 0x44, 0x80, 0, 0, 0, 0, 0, 0, 1],
+                vec![0x36, 0x01, 0xA5],
+                vec![0x37],
+            ]
+        );
+    }
+
+    #[test]
+    fn the_ecu_maximum_wins_over_a_larger_adapter_cap() {
+        let mut ecu = Ecu::new(10);
+        let d = data(20);
+        let job = Download {
+            max_payload: Some(100),
+            ..Download::new(0, &d)
+        };
+        let r = in_mutation(|| download(&mut ecu, &job, &NoProgress)).unwrap();
+        assert_eq!((r.payload_per_block, r.blocks, r.max_block_len), (8, 3, 10));
+        assert!(ecu.blocks().iter().all(|b| b.len() <= 10));
+        // A cap equal to the ECU's room changes nothing either.
+        let mut ecu = Ecu::new(10);
+        let job = Download {
+            max_payload: Some(8),
+            ..Download::new(0, &d)
+        };
+        let r = in_mutation(|| download(&mut ecu, &job, &NoProgress)).unwrap();
+        assert_eq!(r.payload_per_block, 8);
+    }
+
+    #[test]
+    fn a_four_byte_length_field_in_the_0x74_reply() {
+        let mut ecu = Ecu {
+            dl_reply: Some(vec![0x74, 0x40, 0x00, 0x00, 0x01, 0x02]),
+            ..Ecu::new(0)
+        };
+        let d = data(600);
+        let r = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &NoProgress)).unwrap();
+        assert_eq!(
+            (r.max_block_len, r.payload_per_block, r.blocks),
+            (0x102, 0x100, 3)
+        );
+        assert_eq!(received(&ecu), d);
+        // A one-byte field (and the smallest block that carries data).
+        let mut ecu = Ecu {
+            dl_reply: Some(vec![0x74, 0x10, 0x03]),
+            ..Ecu::new(0)
+        };
+        let r =
+            in_mutation(|| download(&mut ecu, &Download::new(0, &d[..3]), &NoProgress)).unwrap();
+        assert_eq!((r.payload_per_block, r.blocks), (1, 3));
+    }
+
+    #[test]
+    fn a_malformed_0x74_reply_or_format_sends_no_block() {
+        let d = data(16);
+        for reply in [
+            vec![0x74],                   // no lengthFormatIdentifier
+            vec![0x74, 0x00],             // zero length bytes
+            vec![0x74, 0x20, 0x01],       // truncated length field
+            vec![0x74, 0x20, 0x00, 0x00], // a zero block length
+            vec![0x76, 0x20, 0x00, 0x10], // another service's reply
+        ] {
+            let mut ecu = Ecu {
+                dl_reply: Some(reply.clone()),
+                ..Ecu::new(0)
+            };
+            let e =
+                in_mutation(|| download(&mut ecu, &Download::new(0, &d), &NoProgress)).unwrap_err();
+            assert!(
+                matches!(e, TransferError::NotStarted { .. }),
+                "{reply:02X?}: {e}"
+            );
+            assert!(e.to_string().contains("requestDownload"), "{e}");
+            assert!(ecu.blocks().is_empty(), "{reply:02X?}");
+            assert!(!ecu.sent.iter().any(|r| r[0] == 0x37));
+        }
+        // A format the address or size does not fit: nothing at all is sent.
+        for (alfid, addr) in [(0x55u8, 0u32), (0x00, 0), (0x22, 0x1_0000), (0x41, 0x100)] {
+            let mut ecu = Ecu::new(10);
+            let job = Download {
+                alfid,
+                ..Download::new(addr, &d)
+            };
+            let e = in_mutation(|| download(&mut ecu, &job, &NoProgress)).unwrap_err();
+            assert!(
+                matches!(e, TransferError::NotStarted { .. }),
+                "0x{alfid:02X}: {e}"
+            );
+            assert!(ecu.sent.is_empty(), "0x{alfid:02X}");
+        }
+        // An adapter cap of zero: the request went out, no block did.
+        let mut ecu = Ecu::new(10);
+        let job = Download {
+            max_payload: Some(0),
+            ..Download::new(0, &d)
+        };
+        let e = in_mutation(|| download(&mut ecu, &job, &NoProgress)).unwrap_err();
+        assert!(e.to_string().contains("no room"), "{e}");
+        assert!(ecu.blocks().is_empty());
+    }
+
+    #[test]
+    fn wrong_counter_nrc_mid_way_is_partial_and_nothing_is_resent() {
+        let mut ecu = Ecu {
+            fail_at: Some(2),
+            fail_nrc: 0x73, // wrongBlockSequenceCounter
+            ..Ecu::new(10)
+        };
+        let d = data(40); // 5 blocks
+        let e = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &NoProgress)).unwrap_err();
+        match &e {
+            TransferError::PartiallyWritten {
+                blocks_done,
+                bytes_done,
+                total,
+                cancelled,
+                reason,
+            } => {
+                assert_eq!((*blocks_done, *bytes_done, *total), (2, 16, 40));
+                assert!(!cancelled);
+                assert!(
+                    reason.contains("block 3") && reason.contains("0x03"),
+                    "{reason}"
+                );
+                assert!(reason.contains("0x73"), "{reason}");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(e.to_string().contains("PARTIALLY WRITTEN"));
+        assert_eq!(counters(&ecu), vec![1, 2, 3], "each counter sent once");
+        assert!(!ecu.sent.iter().any(|r| r[0] == 0x37), "no exit");
+    }
+
+    #[test]
+    fn a_wrong_echo_or_an_unresolved_pending_stops_without_resending() {
+        let d = data(32); // 4 blocks
+        let mut ecu = Ecu {
+            bad_echo_at: Some(1),
+            ..Ecu::new(10)
+        };
+        let e = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &NoProgress)).unwrap_err();
+        assert!(
+            matches!(
+                e,
+                TransferError::PartiallyWritten {
+                    blocks_done: 1,
+                    bytes_done: 8,
+                    ..
+                }
+            ),
+            "{e}"
+        );
+        assert_eq!(counters(&ecu), vec![1, 2]);
+        // The adapter stopped waiting while the ECU still said 0x78.
+        let mut ecu = Ecu {
+            pending_at: Some(0),
+            ..Ecu::new(10)
+        };
+        let e = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &NoProgress)).unwrap_err();
+        assert!(
+            matches!(e, TransferError::PartiallyWritten { blocks_done: 0, .. }),
+            "{e}"
+        );
+        assert!(e.to_string().contains("not re-sent"), "{e}");
+        assert_eq!(counters(&ecu), vec![1], "the block went out once");
+    }
+
+    #[test]
+    fn progress_is_monotonic_and_ends_at_one() {
+        for (len, max) in [(1usize, 10u16), (24, 10), (25, 10), (1000, 130)] {
+            let mut ecu = Ecu::new(max);
+            let d = data(len);
+            let p = Record::default();
+            let r = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &p)).unwrap();
+            let log = p.0.borrow();
+            assert_eq!(log.len(), r.blocks + 2, "request, every block, exit");
+            assert_eq!(log[0].0, 0.0);
+            assert!(
+                log.windows(2).all(|w| w[0].0 <= w[1].0),
+                "{len}/{max}: {log:?}"
+            );
+            assert!(log.iter().all(|(f, _)| (0.0..=1.0).contains(f)));
+            assert_eq!(log[log.len() - 2].0, 1.0, "the last block reports 1.0");
+            assert_eq!(log.last().unwrap(), &(1.0, "transfer exit".to_string()));
+            let last_block = &log[log.len() - 2].1;
+            assert_eq!(
+                last_block,
+                &format!("block {0}/{0} · {len}/{len} bytes", r.blocks)
+            );
+        }
+    }
+
+    #[test]
+    fn a_cancel_after_the_last_block_still_exits() {
+        // Reports: requesting (1), block 1 (2), block 2 (3): the cancel comes
+        // after the last block, when there is no "between blocks" left; the
+        // exit runs so the ECU is not left mid-transfer.
+        let mut ecu = Ecu::new(10);
+        let d = data(16);
+        let p = CancelAfter::new(3);
+        let r = in_mutation(|| download(&mut ecu, &Download::new(0, &d), &p)).unwrap();
+        assert_eq!(r.blocks, 2);
+        assert_eq!(ecu.sent.last().unwrap(), &vec![0x37]);
+    }
+
+    #[test]
+    fn the_exit_record_is_returned() {
+        struct Rec(Vec<Vec<u8>>);
+        impl RawDiag for Rec {
+            fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String> {
+                self.0.push(req.to_vec());
+                Ok(match req[0] {
+                    0x34 => vec![0x74, 0x20, 0x00, 0x05],
+                    0x36 => vec![0x76, req[1]],
+                    _ => vec![0x77, 0xC0, 0xFF, 0xEE],
+                })
+            }
+        }
+        let mut ecu = Rec(Vec::new());
+        let r =
+            in_mutation(|| download(&mut ecu, &Download::new(0, &data(7)), &NoProgress)).unwrap();
+        assert_eq!(r.exit_record, vec![0xC0, 0xFF, 0xEE]);
+        assert_eq!(r.blocks, 3, "3 data bytes per block");
     }
 }

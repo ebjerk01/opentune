@@ -1478,4 +1478,585 @@ mod tests {
         );
         assert!(resolve_checksum(&[], "plugin-algo").is_none());
     }
+
+    // -----------------------------------------------------------------------
+    // Edge cases of the safety seams
+    // -----------------------------------------------------------------------
+
+    /// What a `Host` borrows, owned by a test.
+    struct Fixture {
+        jobs: Jobs,
+        confirms: Confirms,
+        actions: Vec<HostAction>,
+        status: Option<String>,
+        keys: opentune_hub::seedkeys::SeedKeys,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            Self {
+                jobs: Jobs::new(egui::Context::default()),
+                confirms: Confirms::default(),
+                actions: Vec::new(),
+                status: None,
+                keys: opentune_hub::seedkeys::SeedKeys::default(),
+            }
+        }
+
+        /// Run `f` against a host whose global target is `target`.
+        fn host<R>(
+            &mut self,
+            target: Result<DiagTarget, String>,
+            f: impl FnOnce(&mut Host<'_>) -> R,
+        ) -> R {
+            let mut h = Host {
+                tokens: crate::theme::DARK,
+                image_path: None,
+                image: None,
+                image_edited: false,
+                defs: &[],
+                def_idx: None,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                seedkeys: &self.keys,
+                target,
+                jobs: &self.jobs,
+                confirms: &mut self.confirms,
+                actions: &mut self.actions,
+                status: &mut self.status,
+            };
+            f(&mut h)
+        }
+    }
+
+    fn req(key: &str) -> ConfirmRequest {
+        ConfirmRequest {
+            key: key.into(),
+            title: "t".into(),
+            body: "b".into(),
+            typed: None,
+            confirm_label: "ok".into(),
+        }
+    }
+
+    const TCU: DiagTarget = DiagTarget {
+        tx: 0x7E1,
+        rx: 0x7E9,
+    };
+
+    #[test]
+    fn job_progress_is_clamped_and_finished_jobs_leave_the_list() {
+        let jobs = Jobs::new(egui::Context::default());
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let mut h = jobs.spawn("clamp", move |p| {
+            p.set(1.5, "over");
+            go_rx.recv().ok();
+            p.set(-0.25, "under");
+            Ok(())
+        });
+        assert_eq!(h.name(), "clamp");
+        // Wait for the first report, then look while the job is parked.
+        let t0 = Instant::now();
+        while h.progress().1 != "over" {
+            assert!(t0.elapsed() < Duration::from_secs(5), "no progress");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(h.progress(), (1.0, "over".to_string()));
+        assert!(h.is_running());
+        assert_eq!(
+            jobs.active(),
+            vec![("clamp".to_string(), 1.0, "over".into())]
+        );
+        go_tx.send(()).unwrap();
+        assert_eq!(wait(&mut h), Ok(()));
+        assert_eq!(h.progress(), (0.0, "under".to_string()));
+        assert!(h.take().is_none(), "the result is handed out once");
+        assert!(h.poll().is_none());
+        assert!(jobs.active().is_empty(), "a finished job is not listed");
+    }
+
+    #[test]
+    fn a_panicking_job_is_reported_and_unlisted_and_a_dropped_handle_is_harmless() {
+        let jobs = Jobs::new(egui::Context::default());
+        // A String payload (format!) as well as a &str one.
+        let n = 3;
+        let mut p = jobs.spawn::<u8, _>("panics", move |_| panic!("synthetic panic {n}"));
+        assert_eq!(wait(&mut p), Err("the job panicked".to_string()));
+        assert!(jobs.active().iter().all(|(name, ..)| name != "panics"));
+
+        // A handle dropped while its job runs: the job still ends cleanly and
+        // leaves the list.
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        let h = jobs.spawn("orphan", move |p| {
+            go_rx.recv().ok();
+            p.set(0.5, "still here");
+            done_tx.send(()).ok();
+            Ok(1u8)
+        });
+        drop(h);
+        go_tx.send(()).unwrap();
+        done_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let t0 = Instant::now();
+        while jobs.active().iter().any(|(name, ..)| name == "orphan") {
+            assert!(t0.elapsed() < Duration::from_secs(5), "orphan still listed");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        // Jobs keep working after a panic.
+        let mut ok = jobs.spawn("after", |_| Ok("fine"));
+        assert_eq!(wait(&mut ok), Ok("fine"));
+    }
+
+    #[test]
+    fn a_cancel_before_the_job_looks_is_seen_and_is_idempotent() {
+        let jobs = Jobs::new(egui::Context::default());
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let mut h = jobs.spawn("c", move |p| {
+            go_rx.recv().ok();
+            Ok(p.cancelled())
+        });
+        h.cancel();
+        h.cancel();
+        go_tx.send(()).unwrap();
+        assert_eq!(wait(&mut h), Ok(true));
+        // A job never cancelled sees false.
+        let mut h = jobs.spawn("n", |p| Ok(p.cancelled()));
+        assert_eq!(wait(&mut h), Ok(false));
+    }
+
+    #[test]
+    fn confirm_keys_are_independent() {
+        let mut c = Confirms::default();
+        assert!(matches!(c.ask(req("a")), ConfirmResult::Pending));
+        assert!(matches!(
+            c.ask_with(req("b"), Some(TCU)),
+            ConfirmResult::Pending
+        ));
+        c.answer("nope", true); // an unknown key changes nothing
+        c.answer("a", false);
+        assert!(matches!(c.ask(req("b")), ConfirmResult::Pending), "b open");
+        assert!(matches!(c.ask(req("a")), ConfirmResult::Declined));
+        c.answer("b", true);
+        // `b` carries the target it was opened with, even when re-asked
+        // without one.
+        match c.ask(req("b")) {
+            ConfirmResult::Accepted(ack) => {
+                assert_eq!(ack.target(), Some(TCU));
+                assert_eq!(ack.ecu_target(), Ok(TCU));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(c.open.is_empty(), "both dialogs are closed");
+        // A declined ECU confirmation hands out nothing.
+        c.ask_with(req("e"), Some(TCU));
+        c.answer("e", false);
+        assert!(matches!(
+            c.ask_with(req("e"), Some(TCU)),
+            ConfirmResult::Declined
+        ));
+    }
+
+    #[test]
+    fn confirm_ecu_with_an_unusable_target_opens_nothing_and_says_why() {
+        let mut fx = Fixture::new();
+        let r = fx.host(Err("tx set, rx empty".into()), |h| h.confirm_ecu(req("w")));
+        assert!(matches!(r, ConfirmResult::Declined));
+        assert!(fx.confirms.open.is_empty(), "no dialog was opened");
+        let s = fx.status.clone().unwrap();
+        assert!(
+            s.contains("no target module") && s.contains("tx set, rx empty"),
+            "{s}"
+        );
+        // A 29-bit target is stamped exactly as shown.
+        let ext = DiagTarget {
+            tx: 0x18DA_10F1,
+            rx: 0x18DA_F110,
+        };
+        assert!(matches!(
+            fx.host(Ok(ext), |h| h.confirm_ecu(req("w"))),
+            ConfirmResult::Pending
+        ));
+        assert_eq!(fx.confirms.open["w"].3, Some(ext), "the dialog shows it");
+        fx.confirms.answer("w", true);
+        match fx.host(Ok(DiagTarget::ENGINE), |h| h.confirm_ecu(req("w"))) {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.ecu_target(), Ok(ext)),
+            other => panic!("{other:?}"),
+        }
+        // A plain confirm through the host carries no target.
+        fx.host(Ok(ext), |h| h.confirm(req("f")));
+        fx.confirms.answer("f", true);
+        match fx.host(Ok(ext), |h| h.confirm(req("f"))) {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.target(), None),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// A view that was told `Declined` (the target became unusable while its
+    /// dialog was open) must not later get an `Accepted` for that old dialog
+    /// without the user seeing a new one.
+    #[test]
+    #[ignore = "BUG: confirm_ecu returns Declined on an unusable target but leaves an already-open dialog for the key, whose later acceptance a new confirm_ecu consumes without a new dialog"]
+    fn a_declined_ecu_confirmation_leaves_no_acceptable_dialog_behind() {
+        let mut fx = Fixture::new();
+        assert!(matches!(
+            fx.host(Ok(TCU), |h| h.confirm_ecu(req("w"))),
+            ConfirmResult::Pending
+        ));
+        // The target becomes unusable; the view is told Declined and stops.
+        assert!(matches!(
+            fx.host(Err("half set".into()), |h| h.confirm_ecu(req("w"))),
+            ConfirmResult::Declined
+        ));
+        // The dialog the view gave up on is still drawn; the user clicks it.
+        fx.confirms.answer("w", true);
+        // Later the user starts a new write with the engine selected.
+        let r = fx.host(Ok(DiagTarget::ENGINE), |h| h.confirm_ecu(req("w")));
+        assert!(
+            matches!(r, ConfirmResult::Pending),
+            "a new operation must open a new dialog, got {r:?}"
+        );
+    }
+
+    #[test]
+    fn guarded_write_receipt_matches_the_old_contents_and_leaves_no_temp_file() {
+        let d = tmp("write-edge");
+        let f = d.join("image.bin");
+        std::fs::write(&f, b"FIRST").unwrap();
+        let r1 = guarded_write(Ack { target: None }, &f, b"SECOND").unwrap();
+        let b1 = r1.backup.unwrap();
+        assert_eq!(r1.target, f);
+        assert_eq!(
+            (b1.len, b1.crc32),
+            (5, crate::views::vault::crc32(b"FIRST"))
+        );
+        assert!(!f.with_extension("opentune-tmp").exists(), "no temp file");
+        // A second write archives what the first one wrote.
+        let r2 = guarded_write(Ack { target: Some(TCU) }, &f, b"").unwrap();
+        let b2 = r2.backup.unwrap();
+        assert_eq!(std::fs::read(&b2.path).unwrap(), b"SECOND");
+        assert_eq!(std::fs::read(&f).unwrap(), b"", "an empty write is a write");
+        // A target in a missing directory: refused, nothing created.
+        let lost = d.join("missing-dir").join("x.bin");
+        assert!(guarded_write(Ack { target: None }, &lost, b"X").is_err());
+        assert!(!d.join("missing-dir").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Two guarded writes of the same file in quick succession (e.g. Save,
+    /// then Save again): the vault must still hold the ORIGINAL contents.
+    #[test]
+    #[ignore = "BUG: vault backups are named <label>_<address>_<unix seconds>, so a second backup with the same label within one second overwrites the first (the original contents are lost)"]
+    fn two_writes_in_one_second_keep_both_vault_copies() {
+        let d = tmp("write-twice");
+        let f = d.join("image.bin");
+        std::fs::write(&f, b"ORIGINAL").unwrap();
+        let b1 = guarded_write(Ack { target: None }, &f, b"EDIT-1")
+            .unwrap()
+            .backup
+            .unwrap();
+        let b2 = guarded_write(Ack { target: None }, &f, b"EDIT-2")
+            .unwrap()
+            .backup
+            .unwrap();
+        let (r1, r2) = (std::fs::read(&b1.path), std::fs::read(&b2.path));
+        let _ = std::fs::remove_dir_all(&d);
+        assert_ne!(b1.path, b2.path, "each write gets its own vault copy");
+        assert_eq!(r1.unwrap(), b"ORIGINAL", "the original is kept");
+        assert_eq!(r2.unwrap(), b"EDIT-1");
+    }
+
+    fn def_with_ids(tx: u32, rx: u32) -> EcuDef {
+        let mut d = EcuDef::from_json(
+            r#"{"id":"t","name":"T","maker":"x","family":"x","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"flash_size":0,"regions":[],"full_read":"obd"}"#,
+        )
+        .unwrap();
+        d.tx_id = tx;
+        d.rx_id = rx;
+        d
+    }
+
+    #[test]
+    fn resolve_target_hex_forms_and_limits() {
+        let ext = DiagTarget {
+            tx: 0x18DA_10F1,
+            rx: 0x18DA_F110,
+        };
+        // 29-bit ids with surrounding whitespace, lower case, both prefixes.
+        assert_eq!(resolve_target("  18DA10F1\t", "\n18DAF110 ", None), Ok(ext));
+        assert_eq!(resolve_target("18da10f1", "0x18daf110", None), Ok(ext));
+        assert_eq!(resolve_target("0X18DA10F1", "0X18dAf110", None), Ok(ext));
+        assert_eq!(resolve_target(" 0x7e1 ", "0X7E9", None), Ok(TCU));
+        // The 29-bit maximum is accepted, one more is not.
+        assert_eq!(
+            resolve_target("1FFFFFFF", "0", None),
+            Ok(DiagTarget {
+                tx: 0x1FFF_FFFF,
+                rx: 0
+            })
+        );
+        for bad in [
+            "20000000",
+            "0x",
+            "0X",
+            "0x0x7E1",
+            "7E 1",
+            "000000007E1",
+            "7E1h",
+            "-7E1",
+        ] {
+            let e = resolve_target(bad, "7E9", None).unwrap_err();
+            assert!(e.contains("not a hex CAN id"), "{bad}: {e}");
+            assert!(e.contains(bad.trim()), "names the input: {e}");
+            assert!(resolve_target("7E1", bad, None).is_err(), "rx {bad}");
+        }
+        // Whitespace-only counts as empty: neither set means the fallback.
+        assert_eq!(resolve_target(" \t", "\n", None), Ok(DiagTarget::ENGINE));
+        assert!(resolve_target("", " 7E9 ", None).is_err(), "rx only");
+        // A definition with 29-bit ids is used; one beyond 29 bits is not.
+        assert_eq!(
+            resolve_target("", "", Some(&def_with_ids(0x18DA_10F1, 0x18DA_F110))),
+            Ok(ext)
+        );
+        assert_eq!(
+            resolve_target("", "", Some(&def_with_ids(0x2000_0000, 0x7E8))),
+            Ok(DiagTarget::ENGINE)
+        );
+        assert_eq!(
+            resolve_target("", "", Some(&def_with_ids(0x7E1, 0))),
+            Ok(DiagTarget::ENGINE),
+            "half a definition is not a target"
+        );
+        // Display switches to 8 digits above 11 bits.
+        let t = |tx, rx| DiagTarget { tx, rx }.to_string();
+        assert_eq!(t(0x7FF, 0x800), "tx 0x7FF / rx 0x00000800");
+        assert_eq!(t(0, 1), "tx 0x000 / rx 0x001");
+        assert_eq!(DiagTarget::default(), DiagTarget::ENGINE);
+    }
+
+    #[test]
+    #[ignore = "BUG: resolve_target range-checks only the definition's tx id; an rx id above 29 bits becomes the target"]
+    fn resolve_target_refuses_a_definition_rx_beyond_29_bits() {
+        assert_eq!(
+            resolve_target("", "", Some(&def_with_ids(0x7E1, 0xFFFF_FFFF))),
+            Ok(DiagTarget::ENGINE)
+        );
+    }
+
+    #[test]
+    fn raw_transport_edge_replies() {
+        use opentune_core::protocol::{DiagTransport, UdsClient};
+        let mut sent: Vec<Vec<u8>> = Vec::new();
+        let mut raw = |req: &[u8]| -> Result<Vec<u8>, String> {
+            sent.push(req.to_vec());
+            match req {
+                // A pending reply for ANOTHER service: not this request's 0x78.
+                [0x22, 0xF1, 0x90] => Ok(vec![0x7F, 0x31, 0x78]),
+                // An NRC for another service.
+                [0x22, 0xF1, 0x91] => Ok(vec![0x7F, 0x2E, 0x31]),
+                [0x22, 0xF1, 0x92] => Ok(vec![]),
+                // A truncated negative response.
+                [0x22, 0xF1, 0x93] => Ok(vec![0x7F, 0x22]),
+                // A pending reply that names this service but is padded.
+                [0x2E, ..] => Ok(vec![0x7F, 0x2E, 0x78, 0x00]),
+                _ => Err("plain transport failure".into()),
+            }
+        };
+        {
+            let mut t = RawTransport::new(&mut raw);
+            // The bridge passes other services' replies through untouched.
+            assert_eq!(
+                t.request(&[0x22, 0xF1, 0x90], 1).unwrap(),
+                vec![0x7F, 0x31, 0x78]
+            );
+            assert_eq!(t.request(&[0x22, 0xF1, 0x92], 1).unwrap(), Vec::<u8>::new());
+            let e = t.request(&[0x2E, 0x01, 0x02, 0xAA], 1).unwrap_err();
+            assert!(e.to_string().contains("not re-sent"), "{e}");
+            assert!(e.to_string().contains("0x2E"), "{e}");
+            let e = t.request(&[0x10, 0x01], 1).unwrap_err();
+            assert!(
+                matches!(&e, opentune_core::Error::Protocol(m) if m == "plain transport failure"),
+                "{e:?}"
+            );
+            assert!(!opentune_core::resilient::is_link_lost(&e));
+            // Through the client: each is an error, never a value.
+            let mut uds = UdsClient::new(&mut t);
+            for did in [0xF190u16, 0xF191, 0xF192, 0xF193] {
+                let e = uds.read_data_by_id(did).unwrap_err();
+                assert!(
+                    matches!(e, opentune_core::Error::Protocol(_)),
+                    "{did:04X}: {e:?}"
+                );
+            }
+        }
+        // Every request went out exactly once.
+        assert_eq!(sent.len(), 4 + 4);
+        assert_eq!(sent.iter().filter(|r| r[0] == 0x2E).count(), 1);
+    }
+
+    #[test]
+    fn mutation_scopes_nest_and_restore_even_on_panic() {
+        assert!(!in_mutation());
+        {
+            let _outer = MutationScope::enter();
+            assert!(in_mutation());
+            {
+                let _inner = MutationScope::enter();
+                assert!(in_mutation());
+            }
+            assert!(in_mutation(), "the inner scope restores the outer one");
+        }
+        assert!(!in_mutation());
+        let r = std::panic::catch_unwind(|| {
+            let _s = MutationScope::enter();
+            assert!(in_mutation());
+            panic!("synthetic panic inside a mutation");
+        });
+        assert!(r.is_err());
+        assert!(!in_mutation(), "restored while unwinding");
+        // Another thread never sees this thread's scope.
+        let _s = MutationScope::enter();
+        assert!(!std::thread::spawn(in_mutation).join().unwrap());
+    }
+
+    /// Runs every job on the calling thread (like an adapter without a
+    /// worker), catching a panic as the hub does.
+    struct InlineAdapter {
+        reads: Mutex<u32>,
+        mutations: Mutex<u32>,
+    }
+    impl InlineAdapter {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                reads: Mutex::new(0),
+                mutations: Mutex::new(0),
+            })
+        }
+    }
+    impl AdapterAccess for InlineAdapter {
+        fn link(&self) -> LinkInfo {
+            LinkInfo::default()
+        }
+        fn read_job(
+            &self,
+            _op: &str,
+            _target: DiagTarget,
+            job: DiagJob,
+        ) -> Result<Box<dyn Any + Send>, String> {
+            *self.reads.lock().unwrap() += 1;
+            let mut diag = |req: &[u8]| Ok::<Vec<u8>, String>(vec![req[0] + 0x40]);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || job(&mut diag)))
+                .unwrap_or_else(|_| Err("job panicked".into()))
+        }
+        fn mutate_job(
+            &self,
+            op: &str,
+            ack: Ack,
+            _backup: &BackupReceipt,
+            job: DiagJob,
+        ) -> Result<Box<dyn Any + Send>, String> {
+            let t = ack.ecu_target()?;
+            *self.mutations.lock().unwrap() += 1;
+            let r = self.read_job(op, t, job);
+            *self.reads.lock().unwrap() -= 1;
+            r
+        }
+    }
+
+    #[test]
+    fn the_mutation_marker_follows_the_wrappers() {
+        let d = tmp("scope");
+        let backup = backup_into_vault(&d, "scope", b"OLD").unwrap();
+        let inline = InlineAdapter::new();
+        let a: Arc<dyn AdapterAccess> = inline.clone();
+        // Not set during a read, set during a mutation, gone afterwards.
+        assert!(!a.read("r", TCU, |_| Ok(in_mutation())).unwrap());
+        assert!(a
+            .mutate("m", test_ack(TCU), &backup, |_| Ok(in_mutation()))
+            .unwrap());
+        assert!(!in_mutation());
+        assert!(
+            !a.read("next", TCU, |_| Ok(in_mutation())).unwrap(),
+            "not leaked into the next job on the same thread"
+        );
+        // A refused mutation (no target) never runs the closure.
+        let ran = Arc::new(AtomicBool::new(false));
+        let r2 = ran.clone();
+        a.mutate("m", Ack { target: None }, &backup, move |_| {
+            r2.store(true, Ordering::SeqCst);
+            Ok(())
+        })
+        .unwrap_err();
+        assert!(!ran.load(Ordering::SeqCst));
+        assert!(!in_mutation());
+
+        // A panic inside the closure: the marker is restored on this thread.
+        let e = a
+            .mutate("boom", test_ack(TCU), &backup, |_| -> Result<(), String> {
+                assert!(in_mutation());
+                panic!("synthetic panic inside mutate")
+            })
+            .unwrap_err();
+        assert_eq!(e, "job panicked");
+        assert!(!in_mutation());
+        assert!(!a.read("after panic", TCU, |_| Ok(in_mutation())).unwrap());
+
+        // A mutate inside a mutate restores the outer marker, then clears.
+        let a2 = a.clone();
+        let b2 = backup.clone();
+        let (inner, after_inner) = a
+            .mutate("outer", test_ack(TCU), &backup, move |_| {
+                let inner = a2.mutate("inner", test_ack(TCU), &b2, |_| Ok(in_mutation()))?;
+                Ok((inner, in_mutation()))
+            })
+            .unwrap();
+        assert!(inner && after_inner);
+        assert!(!in_mutation());
+        assert_eq!(*inline.mutations.lock().unwrap(), 4);
+        assert_eq!(*inline.reads.lock().unwrap(), 3);
+
+        // On an adapter that runs jobs on another thread, the same holds.
+        let mock = Arc::new(MockAdapter {
+            mutations: Mutex::new(0),
+            targets: Mutex::new(Vec::new()),
+        });
+        let m: Arc<dyn AdapterAccess> = mock;
+        assert!(!m.read("r", TCU, |_| Ok(in_mutation())).unwrap());
+        assert!(m
+            .mutate("w", test_ack(TCU), &backup, |_| Ok(in_mutation()))
+            .unwrap());
+        assert!(!m.read("r", TCU, |_| Ok(in_mutation())).unwrap());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_unexpected_result_type_is_an_error_not_a_panic() {
+        struct WrongType;
+        impl AdapterAccess for WrongType {
+            fn link(&self) -> LinkInfo {
+                LinkInfo::default()
+            }
+            fn read_job(
+                &self,
+                _op: &str,
+                _t: DiagTarget,
+                _job: DiagJob,
+            ) -> Result<Box<dyn Any + Send>, String> {
+                Ok(Box::new("not a u32"))
+            }
+            fn mutate_job(
+                &self,
+                _op: &str,
+                _ack: Ack,
+                _b: &BackupReceipt,
+                _job: DiagJob,
+            ) -> Result<Box<dyn Any + Send>, String> {
+                Err("refused".into())
+            }
+        }
+        let a: Arc<dyn AdapterAccess> = Arc::new(WrongType);
+        let e = a.read("r", TCU, |_| Ok(7u32)).unwrap_err();
+        assert!(e.contains("unexpected result type"), "{e}");
+    }
 }

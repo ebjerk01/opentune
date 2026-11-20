@@ -439,4 +439,294 @@ mod tests {
         go_tx.send(()).unwrap();
         t.join().unwrap().unwrap();
     }
+
+    // -----------------------------------------------------------------------
+    // Link loss, reopen, target changes, panics
+    // -----------------------------------------------------------------------
+
+    use opentune_hub::adapter::testkit::SimFault;
+    use std::sync::atomic::Ordering;
+
+    const TCU: DiagTarget = DiagTarget {
+        tx: 0x7E1,
+        rx: 0x7E9,
+    };
+
+    /// Like [`sim`], plus the bus's fault switches (the bus lives on the
+    /// worker; its `SimFault` is shared, so it is handed back from there).
+    fn sim_faulty() -> (Arc<HubAdapter>, Arc<SimFault>, Arc<Mutex<Vec<u32>>>) {
+        let opens = Arc::new(Mutex::new(Vec::new()));
+        let log = opens.clone();
+        let (ftx, frx) = std::sync::mpsc::channel();
+        let hub = AdapterHub::spawn(move || {
+            let bus = SimBus::default();
+            bus.add(0x7E0, 0x7E8, UdsServer::new());
+            bus.add(0x7E1, 0x7E9, UdsServer::new());
+            ftx.send(bus.fault.clone()).unwrap();
+            let mut inner = bus.opener();
+            Box::new(move |k: &ConnKey| {
+                lock(&log).push(k.addr.tx_id);
+                inner(k)
+            })
+        });
+        let fault = frx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let a = Arc::new(HubAdapter::new(hub));
+        a.set_link(Some(LinkCfg {
+            driver: "sim".into(),
+            port: String::new(),
+            baud: 0,
+            bus: "hs".into(),
+        }));
+        (a, fault, opens)
+    }
+
+    fn opened(f: &SimFault) -> u32 {
+        f.opened.load(Ordering::SeqCst)
+    }
+
+    fn tester_present(a: &Arc<dyn AdapterAccess>, t: DiagTarget) -> Result<Vec<u8>, String> {
+        a.read("tester present", t, |d| d.request(&[0x3E, 0x00]))
+    }
+
+    #[test]
+    fn a_read_after_an_adapter_reset_reopens() {
+        let (a, fault, _) = sim_faulty();
+        let a: Arc<dyn AdapterAccess> = a;
+        tester_present(&a, DiagTarget::ENGINE).unwrap();
+        assert_eq!(opened(&fault), 1);
+        // The adapter power-cycles: this read fails as a lost link ...
+        fault.reset_next.store(true, Ordering::SeqCst);
+        let e = tester_present(&a, DiagTarget::ENGINE).unwrap_err();
+        assert!(
+            e.starts_with(opentune_core::resilient::LINK_LOST_PREFIX),
+            "{e}"
+        );
+        assert_eq!(opened(&fault), 1, "no reopen inside the failed read");
+        // ... and the next one reopens the driver and works.
+        assert_eq!(tester_present(&a, DiagTarget::ENGINE).unwrap()[0], 0x7E);
+        assert_eq!(opened(&fault), 2);
+        tester_present(&a, DiagTarget::ENGINE).unwrap();
+        assert_eq!(opened(&fault), 2, "then reused");
+    }
+
+    #[test]
+    fn an_unplugged_adapter_recovers_once_it_opens_again() {
+        let (a, fault, _) = sim_faulty();
+        let a: Arc<dyn AdapterAccess> = a;
+        tester_present(&a, DiagTarget::ENGINE).unwrap();
+        fault.dead_until_reopen.store(true, Ordering::SeqCst);
+        fault.refuse_opens.store(2, Ordering::SeqCst);
+        let e = tester_present(&a, DiagTarget::ENGINE).unwrap_err();
+        assert!(e.contains("unplugged"), "{e}");
+        // The device is not back yet: two refused opens.
+        for _ in 0..2 {
+            let e = tester_present(&a, DiagTarget::ENGINE).unwrap_err();
+            assert!(e.contains("no such device"), "{e}");
+        }
+        assert_eq!(opened(&fault), 1);
+        tester_present(&a, DiagTarget::ENGINE).unwrap();
+        assert_eq!(opened(&fault), 2);
+        assert!(!fault.dead_until_reopen.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn poll_link_drops_connected_on_a_real_error_but_not_when_busy() {
+        let (a, fault, _) = sim_faulty();
+        let (ident, volts) = a.poll_link().unwrap();
+        assert_eq!(ident, "Simulated bus");
+        assert_eq!(volts, None);
+        assert!(a.link().connected);
+
+        // Another operation holds the hub: "adapter busy" keeps the state.
+        let h = a.clone();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        let t = std::thread::spawn(move || {
+            h.hub.run("long scan", move |_s| {
+                go_rx.recv().ok();
+                Ok(())
+            })
+        });
+        let t0 = Instant::now();
+        while a.busy().is_none() {
+            assert!(t0.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let e = a.poll_link().unwrap_err();
+        assert!(e.starts_with("adapter busy"), "{e}");
+        assert!(a.link().connected, "busy is not a lost link");
+        go_tx.send(()).unwrap();
+        t.join().unwrap().unwrap();
+
+        // The driver is closed and will not open: a real error.
+        a.hub
+            .run("close", |s| {
+                s.invalidate();
+                Ok(())
+            })
+            .unwrap();
+        fault.refuse_opens.store(1, Ordering::SeqCst);
+        let e = a.poll_link().unwrap_err();
+        assert!(e.contains("no such device"), "{e}");
+        let l = a.link();
+        assert!(!l.connected && l.battery_v.is_none());
+        assert_eq!(l.driver, "sim", "the configured cable stays");
+        // It comes back.
+        a.poll_link().unwrap();
+        assert!(a.link().connected);
+    }
+
+    #[test]
+    fn set_link_none_means_no_adapter_connected() {
+        let (a, fault, _) = sim_faulty();
+        a.poll_link().unwrap();
+        assert_eq!(opened(&fault), 1);
+        a.set_link(None);
+        assert_eq!(a.link_cfg(), None);
+        let l = a.link();
+        assert!(!l.connected && l.driver.is_empty() && l.battery_v.is_none());
+        assert_eq!(l.target, Some(DiagTarget::ENGINE), "the target is kept");
+        let e = a.poll_link().unwrap_err();
+        assert!(e.contains("no adapter connected"), "{e}");
+        assert!(!a.link().connected);
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let e = tester_present(&d, DiagTarget::ENGINE).unwrap_err();
+        assert!(e.contains("no adapter connected"), "{e}");
+        let dir = std::env::temp_dir().join(format!("ot-hublink-none-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let backup = crate::host::test_backup(&dir, b"OLD");
+        let e = d
+            .mutate("w", crate::host::test_ack(TCU), &backup, |d| {
+                d.request(&[0x3E, 0x00])
+            })
+            .unwrap_err();
+        assert!(e.contains("no adapter connected"), "{e}");
+        assert_eq!(opened(&fault), 1, "nothing was opened");
+        // Releasing closed the driver: reconnecting opens it afresh.
+        a.set_link(Some(LinkCfg {
+            driver: "sim".into(),
+            port: String::new(),
+            baud: 0,
+            bus: "hs".into(),
+        }));
+        assert!(!a.link().connected, "not connected until a poll succeeds");
+        tester_present(&d, DiagTarget::ENGINE).unwrap();
+        assert_eq!(opened(&fault), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_absent_module_times_out_with_the_operation_budget() {
+        let (a, fault, opens) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a;
+        let absent = DiagTarget {
+            tx: 0x7E5,
+            rx: 0x7ED,
+        };
+        let e = tester_present(&d, absent).unwrap_err();
+        assert!(
+            e.contains(&format!("timed out after {READ_TIMEOUT_MS} ms")),
+            "{e}"
+        );
+        // A mutation waits the longer budget.
+        let dir = std::env::temp_dir().join(format!("ot-hublink-absent-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let backup = crate::host::test_backup(&dir, b"OLD");
+        let e = d
+            .mutate("w", crate::host::test_ack(absent), &backup, |d| {
+                d.request(&[0x3E, 0x00])
+            })
+            .unwrap_err();
+        assert!(
+            e.contains(&format!("timed out after {MUTATE_TIMEOUT_MS} ms")),
+            "{e}"
+        );
+        // The present modules still answer afterwards.
+        tester_present(&d, DiagTarget::ENGINE).unwrap();
+        assert_eq!(*lock(&opens), vec![0x7E5, 0x7E5, 0x7E0]);
+        assert_eq!(opened(&fault), 3, "each failure dropped the session");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_target_change_rebinds_the_session_exactly_once() {
+        let (a, _fault, opens) = sim_faulty();
+        a.poll_link().unwrap();
+        a.poll_link().unwrap();
+        assert_eq!(*lock(&opens), vec![0x7E0]);
+        a.set_target(TCU);
+        assert_eq!(a.link().target, Some(TCU));
+        a.poll_link().unwrap();
+        a.poll_link().unwrap();
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        tester_present(&d, TCU).unwrap();
+        tester_present(&d, TCU).unwrap();
+        assert_eq!(*lock(&opens), vec![0x7E0, 0x7E1], "one rebind, then reuse");
+        // Setting the same target again changes nothing.
+        a.set_target(TCU);
+        a.poll_link().unwrap();
+        assert_eq!(lock(&opens).len(), 2);
+    }
+
+    #[test]
+    fn a_panicking_job_keeps_the_hub_usable() {
+        let (a, fault, _) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        tester_present(&d, DiagTarget::ENGINE).unwrap();
+        let e = d
+            .read("boom", DiagTarget::ENGINE, |_d| -> Result<(), String> {
+                panic!("synthetic panic in an adapter job")
+            })
+            .unwrap_err();
+        assert!(e.contains("boom"), "{e}");
+        assert_eq!(a.busy(), None, "the busy slot is released");
+        // The worker survives; the session was dropped and reopens.
+        tester_present(&d, DiagTarget::ENGINE).unwrap();
+        assert_eq!(opened(&fault), 2);
+        a.poll_link().unwrap();
+        assert!(a.link().connected);
+    }
+
+    #[test]
+    fn the_mutation_marker_does_not_leak_on_the_hub_worker() {
+        let (a, _fault, _) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a;
+        let worker = || std::thread::current().name().map(str::to_string);
+        let dir = std::env::temp_dir().join(format!("ot-hublink-scope-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let backup = crate::host::test_backup(&dir, b"OLD");
+        let (in_mut, thread) = d
+            .mutate("w", crate::host::test_ack(TCU), &backup, move |_d| {
+                Ok((crate::host::in_mutation(), worker()))
+            })
+            .unwrap();
+        assert!(in_mut);
+        assert_eq!(thread.as_deref(), Some("opentune-adapter"));
+        let (in_mut, thread2) = d
+            .read("r", DiagTarget::ENGINE, move |_d| {
+                Ok((crate::host::in_mutation(), worker()))
+            })
+            .unwrap();
+        assert!(!in_mut, "not set during a read");
+        assert_eq!(thread2, thread, "the same worker thread");
+        // A mutation that panics on the worker: the next job is clean.
+        let e = d
+            .mutate(
+                "boom",
+                crate::host::test_ack(TCU),
+                &backup,
+                |_d| -> Result<(), String> { panic!("synthetic panic in a mutation") },
+            )
+            .unwrap_err();
+        assert!(e.contains("boom"), "{e}");
+        let (in_mut, thread3) = d
+            .read("r", DiagTarget::ENGINE, move |_d| {
+                Ok((crate::host::in_mutation(), worker()))
+            })
+            .unwrap();
+        assert!(!in_mut, "restored after the panic");
+        assert_eq!(thread3, thread);
+        // The calling thread never was in a mutation.
+        assert!(!crate::host::in_mutation());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
