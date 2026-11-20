@@ -50,25 +50,10 @@ opentune-dtc = { path = "../../crates/opentune-dtc" }
 opentune-xdf = { path = "../../crates/opentune-xdf" }
 opentune-a2l = { path = "../../crates/opentune-a2l" }
 
-# Interface drivers, wired into the desktop registry.
-opentune-driver-mock = { path = "../../crates/drivers/mock" }
-opentune-driver-openport2 = { path = "../../crates/drivers/j2534-openport" }
-opentune-driver-socketcan = { path = "../../crates/drivers/socketcan" }
-opentune-driver-slcan = { path = "../../crates/drivers/slcan" }
-opentune-driver-elm327 = { path = "../../crates/drivers/kline-elm327" }
-opentune-driver-elm327-obd = { path = "../../crates/drivers/elm327" }
-opentune-driver-elm327net = { path = "../../crates/drivers/elm327net" }
-opentune-driver-gsusb = { path = "../../crates/drivers/gsusb" }
-opentune-driver-j2534 = { path = "../../crates/drivers/j2534" }
-opentune-driver-kkl = { path = "../../crates/drivers/kkl" }
-opentune-driver-vcar = { path = "../../crates/drivers/vcar" }
-opentune-driver-efp02c = { path = "../../crates/drivers/efp02c" }
-# Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
-opentune-driver-isotp-ble = { path = "../../crates/drivers/isotp-ble-bridge", optional = true }
-# Bench tier: DoIP (ISO 13400, UDS over Ethernet), loopback-tested only, alpha builds only.
-opentune-driver-doip = { path = "../../crates/drivers/doip", optional = true }
-# Bench tier: OpenTune's own ESP32-S3 interface (firmware never flashed), alpha builds only.
-opentune-driver-esp32 = { path = "../../crates/drivers/esp32-opentune", optional = true }
+# The adapter/session layer (hub, addressing, driver registry + probe, seed/key
+# lookup, build channel, map codecs, vault listing), shared with other front
+# ends; the interface drivers are wired into its registry.
+opentune-hub = { path = "../../crates/opentune-hub" }
 
 # Service engines + conformance sim, wired into the (alpha) Debug panel.
 opentune-coding = { path = "../../crates/opentune-coding" }
@@ -108,8 +93,10 @@ default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 # Alpha channel: exposes the live Debug panel (all engines + live drivers +
 # session log). Never enabled in a stable/release build.
-alpha = [
-    "dep:opentune-driver-isotp-ble",
-    "dep:opentune-driver-doip",
-    "dep:opentune-driver-esp32",
-]
+alpha = ["opentune-hub/alpha"]
+
+[dev-dependencies]
+# The simulated multi-module bus and test-only seed/key resolvers.
+opentune-hub = { path = "../../crates/opentune-hub", features = ["testkit"] }
+# The Haldex panel's tests drive OpenHaldex over a simulated SLCAN port.
+opentune-driver-slcan = { path = "../../crates/drivers/slcan" }

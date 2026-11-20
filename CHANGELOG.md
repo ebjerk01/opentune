@@ -184,6 +184,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the desktop's adapter/session layer (adapter hub, sessions,
+  module addressing, driver registry and probe, seed/key lookup, build
+  channel, SA2 script decoding, map cell codecs, vault listing) moved into
+  the new workspace crate `opentune-hub`, so a second front end can share it.
+  No behaviour change; the desktop re-exports it under the same public paths.
 - CI and `scripts/check.sh` build, lint and test with `--locked` (the
   workspace, `desktop/src-tauri` and the release builds), so a stale
   `Cargo.lock` fails the run instead of being silently updated.

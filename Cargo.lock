@@ -1471,6 +1471,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-hub"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "opentune-driver-doip",
+ "opentune-driver-efp02c",
+ "opentune-driver-elm327",
+ "opentune-driver-elm327-obd",
+ "opentune-driver-elm327net",
+ "opentune-driver-esp32",
+ "opentune-driver-gsusb",
+ "opentune-driver-isotp-ble",
+ "opentune-driver-j2534",
+ "opentune-driver-kkl",
+ "opentune-driver-mock",
+ "opentune-driver-openport2",
+ "opentune-driver-slcan",
+ "opentune-driver-socketcan",
+ "opentune-driver-vcar",
+ "opentune-sa2",
+ "opentune-seedkey-loader",
+ "opentune-udssim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-image"
 version = "0.1.0"
 
