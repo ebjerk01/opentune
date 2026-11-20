@@ -1477,6 +1477,7 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-udssim",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1485,7 +1486,10 @@ version = "0.7.0"
 dependencies = [
  "opentune-adaptation",
  "opentune-candump",
+ "opentune-checksum",
  "opentune-core",
+ "opentune-ctrldef",
+ "opentune-db",
  "opentune-driver-doip",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
@@ -1501,8 +1505,11 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-haldex",
  "opentune-logdef",
+ "opentune-logview",
  "opentune-mapfind",
+ "opentune-packs",
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",

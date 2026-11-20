@@ -57,6 +57,55 @@ pub struct App {
     frame_ms: f64,
 }
 
+/// The view with `id`: a core view, a built-in, or a plugin view
+/// (`HostAction::ShowView`).
+fn view_by_id(
+    id: &str,
+    builtin: &[Box<dyn NativeView>],
+    plugin: &[Box<dyn NativeView>],
+) -> Option<View> {
+    View::parse(id)
+        .or_else(|| {
+            let i = builtin.iter().position(|v| v.id() == id)?;
+            Some(View::Builtin(i as u16))
+        })
+        .or_else(|| {
+            let i = plugin.iter().position(|v| v.id() == id)?;
+            Some(View::Plugin(i as u16))
+        })
+}
+
+/// Open the local diagnostics log (masked records, size caps, rotation) in
+/// the app's storage dir and chain the panic hook into it. Local only:
+/// nothing is uploaded (see `NativeConfig::diagnostics`). A failure only
+/// disables the log.
+fn start_diagnostics_log(branding: &crate::host::Branding, channel: &crate::host::BuildChannel) {
+    use opentune_diaglog as dl;
+    let Some(dir) = eframe::storage_dir(&branding.app_id) else {
+        dl::global().disable();
+        return;
+    };
+    let version = env!("CARGO_PKG_VERSION");
+    let info = dl::SessionInfo {
+        app: branding.name.clone(),
+        version: version.to_string(),
+        channel: channel.as_str().to_string(),
+        webkit: None,
+        render: serde_json::json!({ "renderer": "egui/wgpu" }),
+    };
+    if dl::global()
+        .open(
+            &dir.join(dl::DIR_NAME),
+            dl::session_header_with_core(&info, version),
+        )
+        .is_err()
+    {
+        dl::global().disable();
+        return;
+    }
+    dl::install_panic_hook();
+}
+
 fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
     explicit.or_else(|| crate::paths::find("ecudefs"))
 }
@@ -90,6 +139,9 @@ impl App {
         };
         theme::setup(&cc.egui_ctx, forced.unwrap_or(settings.theme));
         let scripted = args.bench.is_some() || args.screenshot.is_some();
+        if !scripted {
+            start_diagnostics_log(&config.branding, &channel);
+        }
 
         let adapter = cc
             .wgpu_render_state
@@ -167,7 +219,7 @@ impl App {
             .unwrap_or(View::Flash);
         Self {
             settings,
-            top: TopBar::new(hub.clone()),
+            top: TopBar::new(hub.clone(), channel.clone()),
             view,
             defs,
             defs_note,
@@ -263,6 +315,10 @@ impl App {
 
 impl App {
     /// Carry out what a plugin view asked for.
+    fn view_by_id(&self, id: &str) -> Option<View> {
+        view_by_id(id, &self.builtin_views, &self.plugin_views)
+    }
+
     fn apply(&mut self, actions: Vec<HostAction>) {
         for a in actions {
             match a {
@@ -276,6 +332,10 @@ impl App {
                 }
                 HostAction::SelectMap(m) => self.flash.open_map(m),
                 HostAction::HexJump(addr) => self.flash.hex_jump(addr),
+                HostAction::ShowView(id) => match self.view_by_id(&id) {
+                    Some(v) => self.view = v,
+                    None => self.host_status = Some(format!("no view '{id}'")),
+                },
                 HostAction::EditCells { map, cells } => {
                     match self.flash.apply_edits(&self.defs, map, &cells) {
                         Ok(n) => self.host_status = Some(format!("{n} cell(s) edited")),
@@ -392,6 +452,19 @@ impl eframe::App for App {
             }
         }
 
+        // The top bar's help opens the panel help of the view on screen.
+        let view_id = match self.view {
+            View::Builtin(i) => self
+                .builtin_views
+                .get(i as usize)
+                .map(|v| v.id().to_string()),
+            View::Plugin(i) => self
+                .plugin_views
+                .get(i as usize)
+                .map(|v| v.id().to_string()),
+            v => Some(v.id().to_string()),
+        };
+        self.top.set_view(view_id.as_deref().unwrap_or(""));
         egui::Panel::top("gbar")
             .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
             .show(ui, |ui| {
@@ -488,6 +561,9 @@ impl eframe::App for App {
                         self.flash.open_map(m);
                         self.view = View::Flash;
                     }
+                    // Imported / promoted definitions (HostAction::AddDefinition).
+                    let acts = self.maps.take_actions();
+                    self.apply(acts);
                 }
                 View::EcuDb => self.ecudb.ui(ui, &t),
                 View::Drivers => views::drivers::ui(ui, &t),
@@ -597,5 +673,32 @@ impl eframe::App for App {
         if !self.scripted {
             eframe::set_value(storage, STORAGE_KEY, &self.settings);
         }
+    }
+}
+
+#[cfg(test)]
+mod show_view_tests {
+    use super::*;
+
+    #[test]
+    fn show_view_resolves_core_builtin_and_plugin_ids() {
+        let builtin = views::builtin::views(&crate::host::BuildChannel::compiled());
+        let analyze = builtin.iter().position(|v| v.id() == "analyze").unwrap();
+        let plugin: Vec<Box<dyn NativeView>> = Vec::new();
+        assert_eq!(view_by_id("flash", &builtin, &plugin), Some(View::Flash));
+        assert_eq!(view_by_id("maps", &builtin, &plugin), Some(View::Maps));
+        assert_eq!(
+            view_by_id("analyze", &builtin, &plugin),
+            Some(View::Builtin(analyze as u16))
+        );
+        assert_eq!(view_by_id("no-such-view", &builtin, &plugin), None);
+        assert_eq!(
+            HostAction::ShowView("flash".into()),
+            HostAction::ShowView("flash".into())
+        );
+        assert_ne!(
+            HostAction::ShowView("flash".into()),
+            HostAction::ShowView("maps".into())
+        );
     }
 }

@@ -24,13 +24,20 @@
 //! The opened port lives in [`TsState`] between operations (an operation takes
 //! it out, so a poll can never overlap a write) and is released by
 //! `ts_disconnect` or by loading another INI.
+//!
+//! Value formatting, per-constant diffs, UI value parsing and the JSON shapes
+//! of an INI summary / constant / axis / load report live in
+//! [`opentune_tsini::present`], shared with other front ends.
 
 use crate::adapter::AdapterHub;
+// The pure presentation helpers; the formerly public ones this module still
+// uses keep their old paths.
+use opentune_tsini::present::{axis_json, const_meta, ini_summary, report_json, value_json};
+pub use opentune_tsini::present::{diff_rows, parse_value};
 use opentune_tsini::value::range_issues;
 use opentune_tsini::{
-    decode_channels, load_ini, normalize_signature, AxisRef, ChannelKind, Constant, Ini,
-    IniOptions, Kind, Msq, MsqLoadOptions, MsqMeta, MsqReport, Num, Tune, Value as TsValue,
-    WarnKind,
+    decode_channels, load_ini, normalize_signature, ChannelKind, Ini, IniOptions, Kind, Msq,
+    MsqLoadOptions, MsqMeta, Tune, Value as TsValue,
 };
 use opentune_tsproto::{
     plan_write, write_tune, Client, ClientOptions, Framing, Port, SerialPort, SimEcu, SimOptions,
@@ -98,181 +105,6 @@ impl TsState {
 
 fn e2s(e: impl std::fmt::Display) -> String {
     e.to_string()
-}
-
-// ---------------------------------------------------------------------------
-// Formatting
-// ---------------------------------------------------------------------------
-
-fn fmt_num(v: f64, digits: Option<usize>) -> String {
-    match digits {
-        Some(d) => format!("{v:.d$}", d = d.min(9)),
-        None => format!("{v}"),
-    }
-}
-
-/// A value as one line of text (arrays summarised as their range).
-pub fn fmt_value(c: &Constant, v: &TsValue) -> String {
-    let units = if c.units.is_empty() {
-        String::new()
-    } else {
-        format!(" {}", c.units)
-    };
-    match v {
-        TsValue::Scalar(x) => format!("{}{units}", fmt_num(*x, c.digits_lit())),
-        TsValue::Bits(i) => format!("{i} \"{}\"", c.bit_label(*i as usize)),
-        TsValue::Text(t) => format!("{t:?}"),
-        TsValue::Array(a) => {
-            let (cols, rows) = match c.kind {
-                Kind::Array { cols, rows } => (cols, rows),
-                _ => (a.len(), 1),
-            };
-            let lo = a.iter().copied().fold(f64::INFINITY, f64::min);
-            let hi = a.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            format!(
-                "[{cols}x{rows}] {} .. {}{units}",
-                fmt_num(lo, c.digits_lit()),
-                fmt_num(hi, c.digits_lit())
-            )
-        }
-    }
-}
-
-/// How two values of one constant differ, or `None` if equal.
-pub fn describe_change(c: &Constant, a: &TsValue, b: &TsValue) -> Option<String> {
-    if a == b {
-        return None;
-    }
-    match (a, b) {
-        (TsValue::Array(x), TsValue::Array(y)) if x.len() == y.len() => {
-            let changed: Vec<f64> = x
-                .iter()
-                .zip(y)
-                .filter(|(p, q)| p != q)
-                .map(|(p, q)| (q - p).abs())
-                .collect();
-            let max = changed.iter().copied().fold(0.0, f64::max);
-            Some(format!(
-                "{} of {} cells changed (max |change| {}{})",
-                changed.len(),
-                x.len(),
-                fmt_num(max, c.digits_lit()),
-                if c.units.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", c.units)
-                }
-            ))
-        }
-        _ => Some(format!("{} -> {}", fmt_value(c, a), fmt_value(c, b))),
-    }
-}
-
-/// `[{ name, change }]` for every constant whose value differs.
-pub fn diff_rows(ini: &Ini, a: &Tune, b: &Tune) -> Vec<Value> {
-    let mut out = Vec::new();
-    for c in ini.constants.iter().chain(&ini.pc_variables) {
-        if let (Ok(x), Ok(y)) = (a.get(ini, &c.name), b.get(ini, &c.name)) {
-            if let Some(d) = describe_change(c, &x, &y) {
-                out.push(json!({ "name": c.name, "page": c.page, "change": d }));
-            }
-        }
-    }
-    out
-}
-
-fn num_json(n: &Option<Num>) -> Value {
-    match n {
-        Some(Num::Lit(x)) => json!(x),
-        Some(Num::Expr(e)) => json!({ "expr": e }),
-        None => Value::Null,
-    }
-}
-
-/// Most bit-field options listed for one constant.
-const MAX_OPTIONS: usize = 256;
-
-fn const_meta(c: &Constant) -> Value {
-    let (class, cols, rows, options, len) = match &c.kind {
-        Kind::Scalar => ("scalar", None, None, None, None),
-        Kind::Array { cols, rows } => ("array", Some(*cols), Some(*rows), None, None),
-        Kind::Bits { .. } => {
-            let n = c.bit_slots().min(MAX_OPTIONS);
-            let opts: Vec<String> = (0..n).map(|i| c.bit_label(i)).collect();
-            ("bits", None, None, Some(opts), None)
-        }
-        Kind::String { len } => ("string", None, None, None, Some(*len)),
-    };
-    json!({
-        "name": c.name,
-        "page": c.page,
-        "pc": c.page.is_none(),
-        "class": class,
-        "type": format!("{:?}", c.ty),
-        "units": c.units,
-        "cols": cols,
-        "rows": rows,
-        "options": options,
-        "len": len,
-        "min": num_json(&c.min),
-        "max": num_json(&c.max),
-        "digits": c.digits_lit(),
-    })
-}
-
-fn ini_summary(ini: &Ini, path: &Path) -> Value {
-    let count = |k: WarnKind| ini.warnings_of(k).count();
-    let invalid: Vec<Value> = ini
-        .warnings_of(WarnKind::Invalid)
-        .take(20)
-        .map(|w| json!({ "line": w.line, "section": w.section, "message": w.message }))
-        .collect();
-    json!({
-        "path": path.to_string_lossy(),
-        "signature": ini.signature,
-        "framing": if ini.comms.uses_envelope() { "envelope" } else { "plain" },
-        "pages": ini.pages.iter().map(|p| json!({
-            "page": p.index + 1,
-            "size": p.size,
-            "burnable": p.burn.is_some(),
-        })).collect::<Vec<_>>(),
-        "constants": ini.constants.len(),
-        "pc_variables": ini.pc_variables.len(),
-        "tables": ini.tables.iter().map(|t| json!({ "id": t.id, "title": t.title, "z": t.z_bins })).collect::<Vec<_>>(),
-        "curves": ini.curves.iter().map(|c| json!({ "id": c.id, "title": c.title })).collect::<Vec<_>>(),
-        "channels": ini.output_channels.iter().map(|c| json!({
-            "name": c.name,
-            "units": c.units,
-            "class": match c.kind {
-                ChannelKind::Scalar { .. } => "scalar",
-                ChannelKind::Bits { .. } => "bits",
-                ChannelKind::Array { .. } => "array",
-                ChannelKind::Expr { .. } => "expr",
-            },
-        })).collect::<Vec<_>>(),
-        "setting_groups": ini.setting_groups.iter().map(|g| json!({
-            "name": g.name,
-            "label": g.label,
-            "options": g.options.iter().map(|(n, l)| json!({ "name": n, "label": l })).collect::<Vec<_>>(),
-        })).collect::<Vec<_>>(),
-        "conditions": ini.conditions,
-        "warnings": {
-            "invalid": count(WarnKind::Invalid),
-            "reference": count(WarnKind::Reference),
-            "ignored": count(WarnKind::Ignored),
-            "first_invalid": invalid,
-        },
-    })
-}
-
-fn report_json(r: &MsqReport) -> Value {
-    json!({
-        "applied": r.applied,
-        "unknown": r.unknown,
-        "skipped": r.skipped.iter().map(|(n, w)| json!({ "name": n, "why": w })).collect::<Vec<_>>(),
-        "out_of_range": r.out_of_range,
-        "notes": r.notes,
-    })
 }
 
 // ---------------------------------------------------------------------------
@@ -431,13 +263,6 @@ pub fn diff_msq_with(state: &TsState, path: &str, force: bool) -> Result<Value, 
     }))
 }
 
-fn value_json(c: &Constant, v: &Result<TsValue, opentune_tsini::Error>) -> Value {
-    match v {
-        Ok(v) => json!({ "name": c.name, "value": v, "display": fmt_value(c, v), "error": null }),
-        Err(e) => json!({ "name": c.name, "value": null, "display": null, "error": e.to_string() }),
-    }
-}
-
 /// Every non-array constant (and PC variable) of the working tune with its
 /// metadata and value, for the scalar / bits editor.
 pub fn values_of(state: &TsState) -> Result<Value, String> {
@@ -471,60 +296,6 @@ pub fn get_value(state: &TsState, name: &str) -> Result<Value, String> {
     Ok(v)
 }
 
-/// Parse a UI value for constant `c`: a number (scalar), an option index or
-/// label (bits), an array of numbers (array, row-major), a string (string).
-pub fn parse_value(c: &Constant, v: &Value) -> Result<TsValue, String> {
-    let name = &c.name;
-    match &c.kind {
-        Kind::Scalar => v
-            .as_f64()
-            .filter(|x| x.is_finite())
-            .map(TsValue::Scalar)
-            .ok_or_else(|| format!("{name} needs a number")),
-        Kind::Bits { .. } => {
-            let slots = c.bit_slots();
-            let idx = match (v.as_u64(), v.as_str()) {
-                (Some(i), _) => i as usize,
-                (None, Some(label)) => (0..slots.min(MAX_OPTIONS))
-                    .find(|&i| c.bit_label(i) == label)
-                    .ok_or_else(|| format!("{name}: '{label}' is not one of its options"))?,
-                _ => return Err(format!("{name} needs an option index or label")),
-            };
-            if idx >= slots {
-                return Err(format!("{name}: option {idx} does not fit its bits"));
-            }
-            if c.bit_label(idx) == "INVALID" {
-                return Err(format!("{name}: option {idx} is marked INVALID in the INI"));
-            }
-            Ok(TsValue::Bits(idx as u32))
-        }
-        Kind::Array { .. } => {
-            let arr = v
-                .as_array()
-                .ok_or_else(|| format!("{name} needs a list of numbers"))?;
-            if arr.len() != c.elements() {
-                return Err(format!(
-                    "{name} has {} cells, got {}",
-                    c.elements(),
-                    arr.len()
-                ));
-            }
-            arr.iter()
-                .map(|x| x.as_f64().filter(|f| f.is_finite()))
-                .collect::<Option<Vec<f64>>>()
-                .map(TsValue::Array)
-                .ok_or_else(|| format!("{name}: every cell must be a number"))
-        }
-        Kind::String { len } => {
-            let s = v.as_str().ok_or_else(|| format!("{name} needs text"))?;
-            if !s.is_ascii() || s.len() > *len {
-                return Err(format!("{name}: at most {len} ASCII characters"));
-            }
-            Ok(TsValue::Text(s.to_owned()))
-        }
-    }
-}
-
 /// Set a constant of the working tune. Refuses (never clamps) a value outside
 /// the INI's limits or one the storage type cannot hold.
 pub fn set_value(state: &TsState, name: &str, value: &Value) -> Result<Value, String> {
@@ -544,24 +315,6 @@ pub fn set_value(state: &TsState, name: &str, value: &Value) -> Result<Value, St
     let mut out = value_json(c, &tune.get(&ini, name));
     out["meta"] = const_meta(c);
     Ok(out)
-}
-
-fn axis_json(ini: &Ini, tune: &Tune, a: Option<&AxisRef>) -> Value {
-    let Some(a) = a else { return Value::Null };
-    let c = ini.constant(&a.constant);
-    let (values, error) = match tune.get(ini, &a.constant) {
-        Ok(TsValue::Array(v)) => (Some(v), None),
-        Ok(other) => (None, Some(format!("not an array: {other:?}"))),
-        Err(e) => (None, Some(e.to_string())),
-    };
-    json!({
-        "name": a.constant,
-        "channel": a.channel,
-        "units": c.map(|c| c.units.clone()),
-        "digits": c.and_then(Constant::digits_lit),
-        "values": values,
-        "error": error,
-    })
 }
 
 /// A `[TableEditor]` table of the working tune: axes and a `rows x cols`

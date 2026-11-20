@@ -1,9 +1,20 @@
 //! Global top bar (persistent across views): brand, cable select +
-//! auto-detect, battery voltage + link status, settings menu, theme toggle.
+//! auto-detect, battery voltage + link status, help menu, settings menu,
+//! theme toggle.
 //!
 //! The adapter work (port discovery, ELM327 probing, the battery link) lives
 //! in `crate::adapters` and runs on background threads; this file only polls
 //! its results and draws them.
+//!
+//! The help menu ([`help`], [`whatsnew`], [`opener`]): panel help, the
+//! one-time "What's new" after an update, "Check for updates" (opens the
+//! releases page in the browser; nothing is downloaded or installed) and
+//! About. Adapter settings has DoIP discovery ([`doip`], alpha builds).
+
+pub mod doip;
+pub mod help;
+pub mod opener;
+pub mod whatsnew;
 
 use crate::adapters::{self, BusyPort, Candidate, DetectReport, Link, LinkState, LinkStatus};
 use crate::host::AdapterAccess;
@@ -83,10 +94,28 @@ pub struct TopBar {
     right_w: f32,
     adapter_window: bool,
     about_window: bool,
+    whatsnew: whatsnew::WhatsNewUi,
+    help: help::HelpWindow,
+    doip: DoipUi,
+    /// The app's build channel (gates the Bench tools here).
+    channel: crate::host::BuildChannel,
+    /// Id of the view on screen (the help button opens its panel help).
+    view_id: Option<String>,
+}
+
+/// DoIP discovery in Adapter settings.
+#[derive(Default)]
+struct DoipUi {
+    vin: String,
+    eid: String,
+    job: Option<Receiver<Result<doip::Found, String>>>,
+    found: Option<Result<doip::Found, String>>,
 }
 
 impl TopBar {
-    pub fn new(hub: Arc<HubAdapter>) -> Self {
+    /// `channel`: the app's `NativeConfig::channel` (the top bar's Bench
+    /// tools check it).
+    pub fn new(hub: Arc<HubAdapter>, channel: crate::host::BuildChannel) -> Self {
         Self {
             link: Link::default(),
             hub,
@@ -98,7 +127,17 @@ impl TopBar {
             right_w: 0.0,
             adapter_window: false,
             about_window: false,
+            whatsnew: Default::default(),
+            help: Default::default(),
+            doip: Default::default(),
+            channel,
+            view_id: None,
         }
+    }
+
+    /// The view on screen, by id (help opens that panel's help).
+    pub fn set_view(&mut self, id: &str) {
+        self.view_id = (!id.is_empty()).then(|| id.to_string());
     }
 
     pub fn ui(
@@ -109,6 +148,7 @@ impl TopBar {
         branding: &crate::host::Branding,
     ) {
         let ctx = ui.ctx().clone();
+        self.whatsnew.startup(&branding.app_id);
         self.poll(settings);
         let link = self.link.snapshot();
         // Any change of driver / port (select, auto-detect, settings window)
@@ -150,6 +190,7 @@ impl TopBar {
                     self.battery_stat(ui, t, &link);
                     self.link_stat(ui, t, settings, &link);
                     theme::vsep(ui, t, 26.0);
+                    self.help_menu(ui, t);
                     self.settings_menu(ui, t, settings);
                     // Theme toggle (cycles to the opposite of what is shown).
                     let showing_dark = t.dark;
@@ -179,6 +220,8 @@ impl TopBar {
         self.show_toast(&ctx, t, toast_y);
         self.adapter_modal(&ctx, t, settings);
         self.about_modal(&ctx, t);
+        self.whatsnew.ui(&ctx, t);
+        self.help.ui(&ctx, t);
     }
 
     // -----------------------------------------------------------------------
@@ -196,6 +239,19 @@ impl TopBar {
                 Err(TryRecvError::Disconnected) => {
                     self.scan = None;
                     self.notify("Adapter scan failed", Tone::Crit);
+                }
+                Err(TryRecvError::Empty) => {}
+            }
+        }
+        if let Some(rx) = &self.doip.job {
+            match rx.try_recv() {
+                Ok(r) => {
+                    self.doip.job = None;
+                    self.doip.found = Some(r);
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.doip.job = None;
+                    self.doip.found = Some(Err("DoIP discovery stopped".into()));
                 }
                 Err(TryRecvError::Empty) => {}
             }
@@ -523,6 +579,97 @@ impl TopBar {
         }
     }
 
+    /// Send one DoIP vehicle identification request in the background (the
+    /// backend refuses it on a stable channel).
+    fn start_doip(&mut self, ctx: &egui::Context, port: &str) {
+        if self.doip.job.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (port, vin, eid) = (
+            port.to_string(),
+            self.doip.vin.clone(),
+            self.doip.eid.clone(),
+        );
+        let (ctx, channel) = (ctx.clone(), self.channel.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(doip::discover(&channel, &port, &vin, &eid, None));
+            ctx.request_repaint();
+        });
+        self.doip.found = None;
+        self.doip.job = Some(rx);
+    }
+
+    /// Open the releases page (owner decision (a): no download, no install).
+    fn check_updates(&mut self) {
+        match opener::open_url(opener::RELEASES_URL) {
+            Ok(()) => self.notify(
+                "Opened the OpenTune releases page in your browser",
+                Tone::Ok,
+            ),
+            Err(e) => self.notify(
+                &format!("{e}. Releases: {}", opener::RELEASES_URL),
+                Tone::Warn,
+            ),
+        }
+    }
+
+    /// The help menu: panel help, What's new, updates, About.
+    fn help_menu(&mut self, ui: &mut Ui, t: &Tokens) {
+        let r = theme::icon_button(ui, t, icons::QUESTION, "Help");
+        egui::Popup::menu(&r)
+            .width(244.0)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                menu_heading(ui, t, "Help");
+                if menu_row(ui, t, "Panel help…", RowValue::None)
+                    .on_hover_text("What each panel does, what it needs, how to use it")
+                    .clicked()
+                {
+                    self.help.show_for(self.view_id.as_deref());
+                    ui.close();
+                }
+                let ver = whatsnew::VERSION;
+                if menu_row(ui, t, "What's new", RowValue::Text(ver)).clicked() {
+                    self.whatsnew.open();
+                    ui.close();
+                }
+                if let Some(dir) = opentune_diaglog::log_dir() {
+                    if menu_row(ui, t, "Diagnostics log…", RowValue::None)
+                        .on_hover_text(
+                            "Open the folder of the local diagnostics log (masked; never \
+                             uploaded by itself)",
+                        )
+                        .clicked()
+                    {
+                        if let Err(e) = crate::views::vault::reveal(&dir) {
+                            self.notify(
+                                &format!("Could not open {}: {e}", dir.display()),
+                                Tone::Crit,
+                            );
+                        }
+                        ui.close();
+                    }
+                }
+                menu_sep(ui, t);
+                if menu_row(ui, t, "Check for updates", RowValue::None)
+                    .on_hover_text(
+                        "Opens the releases page in your browser. The app never downloads \
+                         or installs anything itself.",
+                    )
+                    .clicked()
+                {
+                    self.check_updates();
+                    ui.close();
+                }
+                if menu_row(ui, t, "About OpenTune", RowValue::None).clicked() {
+                    self.about_window = true;
+                    ui.close();
+                }
+            });
+    }
+
     /// The gear menu (mockup `.menu`).
     fn settings_menu(&mut self, ui: &mut Ui, t: &Tokens, settings: &mut Settings) {
         let r = theme::icon_button(ui, t, icons::GEAR, "Settings");
@@ -631,7 +778,9 @@ impl TopBar {
             return;
         }
         let mut done = false;
+        let mut discover: Option<String> = None;
         let cands = &self.candidates;
+        let dp = &mut self.doip;
         let r = egui::Modal::new(egui::Id::unique("adapter-settings"))
             .frame(theme::panel_frame(t).inner_margin(Margin::same(18)))
             .show(ctx, |ui| {
@@ -748,6 +897,10 @@ impl TopBar {
                         };
                         ui.end_row();
                     });
+                if a.driver == "doip" && doip::gate(&self.channel).is_ok() {
+                    ui.add_space(10.0);
+                    discover = doip_section(ui, t, dp, &mut a.port);
+                }
                 ui.add_space(8.0);
                 ui.label(
                     RichText::new(
@@ -766,6 +919,9 @@ impl TopBar {
                     }
                 });
             });
+        if let Some(port) = discover {
+            self.start_doip(ctx, &port);
+        }
         if done || r.should_close() {
             self.adapter_window = false;
         }
@@ -775,7 +931,7 @@ impl TopBar {
         if !self.about_window {
             return;
         }
-        let mut done = false;
+        let (mut done, mut updates, mut news) = (false, false, false);
         let r = egui::Modal::new(egui::Id::unique("about-opentune"))
             .frame(theme::panel_frame(t).inner_margin(Margin::same(18)))
             .show(ctx, |ui| {
@@ -802,6 +958,8 @@ impl TopBar {
                         ui.label(RichText::new(v).size(12.5).color(t.fg));
                     });
                 };
+                line(ui, "Version", whatsnew::VERSION);
+                line(ui, "Build", self.channel.as_str());
                 line(ui, "Licence", "GPL-3.0-or-later");
                 line(ui, "UI", "egui / eframe on wgpu");
                 line(
@@ -810,13 +968,38 @@ impl TopBar {
                     "fonts: Inter, Space Grotesk, JetBrains Mono (SIL OFL 1.1); \
                      icons: Phosphor (MIT)",
                 );
+                ui.add_space(10.0);
+                ui.label(
+                    RichText::new(
+                        "Check for updates opens the releases page in your browser; the app \
+                         never downloads or installs anything itself.",
+                    )
+                    .size(12.0)
+                    .color(t.fg_faint),
+                );
                 ui.add_space(12.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if theme::button(ui, t, None, "Close").clicked() {
                         done = true;
                     }
+                    if theme::button(ui, t, Some(icons::ARROW_SQUARE_OUT), "Check for updates")
+                        .on_hover_text(opener::RELEASES_URL)
+                        .clicked()
+                    {
+                        updates = true;
+                    }
+                    if theme::button(ui, t, Some(icons::SPARKLE), "What's new").clicked() {
+                        news = true;
+                    }
                 });
             });
+        if updates {
+            self.check_updates();
+        }
+        if news {
+            self.whatsnew.open();
+            done = true;
+        }
         if done || r.should_close() {
             self.about_window = false;
         }
@@ -860,6 +1043,74 @@ fn menu_sep(ui: &mut Ui, t: &Tokens) {
     ui.add_space(6.0);
     theme::hline(ui, t.border_soft);
     ui.add_space(6.0);
+}
+
+/// The DoIP discovery block of Adapter settings (shown with the `doip`
+/// driver on alpha builds). Returns the port to discover from when the
+/// button was clicked; picking a found entity fills `port`.
+fn doip_section(ui: &mut Ui, t: &Tokens, dp: &mut DoipUi, port: &mut String) -> Option<String> {
+    let mut go = None;
+    theme::section_label(ui, t, "DoIP discovery");
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.add(
+            egui::TextEdit::singleline(&mut dp.vin)
+                .hint_text("VIN (optional)")
+                .font(font(MONO_MEDIUM, 12.0))
+                .desired_width(170.0),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut dp.eid)
+                .hint_text("or EID")
+                .font(font(MONO_MEDIUM, 12.0))
+                .desired_width(110.0),
+        );
+        let busy = dp.job.is_some();
+        let r = ui
+            .add_enabled_ui(!busy, |ui| {
+                theme::button(ui, t, Some(icons::MAGNIFYING_GLASS), "Discover")
+            })
+            .inner
+            .on_hover_text(
+                "One UDP vehicle identification request (broadcast, or to the IP in Port). \
+                 No TCP connection, nothing sent to an ECU.",
+            );
+        if r.clicked() {
+            go = Some(port.clone());
+        }
+        if busy {
+            ui.spinner();
+        }
+    });
+    match &dp.found {
+        Some(Ok(f)) if f.entities.is_empty() => {
+            ui.label(
+                RichText::new(format!("No DoIP entity answered ({})", f.dest))
+                    .size(12.0)
+                    .color(t.fg_dim),
+            );
+        }
+        Some(Ok(f)) => {
+            for e in &f.entities {
+                let text = format!(
+                    "{}  0x{:04X}  {}  {}",
+                    e.ip, e.logical_address, e.vin, e.further_action
+                );
+                if ui
+                    .selectable_label(*port == e.spec, text)
+                    .on_hover_text(format!("EID {}\nPort: {}", e.eid, e.spec))
+                    .clicked()
+                {
+                    *port = e.spec.clone();
+                }
+            }
+        }
+        Some(Err(e)) => {
+            ui.label(RichText::new(e).size(12.0).color(t.crit));
+        }
+        None => {}
+    }
+    go
 }
 
 fn modal_title(ui: &mut Ui, t: &Tokens, text: &str) {

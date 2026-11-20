@@ -184,6 +184,11 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the live-log request building (logger definition, SSM or UDS
+  addressing with the engine assumed when no ids are given, fast / SSM poll
+  options, idle stop, reconnect policy) moved from the desktop's `log_start`
+  into `opentune_hub::livelog::live_request`, so the native app starts the
+  same sessions. No behaviour change.
 - Internal: the desktop's live-log session engine (the `0x2C` fast / SSM
   live session held on the adapter hub, link-loss detection and reconnect,
   the stateless poll and the logger-definition loader) moved from
@@ -196,6 +201,21 @@ section (alpha/bench builds) until they are vehicle-tested.
   second front end can share it. No behaviour change; the desktop keeps its
   `init` and `diag_log*` commands and re-exports the rest under the same
   `opentune_desktop::diaglog` paths.
+- Internal: more pure desktop helpers moved into the workspace crates, so the
+  native app can call them. No behaviour change; the desktop's Tauri
+  commands call the moved code and the moved unit tests went with it.
+  - The Controllers panel's catalog (built-in definitions plus definition
+    packs), link-validation context, list / detail rows and the CAN-log
+    decode → `opentune_hub::controllers` (not `opentune-ctrldef`:
+    `opentune-packs` depends on it).
+  - The Log viewer's map overlay (axis breakpoints, unit checks, the binned
+    payload) → `opentune_hub::logoverlay` (it reads axes and cells with the
+    hub's map codecs).
+  - The Haldex panel's chart series, their decimation, the decoded-log
+    payload and the Live-log CSV export → `opentune_haldex::series`.
+  - The aftermarket-ECU panel's value formatting, per-constant diffs, UI
+    value parsing and INI / constant / axis / `.msq` report JSON →
+    `opentune_tsini::present`.
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into

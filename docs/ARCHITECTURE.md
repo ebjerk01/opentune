@@ -64,6 +64,12 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   Its local diagnostics log lives in the workspace crate
   **`opentune-diaglog`** (re-exported as `opentune_desktop::diaglog`; the
   desktop adds only its Tauri `init` and `diag_log*` commands).
+  It also holds panel logic that joins several crates:
+  `opentune_hub::controllers` (the controller catalog over `ctrldefs/` and
+  definition packs, link validation, CAN-log decode) and
+  `opentune_hub::logoverlay` (a log's map overlay: axis breakpoints from the
+  definition and image, unit checks, the binned payload over
+  `opentune_logview::overlay`).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).
@@ -232,10 +238,10 @@ apps that need it.
 | `opentune-attest` | Flash checksum attestation bound to an image's bytes |
 | `opentune-db` | Control-unit reference database (ECU / TCU / AWD units in [`database/`](../database/)): load, search, validate |
 | `opentune-candump` | Full CAN dump over a driver's `CanMonitor`: candump / CSV / Vector ASC writers, live stats, capture loop |
-| `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), simulated units ([`HALDEX.md`](HALDEX.md)) |
+| `opentune-haldex` | Haldex AWD: read-only Gen4 KWP2000/TP2.0 engine, passive Haldex CAN decoder + candump/SavvyCAN log readers, OpenHaldex backend (modes, 0x6B0/0x6A0 frames, UDS DIDs, BLE status), chart series + decimation and Live-log CSV export of a decoded log (`series`), simulated units ([`HALDEX.md`](HALDEX.md)) |
 | `opentune-dsg` | VAG DQ250 02E read-only diagnostics engine: KWP2000 over a core TP2.0 channel to address `0x02` — identification, DTCs with KWP status-byte decode, measuring groups as unconfirmed numbered cells (shared VAG formula table in `opentune_core::protocol::vagmeas`), meanings hooked from the controller definition's `live[]`; scripted DQ250 responder ([`DSG.md`](DSG.md)) |
 | `opentune-ctrldef` | Data-defined drivetrain controller definitions ([`ctrldefs/`](../ctrldefs/), schema `docs/ctrldef.schema.json`): identity, ecudef/unit links, diagnostic channels, DBC-style CAN frame sets, live channels, adaptations, tables with axes, gear ratios; loader, validation, CAN decoder + log summary ([`CONTROLLER-DEFS.md`](CONTROLLER-DEFS.md), [`MERCEDES-722.6.md`](MERCEDES-722.6.md)) |
-| `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding |
+| `opentune-tsini` | TunerStudio INI ECU definitions (pages, constants, output channels, table/curve editors, menus, `#if` conditions) and `.msq` tunes; constant ↔ page-byte mapping, realtime channel decoding; a tune editor's presentation helpers (`present`: values as text, per-constant diffs, UI value parsing, JSON summaries) |
 | `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
 | `opentune-c167bsl` | C167/ST10 bootstrap-loader (BSL) client, read only: autobaud + ID byte, 32-byte loader, user-supplied monitor kernel, register setup with read-back, checksummed block reads; EDC15 and EGS52 presets as data, dry-run plan, simulated BSL responder ([`C167-BSL.md`](C167-BSL.md)) |
 | `opentune-ffi` | UniFFI binding used by the Android app |

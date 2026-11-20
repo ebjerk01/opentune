@@ -34,6 +34,8 @@ opentune-logview = { path = "../crates/opentune-logview" }
 opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
 # The shared adapter session (driver registry, one owner of the hardware).
 opentune-hub = { path = "../crates/opentune-hub" }
+# The local diagnostics log (masked records, rotation, panic hook).
+opentune-diaglog = { path = "../crates/opentune-diaglog" }
 # Engines the ported panels use (added once by the scaffold batch so the
 # feature batches never touch this file).
 opentune-packs = { path = "../crates/opentune-packs" }

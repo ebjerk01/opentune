@@ -7,7 +7,7 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs, vault listing and the live-log session engine."
+description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs, vault listing, the live-log session engine, long-running operations, the drivetrain controller catalog and the log map overlay."
 
 [dependencies]
 opentune-core = { path = "../opentune-core" }
@@ -40,6 +40,21 @@ opentune-udssim = { path = "../opentune-udssim" }
 # Long-running operations (`ops`): CAN capture and actuator tests.
 opentune-candump = { path = "../opentune-candump" }
 opentune-adaptation = { path = "../opentune-adaptation" }
+
+# Controller catalog (src/controllers.rs): definitions, the packs that carry
+# them, link checks against the database units and checksum ids, and the CAN
+# log reader its decode shares with the Haldex tools. Not in opentune-ctrldef:
+# opentune-packs depends on it.
+opentune-ctrldef = { path = "../opentune-ctrldef" }
+opentune-packs = { path = "../opentune-packs" }
+opentune-db = { path = "../opentune-db" }
+opentune-checksum = { path = "../opentune-checksum" }
+opentune-haldex = { path = "../opentune-haldex" }
+
+# Log map overlay (src/logoverlay.rs): the log reader and binning, joined
+# with this crate's map codecs (so not in opentune-logview itself).
+opentune-logview = { path = "../opentune-logview" }
+
 # Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
 opentune-driver-isotp-ble = { path = "../drivers/isotp-ble-bridge", optional = true }
 # Bench tier: DoIP (ISO 13400, UDS over Ethernet), loopback-tested only, alpha builds only.

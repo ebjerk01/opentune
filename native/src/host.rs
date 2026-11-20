@@ -581,6 +581,9 @@ pub struct Confirms {
     /// key → (request, state, typed text, target module shown).
     #[allow(clippy::type_complexity)]
     open: BTreeMap<String, (ConfirmRequest, ConfirmState, String, Option<DiagTarget>)>,
+    /// key → (module name, the app's target described when it is NOT this
+    /// module): dialogs from [`Host::confirm_ecu_for`].
+    modules: BTreeMap<String, (String, Option<String>)>,
 }
 
 impl Confirms {
@@ -592,6 +595,29 @@ impl Confirms {
     /// can be consumed later.
     pub(crate) fn withdraw(&mut self, key: &str) {
         self.open.remove(key);
+        self.modules.remove(key);
+    }
+
+    /// Like `ask_with`, naming the module (`module`) and, when it is not the
+    /// app's current target, saying so prominently (`off_target`: the app's
+    /// target, described).
+    pub(crate) fn ask_for(
+        &mut self,
+        req: ConfirmRequest,
+        target: DiagTarget,
+        module: &str,
+        off_target: Option<String>,
+    ) -> ConfirmResult {
+        let key = req.key.clone();
+        if !self.open.contains_key(&key) {
+            self.modules
+                .insert(key.clone(), (module.to_string(), off_target));
+        }
+        let r = self.ask_with(req, Some(target));
+        if !matches!(r, ConfirmResult::Pending) {
+            self.modules.remove(&key);
+        }
+        r
     }
 
     /// Like `ask`, for an operation on module `target`: the dialog shows it
@@ -632,6 +658,7 @@ impl Confirms {
             return;
         };
         let key = key.clone();
+        let module = self.modules.get(&key).cloned();
         let mut decided = None;
         egui::Modal::new(egui::Id::unique("host-confirm")).show(ctx, |ui| {
             ui.set_max_width(460.0);
@@ -642,6 +669,33 @@ impl Confirms {
             );
             ui.add_space(6.0);
             ui.label(egui::RichText::new(&req.body).color(t.fg_dim));
+            if let Some((name, app_target)) = &module {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(format!("Module: {name}"))
+                        .font(theme::font(theme::DISPLAY, 15.0))
+                        .color(t.fg),
+                );
+                if let Some(app) = app_target {
+                    ui.add_space(6.0);
+                    egui::Frame::new()
+                        .fill(t.crit_soft)
+                        .stroke(egui::Stroke::new(1.5, t.crit))
+                        .corner_radius(egui::CornerRadius::same(8))
+                        .inner_margin(egui::Margin::symmetric(10, 8))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}  This is NOT the app's current target ({app}). \
+                                     Check that {name} is the module you mean.",
+                                    crate::icons::WARNING
+                                ))
+                                .font(theme::font(theme::UI_STRONG, 13.0))
+                                .color(t.crit),
+                            );
+                        });
+                }
+            }
             if let Some(tg) = target {
                 ui.add_space(8.0);
                 egui::Frame::new()
@@ -872,6 +926,35 @@ pub trait AdapterAccess: Send + Sync {
     /// build channel is alpha / bench, and hand the job only a
     /// [`RawInterface`] (which refuses flash writes and ECU-changing
     /// requests).
+    /// Start a live-logging session on `target` with the hub's live-log
+    /// engine (polling, UDS `0x2C` fast mode, Subaru SSM, link-loss
+    /// handling), held as one long adapter operation until [`live_stop`]
+    /// or until no tick arrives for the engine's idle time. Blocking: call
+    /// it from a job. Returns the engine's start report (`status`,
+    /// `channels`, `params`, `ssm`, `target`, `link`).
+    ///
+    /// The engine is trusted core code: it sends the session / dynamic-DID
+    /// requests fast mode needs (it never writes ECU data), which is why
+    /// this is its own operation and not a `read` job.
+    ///
+    /// [`live_stop`]: AdapterAccess::live_stop
+    fn live_start(&self, spec: LiveSpec, target: DiagTarget) -> Result<serde_json::Value, String> {
+        let _ = (spec, target);
+        Err(UNSUPPORTED.into())
+    }
+
+    /// One sample of every channel of the running live session
+    /// (`ts`, `samples`, `status`, `rate`, `running`, `ended`, `target`,
+    /// `link`). Blocking (waits for the next sample).
+    fn live_tick(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
+    /// Stop the live session, clear any dynamic DIDs and release the adapter.
+    fn live_stop(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
     fn raw_job(
         &self,
         op: &str,
@@ -1006,6 +1089,31 @@ pub(crate) fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Resul
         .map_err(|_| "adapter returned an unexpected result type".into())
 }
 
+/// A live-logging session request (see [`AdapterAccess::live_start`]): the
+/// logger definition and channels plus the engine options. The cable comes
+/// from the app's link, the module from the target.
+#[derive(Clone, Debug, Default)]
+pub struct LiveSpec {
+    /// Logger definition file (a pack's JSON `LogDef` or a `logger.xml`).
+    pub def_path: String,
+    /// Per-request timeout.
+    pub timeout_ms: u64,
+    /// Channel ids to log.
+    pub ids: Vec<String>,
+    /// UDS `0x2C` fast mode (dynamically defined DIDs) instead of polling.
+    pub fast: bool,
+    pub dynamic_did: Option<String>,
+    pub max_record: Option<usize>,
+    pub fast_session: Option<String>,
+    /// `uds` (default), `ssm` (Subaru K-line) or `ssm-can`.
+    pub transport: Option<String>,
+    /// SSM module (`ecu` / `tcu`).
+    pub ssm_target: Option<String>,
+    pub ssm_max_packet: Option<usize>,
+    /// Reopen and re-arm after a lost link (else the session ends).
+    pub reconnect: bool,
+}
+
 impl dyn AdapterAccess {
     /// Run `f` read-only on module `target` and return its result.
     pub fn read<R, F>(&self, op: &str, target: DiagTarget, f: F) -> Result<R, String>
@@ -1113,6 +1221,9 @@ pub enum HostAction {
     SelectDefinition(String),
     SelectMap(usize),
     HexJump(usize),
+    /// Switch the app to the view with this id (`flash`, `maps`, a built-in
+    /// or plugin view's `NativeView::id`). Unknown ids leave the view as is.
+    ShowView(String),
     /// Change cells of map `map` of the selected definition in the working
     /// image: `(cell index row-major, physical value)`. Nothing is written to
     /// disk; the user saves through the Flash view's confirm + backup-first
@@ -1135,6 +1246,7 @@ impl PartialEq for HostAction {
             (SelectDefinition(a), SelectDefinition(b)) => a == b,
             (SelectMap(a), SelectMap(b)) => a == b,
             (HexJump(a), HexJump(b)) => a == b,
+            (ShowView(a), ShowView(b)) => a == b,
             (EditCells { map: m, cells: c }, EditCells { map: n, cells: d }) => m == n && c == d,
             // EcuDef has no PartialEq: compare the serialized definitions.
             (AddDefinition(a), AddDefinition(b)) => {
@@ -1342,6 +1454,34 @@ impl<'a> Host<'a> {
                 ConfirmResult::Declined
             }
         }
+    }
+
+    /// Confirm an operation that changes the explicit module `target`, named
+    /// `module` (e.g. "Gearbox (TCU)"), which need not be the app's target.
+    /// The dialog names the module prominently, warns prominently when it is
+    /// NOT the app's current target, and the [`Ack`] carries `target`.
+    /// Declined at once without a module name.
+    ///
+    /// One confirmation covers one module: an operation over several modules
+    /// must confirm each one (there is deliberately no fan-out confirmation).
+    pub fn confirm_ecu_for(
+        &mut self,
+        req: ConfirmRequest,
+        target: DiagTarget,
+        module: &str,
+    ) -> ConfirmResult {
+        if module.trim().is_empty() {
+            self.confirms.withdraw(&req.key);
+            *self.status = Some("name the module the change goes to".into());
+            return ConfirmResult::Declined;
+        }
+        let off_target = match &self.target {
+            Ok(app) if *app == target => None,
+            Ok(app) => Some(app.to_string()),
+            Err(_) => Some("none usable".to_string()),
+        };
+        self.confirms
+            .ask_for(req, target, module.trim(), off_target)
     }
 
     pub fn spawn_job<T, F>(&self, name: &str, f: F) -> JobHandle<T>
@@ -1994,6 +2134,62 @@ mod tests {
             typed: None,
             confirm_label: "ok".into(),
         }
+    }
+
+    /// An explicit-module confirmation: the dialog names the module, warns
+    /// when it is not the app's target, and the Ack carries the module.
+    #[test]
+    fn confirm_ecu_for_names_the_module_warns_off_target_and_stamps_it() {
+        let mut fx = Fixture::new();
+        // The app targets the engine; the change is for the TCU.
+        assert!(matches!(
+            fx.host(Ok(DiagTarget::ENGINE), |h| h.confirm_ecu_for(
+                req("tcu"),
+                TCU,
+                "Gearbox (TCU)"
+            )),
+            ConfirmResult::Pending
+        ));
+        assert_eq!(fx.confirms.open["tcu"].3, Some(TCU), "the dialog shows it");
+        let (name, off) = fx.confirms.modules["tcu"].clone();
+        assert_eq!(name, "Gearbox (TCU)");
+        assert_eq!(
+            off.as_deref(),
+            Some("tx 0x7E0 / rx 0x7E8"),
+            "NOT the app's target"
+        );
+        fx.confirms.answer("tcu", true);
+        match fx.host(Ok(DiagTarget::ENGINE), |h| {
+            h.confirm_ecu_for(req("tcu"), TCU, "Gearbox (TCU)")
+        }) {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.ecu_target(), Ok(TCU)),
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            !fx.confirms.modules.contains_key("tcu"),
+            "cleared once answered"
+        );
+        // Same module as the app's target: named, no off-target warning.
+        fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("same"), TCU, "Gearbox"));
+        assert_eq!(fx.confirms.modules["same"].1, None);
+        // An unusable app target counts as "not the app's target".
+        fx.host(Err("half set".into()), |h| {
+            h.confirm_ecu_for(req("err"), TCU, "Gearbox")
+        });
+        assert_eq!(fx.confirms.modules["err"].1.as_deref(), Some("none usable"));
+        // No module name: declined, nothing opened.
+        assert!(matches!(
+            fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("anon"), TCU, "  ")),
+            ConfirmResult::Declined
+        ));
+        assert!(!fx.confirms.open.contains_key("anon"));
+        // A declined dialog leaves nothing behind.
+        fx.confirms.answer("same", false);
+        assert!(matches!(
+            fx.host(Ok(TCU), |h| h.confirm_ecu_for(req("same"), TCU, "Gearbox")),
+            ConfirmResult::Declined
+        ));
+        assert!(!fx.confirms.modules.contains_key("same"));
     }
 
     const TCU: DiagTarget = DiagTarget::can(0x7E1, 0x7E9);

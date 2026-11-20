@@ -16,6 +16,10 @@
 //!   request): its modes, its CAN broadcast/command frames, its BLE status
 //!   record and its supplier-specific UDS identifiers.
 //!
+//! [`series`] turns a decoded log into chart-ready series (lock request /
+//! actual, clutch value, Gen4 temperature, wheel-speed delta), decimated for
+//! plotting or exported as a Live-log CSV.
+//!
 //! [`sim`] provides simulated units (a Gen4 TP2.0/KWP2000 controller and an
 //! OpenHaldex UDS responder) for tests and the CLI's `--sim` mode.
 //!
@@ -45,6 +49,7 @@ pub mod can;
 pub mod canlog;
 pub mod gen4;
 pub mod openhaldex;
+pub mod series;
 pub mod sim;
 
 pub use can::{decode_frame, Bus, HaldexFrame};

@@ -20,32 +20,20 @@
 //!   `opentune controller decode`. Nothing is transmitted.
 //!
 //! Definitions are small, so they are re-read per call.
+//!
+//! The catalog, link validation, list / detail JSON and the log decode live
+//! in [`opentune_hub::controllers`] (shared with other front ends); this
+//! module resolves the app's data directories and checksum resolvers and
+//! wraps them as Tauri commands.
 
-use opentune_ctrldef::decode::{summarize, RawFrame, SignalStats};
-use opentune_ctrldef::{
-    ControllerDef, Decoder, Issue, LinkContext, LiveSource, Severity, ValidationState,
-};
-use opentune_packs::{discover, load_pack, Kind, Pack};
+use opentune_ctrldef::{ControllerDef, LinkContext};
+pub(crate) use opentune_hub::controllers::decode_text;
 use serde_json::{json, Value};
-use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// The definition `opentune dsg` reads link to (`CTRLDEF_ID` in the CLI).
-const DSG_CTRLDEF: &str = "vag-dq250-02e";
 /// Decoded frames returned by default / at most (the summary covers all).
 const DEFAULT_ROWS: usize = 2000;
 const MAX_ROWS: usize = 20_000;
-
-/// One definition and where it came from.
-struct Found {
-    def: ControllerDef,
-    path: PathBuf,
-    /// `builtin`, `pack` or `file`.
-    source: &'static str,
-    pack: Option<Value>,
-    pack_ecudefs: Vec<opentune_core::ecudef::EcuDef>,
-}
 
 /// The built-in `ctrldefs/` directory: next to the other data directories
 /// (bundled resources, `OPENTUNE_DATA`, an embedder's data root), else the
@@ -67,214 +55,11 @@ pub(crate) fn builtin_dir(state: &crate::AppData) -> Option<PathBuf> {
     cands.into_iter().find(|p| p.is_dir())
 }
 
-fn pack_info(p: &Pack) -> Value {
-    let m = &p.manifest;
-    json!({
-        "id": m.id, "name": m.name, "version": m.version, "license": m.license,
-        "dir": p.root.display().to_string(), "valid": p.report.is_clean(),
-    })
-}
-
-/// Read every `*.json` in the built-in directory; a file that does not parse
-/// goes to `failed` with the reason (never silently dropped).
-fn read_builtin(dir: &Path, found: &mut Vec<Found>, failed: &mut Vec<Value>) {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut files: Vec<PathBuf> = rd
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-            !opentune_ctrldef::is_scaffolding_file(name)
-                && p.extension().and_then(|s| s.to_str()) == Some("json")
-        })
-        .collect();
-    files.sort();
-    for path in files {
-        let parsed = std::fs::read_to_string(&path)
-            .map_err(|e| e.to_string())
-            .and_then(|t| ControllerDef::from_json(&t).map_err(|e| format!("parse error: {e}")));
-        match parsed {
-            Ok(def) => found.push(Found {
-                def,
-                path,
-                source: "builtin",
-                pack: None,
-                pack_ecudefs: Vec::new(),
-            }),
-            Err(message) => failed.push(json!({
-                "file": path.display().to_string(), "source": "builtin", "pack": null, "message": message,
-            })),
-        }
-    }
-}
-
-/// The controller definitions of one pack (the pack loader already ran the
-/// ctrldef validator on them) and its skipped controller files.
-fn read_pack(p: Pack, found: &mut Vec<Found>, failed: &mut Vec<Value>) {
-    let info = pack_info(&p);
-    for n in p.report.notes.iter().filter(|n| n.kind == Kind::Controller) {
-        failed.push(json!({
-            "file": p.root.join(&n.file).display().to_string(), "source": "pack",
-            "pack": info, "message": n.message,
-        }));
-    }
-    let files: Vec<&str> = p
-        .entries
-        .iter()
-        .filter(|e| e.kind == Kind::Controller)
-        .map(|e| e.file.as_str())
-        .collect();
-    // entries and `controllers` are both in load order
-    for (def, file) in p.controllers.iter().zip(files) {
-        found.push(Found {
-            def: def.clone(),
-            path: p.root.join(file),
-            source: "pack",
-            pack: Some(info.clone()),
-            pack_ecudefs: p.ecudefs.clone(),
-        });
-    }
-}
-
-/// Built-in definitions, then every pack under `packs_root`, then the `extra`
-/// pack folders that are not already among them.
-fn catalog(
-    builtin: Option<&Path>,
-    packs_root: Option<&Path>,
-    extra: &[String],
-) -> (Vec<Found>, Vec<Value>) {
-    let (mut found, mut failed) = (Vec::new(), Vec::new());
-    if let Some(d) = builtin {
-        read_builtin(d, &mut found, &mut failed);
-    }
-    let mut dirs: Vec<PathBuf> = packs_root.map(discover).unwrap_or_default();
-    for e in extra {
-        let p = PathBuf::from(e);
-        let canon = |x: &Path| std::fs::canonicalize(x).unwrap_or_else(|_| x.to_path_buf());
-        if !dirs.iter().any(|d| canon(d) == canon(&p)) {
-            dirs.push(p);
-        }
-    }
-    for dir in dirs {
-        match load_pack(&dir) {
-            Ok(p) => read_pack(p, &mut found, &mut failed),
-            Err(e) => failed.push(json!({
-                "file": dir.display().to_string(), "source": "pack", "pack": null, "message": e.to_string(),
-            })),
-        }
-    }
-    (found, failed)
-}
-
 /// Link context: the bundled ecudefs, the database unit ids and the public
-/// checksum ids. [`ctx_for`] adds a pack's own ecudefs and plugin checksums.
+/// checksum ids ([`opentune_hub::controllers::link_context`]).
 fn base_context(state: &crate::AppData) -> LinkContext {
     let ecudefs: Vec<_> = crate::state::load_defs(&state.ecudefs).as_ref().clone();
-    let unit_ids = state
-        .database
-        .as_deref()
-        .and_then(|d| opentune_db::Database::load_dir(d).ok())
-        .map(|db| db.entries().iter().map(|e| e.unit.id.clone()).collect())
-        .unwrap_or_default();
-    let checksum_ids: Vec<String> = opentune_checksum::algorithms()
-        .into_iter()
-        .map(|a| a.id.to_string())
-        .collect();
-    LinkContext {
-        ecudefs,
-        unit_ids,
-        checksum_ids,
-    }
-}
-
-/// The link context for one definition: `base` plus the ecudefs of the pack it
-/// came from and a checksum id that only a plugin resolver knows.
-fn ctx_for<'a>(
-    base: &'a LinkContext,
-    checksums: &crate::Checksums,
-    f: &Found,
-) -> Cow<'a, LinkContext> {
-    let plugin = f
-        .def
-        .checksum
-        .as_ref()
-        .filter(|c| !base.checksum_ids.contains(c) && checksums.get(c).is_some());
-    if f.pack_ecudefs.is_empty() && plugin.is_none() {
-        return Cow::Borrowed(base);
-    }
-    let mut c = base.clone();
-    c.ecudefs.extend(f.pack_ecudefs.iter().cloned());
-    c.checksum_ids.extend(plugin.cloned());
-    Cow::Owned(c)
-}
-
-fn all_issues(f: &Found, ctx: &LinkContext) -> Vec<Issue> {
-    let stem = f.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    f.def
-        .validate()
-        .into_iter()
-        .chain(f.def.validate_filename(stem))
-        .chain(f.def.validate_links(ctx))
-        .collect()
-}
-
-fn issue_json(i: &Issue) -> Value {
-    json!({
-        "severity": if i.severity == Severity::Error { "error" } else { "warn" },
-        "code": i.code, "location": i.location, "message": i.message,
-    })
-}
-
-fn related(d: &ControllerDef) -> Value {
-    let low = format!("{} {}", d.id, d.family).to_ascii_lowercase();
-    json!({
-        "dsg": d.id == DSG_CTRLDEF,
-        "haldex": low.contains("haldex"),
-    })
-}
-
-fn kind_str(d: &ControllerDef) -> &'static str {
-    d.kind.as_str()
-}
-
-fn matches_query(d: &ControllerDef, q: &str) -> bool {
-    let q = q.trim().to_ascii_lowercase();
-    if q.is_empty() {
-        return true;
-    }
-    let hay = format!(
-        "{} {} {} {} {}",
-        d.id,
-        d.name,
-        d.maker,
-        d.family,
-        d.vehicles.join(" ")
-    )
-    .to_ascii_lowercase();
-    hay.contains(&q) || d.matches(&q)
-}
-
-fn row(f: &Found, issues: &[Issue]) -> Value {
-    let d = &f.def;
-    let errors = issues
-        .iter()
-        .filter(|i| i.severity == Severity::Error)
-        .count();
-    json!({
-        "id": d.id, "name": d.name, "kind": kind_str(d), "maker": d.maker, "family": d.family,
-        "vehicles": d.vehicles, "validation": d.validation.as_str(),
-        "source": f.source, "pack": f.pack, "path": f.path.display().to_string(),
-        "buses": d.buses.iter().map(|b| &b.name).collect::<Vec<_>>(),
-        "counts": {
-            "diagnostics": d.diagnostics.len(),
-            "frames": d.buses.iter().map(|b| b.frames.len()).sum::<usize>(),
-            "live": d.live.len(), "tables": d.tables.len(), "gearsets": d.gearsets.len(),
-        },
-        "errors": errors, "warnings": issues.len() - errors,
-        "related": related(d),
-    })
+    opentune_hub::controllers::link_context(ecudefs, state.database.as_deref())
 }
 
 fn list_impl(
@@ -285,58 +70,15 @@ fn list_impl(
     extra: &[String],
 ) -> Value {
     let builtin = builtin_dir(state);
-    let (found, failed) = catalog(builtin.as_deref(), state.packs.as_deref(), extra);
-    let total = found.len();
-    let base = base_context(state);
-    let defs: Vec<Value> = found
-        .iter()
-        .filter(|f| {
-            kind.map(str::trim)
-                .filter(|k| !k.is_empty())
-                .is_none_or(|k| kind_str(&f.def) == k)
-        })
-        .filter(|f| q.is_none_or(|q| matches_query(&f.def, q)))
-        .map(|f| row(f, &all_issues(f, &ctx_for(&base, checksums, f))))
-        .collect();
-    json!({
-        "builtin_dir": builtin.map(|p| p.display().to_string()),
-        "total": total,
-        "defs": defs,
-        "failed": failed,
-    })
-}
-
-/// The pack a definition file sits in (`<pack>/controllers/<id>.json`).
-fn pack_of(path: &Path) -> Option<Pack> {
-    let dir = path.parent()?.parent()?;
-    if !dir.join("pack.json").is_file() {
-        return None;
-    }
-    load_pack(dir).ok()
-}
-
-fn open_found(state: &crate::AppData, path: &Path) -> Result<Found, String> {
-    let text =
-        std::fs::read_to_string(path).map_err(|e| format!("read '{}': {e}", path.display()))?;
-    let def = ControllerDef::from_json(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    let builtin = builtin_dir(state)
-        .and_then(|b| std::fs::canonicalize(b).ok())
-        .zip(std::fs::canonicalize(path).ok())
-        .is_some_and(|(b, p)| p.parent() == Some(b.as_path()));
-    let (source, pack, pack_ecudefs) = if builtin {
-        ("builtin", None, Vec::new())
-    } else if let Some(p) = pack_of(path) {
-        ("pack", Some(pack_info(&p)), p.ecudefs.clone())
-    } else {
-        ("file", None, Vec::new())
-    };
-    Ok(Found {
-        def,
-        path: path.to_path_buf(),
-        source,
-        pack,
-        pack_ecudefs,
-    })
+    opentune_hub::controllers::list(
+        builtin.as_deref(),
+        state.packs.as_deref(),
+        &base_context(state),
+        &|id| checksums.get(id).is_some(),
+        q,
+        kind,
+        extra,
+    )
 }
 
 fn get_impl(
@@ -344,133 +86,12 @@ fn get_impl(
     checksums: &crate::Checksums,
     path: &Path,
 ) -> Result<Value, String> {
-    let f = open_found(state, path)?;
-    let base = base_context(state);
-    let issues = all_issues(&f, &ctx_for(&base, checksums, &f));
-    let mut out = row(&f, &issues);
-    out["def"] = serde_json::to_value(&f.def).map_err(|e| e.to_string())?;
-    out["issues"] = issues.iter().map(issue_json).collect();
-    Ok(out)
-}
-
-fn stats_json(s: &SignalStats, name: &str, unit: &str) -> Value {
-    let mut v = serde_json::to_value(s).unwrap_or(Value::Null);
-    v["name"] = json!(name);
-    v["unit"] = json!(unit);
-    v
-}
-
-/// Decode `text` with `def`. `bus` empty/None picks the only set (or all sets
-/// when they do not share ids). `limit` caps the decoded frames returned.
-pub(crate) fn decode_text(
-    def: &ControllerDef,
-    text: &str,
-    bus: Option<&str>,
-    limit: usize,
-) -> Result<Value, String> {
-    if def.buses.is_empty() {
-        return Err(format!(
-            "{} defines no CAN frame sets to decode with",
-            def.id
-        ));
-    }
-    let bus = bus
-        .map(str::trim)
-        .filter(|b| !b.is_empty() && *b != "all")
-        .map(str::to_string)
-        .or_else(|| (def.buses.len() == 1).then(|| def.buses[0].name.clone()));
-    let dec = Decoder::new(def, bus.as_deref())?;
-    let parsed = opentune_haldex::canlog::parse_log(text);
-    let label = bus.clone().unwrap_or_else(|| "all".into());
-    let (summary, decoded) = summarize(
-        &dec,
-        &label,
-        parsed.frames.iter().map(|f| RawFrame {
-            ts: f.ts,
-            id: f.id,
-            extended: f.extended,
-            data: &f.data,
-        }),
-    );
-    let known = dec.ids();
-    let mut undecoded: BTreeMap<u32, u64> = BTreeMap::new();
-    for f in &parsed.frames {
-        if known.binary_search(&f.id).is_err() {
-            *undecoded.entry(f.id).or_default() += 1;
-        }
-    }
-    let mut undecoded: Vec<(u32, u64)> = undecoded.into_iter().collect();
-    undecoded.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-
-    let unit_of = |frame: &str, sig: &str| -> String {
-        def.buses
-            .iter()
-            .flat_map(|b| &b.frames)
-            .find(|f| f.name == frame)
-            .and_then(|f| f.signals.iter().find(|s| s.name == sig))
-            .map(|s| s.unit.clone())
-            .unwrap_or_default()
-    };
-    let t0 = parsed.frames.iter().find_map(|f| f.ts);
-    let rows: Vec<Value> = decoded
-        .iter()
-        .take(limit)
-        .map(|(ts, f)| {
-            json!({
-                "t": ts.zip(t0).map(|(a, b)| a - b),
-                "id": format!("0x{:03X}", f.id),
-                "bus": f.bus, "frame": f.frame, "signals": f.signals,
-            })
-        })
-        .collect();
-    let live: Vec<Value> = def
-        .live
-        .iter()
-        .filter_map(|l| {
-            let LiveSource::CanSignal {
-                bus: b,
-                frame,
-                signal,
-            } = &l.source
-            else {
-                return None;
-            };
-            if bus.as_deref().is_some_and(|x| !b.eq_ignore_ascii_case(x)) {
-                return None;
-            }
-            let s = summary.live.get(&l.name)?;
-            let mut v = stats_json(s, &l.name, &l.unit);
-            v["source"] = json!(format!("{b}/{frame}.{signal}"));
-            Some(v)
-        })
-        .collect();
-    let frames: Vec<Value> = summary
-        .per_frame
-        .iter()
-        .map(|(name, f)| {
-            json!({
-                "name": name, "bus": f.bus, "id": format!("0x{:03X}", f.id), "count": f.count,
-                "span": match (f.first_ts, f.last_ts) { (Some(a), Some(b)) if b > a => Some(b - a), _ => None },
-                "signals": f.signals.iter().map(|(s, st)| stats_json(st, s, &unit_of(name, s))).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-    Ok(json!({
-        "controller": def.id,
-        "validation": def.validation.as_str(),
-        "unconfirmed": def.validation < ValidationState::RealImageTested,
-        "bus": label,
-        "sets": def.buses.iter().map(|b| &b.name).collect::<Vec<_>>(),
-        "frames_in_log": summary.frames,
-        "decoded": summary.decoded,
-        "bad_lines": parsed.bad_lines,
-        "live": live,
-        "per_frame": frames,
-        "undecoded_ids": undecoded.iter().take(12).map(|(id, n)| json!({ "id": format!("0x{id:03X}"), "count": n })).collect::<Vec<_>>(),
-        "undecoded_total": undecoded.iter().map(|x| x.1).sum::<u64>(),
-        "rows": rows,
-        "rows_total": decoded.len(),
-    }))
+    opentune_hub::controllers::get(
+        builtin_dir(state).as_deref(),
+        &base_context(state),
+        &|id| checksums.get(id).is_some(),
+        path,
+    )
 }
 
 /// Every controller definition: built-in `ctrldefs/` plus the `controllers/`
@@ -677,70 +298,5 @@ mod tests {
             .any(|i| i["code"] == "id.filename" && i["severity"] == "error"));
         assert!(get_impl(&st, &c, &d.join("missing.json")).is_err());
         std::fs::remove_dir_all(&d).ok();
-    }
-
-    #[test]
-    fn decodes_a_synthetic_log_like_the_cli() {
-        let def = ControllerDef::from_json(
-            &std::fs::read_to_string(repo("ctrldefs/borgwarner-haldex-gen4.json")).unwrap(),
-        )
-        .unwrap();
-        let bus = def.buses[0].name.clone();
-        let frame = &def.buses[0].frames[0];
-        let len = frame.dlc.unwrap_or(8) as usize;
-        let payload: String = (0..len).map(|i| format!("{:02X}", 0x10 + i)).collect();
-        // candump + Vector ASC of the same synthetic frame, plus an unknown id
-        // and an unreadable line
-        let text = format!(
-            "(1.000000) can0 {id:03X}#{payload}\n(1.010000) can0 7FF#00\n\
-             garbage\n   1.020000 1  {id:X}             Rx   d {len:x} {asc}\n",
-            id = frame.id,
-            asc = (0..len)
-                .map(|i| format!("{:02X}", 0x10 + i))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        let v = decode_text(&def, &text, Some(&bus), 10).unwrap();
-        assert_eq!(v["frames_in_log"], 3);
-        assert_eq!(v["decoded"], 2);
-        assert_eq!(v["bad_lines"], 1);
-        assert_eq!(v["undecoded_ids"][0]["id"], "0x7FF");
-        let rows = v["rows"].as_array().unwrap();
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0]["frame"], frame.name);
-        assert!((rows[1]["t"].as_f64().unwrap() - 0.02).abs() < 1e-9);
-        assert_eq!(
-            rows[0]["signals"], rows[1]["signals"],
-            "candump and ASC agree"
-        );
-        let pf = v["per_frame"].as_array().unwrap();
-        assert_eq!(pf[0]["count"], 2);
-        // same values as the library decoder the CLI uses
-        let dec = Decoder::new(&def, Some(&bus)).unwrap();
-        let data: Vec<u8> = (0..len as u8).map(|i| 0x10 + i).collect();
-        let want = dec.decode(frame.id, frame.extended, &data).unwrap();
-        assert_eq!(
-            rows[0]["signals"],
-            serde_json::to_value(&want.signals).unwrap()
-        );
-        // limit caps the rows, not the summary
-        let v1 = decode_text(&def, &text, Some(&bus), 1).unwrap();
-        assert_eq!(v1["rows"].as_array().unwrap().len(), 1);
-        assert_eq!(v1["rows_total"], 2);
-        // an unknown set is refused with the set names
-        let e = decode_text(&def, &text, Some("nope"), 10).unwrap_err();
-        assert!(e.contains(&bus), "{e}");
-    }
-
-    #[test]
-    fn a_definition_without_frame_sets_cannot_decode() {
-        let mut def = ControllerDef::from_json(
-            &std::fs::read_to_string(repo("ctrldefs/vag-dq381.json")).unwrap(),
-        )
-        .unwrap();
-        def.buses.clear();
-        assert!(decode_text(&def, "", None, 10)
-            .unwrap_err()
-            .contains("no CAN frame sets"));
     }
 }
