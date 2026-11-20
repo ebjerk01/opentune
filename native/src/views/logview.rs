@@ -27,6 +27,17 @@
 //! **Large logs:** drawing is decimated per pixel bucket (each bucket keeps its
 //! minimum and maximum, so spikes survive); statistics and the readout always
 //! use every sample. Parsing runs on a background thread.
+//!
+//! **Map overlay** ([`overlay`]): bin the log over a calibration map's
+//! breakpoints (hits, time in cell, a value channel's range per cell) with
+//! the core's `opentune_hub::logoverlay`. **Drive view**: hand the open log
+//! to the Drive view for a 1–8× replay.
+
+mod overlay;
+#[cfg(test)]
+mod overlay_tests;
+
+pub use overlay::LogContext;
 
 use crate::icons;
 use crate::image::fmt_val;
@@ -605,10 +616,22 @@ pub struct LogView {
     show_notes: bool,
     /// About six pixels in time units (marker hover snapping).
     snap: f64,
+    /// The map overlay card.
+    overlay: overlay::Overlay,
+    /// "Drive view" was pressed (the app switches view, see
+    /// [`LogView::take_show_drive`]).
+    show_drive: bool,
+    drive_note: Option<String>,
 }
 
 impl LogView {
     pub fn ui(&mut self, ui: &mut Ui, t: &Tokens) {
+        self.ui_with(ui, t, LogContext::default());
+    }
+
+    /// [`LogView::ui`] with the app's selected definition and open image,
+    /// which the map overlay offers.
+    pub fn ui_with(&mut self, ui: &mut Ui, t: &Tokens, cx: LogContext<'_>) {
         self.poll();
         if self.loading.is_some() {
             ui.ctx()
@@ -619,7 +642,31 @@ impl LogView {
         ui.scope_builder(UiBuilder::new().max_rect(left), |ui| {
             self.channel_pane(ui, t)
         });
-        ui.scope_builder(UiBuilder::new().max_rect(right), |ui| self.plot_pane(ui, t));
+        ui.scope_builder(UiBuilder::new().max_rect(right), |ui| {
+            self.plot_pane(ui, t, &cx)
+        });
+    }
+
+    /// True once after "Drive view" was pressed: the log is queued there and
+    /// the app should switch to the `drive` view.
+    #[allow(dead_code)] // called by app.rs once it routes the Drive hand-off
+    pub fn take_show_drive(&mut self) -> bool {
+        std::mem::take(&mut self.show_drive)
+    }
+
+    /// Queue the open log for the Drive view's replay.
+    fn send_to_drive(&mut self) {
+        if let Some(d) = &self.data {
+            super::drive::queue_replay(d.path.clone());
+            self.show_drive = true;
+            self.drive_note = Some(format!(
+                "{} is queued in the Drive view (Calibration → Drive view)",
+                d.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ));
+        }
     }
 
     /// Start loading `path` in the background (also used for dropped files).
@@ -684,6 +731,8 @@ impl LogView {
         self.stats_key = None;
         self.filter_key = None;
         self.error = None;
+        self.overlay.result = None;
+        self.drive_note = None;
     }
 
     /// Filtered channel list and the statistics of the visible range.
@@ -801,7 +850,7 @@ impl LogView {
         }
     }
 
-    fn plot_pane(&mut self, ui: &mut Ui, t: &Tokens) {
+    fn plot_pane(&mut self, ui: &mut Ui, t: &Tokens, cx: &LogContext<'_>) {
         let title = self
             .data
             .as_ref()
@@ -813,6 +862,9 @@ impl LogView {
         let mut mode = self.mode;
         let mut browse = false;
         let mut reset = false;
+        let mut drive = false;
+        let mut toggle_overlay = false;
+        let overlay_open = self.overlay.open;
         theme::panel(
             ui,
             t,
@@ -826,6 +878,24 @@ impl LogView {
                 }
                 if !has_data {
                     return;
+                }
+                if theme::icon_button(
+                    ui,
+                    t,
+                    icons::STEERING_WHEEL,
+                    "Play this log back in the Drive view",
+                )
+                .clicked()
+                {
+                    drive = true;
+                }
+                let tip = if overlay_open {
+                    "Hide the map overlay"
+                } else {
+                    "Map overlay: which map cells the log used"
+                };
+                if theme::icon_button(ui, t, icons::GRID_FOUR, tip).clicked() {
+                    toggle_overlay = true;
                 }
                 if theme::icon_button(ui, t, icons::CORNERS_OUT, "Show the whole log").clicked() {
                     reset = true;
@@ -859,17 +929,61 @@ impl LogView {
                         }
                     });
                 theme::hline(ui, t.border_soft);
+                if let Some(n) = &self.drive_note {
+                    egui::Frame::new()
+                        .inner_margin(Margin::symmetric(14, 4))
+                        .show(ui, |ui| {
+                            ui.label(RichText::new(n).small().color(t.fg_dim));
+                        });
+                }
                 egui::Frame::new()
                     .inner_margin(Margin::symmetric(10, 8))
                     .show(ui, |ui| {
                         let readout_h = 58.0;
-                        let h = (ui.available_height() - readout_h).max(120.0);
-                        let hover = self.plot(ui, t, h);
+                        let avail = ui.available_height();
+                        let plot_h = if self.overlay.open {
+                            (avail * 0.42 - readout_h).max(120.0)
+                        } else {
+                            (avail - readout_h).max(120.0)
+                        };
+                        let hover = self.plot(ui, t, plot_h);
                         ui.add_space(4.0);
                         self.readout(ui, t, hover);
+                        if self.overlay.open {
+                            ui.add_space(6.0);
+                            theme::hline(ui, t.border_soft);
+                            ui.add_space(6.0);
+                            egui::ScrollArea::vertical()
+                                .id_salt("lv-overlay")
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        RichText::new("Map overlay")
+                                            .font(font(theme::DISPLAY_MEDIUM, 13.5))
+                                            .color(t.fg),
+                                    );
+                                    ui.add_space(4.0);
+                                    if let Some(d) = &self.data {
+                                        self.overlay.ui(
+                                            ui,
+                                            t,
+                                            &d.log,
+                                            self.generation,
+                                            self.view,
+                                            cx,
+                                        );
+                                    }
+                                });
+                        }
                     });
             },
         );
+        if drive {
+            self.send_to_drive();
+        }
+        if toggle_overlay {
+            self.overlay.open = !self.overlay.open;
+        }
         if mode != self.mode {
             self.mode = mode;
             ctx.request_repaint();
