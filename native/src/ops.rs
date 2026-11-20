@@ -227,10 +227,22 @@ impl LongJob {
     /// the job's error too (a copy), so the adapter can drop a session that
     /// failed. A panic in the job is caught and reported as an error.
     pub fn run(self, d: &mut dyn RawDiag) -> Result<(), String> {
+        self.run_with(d, || {})
+    }
+
+    /// [`run`](Self::run), calling `before_reply` after the job returned
+    /// and just before its result is delivered (an adapter marks the op as
+    /// ending there, so a caller woken by the result never sees it "busy").
+    pub(crate) fn run_with(
+        self,
+        d: &mut dyn RawDiag,
+        before_reply: impl FnOnce(),
+    ) -> Result<(), String> {
         let LongJob { f, stop, reply } = self;
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(d, &stop)))
             .unwrap_or_else(|p| Err(format!("the operation panicked: {}", panic_text(&*p))));
         let out = r.as_ref().map(|_| ()).map_err(Clone::clone);
+        before_reply();
         let _ = reply.send(r);
         out
     }
@@ -238,6 +250,12 @@ impl LongJob {
     /// The operation could not start (e.g. the adapter would not open):
     /// deliver `why` to the caller.
     pub fn fail(self, why: String) {
+        self.fail_with(why, || {})
+    }
+
+    /// [`fail`](Self::fail) with a hook before the reply, as in `run_with`.
+    pub(crate) fn fail_with(self, why: String, before_reply: impl FnOnce()) {
+        before_reply();
         let _ = self.reply.send(Err(why));
     }
 }

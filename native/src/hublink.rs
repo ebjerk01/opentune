@@ -61,6 +61,10 @@ pub struct HubAdapter {
     caps: Mutex<Option<Capabilities>>,
     /// Gates the Bench-tier operations (raw access) in this backend.
     channel: BuildChannel,
+    /// A long operation whose job has returned (its result is delivered)
+    /// but whose hub slot is still being released: a view's next operation
+    /// waits for it like for a battery poll instead of failing "busy".
+    ending: Arc<Mutex<Option<String>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -81,6 +85,7 @@ impl HubAdapter {
             info: Mutex::new(LinkInfo::default()),
             caps: Mutex::new(None),
             channel: BuildChannel::compiled(),
+            ending: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -246,7 +251,10 @@ impl HubAdapter {
         e.starts_with("adapter busy")
             && pending()
             && Instant::now() < deadline
-            && self.hub.current().is_none_or(|c| c == LINK_POLL)
+            && self
+                .hub
+                .current()
+                .is_none_or(|c| c == LINK_POLL || lock(&self.ending).as_deref() == Some(c.as_str()))
     }
 
     fn run_job(
@@ -401,17 +409,23 @@ impl AdapterAccess for HubAdapter {
         let deadline = Instant::now() + POLL_WAIT;
         loop {
             let (k, sl) = (key.clone(), slot.clone());
+            let (ending, name) = (self.ending.clone(), op.to_string());
             // `start_op` claims the busy slot before it takes the closure, so
             // a refusal leaves the job in `slot` for the next attempt.
             let r = self.hub.start_op(op, move |s| {
+                *lock(&ending) = None;
+                // Marked just before the result is delivered: the slot frees
+                // when this closure ends, a moment after the caller wakes.
+                let mark = || *lock(&ending) = Some(name.clone());
                 let mut job = lock(&sl).take();
                 let r = s.with_diag(&k, READ_TIMEOUT_MS, |d| match job.take() {
                     // Also for a direct `start_job` call: read services only.
-                    Some(j) => j.run(&mut crate::ops::ReadOnlyDiag(d)),
+                    Some(j) => j.run_with(&mut crate::ops::ReadOnlyDiag(d), mark),
                     None => Err("internal error: job already ran".into()),
                 });
                 if let (Err(e), Some(j)) = (r, job) {
-                    j.fail(e); // the adapter did not open: the job never ran
+                    // The adapter did not open: the job never ran.
+                    j.fail_with(e, || *lock(&ending) = Some(name.clone()));
                 }
             });
             match r {
@@ -573,6 +587,40 @@ mod tests {
             assert!(t0.elapsed() < Duration::from_secs(5), "slot never freed");
             std::thread::sleep(Duration::from_millis(5));
         }
+        // POSITIVE: Bench readflash's exact service set passes the real
+        // filter on both paths (typed read, and a direct read_job through
+        // HubAdapter's own ReadOnlyDiag): 10 03 → 27 01 → 22 F1 87 →
+        // 23 (ALFID 0x24). Whatever the simulated ECU answers (a positive
+        // reply or a raw 7F), the request was SENT, which is the point:
+        // the guard's refusal is an Err that never reaches the wire.
+        let readflash: Vec<Vec<u8>> = vec![
+            vec![0x10, 0x03],
+            vec![0x27, 0x01],
+            vec![0x22, 0xF1, 0x87],
+            vec![0x23, 0x24, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00],
+        ];
+        let seq = readflash.clone();
+        let replies: Vec<Vec<u8>> = dynamic
+            .read("readflash", DiagTarget::ENGINE, move |d| {
+                seq.iter().map(|r| d.request(r)).collect()
+            })
+            .unwrap();
+        assert_eq!(replies.len(), 4);
+        for (req, resp) in readflash.iter().zip(&replies) {
+            assert!(
+                resp[0] == req[0] + 0x40 || (resp[0] == 0x7F && resp[1] == req[0]),
+                "{req:02X?} reached the ECU: {resp:02X?}"
+            );
+        }
+        let seq = readflash.clone();
+        let job: DiagJob = Box::new(move |d: &mut dyn RawDiag| {
+            let r: Result<Vec<Vec<u8>>, String> = seq.iter().map(|r| d.request(r)).collect();
+            r.map(|v| Box::new(v) as Box<dyn Any + Send>)
+        });
+        let direct = a
+            .read_job("readflash direct", DiagTarget::ENGINE, job)
+            .expect("readflash passes HubAdapter's own filter");
+        assert_eq!(direct.downcast::<Vec<Vec<u8>>>().unwrap().len(), 4);
         // Reads (incl. a session change and security access) still work.
         let r: Vec<u8> = dynamic
             .read("reads", DiagTarget::ENGINE, |d| {
