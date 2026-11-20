@@ -2,7 +2,7 @@
 name = "opentune-native"
 # The native frontend has its own version line until it replaces the webview
 # app (planned as 1.0.0-beta); do not tie it to the Tauri app's version yet.
-version = "0.1.0"
+version = "1.0.0-beta.1"
 description = "OpenTune native desktop frontend (egui/eframe on wgpu) - prototype"
 edition = "2021"
 license = "GPL-3.0-or-later"

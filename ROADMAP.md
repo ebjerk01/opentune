@@ -1,7 +1,8 @@
 # OpenTune Roadmap
 
-> ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the desktop app is a
-> public alpha (v0.7.0, signed auto-update) and the Android app is unreleased. Only a first
+> ⚠️ **Status: early alpha.** The offline tooling works on a `.bin`; the **native desktop
+> app** is a public beta pre-release (v1.0.0-beta.1; the earlier Tauri app is v0.7.0 with signed
+> auto-update) and the Android app is unreleased. Only a first
 > read-only identity read has been done on a real car — don't flash a real vehicle yet.
 > Expect breaking changes.
 
@@ -66,6 +67,8 @@ Everything here operates on a flash `.bin`.
 - [x] **DTC database + decoder** — 11,140 codes (`opentune dtc`)
 
 ### Apps
+- [x] **Native desktop app** (`native/`, egui/wgpu) — every panel of the desktop app rebuilt natively over the shared core (calibration, vehicle panels in the Bench tier, reference, guide, Check my car), the same safety model (typed confirmation + backup before any module change; read allow-list), Linux AppImage + Windows zip packaging (macOS from source). **v1.0.0-beta.1** pre-release.
+- [ ] Native app: signed release pipeline + in-app "what's new" from releases, then retire the Tauri app; TunerStudio online write (needs a device-level confirm/backup API)
 - [x] **Desktop (Tauri)** — identify, checksum verify/fix, findmaps, map viewer **+ editor** (edit/interpolate/smooth, write-back + checksum fix), **compare**, flash (mock), vault, offline guide
 - [x] **Portable Linux builds** — glibc baseline fixed (`ubuntu-22.04` CI + a `debian:bookworm` Docker recipe in `desktop/portable-build/`); alpha AppImage + `.deb`
 - [x] **Android `opentune-ffi`** — UniFFI binding over the core (compile-verified; Kotlin bindings generated) + a Jetpack Compose app (`android/`)
@@ -238,7 +241,7 @@ unit-testable offline; the live paths are 🔒 (need a car/adapter).
 - [x] **Safer file writes** — checksum fix saves to a new file by default (overwrite archives the original first), flash archives the target to the vault, map write-back reports which checksum it used.
 - [x] **Fast startup** — nothing heavy before the first paint: definitions/catalog parsed once on a background thread and cached, startup commands async, panels load on first show, WebKitGTK DMA-BUF renderer off by default on Linux; `OPENTUNE_TRACE_STARTUP=1` prints a timing breakdown (`docs/TROUBLESHOOTING-STARTUP.md`). ~1.1 s to first frame on a desktop test machine.
 - [x] **Process gates** — `scripts/check.sh` (all CI gates incl. desktop + UI JS), tracked pre-commit hook, CI jobs for the desktop crate and UI, doc-drift tests (CLI commands, drivers, checksum ids, crates must be documented); `docs/DEVELOPMENT.md`.
-- [~] *(desktop: adapter capability bar + capability-gated car-facing panels — coding/adaptation/autoscan/service/logging/OBD/dashboard/inspection/CAN capture — in the Bench tier until vehicle-tested; Debug console alpha-only)* Wire every pillar into the **Tauri desktop** app as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
+- [~] *(desktop: adapter capability bar + capability-gated car-facing panels — coding/adaptation/autoscan/service/logging/OBD/dashboard/inspection/CAN capture — in the Bench tier until vehicle-tested; Debug console alpha-only)* Wire every pillar into the desktop app (now the **native app**, which has every Tauri panel) as the suite's primary face, with **guided wizards** (coding/adaptation/service/flash) + live dashboards; **Android** companion over USB-OTG/BLE; **CLI** for automation. Signed **OpenTune** AppImages from GitHub Releases.
 
 ### Definition ecosystem (the scaling lever)
 - [~] New data formats — **coding-label**, **adaptation-channel map**, **service-function script**, **logger** and **vehicle-module list** all exist; **`opentune-packs`** bundles them as one versioned pack (`pack.json` + per-kind dirs incl. `controllers/`, provenance metadata, CLI `packs` + `packs validate`). Shipped starter packs: `generic-obd2` (J1979 module lists, 34-PID logger, readiness/DTC/VIN scripts, mode-04 clear as the only write), `iso14229-identification`, `vag-modules` (7 UDS modules, each sourced from MIT/BSD projects), `vcar-demo`. Still open: the community library itself. A **community** definition/pack library, versioned files the app loads locally (no hosting).
