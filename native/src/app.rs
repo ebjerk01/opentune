@@ -588,7 +588,20 @@ impl eframe::App for App {
                         self.view = View::Flash;
                     }
                 }
-                View::Log => self.logview.ui(ui, &t),
+                View::Log => {
+                    let cx = views::logview::LogContext {
+                        def: self.flash.def_idx.map(|i| &self.defs[i]),
+                        image: self
+                            .flash
+                            .image
+                            .as_ref()
+                            .map(|i| (i.path.as_path(), i.bytes.as_slice())),
+                    };
+                    self.logview.ui_with(ui, &t, cx);
+                    if self.logview.take_show_drive() {
+                        self.apply(vec![HostAction::ShowView("drive".into())]);
+                    }
+                }
                 View::Controllers => self.controllers.ui(ui, &t),
                 // Built-in and plugin NativeViews: the same Host path.
                 View::Builtin(_) | View::Plugin(_) => {

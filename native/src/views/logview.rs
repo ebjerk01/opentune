@@ -625,12 +625,8 @@ pub struct LogView {
 }
 
 impl LogView {
-    pub fn ui(&mut self, ui: &mut Ui, t: &Tokens) {
-        self.ui_with(ui, t, LogContext::default());
-    }
-
-    /// [`LogView::ui`] with the app's selected definition and open image,
-    /// which the map overlay offers.
+    /// Draw the viewer; `cx` carries the app's selected definition and open
+    /// image, which the map overlay offers.
     pub fn ui_with(&mut self, ui: &mut Ui, t: &Tokens, cx: LogContext<'_>) {
         self.poll();
         if self.loading.is_some() {
@@ -649,7 +645,6 @@ impl LogView {
 
     /// True once after "Drive view" was pressed: the log is queued there and
     /// the app should switch to the `drive` view.
-    #[allow(dead_code)] // called by app.rs once it routes the Drive hand-off
     pub fn take_show_drive(&mut self) -> bool {
         std::mem::take(&mut self.show_drive)
     }
