@@ -53,16 +53,13 @@
 //! [`opentune_hub::livelog`], shared with other front ends; the commands here
 //! are thin glue over it.
 
-use crate::adapter::{AdapterHub, ConnKey};
-use opentune_core::resilient::SystemClock;
+use crate::adapter::AdapterHub;
 pub use opentune_hub::livelog::LiveLogState;
 use opentune_hub::livelog::{
-    await_live_start, begin_live, chrono_millis, fast_config, live_policy, load_def, poll_on,
-    sample_json, ssm_key, ssm_request, stop_live, tick_live, LiveRequest, IDLE_STOP,
+    await_live_start, begin_live, chrono_millis, live_request, load_def, poll_on, sample_json,
+    stop_live, tick_live, LiveStart,
 };
-use opentune_logdef::{FastLogConfig, SsmPollConfig};
 use serde_json::{json, Value};
-use std::sync::Arc;
 
 /// Parse a `logger.xml` definition and return the list of available parameters.
 ///
@@ -172,57 +169,26 @@ pub async fn log_start(
     hub: tauri::State<'_, AdapterHub>,
     state: tauri::State<'_, LiveLogState>,
 ) -> Result<Value, String> {
-    let def = load_def(&def_path)?;
-    let ssm = ssm_request(transport.as_deref(), ssm_target.as_deref(), ssm_max_packet)?;
-    let (key, target, cfg) = match &ssm {
-        Some(r) => {
-            if fast {
-                return Err("Fast (0x2C) is UDS; SSM always batches its reads".into());
-            }
-            let (key, target) =
-                ssm_key(&driver, port.as_deref(), baud.as_deref(), bus.as_deref(), r);
-            let cfg = FastLogConfig {
-                ssm: Some(SsmPollConfig {
-                    max_packet_len: r.max_packet_len,
-                }),
-                ..fast_config(false, None, None, None)?
-            };
-            (key, target, cfg)
-        }
-        None => {
-            let cfg = fast_config(
-                fast,
-                dynamic_did.as_deref(),
-                max_record,
-                fast_session.as_deref(),
-            )?;
-            let (addr, assumed) = crate::adapter::read_addr(crate::adapter::resolve(
-                tx_id.as_deref(),
-                rx_id.as_deref(),
-                None,
-            )?);
-            let key = ConnKey::new(
-                &driver,
-                port.as_deref(),
-                baud.as_deref(),
-                bus.as_deref(),
-                addr,
-            );
-            (key, addr.json(assumed), cfg)
-        }
-    };
-    let req = LiveRequest {
-        key,
-        target: target.clone(),
+    let req = live_request(LiveStart {
+        driver: &driver,
+        port: port.as_deref(),
+        baud: baud.as_deref(),
+        bus: bus.as_deref(),
+        tx_id: tx_id.as_deref(),
+        rx_id: rx_id.as_deref(),
+        def_path: &def_path,
         timeout_ms,
-        def,
         ids,
-        cfg,
-        idle: IDLE_STOP,
-        ssm,
-        policy: live_policy(reconnect.unwrap_or(false)),
-        clock: Arc::new(SystemClock::new()),
-    };
+        fast,
+        dynamic_did: dynamic_did.as_deref(),
+        max_record,
+        fast_session: fast_session.as_deref(),
+        transport: transport.as_deref(),
+        ssm_target: ssm_target.as_deref(),
+        ssm_max_packet,
+        reconnect: reconnect.unwrap_or(false),
+    })?;
+    let target = req.target.clone();
     let rx = begin_live(&hub, &state, req)?;
     let st = tauri::async_runtime::spawn_blocking(move || await_live_start(rx))
         .await

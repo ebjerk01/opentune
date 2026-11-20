@@ -1155,6 +1155,150 @@ pub fn ssm_key(
     (key, target)
 }
 
+/// What a front end asks a live session for: the desktop's `log_start`
+/// arguments without the app state (cable, module ids, logger definition,
+/// channels and the fast / SSM / reconnect options).
+pub struct LiveStart<'a> {
+    pub driver: &'a str,
+    pub port: Option<&'a str>,
+    pub baud: Option<&'a str>,
+    pub bus: Option<&'a str>,
+    pub tx_id: Option<&'a str>,
+    pub rx_id: Option<&'a str>,
+    pub def_path: &'a str,
+    pub timeout_ms: u64,
+    pub ids: Vec<String>,
+    pub fast: bool,
+    pub dynamic_did: Option<&'a str>,
+    pub max_record: Option<usize>,
+    pub fast_session: Option<&'a str>,
+    pub transport: Option<&'a str>,
+    pub ssm_target: Option<&'a str>,
+    pub ssm_max_packet: Option<usize>,
+    pub reconnect: bool,
+}
+
+/// Build the [`LiveRequest`] for `a` (the desktop's `log_start` request
+/// building, shared): the logger definition, SSM or UDS addressing (typed
+/// ids, else the engine, flagged as assumed), the fast / SSM poll options,
+/// [`IDLE_STOP`], the reconnect policy and the system clock. Pass the result
+/// to [`begin_live`].
+pub fn live_request(a: LiveStart<'_>) -> Result<LiveRequest, String> {
+    let def = load_def(a.def_path)?;
+    let ssm = ssm_request(a.transport, a.ssm_target, a.ssm_max_packet)?;
+    let (key, target, cfg) = match &ssm {
+        Some(r) => {
+            if a.fast {
+                return Err("Fast (0x2C) is UDS; SSM always batches its reads".into());
+            }
+            let (key, target) = ssm_key(a.driver, a.port, a.baud, a.bus, r);
+            let cfg = FastLogConfig {
+                ssm: Some(SsmPollConfig {
+                    max_packet_len: r.max_packet_len,
+                }),
+                ..fast_config(false, None, None, None)?
+            };
+            (key, target, cfg)
+        }
+        None => {
+            let cfg = fast_config(a.fast, a.dynamic_did, a.max_record, a.fast_session)?;
+            let (addr, assumed) =
+                crate::adapter::read_addr(crate::adapter::resolve(a.tx_id, a.rx_id, None)?);
+            let key = ConnKey::new(a.driver, a.port, a.baud, a.bus, addr);
+            (key, addr.json(assumed), cfg)
+        }
+    };
+    Ok(LiveRequest {
+        key,
+        target,
+        timeout_ms: a.timeout_ms,
+        def,
+        ids: a.ids,
+        cfg,
+        idle: IDLE_STOP,
+        ssm,
+        policy: live_policy(a.reconnect),
+        clock: Arc::new(opentune_core::resilient::SystemClock::new()),
+    })
+}
+
+#[cfg(test)]
+mod live_request_tests {
+    use super::*;
+
+    fn start<'a>(def_path: &'a str) -> LiveStart<'a> {
+        LiveStart {
+            driver: "sim",
+            port: None,
+            baud: None,
+            bus: None,
+            tx_id: None,
+            rx_id: None,
+            def_path,
+            timeout_ms: 500,
+            ids: vec!["P1".into()],
+            fast: false,
+            dynamic_did: None,
+            max_record: None,
+            fast_session: None,
+            transport: None,
+            ssm_target: None,
+            ssm_max_packet: None,
+            reconnect: false,
+        }
+    }
+
+    fn def_file(tag: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("ot-live-req-{tag}-{}.json", std::process::id()));
+        let def = opentune_logdef::LogDef {
+            format: opentune_logdef::SourceFormat::RomRaiderLogger,
+            version: None,
+            convert_factors: Vec::new(),
+            protocols: Vec::new(),
+            warnings: Vec::new(),
+        };
+        std::fs::write(&p, serde_json::to_string(&def).unwrap()).unwrap();
+        p
+    }
+
+    #[test]
+    fn builds_the_uds_request_with_the_engine_assumed_when_no_ids_are_given() {
+        let p = def_file("uds");
+        let r = live_request(start(p.to_str().unwrap())).unwrap();
+        assert_eq!(r.key.addr, crate::adapter::Addr::ENGINE);
+        assert_eq!(r.target["assumed"], json!(true));
+        assert_eq!(r.idle, IDLE_STOP);
+        assert!(r.ssm.is_none());
+        let mut typed = start(p.to_str().unwrap());
+        typed.tx_id = Some("7E1");
+        typed.rx_id = Some("7E9");
+        let r = live_request(typed).unwrap();
+        assert_eq!((r.key.addr.tx_id, r.key.addr.rx_id), (0x7E1, 0x7E9));
+        assert_eq!(r.target["assumed"], json!(false));
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn refuses_what_log_start_refused() {
+        let p = def_file("refuse");
+        // Half-set ids, as before.
+        let mut half = start(p.to_str().unwrap());
+        half.tx_id = Some("7E1");
+        assert!(live_request(half).is_err());
+        // Fast mode over SSM, with the same message.
+        let mut ssm = start(p.to_str().unwrap());
+        ssm.transport = Some("ssm");
+        ssm.fast = true;
+        match live_request(ssm) {
+            Err(e) => assert_eq!(e, "Fast (0x2C) is UDS; SSM always batches its reads"),
+            Ok(_) => panic!("fast over SSM must be refused"),
+        }
+        // A missing definition file fails first.
+        assert!(live_request(start("/nonexistent/logger.xml")).is_err());
+        let _ = std::fs::remove_file(&p);
+    }
+}
+
 /// Milliseconds since the Unix epoch, for a per-tick timestamp. Avoids pulling in
 /// a date crate: the frontend only uses it to order/stamp rows.
 pub fn chrono_millis() -> u64 {

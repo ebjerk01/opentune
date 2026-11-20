@@ -11,6 +11,8 @@ description = "BorgWarner Haldex AWD support: Gen4 read-only KWP2000/TP2.0 engin
 [dependencies]
 opentune-core = { path = "../opentune-core" }
 serde.workspace = true
+# The decoded-log payload in src/series.rs.
+serde_json.workspace = true
 
 [dev-dependencies]
 opentune-udssim = { path = "../opentune-udssim" }
