@@ -7,23 +7,25 @@
 //! target. A KWP definition's `kwp_addr` (or the address typed here), on the
 //! transport the desktop's `kwp_key` picks by cable: TP2.0 on a raw-CAN
 //! cable, the K-line address on a K-line cable (confirmation shows e.g.
-//! "TP2.0 → module 0x01"). Changes are offered only when that module IS the
-//! app target (the `Ack` addresses the app target).
+//! "TP2.0 → module 0x01"). Every change is confirmed with
+//! `Host::confirm_ecu_for` for exactly that module, named by the definition;
+//! the dialog warns when it is not the app's target, and each op re-checks
+//! `ack.target() == module` before anything is sent.
 //!
 //! ## Per-op table (reviewed before merge)
 //!
 //! | Operation | SIDs sent (in order) | Path | Backup source |
 //! |---|---|---|---|
 //! | Read value channel (UDS) | `22 <did>` | `read` | n/a (read only) |
-//! | Write value channel (UDS) — 1. confirm | none | `Host::confirm_ecu` (typed `WRITE`) | — |
+//! | Write value channel (UDS) — 1. confirm | none | `Host::confirm_ecu_for(req, module, "<definition name> (<ids>)")` (typed `WRITE`; per-module key) | — |
 //! | Write value — 2. pre-read | `22 <did>` | `read` (the confirmed module) | — |
 //! | Write value — 3. backup | none | `Host::backup` (refused when empty) | the channel's WHOLE DID record from step 2 |
-//! | Write value — 4. write | `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only with a seed/key id; never retried); `22 <did>` (must equal the backup, else NOTHING is written); `22 <did>` (engine's fresh read), `2E <did> <record>` (only when it differs), `22 <did>` (verify); `10 01` (best effort) | `mutate` (the `Ack`'s module; receipt must match the step-2 record: CRC + length) | as step 3 |
-//! | Run routine channel (UDS basic settings) | run: `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only with a seed/key id); `31 01 <id> [start data]`; `31 03 <id>` × polls. restore (always): `31 02 <id> [stop data]` (a negative reply = not running = fine), `10 01` | `actuate` (the `Ack`'s module) | n/a (non-persistent). **Flag for review:** a relearn routine may store newly learned values in the module; the definition names no data to read first, so nothing can be backed up |
+//! | Write value — 4. write | (`ack.target() == module` re-checked first, else nothing is sent) `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only with a seed/key id, via `Host::unlocker_for`; never retried); `22 <did>` (must equal the backup, else NOTHING is written); `22 <did>` (engine's fresh read), `2E <did> <record>` (only when it differs), `22 <did>` (verify); `10 01` (best effort) | `mutate` (the `Ack`'s module; receipt must match the step-2 record: CRC + length) | as step 3 |
+//! | Run routine channel (UDS basic settings) | confirm: `Host::confirm_ecu_for(req, module, "<definition name> (<ids>)")`, text "… It may store newly learned values in the module; not reversible from OpenTune."; then (`ack.target() == module` re-checked) run: `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only with a seed/key id); `31 01 <id> [start data]`; `31 03 <id>` × polls. restore (always): `31 02 <id> [stop data]` (a negative reply = not running = fine), `10 01` | `actuate` (the `Ack`'s module) | n/a (actuate, owner-approved). A relearn may store learned values; nothing can be backed up (the definition names no data) |
 //! | Actuator channel | — | not here: the Actuator tests panel runs them through the hub's actuator gates | — |
 //! | Read measuring block (KWP `kwp_group`) | `10 89`, `21 <group>` (once more after a session-loss symptom: `10 89`, `21 <group>`) | `read` (TP2.0 / K-line module) | n/a (read only) |
-//! | Basic settings (KWP `kwp_basic_settings`) | run: `10 89`; `31 <enter> 00 00` (enumerate, if configured); `31 <enter> <bs> <group>`; `31 <read> <bs> <group>` × polls; `32 <enter> <bs> <group>`. restore: `32 <enter> <bs> <group>` only when the run did not get the stop acknowledged and the session was not lost (else nothing) | `actuate` (the `Ack`'s TP2.0 / K-line module) | n/a (non-persistent). Same **flag** as the UDS routine. No login: a module that answers NRC 0x33 is reported as needing one |
-//! | KWP adaptation channel read / test / save | — | **not ported**: even the read sends `31 B8`/`31 B9`/`31 BA` and `32 B8` (not on `READ_SERVICES`), so the backup read cannot run on the read path; needs approval | — |
+//! | Basic settings (KWP `kwp_basic_settings`) | confirm: `Host::confirm_ecu_for(req, module, "<definition name> (TP2.0 → module 0x..)")` (or K-line), same "may store newly learned values in the module; not reversible from OpenTune" text; then (`ack.target() == module` re-checked) run: `10 89`; `31 <enter> 00 00` (enumerate, if configured); `31 <enter> <bs> <group>`; ONLY if the module answers NRC 0x33 and a seed/key id is entered: `27 <lvl>`, `27 <lvl+1> <key>` (handler from `Unlocker::seed_key`; default level 03; a rejected key is never retried) and the start again; `31 <read> <bs> <group>` × polls; `32 <enter> <bs> <group>`. restore: `32 <enter> <bs> <group>` only when the run did not get the stop acknowledged and the session was not lost (else nothing) | `actuate` (the `Ack`'s TP2.0 / K-line module) | n/a (actuate, owner-approved). Without a seed/key id, NRC 0x33 is reported as "needs a login" |
+//! | KWP adaptation channel read / test / save | — | **not ported (a later batch)**: even the read sends `31 B8`/`31 B9`/`31 BA` and `32 B8`, which stay off `READ_SERVICES` | — |
 
 use super::coding::plumbing as pl;
 use crate::host::{
@@ -270,6 +272,10 @@ pub(crate) struct BasicArgs {
     pub channel: String,
     pub polls: u32,
     pub interval_ms: u64,
+    /// The login fallback: used ONLY when the module refuses the login-less
+    /// start with NRC 0x33 (the engine decides; a rejected key is never
+    /// retried).
+    pub login: Option<(Unlocker, u8)>,
 }
 
 /// What the basic-settings run left behind, for the hand-back.
@@ -319,13 +325,32 @@ pub(crate) fn kwp_basic_op(
                 confirmed: true,
                 workshop_code: None,
             };
+            let handler = match &args.login {
+                Some((u, _)) => match u.seed_key() {
+                    Ok(h) => Some(h),
+                    Err(e) => {
+                        set(BasicEnd::NotStarted);
+                        return Err(e);
+                    }
+                },
+                None => None,
+            };
+            let login = KwpLogin {
+                session: Some(kwp::VAG_SESSION),
+                security_level: args
+                    .login
+                    .as_ref()
+                    .map(|(_, l)| *l)
+                    .unwrap_or(kwp::VAG_SECURITY_LEVEL),
+                seed_key: handler.as_deref(),
+            };
             let r = match kwp::run_basic_settings(
                 d,
                 &args.def,
                 &args.channel,
                 args.polls,
                 args.interval_ms,
-                &KwpLogin::vag(),
+                &login,
                 &opts,
             ) {
                 Ok(r) => r,
@@ -412,7 +437,7 @@ pub(crate) enum Action {
 
 pub(crate) enum Step {
     Idle,
-    Confirm(ConfirmRequest, DiagTarget, Action),
+    Confirm(ConfirmRequest, DiagTarget, String, Box<Action>),
     PreRead(Ack, JobHandle<Vec<u8>>, String, u64, Option<(Unlocker, u8)>),
     Running(JobHandle<(Tone, String)>),
 }
@@ -525,24 +550,26 @@ impl AdaptationView {
         }));
     }
 
-    /// Ask for an ECU change on channel `ch` (opens the confirmation).
-    /// Refused, sending nothing, when the module is not the app target, a
-    /// backup folder is missing (writes) or the seed/key id does not resolve.
+    /// Ask for an ECU change on channel `ch` (opens the confirmation for the
+    /// channel's module, by name). Refused, sending nothing, when a backup
+    /// folder is missing (writes) or the seed/key id does not resolve.
     pub(crate) fn request(&mut self, host: &mut Host<'_>, ch: &str) {
         let Some(l) = self.loaded.clone() else { return };
         let module = match self.module_for(host, ch) {
             Ok(t) => t,
             Err(e) => return self.msg = Some((Tone::Crit, e)),
         };
-        if let Some(why) = pl::change_blocker(host, module) {
-            return self.msg = Some((Tone::Crit, why));
-        }
-        let unlock = match self.security.resolve(host) {
-            Ok(u) => u,
-            Err(e) => return self.msg = Some((Tone::Crit, e)),
-        };
         let kind = match kind(&l.def, ch) {
             Ok(k) => k.clone(),
+            Err(e) => return self.msg = Some((Tone::Crit, e)),
+        };
+        let default_level = if kind.is_kwp() {
+            kwp::VAG_SECURITY_LEVEL
+        } else {
+            0x01
+        };
+        let unlock = match self.security.resolve(host, default_level) {
+            Ok(u) => u,
             Err(e) => return self.msg = Some((Tone::Crit, e)),
         };
         let (title, body, typed, action) = match kind {
@@ -581,8 +608,8 @@ impl AdaptationView {
                     format!(
                         "Starts the routine on the module, polls its result {} time(s), then \
                          stops it and returns to the default session (always, also after an \
-                         error). A basic-settings routine may store newly learned values in the \
-                         module; they cannot be backed up.",
+                         error). It may store newly learned values in the module; not reversible \
+                         from OpenTune.",
                         self.polls
                     ),
                     None,
@@ -601,7 +628,7 @@ impl AdaptationView {
                 format!(
                     "Runs basic settings on the module (KWP2000), reads the block {} time(s), \
                      then stops it (always, also after an error). It may store newly learned \
-                     values in the module; they cannot be backed up.",
+                     values in the module; not reversible from OpenTune.",
                     self.polls
                 ),
                 None,
@@ -610,6 +637,7 @@ impl AdaptationView {
                     channel: ch.into(),
                     polls: self.polls,
                     interval_ms: self.interval_ms,
+                    login: unlock,
                 }),
             ),
             _ => {
@@ -620,13 +648,14 @@ impl AdaptationView {
             }
         };
         let req = ConfirmRequest {
-            key: "adaptation-change".into(),
+            key: pl::confirm_key("adaptation-change", module),
             title,
             body,
             typed,
             confirm_label: "Run on module".into(),
         };
-        self.step = Step::Confirm(req, module, action);
+        let label = pl::module_label(&l.def.name, module);
+        self.step = Step::Confirm(req, module, label, Box::new(action));
     }
 
     pub(crate) fn tick(&mut self, host: &mut Host<'_>) {
@@ -638,14 +667,16 @@ impl AdaptationView {
         }
         self.step = match std::mem::replace(&mut self.step, Step::Idle) {
             Step::Idle => Step::Idle,
-            Step::Confirm(req, module, action) => match host.confirm_ecu(req.clone()) {
-                ConfirmResult::Pending => Step::Confirm(req, module, action),
-                ConfirmResult::Declined => {
-                    self.msg = Some((Tone::Muted, "cancelled: nothing was sent".into()));
-                    Step::Idle
+            Step::Confirm(req, module, label, action) => {
+                match host.confirm_ecu_for(req.clone(), module, &label) {
+                    ConfirmResult::Pending => Step::Confirm(req, module, label, action),
+                    ConfirmResult::Declined => {
+                        self.msg = Some((Tone::Muted, "cancelled: nothing was sent".into()));
+                        Step::Idle
+                    }
+                    ConfirmResult::Accepted(ack) => self.accepted(host, ack, module, *action),
                 }
-                ConfirmResult::Accepted(ack) => self.accepted(host, ack, module, action),
-            },
+            }
             Step::PreRead(ack, mut job, ch, raw, unlock) => match job.take() {
                 None => Step::PreRead(ack, job, ch, raw, unlock),
                 Some(Err(e)) => {
@@ -843,10 +874,10 @@ impl NativeView for AdaptationView {
                             );
                         });
                     }
-                    let blocker = module
+                    let off = module
                         .as_ref()
                         .ok()
-                        .and_then(|m| pl::change_blocker(host, *m));
+                        .and_then(|m| pl::off_target_note(host, *m));
                     let idle = !self.busy() && module.is_ok();
                     let mut change = false;
                     match &c.kind {
@@ -871,7 +902,7 @@ impl NativeView for AdaptationView {
                                             .desired_width(90.0),
                                     );
                                     change = ui
-                                        .add_enabled_ui(idle && blocker.is_none(), |ui| {
+                                        .add_enabled_ui(idle, |ui| {
                                             theme::primary_button(
                                                 ui,
                                                 &t,
@@ -901,7 +932,7 @@ impl NativeView for AdaptationView {
                                 }
                             });
                             change = ui
-                                .add_enabled_ui(idle && blocker.is_none(), |ui| {
+                                .add_enabled_ui(idle, |ui| {
                                     theme::primary_button(ui, &t, Some(icons::PLAY), "Run…")
                                 })
                                 .inner
@@ -923,10 +954,10 @@ impl NativeView for AdaptationView {
                              refuses).",
                         ),
                     }
-                    if let Some(b) = &blocker {
+                    if let Some(b) = &off {
                         pl::note(ui, host, Tone::Warn, b);
                     }
-                    if !c.kind.is_kwp() {
+                    if !matches!(c.kind, ChannelKind::KwpGroup { .. }) {
                         self.security.ui(ui, host);
                     }
                     self.records.ui(ui, host);
@@ -998,11 +1029,19 @@ mod tests {
         };
         v.set_def(&def_file(&fx.dir));
         v.value_text = "900".into();
-        fx.host(ECU, |h| v.request(h, "Idle"));
-        fx.host(ECU, |h| v.tick(h));
+        // The app target is the TCU; the definition names the engine, which
+        // is confirmed by name and is the only module written.
+        fx.host(TCU, |h| v.request(h, "Idle"));
+        let Step::Confirm(_, m, label, _) = &v.step else {
+            panic!("expected the confirmation")
+        };
+        assert_eq!(*m, ECU);
+        assert_eq!(label, "Synthetic (tx 0x7E0 / rx 0x7E8)");
+        fx.host(TCU, |h| v.tick(h));
         assert!(bus.wire().is_empty(), "nothing before the confirmation");
-        fx.confirms.answer("adaptation-change", true);
-        run(&mut v, &mut fx, ECU);
+        fx.confirms
+            .answer(&pl::confirm_key("adaptation-change", ECU), true);
+        run(&mut v, &mut fx, TCU);
         assert_eq!(v.msg.as_ref().unwrap().0, Tone::Ok, "{:?}", v.msg);
         let backup = v.last_backup.clone().unwrap();
         assert_eq!(std::fs::read(backup).unwrap(), vec![0x03, 0x20, 0xAA]);
@@ -1025,12 +1064,10 @@ mod tests {
         };
         v.set_def(&def_file(&fx.dir));
         v.value_text = "900".into();
-        // The definition's module (7E0) is not the app target (7E1).
-        fx.host(TCU, |h| v.request(h, "Idle"));
-        assert!(matches!(v.step, Step::Idle));
         fx.host(ECU, |h| v.request(h, "Idle"));
         fx.host(ECU, |h| v.tick(h));
-        fx.confirms.answer("adaptation-change", false);
+        fx.confirms
+            .answer(&pl::confirm_key("adaptation-change", ECU), false);
         fx.host(ECU, |h| v.tick(h));
         assert!(matches!(v.step, Step::Idle));
         assert!(bus.wire().is_empty());
@@ -1136,6 +1173,7 @@ mod tests {
             channel: "BS60".into(),
             polls: 2,
             interval_ms: 0,
+            login: None,
         };
         // A plain Ack, or one for another module, sends nothing.
         let other = fx.ecu_ack(ECU);
@@ -1189,6 +1227,7 @@ mod tests {
                 channel: "BS60".into(),
                 polls: 2,
                 interval_ms: 0,
+                login: None,
             },
         )
         .unwrap();
@@ -1213,11 +1252,85 @@ mod tests {
                 channel: "BS60".into(),
                 polls: 1,
                 interval_ms: 0,
+                login: None,
             },
         )
         .unwrap();
         let e = act.result.unwrap_err();
         assert!(e.to_lowercase().contains("login"), "{e}");
         assert!(bus.with_sid(0x27).is_empty(), "no key is ever sent");
+    }
+
+    fn kwp_login_keys(fx: &mut Fixture) {
+        fx.keys =
+            opentune_hub::seedkeys::SeedKeys::new(vec![opentune_adaptation::sim::test_seed_key]);
+    }
+
+    #[test]
+    fn kwp_basic_settings_logs_in_only_when_the_module_asks() {
+        let bus = kwp_bus(true);
+        let a = bus.access("socketcan");
+        let mut fx = Fixture::new("adapt-kwp-login-ok");
+        kwp_login_keys(&mut fx);
+        let l = load(&def_file(&fx.dir)).unwrap();
+        let u = fx
+            .host(ECU, |h| {
+                h.unlocker_for(opentune_adaptation::sim::SIM_SEED_KEY_ID)
+            })
+            .unwrap();
+        let ack = fx.ecu_ack(DiagTarget::tp20(0x01));
+        let act = kwp_basic_op(
+            &a,
+            ack,
+            DiagTarget::tp20(0x01),
+            BasicArgs {
+                def: l.def,
+                channel: "BS60".into(),
+                polls: 1,
+                interval_ms: 0,
+                login: Some((u, kwp::VAG_SECURITY_LEVEL)),
+            },
+        )
+        .unwrap();
+        assert!(act.restored.is_ok());
+        let rep = act.result.unwrap();
+        assert!(rep.login_required && rep.stopped);
+        // One seed request and one key, at level 03 / 04.
+        let sec: Vec<Vec<u8>> = bus.with_sid(0x27).into_iter().map(|(_, r)| r).collect();
+        assert_eq!(sec.len(), 2, "{sec:02X?}");
+        assert_eq!(sec[0], vec![0x27, 0x03]);
+        assert_eq!(sec[1][..2], [0x27, 0x04]);
+    }
+
+    #[test]
+    fn a_rejected_kwp_key_is_never_retried() {
+        let bus = kwp_bus(true);
+        let a = bus.access("socketcan");
+        let mut fx = Fixture::new("adapt-kwp-badkey");
+        fx.keys = super::super::coding::simkit::xor_keys(); // the wrong algorithm
+        let l = load(&def_file(&fx.dir)).unwrap();
+        let u = fx.host(ECU, |h| h.unlocker_for("xor-5a")).unwrap();
+        let ack = fx.ecu_ack(DiagTarget::tp20(0x01));
+        let act = kwp_basic_op(
+            &a,
+            ack,
+            DiagTarget::tp20(0x01),
+            BasicArgs {
+                def: l.def,
+                channel: "BS60".into(),
+                polls: 1,
+                interval_ms: 0,
+                login: Some((u, kwp::VAG_SECURITY_LEVEL)),
+            },
+        )
+        .unwrap();
+        assert!(act.result.is_err());
+        let keys = bus
+            .with_sid(0x27)
+            .into_iter()
+            .filter(|(_, r)| r.get(1) == Some(&0x04))
+            .count();
+        assert_eq!(keys, 1, "one key, never retried");
+        assert!(bus.with_kwp(0x01, 0x300, |m| m.basic_active.is_none()));
     }
 }
