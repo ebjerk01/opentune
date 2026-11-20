@@ -16,6 +16,8 @@
 //! - [`channels`] decodes the realtime output-channel block, including simple
 //!   `{ expression }` channels ([`expr`]); anything the evaluator does not
 //!   support is reported per channel, not guessed.
+//! - [`present`] holds a tune editor's presentation helpers: values as text,
+//!   per-constant diffs, UI value parsing and JSON summaries.
 //!
 //! The serial protocol that moves pages and realtime data lives in
 //! `opentune-tsproto`.
@@ -27,6 +29,7 @@ pub mod expr;
 pub mod model;
 pub mod msq;
 mod parse;
+pub mod present;
 pub mod text;
 pub mod tune;
 pub mod value;

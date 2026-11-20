@@ -196,6 +196,9 @@ section (alpha/bench builds) until they are vehicle-tested.
     hub's map codecs).
   - The Haldex panel's chart series, their decimation, the decoded-log
     payload and the Live-log CSV export → `opentune_haldex::series`.
+  - The aftermarket-ECU panel's value formatting, per-constant diffs, UI
+    value parsing and INI / constant / axis / `.msq` report JSON →
+    `opentune_tsini::present`.
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into

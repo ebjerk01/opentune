@@ -19,6 +19,5 @@ thiserror = { workspace = true }
 # roxmltree 0.20.0 (2023-12-29): small pull-free DOM reader, already used by
 # opentune-xdf / -ecuflash / -logdef; reads the .msq XML.
 roxmltree = "0.20.0"
-
-[dev-dependencies]
+# The JSON shapes of the presentation helpers (src/present.rs).
 serde_json = { workspace = true }

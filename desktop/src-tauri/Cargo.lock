@@ -2964,6 +2964,7 @@ version = "0.7.0"
 dependencies = [
  "roxmltree",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 
