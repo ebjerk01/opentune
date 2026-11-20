@@ -93,6 +93,19 @@ The host enforces the safety rules: `write_file` needs an `Ack` (only
 `AdapterAccess::mutate` needs an `Ack` and a `BackupReceipt` (only `backup`
 creates one). Neither type can be constructed outside this crate.
 
+**Target module.** The app has one diagnostic target (Settings → Adapter
+settings tx/rx, else the definition's ids, else the engine 7E0/7E8):
+`Host::target()` and `Host::link().target`. Views pass it to
+`AdapterAccess::read`. An ECU-changing operation is confirmed with
+`Host::confirm_ecu`, whose dialog shows the target and whose `Ack` carries
+it; `AdapterAccess::mutate` addresses `Ack::ecu_target()`, so a write reaches
+exactly the module the user confirmed, and a plain `confirm` Ack (file
+writes) cannot drive a mutation.
+
+**Diagnostics.** `NativeConfig::diagnostics` is an optional upload seam
+(`DiagnosticsSink`); it is `None` in the public build, which never uploads
+anything.
+
 A view edits map cells with `HostAction::EditCells { map, cells }` (physical
 values, applied to the working image; `Host::image()` shows them and
 `Host::image_edited()` says there are unsaved edits). Views never save the

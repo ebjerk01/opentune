@@ -63,6 +63,11 @@ pub struct NativeConfig {
     pub views: Vec<Box<dyn NativeView>>,
     /// The adapter the views run diagnostics through (None: no adapter layer).
     pub adapter: Option<Arc<dyn AdapterAccess>>,
+    /// Where an embedding build may send diagnostics reports (None in the
+    /// public build: nothing is ever uploaded). The core never calls it on
+    /// its own; a build that sets it decides what is sent and when, with the
+    /// user's consent.
+    pub diagnostics: Option<Arc<dyn DiagnosticsSink>>,
 }
 
 /// Resolve a checksum id: the build's resolvers first, then the core set.
@@ -254,7 +259,91 @@ impl Jobs {
 /// [`Host::confirm`] creates it; it is consumed by the operation it guards.
 #[derive(Debug)]
 pub struct Ack {
-    _p: (),
+    /// The module the user saw in the dialog ([`Host::confirm_ecu`] only).
+    target: Option<DiagTarget>,
+}
+
+impl Ack {
+    /// The diagnostic module this confirmation names, if it was an ECU
+    /// operation ([`Host::confirm_ecu`]).
+    pub fn target(&self) -> Option<DiagTarget> {
+        self.target
+    }
+
+    /// The module a mutating adapter operation must address: the one the
+    /// user confirmed. A file-write confirmation is refused here.
+    pub fn ecu_target(&self) -> Result<DiagTarget, String> {
+        self.target.ok_or_else(|| {
+            "this confirmation does not name a target module (use Host::confirm_ecu)".into()
+        })
+    }
+}
+
+/// The diagnostic module requests go to: request (tx) and response (rx)
+/// CAN ids. One global target for the whole app (Settings → Adapter
+/// settings, else the definition's ids, else the engine).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DiagTarget {
+    pub tx: u32,
+    pub rx: u32,
+}
+
+impl DiagTarget {
+    /// The engine ECU's physical diagnostic address (ISO 15765-4).
+    pub const ENGINE: DiagTarget = DiagTarget {
+        tx: 0x7E0,
+        rx: 0x7E8,
+    };
+}
+
+impl Default for DiagTarget {
+    fn default() -> Self {
+        Self::ENGINE
+    }
+}
+
+impl std::fmt::Display for DiagTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let id = |v: u32| {
+            if v > 0x7FF {
+                format!("0x{v:08X}")
+            } else {
+                format!("0x{v:03X}")
+            }
+        };
+        write!(f, "tx {} / rx {}", id(self.tx), id(self.rx))
+    }
+}
+
+/// The app's target from the Adapter settings fields (hex, both or neither)
+/// and the selected definition: typed ids win, then the definition's
+/// (non-zero) ids, then [`DiagTarget::ENGINE`].
+pub fn resolve_target(tx: &str, rx: &str, def: Option<&EcuDef>) -> Result<DiagTarget, String> {
+    let parse = |s: &str| {
+        let h = s.trim();
+        let h = h
+            .strip_prefix("0x")
+            .or_else(|| h.strip_prefix("0X"))
+            .unwrap_or(h);
+        u32::from_str_radix(h, 16)
+            .ok()
+            .filter(|v| *v <= 0x1FFF_FFFF && !h.is_empty() && h.len() <= 8)
+            .ok_or_else(|| format!("'{}' is not a hex CAN id", s.trim()))
+    };
+    match (tx.trim().is_empty(), rx.trim().is_empty()) {
+        (false, false) => Ok(DiagTarget {
+            tx: parse(tx)?,
+            rx: parse(rx)?,
+        }),
+        (true, true) => Ok(match def {
+            Some(d) if d.tx_id != 0 && d.rx_id != 0 && d.tx_id <= 0x1FFF_FFFF => DiagTarget {
+                tx: d.tx_id,
+                rx: d.rx_id,
+            },
+            _ => DiagTarget::ENGINE,
+        }),
+        _ => Err("set both the request (tx) and response (rx) ids, or neither".into()),
+    }
 }
 
 /// Proof that a backup was written to the vault. Only [`Host::backup`] (and
@@ -297,15 +386,27 @@ enum ConfirmState {
 /// Open confirmation dialogs, rendered by the app every frame.
 #[derive(Default)]
 pub struct Confirms {
-    open: BTreeMap<String, (ConfirmRequest, ConfirmState, String)>,
+    /// key → (request, state, typed text, target module shown).
+    #[allow(clippy::type_complexity)]
+    open: BTreeMap<String, (ConfirmRequest, ConfirmState, String, Option<DiagTarget>)>,
 }
 
 impl Confirms {
     pub(crate) fn ask(&mut self, req: ConfirmRequest) -> ConfirmResult {
-        match self.open.get(&req.key).map(|(_, s, _)| *s) {
+        self.ask_with(req, None)
+    }
+
+    /// Like `ask`, for an operation on module `target`: the dialog shows it
+    /// and the `Ack` carries the target exactly as shown when it opened.
+    pub(crate) fn ask_with(
+        &mut self,
+        req: ConfirmRequest,
+        target: Option<DiagTarget>,
+    ) -> ConfirmResult {
+        match self.open.get(&req.key).map(|(_, s, _, _)| *s) {
             Some(ConfirmState::Accepted) => {
-                self.open.remove(&req.key);
-                ConfirmResult::Accepted(Ack { _p: () })
+                let (_, _, _, shown) = self.open.remove(&req.key).expect("present");
+                ConfirmResult::Accepted(Ack { target: shown })
             }
             Some(ConfirmState::Declined) => {
                 self.open.remove(&req.key);
@@ -313,8 +414,10 @@ impl Confirms {
             }
             Some(ConfirmState::Open) => ConfirmResult::Pending,
             None => {
-                self.open
-                    .insert(req.key.clone(), (req, ConfirmState::Open, String::new()));
+                self.open.insert(
+                    req.key.clone(),
+                    (req, ConfirmState::Open, String::new(), target),
+                );
                 ConfirmResult::Pending
             }
         }
@@ -323,10 +426,10 @@ impl Confirms {
     /// Draw the open dialogs (one at a time).
     pub fn ui(&mut self, ctx: &egui::Context) {
         let t = theme::tokens(ctx);
-        let Some((key, (req, _, typed))) = self
+        let Some((key, (req, _, typed, target))) = self
             .open
             .iter_mut()
-            .find(|(_, (_, s, _))| *s == ConfirmState::Open)
+            .find(|(_, (_, s, _, _))| *s == ConfirmState::Open)
         else {
             return;
         };
@@ -341,6 +444,28 @@ impl Confirms {
             );
             ui.add_space(6.0);
             ui.label(egui::RichText::new(&req.body).color(t.fg_dim));
+            if let Some(tg) = target {
+                ui.add_space(8.0);
+                egui::Frame::new()
+                    .fill(t.warn.gamma_multiply(0.14))
+                    .stroke(egui::Stroke::new(1.0, t.warn.gamma_multiply(0.5)))
+                    .corner_radius(egui::CornerRadius::same(8))
+                    .inner_margin(egui::Margin::symmetric(10, 7))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("Target module")
+                                    .font(theme::font(theme::UI_STRONG, 12.0))
+                                    .color(t.fg),
+                            );
+                            ui.label(
+                                egui::RichText::new(tg.to_string())
+                                    .font(theme::font(theme::MONO_STRONG, 13.0))
+                                    .color(t.warn),
+                            );
+                        });
+                    });
+            }
             let ok_enabled = match &req.typed {
                 Some(word) => {
                     ui.add_space(8.0);
@@ -434,6 +559,16 @@ pub struct WriteReceipt {
 // Adapter
 // ---------------------------------------------------------------------------
 
+/// An embedding build's diagnostics upload target (see
+/// [`NativeConfig::diagnostics`]). A report is opaque text the build
+/// assembled; implementations must only send it with the user's consent.
+pub trait DiagnosticsSink: Send + Sync {
+    /// Human-readable destination, shown before anything is sent.
+    fn destination(&self) -> String;
+    /// Send one report; returns a reference (ticket id, URL) or an error.
+    fn submit(&self, report: &str) -> Result<String, String>;
+}
+
 /// Snapshot of the adapter connection the top bar shows.
 #[derive(Clone, Debug, Default)]
 pub struct LinkInfo {
@@ -441,20 +576,27 @@ pub struct LinkInfo {
     pub port: String,
     pub connected: bool,
     pub battery_v: Option<f32>,
+    /// The app's current target module (`None`: the Adapter settings ids are
+    /// incomplete or invalid, so no ECU operation can run).
+    pub target: Option<DiagTarget>,
 }
 
 /// Diagnostics through the app's adapter. Implementations serialize access
 /// (one operation at a time) and never let a view open a driver itself.
 pub trait AdapterAccess: Send + Sync {
     fn link(&self) -> LinkInfo;
-    /// A read-only operation (identification, reads, live data).
+    /// A read-only operation (identification, reads, live data) on module
+    /// `target` (pass [`Host::target`]: the app's one global target).
     fn read(
         &self,
         op: &str,
+        target: DiagTarget,
         f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
     ) -> Result<(), String>;
-    /// An operation that changes the ECU. Needs the user's [`Ack`] and a
-    /// [`BackupReceipt`] of the data it is about to change.
+    /// An operation that changes the ECU. Needs the user's [`Ack`] from
+    /// [`Host::confirm_ecu`] and a [`BackupReceipt`] of the data it is about
+    /// to change. Implementations address [`Ack::ecu_target`] — the module
+    /// the user saw in the dialog — and refuse an `Ack` without one.
     fn mutate(
         &self,
         op: &str,
@@ -496,6 +638,8 @@ pub struct Host<'a> {
     pub(crate) map_idx: usize,
     pub(crate) checksums: &'a [ChecksumResolver],
     pub(crate) adapter: Option<&'a Arc<dyn AdapterAccess>>,
+    pub(crate) diagnostics: Option<&'a Arc<dyn DiagnosticsSink>>,
+    pub(crate) target: Result<DiagTarget, String>,
     pub(crate) jobs: &'a Jobs,
     pub(crate) confirms: &'a mut Confirms,
     pub(crate) actions: &'a mut Vec<HostAction>,
@@ -533,8 +677,37 @@ impl<'a> Host<'a> {
     pub fn adapter(&self) -> Option<Arc<dyn AdapterAccess>> {
         self.adapter.cloned()
     }
+    /// The link, with the app's current target module.
+    /// The build's diagnostics upload target (None in the public build).
+    pub fn diagnostics(&self) -> Option<Arc<dyn DiagnosticsSink>> {
+        self.diagnostics.cloned()
+    }
+
+    /// The link, with the app's current target module.
     pub fn link(&self) -> LinkInfo {
-        self.adapter.map(|a| a.link()).unwrap_or_default()
+        let mut l = self.adapter.map(|a| a.link()).unwrap_or_default();
+        l.target = self.target.as_ref().ok().copied();
+        l
+    }
+
+    /// The app's one target module (Settings → Adapter settings, else the
+    /// definition's ids, else the engine), or why it is unusable.
+    pub fn target(&self) -> Result<DiagTarget, String> {
+        self.target.clone()
+    }
+
+    /// Confirm an operation that changes an ECU. The dialog shows the target
+    /// module, and the returned [`Ack`] carries it, so the write goes to the
+    /// module the user confirmed even if the global target changes later.
+    /// Declined at once when the target is unusable.
+    pub fn confirm_ecu(&mut self, req: ConfirmRequest) -> ConfirmResult {
+        match &self.target {
+            Ok(t) => self.confirms.ask_with(req, Some(*t)),
+            Err(e) => {
+                *self.status = Some(format!("no target module: {e}"));
+                ConfirmResult::Declined
+            }
+        }
     }
 
     pub fn spawn_job<T, F>(&self, name: &str, f: F) -> JobHandle<T>
@@ -690,28 +863,154 @@ mod tests {
         let d = tmp("write");
         let f = d.join("image.bin");
         std::fs::write(&f, b"OLD-CONTENTS").unwrap();
-        let r = guarded_write(Ack { _p: () }, &f, b"NEW").unwrap();
+        let r = guarded_write(Ack { target: None }, &f, b"NEW").unwrap();
         assert_eq!(std::fs::read(&f).unwrap(), b"NEW");
         let b = r.backup.expect("backup of the old contents");
         assert_eq!(std::fs::read(&b.path).unwrap(), b"OLD-CONTENTS");
         assert!(b.path.starts_with(d.join("opentune-vault")));
         // A new file needs no backup.
         let n = d.join("new.bin");
-        assert!(guarded_write(Ack { _p: () }, &n, b"X")
+        assert!(guarded_write(Ack { target: None }, &n, b"X")
             .unwrap()
             .backup
             .is_none());
         // An unreadable target (a directory) is refused before anything is written.
         let dir_target = d.join("adir");
         std::fs::create_dir_all(&dir_target).unwrap();
-        assert!(guarded_write(Ack { _p: () }, &dir_target, b"X").is_err());
+        assert!(guarded_write(Ack { target: None }, &dir_target, b"X").is_err());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn public_default_uploads_nothing_and_has_no_adapter() {
+        let c = NativeConfig::default();
+        assert!(c.diagnostics.is_none());
+        assert!(c.adapter.is_none());
+        assert!(c.views.is_empty() && c.checksums.is_empty());
+        assert_eq!(c.branding.name, "OpenTune");
+    }
+
+    #[test]
+    fn target_resolution_and_display() {
+        let d = |tx, rx| {
+            let mut d = EcuDef::from_json(
+                r#"{"id":"t","name":"T","maker":"x","family":"x","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"flash_size":0,"regions":[],"full_read":"obd"}"#,
+            )
+            .unwrap();
+            d.tx_id = tx;
+            d.rx_id = rx;
+            d
+        };
+        let tcu = DiagTarget {
+            tx: 0x7E1,
+            rx: 0x7E9,
+        };
+        assert_eq!(resolve_target("", "", None), Ok(DiagTarget::ENGINE));
+        assert_eq!(resolve_target(" ", "", Some(&d(0x7E1, 0x7E9))), Ok(tcu));
+        assert_eq!(
+            resolve_target("", "", Some(&d(1, 0))),
+            Ok(DiagTarget::ENGINE),
+            "a K-line def without CAN ids"
+        );
+        assert_eq!(
+            resolve_target("0x7e1", "7E9", Some(&d(0x7E0, 0x7E8))),
+            Ok(tcu),
+            "typed ids win"
+        );
+        assert!(resolve_target("7E1", "", None).is_err(), "both or neither");
+        assert!(resolve_target("xyz", "7E9", None).is_err());
+        assert!(
+            resolve_target("3FFFFFFF", "7E9", None).is_err(),
+            "> 29 bits"
+        );
+        assert_eq!(tcu.to_string(), "tx 0x7E1 / rx 0x7E9");
+        assert_eq!(
+            DiagTarget {
+                tx: 0x18DA10F1,
+                rx: 0x18DAF110
+            }
+            .to_string(),
+            "tx 0x18DA10F1 / rx 0x18DAF110"
+        );
+    }
+
+    /// The Ack carries the module shown when the dialog opened, even if the
+    /// global target changes before the user clicks.
+    #[test]
+    fn ecu_confirm_stamps_the_shown_target() {
+        let ctx = egui::Context::default();
+        let jobs = Jobs::new(ctx);
+        let mut confirms = Confirms::default();
+        let mut actions = Vec::new();
+        let mut status = None;
+        let tcu = DiagTarget {
+            tx: 0x7E1,
+            rx: 0x7E9,
+        };
+        let req = || ConfirmRequest {
+            key: "flash-tcu".into(),
+            title: "Write".into(),
+            body: "b".into(),
+            typed: None,
+            confirm_label: "Write".into(),
+        };
+        let mut host = |target: Result<DiagTarget, String>,
+                        confirms: &mut Confirms,
+                        f: &mut dyn FnMut(&mut Host) -> ConfirmResult| {
+            let mut h = Host {
+                tokens: crate::theme::DARK,
+                image_path: None,
+                image: None,
+                image_edited: false,
+                defs: &[],
+                def_idx: None,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                target,
+                jobs: &jobs,
+                confirms,
+                actions: &mut actions,
+                status: &mut status,
+            };
+            f(&mut h)
+        };
+        let r = host(Ok(tcu), &mut confirms, &mut |h| h.confirm_ecu(req()));
+        assert!(matches!(r, ConfirmResult::Pending));
+        confirms.answer("flash-tcu", true);
+        // The user switched the global target to the engine meanwhile.
+        let r = host(Ok(DiagTarget::ENGINE), &mut confirms, &mut |h| {
+            h.confirm_ecu(req())
+        });
+        match r {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.ecu_target(), Ok(tcu)),
+            other => panic!("{other:?}"),
+        }
+        // An unusable target never opens a dialog.
+        let r = host(Err("half set".into()), &mut confirms, &mut |h| {
+            h.confirm_ecu(req())
+        });
+        assert!(matches!(r, ConfirmResult::Declined));
+        // A plain confirm's Ack cannot drive a mutation.
+        let r = host(Ok(tcu), &mut confirms, &mut |h| h.confirm(req()));
+        assert!(matches!(r, ConfirmResult::Pending));
+        confirms.answer("flash-tcu", true);
+        if let ConfirmResult::Accepted(ack) =
+            host(Ok(tcu), &mut confirms, &mut |h| h.confirm(req()))
+        {
+            assert!(ack.ecu_target().is_err());
+        } else {
+            panic!("expected Accepted");
+        }
     }
 
     /// A mock adapter: answers every request with a fixed reply and counts
     /// mutating calls (which can only happen with an Ack + BackupReceipt).
     struct MockAdapter {
         mutations: Mutex<u32>,
+        /// Every module an operation addressed.
+        targets: Mutex<Vec<DiagTarget>>,
     }
     impl AdapterAccess for MockAdapter {
         fn link(&self) -> LinkInfo {
@@ -720,26 +1019,30 @@ mod tests {
                 port: "mem".into(),
                 connected: true,
                 battery_v: Some(12.6),
+                target: None,
             }
         }
         fn read(
             &self,
             _op: &str,
+            target: DiagTarget,
             f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
         ) -> Result<(), String> {
+            self.targets.lock().unwrap().push(target);
             let mut diag = |req: &[u8]| Ok::<Vec<u8>, String>(vec![req[0] + 0x40]);
             f(&mut diag)
         }
         fn mutate(
             &self,
             op: &str,
-            _ack: Ack,
+            ack: Ack,
             backup: &BackupReceipt,
             f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
         ) -> Result<(), String> {
             assert!(backup.path.exists(), "{op}: backup must exist");
+            let target = ack.ecu_target()?;
             *self.mutations.lock().unwrap() += 1;
-            self.read(op, f)
+            self.read(op, target, f)
         }
     }
 
@@ -748,12 +1051,13 @@ mod tests {
         let jobs = Jobs::new(egui::Context::default());
         let mock = Arc::new(MockAdapter {
             mutations: Mutex::new(0),
+            targets: Mutex::new(Vec::new()),
         });
         let adapter: Arc<dyn AdapterAccess> = mock.clone();
         let a = adapter.clone();
         let mut h = jobs.spawn("identify", move |p| {
             let mut reply = Vec::new();
-            a.read("identify", &mut |d| {
+            a.read("identify", DiagTarget::ENGINE, &mut |d| {
                 reply = d.request(&[0x22, 0xF1, 0x90])?;
                 Ok(())
             })?;
@@ -766,11 +1070,22 @@ mod tests {
         let d = tmp("mut");
         let backup = backup_into_vault(&d, "flash before write", b"ECU-DATA").unwrap();
         adapter
-            .mutate("write", Ack { _p: () }, &backup, &mut |dg| {
+            .mutate("write", Ack { target: None }, &backup, &mut |dg| {
+                dg.request(&[0x2E]).map(|_| ())
+            })
+            .expect_err("a file-write Ack names no module");
+        assert_eq!(*mock.mutations.lock().unwrap(), 0);
+        let tcu = DiagTarget {
+            tx: 0x7E1,
+            rx: 0x7E9,
+        };
+        adapter
+            .mutate("write", Ack { target: Some(tcu) }, &backup, &mut |dg| {
                 dg.request(&[0x2E]).map(|_| ())
             })
             .unwrap();
         assert_eq!(*mock.mutations.lock().unwrap(), 1);
+        assert_eq!(mock.targets.lock().unwrap().last(), Some(&tcu));
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -840,6 +1155,8 @@ mod tests {
                 map_idx: 0,
                 checksums: &[],
                 adapter: None,
+                diagnostics: None,
+                target: Ok(DiagTarget::ENGINE),
                 jobs: &jobs,
                 confirms: &mut confirms,
                 actions: &mut actions,

@@ -654,11 +654,33 @@ impl TopBar {
                         ui.label(RichText::new("Response id (rx)").color(t.fg_dim));
                         hex_field(ui, t, &mut a.rx, "7E8");
                         ui.end_row();
+
+                        ui.label(RichText::new("Target module").color(t.fg_dim));
+                        let typed = !a.tx.trim().is_empty() || !a.rx.trim().is_empty();
+                        match crate::host::resolve_target(&a.tx, &a.rx, None) {
+                            Ok(tg) if typed => ui.label(
+                                RichText::new(tg.to_string())
+                                    .font(theme::font(theme::MONO_STRONG, 12.5))
+                                    .color(t.fg),
+                            ),
+                            Ok(_) => ui.label(
+                                RichText::new("definition's ids, else engine (7E0 / 7E8)")
+                                    .color(t.fg),
+                            ),
+                            Err(e) => ui.label(
+                                RichText::new(format!("{} {e}", icons::WARNING))
+                                    .size(12.0)
+                                    .color(t.crit),
+                            ),
+                        };
+                        ui.end_row();
                     });
                 ui.add_space(8.0);
                 ui.label(
                     RichText::new(
-                        "Blank ids use the ECU definition's default. The CAN bus choice \
+                        "One target for the whole app: every diagnostic view and plugin talks \
+                         to this module, and every ECU write names it in its confirmation. \
+                         Blank ids use the ECU definition's default. The CAN bus choice \
                          applies to dual-bus (HS/MS switch) ELM327 adapters.",
                     )
                     .size(12.0)
