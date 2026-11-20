@@ -1474,7 +1474,10 @@ dependencies = [
 name = "opentune-hub"
 version = "0.7.0"
 dependencies = [
+ "opentune-checksum",
  "opentune-core",
+ "opentune-ctrldef",
+ "opentune-db",
  "opentune-driver-doip",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
@@ -1490,6 +1493,8 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-haldex",
+ "opentune-packs",
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",

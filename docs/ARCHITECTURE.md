@@ -50,6 +50,9 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   plugin seed/key lookup with the built-in SA2 interpreter, the build
   channel, map cell codecs and vault listing. The desktop re-exports it under
   its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
+  It also holds panel logic that joins several crates:
+  `opentune_hub::controllers` (the controller catalog over `ctrldefs/` and
+  definition packs, link validation, CAN-log decode).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).

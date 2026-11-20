@@ -16,6 +16,9 @@
 //! * [`channel`] — the [`BuildChannel`] that gates debug / Bench-tier features.
 //! * [`maps`] — map cell / axis decoding and single-cell encoding.
 //! * [`vault`] — listing a backup vault directory.
+//! * [`controllers`] — the drivetrain controller catalog (built-in
+//!   definitions plus definition packs), cross-link validation and the
+//!   offline CAN-log decode with a definition's frame sets.
 //!
 //! Features: `alpha` registers the Bench-tier drivers and makes
 //! [`BuildChannel::compiled`] report `alpha`; `testkit` exposes the simulated
@@ -24,6 +27,7 @@
 
 pub mod adapter;
 pub mod channel;
+pub mod controllers;
 pub mod drivers;
 pub mod maps;
 pub mod sa2script;
