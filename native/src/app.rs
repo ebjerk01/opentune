@@ -535,6 +535,9 @@ impl eframe::App for App {
                         self.flash.open_map(m);
                         self.view = View::Flash;
                     }
+                    // Imported / promoted definitions (HostAction::AddDefinition).
+                    let acts = self.maps.take_actions();
+                    self.apply(acts);
                 }
                 View::EcuDb => self.ecudb.ui(ui, &t),
                 View::Drivers => views::drivers::ui(ui, &t),

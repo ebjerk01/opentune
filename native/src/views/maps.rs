@@ -545,13 +545,8 @@ pub(crate) fn kv(ui: &mut Ui, t: &Tokens, key: &str, value: &str) {
 
 impl MapsView {
     /// Definitions imported / promoted since the last call, as
-    /// `HostAction::AddDefinition`, for the app to apply.
-    ///
-    /// INTEGRATION: `app.rs` (shared, not owned by batch N2) must drain this
-    /// after `self.maps.ui(..)` with `let a = self.maps.take_actions();
-    /// self.apply(a);`. Until then an import / promote is parsed and shown
-    /// but not added to the definitions.
-    #[allow(dead_code)]
+    /// `HostAction::AddDefinition`, for the app to apply (`app.rs` drains
+    /// this after every `ui`).
     pub fn take_actions(&mut self) -> Vec<HostAction> {
         std::mem::take(&mut self.actions)
     }

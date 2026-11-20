@@ -34,17 +34,19 @@ src/
   widgets/       shared panel widgets: pack picker, GPS card, capability
                  gating, CSV recorder
   hex.rs         virtualised hex rows
-  mapview.rs     heat-grid map canvas + legend
-  image.rs       map decoding (thin local copy of the Tauri backend's)
+  mapview.rs     heat-grid map canvas + legend, range selection
+  mapops.rs      map editor operations (set, +/-, %, interpolate, smooth)
+  image.rs       the edit model (refuse-not-clamp encode, undo / redo)
   bench.rs       --bench frame timing
   screenshot.rs  --screenshot capture
 assets/fonts/    Inter, Space Grotesk, JetBrains Mono (SIL OFL 1.1, subset,
                  see README there), Phosphor (MIT)
 ```
 
-The map decoding (`image.rs`) is a local copy that predates the shared
-codec in `opentune_hub::maps` (which the Tauri app uses); switching the
-native app to it is planned.
+Map decoding is the shared codec in `opentune_hub::maps` (the Tauri app's
+too). Encoding stays native and REFUSES a value that does not fit (the
+shared encoder clamps); `image::tests::refuse_not_clamp_is_pinned` keeps it
+that way.
 
 ## Build and run
 
@@ -235,9 +237,18 @@ the configured resolvers.
 - "Fix & save" (no edits) writes corrected checksums to a NEW file chosen
   in a save dialog; the opened dump is never overwritten by it.
 - Map editing: click a cell, type a value + Enter (or `+`/`-` to step one
-  raw LSB, Shift for 10, Ctrl+Z to undo). Values are refused, never clamped
-  or wrapped, when they do not fit the data type or the map's `min`/`max`.
-  Edited cells are marked; the dump bar shows the edited byte count.
+  raw LSB, Shift for 10). Select a range (shift-click, drag, Shift+arrows,
+  Ctrl+A) for Set / + / − / ×% / interpolate (bilinear, rows, columns) /
+  smooth / copy / paste (tab-separated, system clipboard). Values are
+  refused, never clamped or wrapped, when they do not fit the data type or
+  the map's `min`/`max`; every operation is all-or-nothing (one refused
+  cell changes nothing, and every refused cell is listed) and one undo step
+  (Ctrl+Z; Ctrl+Y / Ctrl+Shift+Z redo). `HostAction::EditCells` follows the
+  same all-or-nothing rule. Edited cells are marked; the dump bar shows the
+  edited byte count.
+- XDF / A2L import and region promote add session definitions (Maps view);
+  a project (`.otproj`, the Tauri format) captures and re-applies edits as
+  one all-or-nothing undo step.
 - **Save** replaces the opened dump only after a confirmation; its current
   contents are archived in the vault first (the write is refused if the
   backup fails) and the new file is written atomically. Checksums are
