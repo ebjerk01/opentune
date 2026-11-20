@@ -2669,6 +2669,7 @@ dependencies = [
  "opentune-core",
  "opentune-ctrldef",
  "opentune-db",
+ "opentune-diaglog",
  "opentune-driver-slcan",
  "opentune-dtc",
  "opentune-flash",
@@ -2695,6 +2696,15 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
+]
+
+[[package]]
+name = "opentune-diaglog"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2854,6 +2864,8 @@ dependencies = [
 name = "opentune-hub"
 version = "0.7.0"
 dependencies = [
+ "opentune-adaptation",
+ "opentune-candump",
  "opentune-checksum",
  "opentune-core",
  "opentune-ctrldef",
@@ -2874,7 +2886,9 @@ dependencies = [
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
  "opentune-haldex",
+ "opentune-logdef",
  "opentune-logview",
+ "opentune-mapfind",
  "opentune-packs",
  "opentune-sa2",
  "opentune-seedkey-loader",
@@ -2901,6 +2915,14 @@ version = "0.7.0"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-mapfind"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
 ]
 
 [[package]]

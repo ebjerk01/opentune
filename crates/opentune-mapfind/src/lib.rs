@@ -58,6 +58,7 @@ use opentune_core::ecudef::{AxisDef, DataType, Endian, MapDef, Scaling};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 
+pub mod diff;
 pub mod relocate;
 
 /// How a candidate was located in the image.

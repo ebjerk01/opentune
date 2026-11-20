@@ -184,6 +184,18 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the desktop's live-log session engine (the `0x2C` fast / SSM
+  live session held on the adapter hub, link-loss detection and reconnect,
+  the stateless poll and the logger-definition loader) moved from
+  `feat_logging.rs` into `opentune_hub::livelog`, so a second front end can
+  share it. No behaviour change; the `log_*` commands are thin glue over it.
+- Internal: the desktop's local diagnostics log (records, write-time masking
+  of SecurityAccess seeds/keys and long hex payloads, size caps and rotation,
+  the process-wide log, the chained panic hook, rate-limited frontend reports
+  and read-back) moved into the new workspace crate `opentune-diaglog`, so a
+  second front end can share it. No behaviour change; the desktop keeps its
+  `init` and `diag_log*` commands and re-exports the rest under the same
+  `opentune_desktop::diaglog` paths.
 - Internal: more pure desktop helpers moved into the workspace crates, so the
   native app can call them. No behaviour change; the desktop's Tauri
   commands call the moved code and the moved unit tests went with it.
@@ -204,6 +216,20 @@ section (alpha/bench builds) until they are vehicle-tested.
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
   the new workspace crate `opentune-hub`, so a second front end can share it.
   No behaviour change; the desktop re-exports it under the same public paths.
+- Internal: the desktop's long-running adapter operations moved into
+  `opentune-hub` as `opentune_hub::ops`: the CAN capture job with its
+  counters and stop handling (`ops::candump`), and the actuator-test gates,
+  live run, exchange log, STOP and automatic return of control
+  (`ops::actuator`), so a second front end runs the same code. The desktop
+  keeps only the Tauri commands; its session log plugs in through a small
+  `ExchangeLog` trait. No behaviour change.
+- Internal: more desktop helpers moved into shared crates, no behaviour
+  change: the stock/tuned diff clustering, 16-bit shape guess and map cell
+  deltas into `opentune_mapfind::diff` (the CLI's `findmaps` / `compare` and
+  the desktop now share one copy), the Find maps / Compare payloads into
+  `opentune_hub::compare`, the seed/key calculator's generic transforms into
+  `opentune_hub::seedkeys::generic`, and the "What's new" changelog parsing,
+  semver order and seen-version check into `opentune_hub::whatsnew`.
 - CI and `scripts/check.sh` build, lint and test with `--locked` (the
   workspace, `desktop/src-tauri` and the release builds), so a stale
   `Cargo.lock` fails the run instead of being silently updated.

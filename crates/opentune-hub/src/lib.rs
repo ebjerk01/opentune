@@ -16,6 +16,9 @@
 //! * [`channel`] — the [`BuildChannel`] that gates debug / Bench-tier features.
 //! * [`maps`] — map cell / axis decoding and single-cell encoding.
 //! * [`vault`] — listing a backup vault directory.
+//! * [`livelog`] — the live datalogging session engine (UDS `0x2C` fast
+//!   mode, Subaru SSM, link-loss detection and opt-in reconnect) held as one
+//!   long-running hub operation, plus the stateless per-tick poll.
 //! * [`controllers`] — the drivetrain controller catalog (built-in
 //!   definitions plus definition packs), cross-link validation and the
 //!   offline CAN-log decode with a definition's frame sets.
@@ -29,12 +32,16 @@
 
 pub mod adapter;
 pub mod channel;
+pub mod compare;
 pub mod controllers;
 pub mod drivers;
+pub mod livelog;
 pub mod logoverlay;
 pub mod maps;
+pub mod ops;
 pub mod sa2script;
 pub mod seedkeys;
 pub mod vault;
+pub mod whatsnew;
 
 pub use channel::BuildChannel;

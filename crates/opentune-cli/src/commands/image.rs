@@ -1,6 +1,7 @@
 //! Offline commands over local image files: diff, map finding, compare.
 use crate::mapfind_cmd;
 use anyhow::{anyhow, Context, Result};
+use opentune_mapfind::diff::{diff_regions, u16_shape, MapDelta, U16Shape};
 use std::path::PathBuf;
 
 /// `diff`
@@ -25,7 +26,7 @@ pub fn findmaps(
     };
     let a = std::fs::read(&stock).with_context(|| format!("read {}", stock.display()))?;
     let b = std::fs::read(&tuned).with_context(|| format!("read {}", tuned.display()))?;
-    let regions = find_maps(&a, &b, gap, min_len);
+    let regions = diff_regions(&a, &b, gap, min_len);
     println!(
         "{} candidate map region(s) (gap={gap}, min_len={min_len}):",
         regions.len()
@@ -83,51 +84,13 @@ pub fn compare(
     Ok(())
 }
 
-/// Cluster the byte differences between two images into candidate map regions,
-/// merging changes separated by fewer than `gap` unchanged bytes.
-fn find_maps(a: &[u8], b: &[u8], gap: usize, min_len: usize) -> Vec<(usize, usize)> {
-    let n = a.len().min(b.len());
-    let mut regions = Vec::new();
-    let mut i = 0;
-    while i < n {
-        if a[i] != b[i] {
-            let start = i;
-            let mut end = i + 1;
-            let mut since_change = 0usize;
-            let mut j = i + 1;
-            while j < n && since_change <= gap {
-                if a[j] != b[j] {
-                    end = j + 1;
-                    since_change = 0;
-                } else {
-                    since_change += 1;
-                }
-                j += 1;
-            }
-            regions.push((start, end));
-            i = end;
-        } else {
-            i += 1;
-        }
-    }
-    regions
-        .into_iter()
-        .filter(|(s, e)| e - s >= min_len)
-        .collect()
-}
-
 /// Hint whether a region's size looks like a table of 16-bit cells.
 fn guess_stride(len: usize) -> String {
-    if len >= 4 && len.is_multiple_of(2) {
-        let cells = len / 2;
-        for &w in &[16usize, 12, 10, 8] {
-            if cells.is_multiple_of(w) {
-                return format!("  (~{}x{} u16?)", cells / w, w);
-            }
-        }
-        return format!("  (~{cells} u16 cells?)");
+    match u16_shape(len) {
+        Some(U16Shape::Grid { rows, cols }) => format!("  (~{rows}x{cols} u16?)"),
+        Some(U16Shape::Cells(cells)) => format!("  (~{cells} u16 cells?)"),
+        None => String::new(),
     }
-    String::new()
 }
 
 /// Summarise the byte differences between two images as contiguous ranges.
@@ -257,19 +220,9 @@ fn compare_maps(d: &opentune_core::ecudef::EcuDef, a: &[u8], b: &[u8], only: Opt
             println!("  {:<32} [out of range — skipped]", m.name);
             continue;
         };
-        let mut changed = 0usize;
-        let mut max_abs = 0f64;
-        let mut sum_delta = 0f64;
-        for (x, y) in pa.iter().zip(pb.iter()) {
-            let dlt = y - x;
-            if dlt.abs() > 1e-9 {
-                changed += 1;
-                sum_delta += dlt;
-                if dlt.abs() > max_abs {
-                    max_abs = dlt.abs();
-                }
-            }
-        }
+        let delta = MapDelta::from_pairs(pa.iter().copied().zip(pb.iter().copied()));
+        let changed = delta.changed;
+        let max_abs = delta.max_abs;
         let unit = if m.unit.is_empty() {
             String::new()
         } else {
@@ -282,7 +235,7 @@ fn compare_maps(d: &opentune_core::ecudef::EcuDef, a: &[u8], b: &[u8], only: Opt
             continue;
         }
         any_changed = true;
-        let avg = sum_delta / changed as f64;
+        let avg = delta.mean();
         println!(
             "  {:<32} {}x{}  {} cell(s) changed  Δmax {:+.3}{u}  Δavg {:+.3}{u}",
             m.name,
