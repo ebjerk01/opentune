@@ -817,6 +817,18 @@ fn mono(s: impl Into<String>, c: Color32) -> RichText {
         .color(c)
 }
 
+/// `s` cut to `n` characters with an ellipsis (grid cells: a truncating
+/// label inside a `Grid` collapses to its minimum width).
+fn cut(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        s.to_string()
+    } else {
+        let mut c: String = s.chars().take(n.saturating_sub(1)).collect();
+        c.push('\u{2026}');
+        c
+    }
+}
+
 fn confidence_tone(c: &str) -> Tone {
     match c.to_ascii_lowercase().as_str() {
         "high" => Tone::Ok,
@@ -867,7 +879,7 @@ fn report_body(
             let (ok, n) = ck.tally();
             let (txt, c) = match &ck.blocks {
                 Err(_) => ("error".to_string(), t.crit),
-                Ok(_) if n == 0 => ("not recognised".to_string(), t.warn),
+                Ok(_) if n == 0 => ("no blocks".to_string(), t.warn),
                 Ok(_) if ok == n => (format!("{ok}/{n} OK"), t.ok),
                 Ok(_) => (format!("{}/{n} BAD", n - ok), t.crit),
             };
@@ -943,7 +955,8 @@ fn report_body(
                             .font(font(UI_MEDIUM, 12.0))
                             .color(t.fg_dim),
                     );
-                    ui.add(Label::new(mono(f.value.clone(), t.fg)).truncate());
+                    ui.add(Label::new(mono(cut(&f.value, 44), t.fg)))
+                        .on_hover_text(&f.value);
                     let off = format!("0x{:06X}", f.offset);
                     if opened {
                         if ui
@@ -1048,7 +1061,7 @@ fn report_body(
                             .font(font(UI_STRONG, 12.0))
                             .color(t.fg),
                     );
-                    ui.add(Label::new(RichText::new(&c.models).color(t.fg)).truncate())
+                    ui.add(Label::new(RichText::new(cut(&c.models, 40)).color(t.fg)))
                         .on_hover_text(catalog_hover(c));
                     let dash = || "—".to_string();
                     ui.label(mono(c.years.clone().unwrap_or_else(dash), t.fg_dim));
@@ -1355,6 +1368,14 @@ pub(crate) mod tests {
         let host_free = report::match_typed(&[], &v.catalog.as_ref().unwrap().entries, &v.hw, "");
         assert_eq!(host_free.1.len(), 1);
         assert!(rig.actions.is_empty(), "rendering asks nothing of the app");
+    }
+
+    #[test]
+    fn long_cells_are_cut_with_an_ellipsis() {
+        assert_eq!(cut("abc", 3), "abc");
+        assert_eq!(cut("abcdef", 4), "abc\u{2026}");
+        assert_eq!(size_text(512 * 1024), "512 KiB");
+        assert_eq!(confidence_tone("High"), Tone::Ok);
     }
 
     #[test]
