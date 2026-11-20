@@ -9,7 +9,8 @@
 #                            only Windows system DLLs + the Universal CRT;
 #                            icon + version info embedded by build.rs via
 #                            llvm-mingw's windres)
-#     ecudefs/ database/ ctrldefs/   (read from beside the .exe)
+#     ecudefs/ database/ ctrldefs/ catalog/ packs/ guide/
+#                           (read from beside the .exe)
 #     LICENSE  README.txt
 #   OUT_DIR/OpenTune-native-<ver>-windows-x86_64.zip
 #
@@ -51,15 +52,16 @@ dir="$out/$name"
 rm -rf "$dir" "$out/$name.zip"
 mkdir -p "$dir"
 cp "$exe" "$dir/"
-for d in ecudefs database ctrldefs; do
+for d in ecudefs database ctrldefs catalog packs; do
     cp -r "$root/$d" "$dir/$d"
 done
+cp -r "$root/desktop/src-tauri/guide" "$dir/guide"
 cp "$root/LICENSE" "$dir/LICENSE" 2>/dev/null || true
 cat > "$dir/README.txt" <<EOF
 OpenTune native $version (preview) - Windows x86_64
 
-Run opentune-native.exe. Keep the ecudefs, database and ctrldefs folders next
-to it. Optional: pass a dump path as the first argument.
+Run opentune-native.exe. Keep the data folders (ecudefs, database, ctrldefs,
+catalog, packs, guide) next to it. Optional: pass a dump path as the first argument.
 Review/measurement modes: opentune-native.exe --help
 GPL-3.0-or-later. https://github.com/ebjerk01/opentune
 EOF

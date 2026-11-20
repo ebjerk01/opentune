@@ -7,7 +7,7 @@
 #   OUT_DIR/OpenTune.app/Contents/
 #     Info.plist
 #     MacOS/opentune-native
-#     Resources/{ecudefs,database,ctrldefs}/ + opentune.icns
+#     Resources/{ecudefs,database,ctrldefs,catalog,packs,guide}/ + opentune.icns
 #   OUT_DIR/OpenTune-native-<ver>-macos-<arch>.zip
 #
 # Needs: Xcode command-line tools (xcode-select --install) and rustup.
@@ -29,9 +29,10 @@ app="$out/OpenTune.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 install -m755 "$target/release/opentune-native" "$app/Contents/MacOS/opentune-native"
-for d in ecudefs database ctrldefs; do
+for d in ecudefs database ctrldefs catalog packs; do
     cp -R "$root/$d" "$app/Contents/Resources/$d"
 done
+cp -R "$root/desktop/src-tauri/guide" "$app/Contents/Resources/guide"
 
 # Icon: an .iconset from the 512 px master, then iconutil.
 set_dir="$(mktemp -d)/opentune.iconset"
