@@ -65,6 +65,8 @@ pub struct HubAdapter {
     /// but whose hub slot is still being released: a view's next operation
     /// waits for it like for a battery poll instead of failing "busy".
     ending: Arc<Mutex<Option<String>>>,
+    /// The live-logging session (the hub's live-log engine state).
+    live: opentune_hub::livelog::LiveLogState,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -86,6 +88,7 @@ impl HubAdapter {
             caps: Mutex::new(None),
             channel: BuildChannel::compiled(),
             ending: Arc::new(Mutex::new(None)),
+            live: Default::default(),
         }
     }
 
@@ -333,6 +336,78 @@ impl RawDiag for HubModules<'_> {
 }
 
 impl AdapterAccess for HubAdapter {
+    fn live_start(
+        &self,
+        spec: crate::host::LiveSpec,
+        target: DiagTarget,
+    ) -> Result<serde_json::Value, String> {
+        use opentune_hub::livelog::{await_live_start, begin_live, live_request, LiveStart};
+        let ssm = spec
+            .transport
+            .as_deref()
+            .is_some_and(|t| !matches!(t.trim(), "" | "uds"));
+        if target.transport != Transport::IsoTp && !ssm {
+            return Err(format!(
+                "live logging runs over ISO-TP (UDS) or Subaru SSM; {target} is not supported"
+            ));
+        }
+        let cfg = self
+            .link_cfg()
+            .ok_or("no adapter connected: pick a cable and connect it in the top bar")?;
+        let baud = (cfg.baud != 0).then(|| cfg.baud.to_string());
+        let (tx, rx) = (format!("{:X}", target.tx), format!("{:X}", target.rx));
+        let deadline = Instant::now() + POLL_WAIT;
+        loop {
+            let req = live_request(LiveStart {
+                driver: &cfg.driver,
+                port: Some(&cfg.port),
+                baud: baud.as_deref(),
+                bus: Some(&cfg.bus),
+                tx_id: Some(&tx),
+                rx_id: Some(&rx),
+                def_path: &spec.def_path,
+                timeout_ms: spec.timeout_ms,
+                ids: spec.ids.clone(),
+                fast: spec.fast,
+                dynamic_did: spec.dynamic_did.as_deref(),
+                max_record: spec.max_record,
+                fast_session: spec.fast_session.as_deref(),
+                transport: spec.transport.as_deref(),
+                ssm_target: spec.ssm_target.as_deref(),
+                ssm_max_packet: spec.ssm_max_packet,
+                reconnect: spec.reconnect,
+            })?;
+            let target_json = req.target.clone();
+            match begin_live(&self.hub, &self.live, req) {
+                // A battery poll holds the adapter for a moment: wait for it.
+                Err(e) if self.retry_after_poll(&e, || true, deadline) => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(e) => return Err(e),
+                Ok(rx) => {
+                    let st = await_live_start(rx)?;
+                    let link = self.live.current().and_then(|r| r.link());
+                    return Ok(serde_json::json!({
+                        "status": st.status,
+                        "channels": st.params.len(),
+                        "params": st.params,
+                        "ssm": st.ssm,
+                        "target": target_json,
+                        "link": link,
+                    }));
+                }
+            }
+        }
+    }
+
+    fn live_tick(&self) -> Result<serde_json::Value, String> {
+        opentune_hub::livelog::tick_live(&self.live)
+    }
+
+    fn live_stop(&self) -> Result<serde_json::Value, String> {
+        opentune_hub::livelog::stop_live(&self.hub, &self.live)
+    }
+
     fn link(&self) -> LinkInfo {
         let mut l = lock(&self.info).clone();
         l.target = Some(*lock(&self.target));
@@ -514,9 +589,52 @@ mod tests {
         (opens, a)
     }
 
-    /// `read` and `start` (typed or direct) only send read services: a write
-    /// is refused by the guard before the wire, and the same module still
-    /// answers reads afterwards.
+    /// Live logging goes through the hub's live-log engine with the link's
+    /// cable and the target's ids; refusals happen before any session.
+    #[test]
+    fn live_sessions_start_on_the_link_and_refuse_early() {
+        use crate::host::LiveSpec;
+        let def = std::env::temp_dir().join(format!("ot-native-live-{}.json", std::process::id()));
+        std::fs::write(
+            &def,
+            r#"{"format":"rom_raider_logger","version":null,"convert_factors":[],"protocols":[],"warnings":[]}"#,
+        )
+        .unwrap();
+        let spec = |path: &std::path::Path| LiveSpec {
+            def_path: path.display().to_string(),
+            timeout_ms: 200,
+            ids: vec!["rpm".into()],
+            ..Default::default()
+        };
+        // No cable: refused before anything is built.
+        let none = HubAdapter::new(AdapterHub::spawn(|| {
+            Box::new(|_k: &ConnKey| Err("no hardware in tests".to_string()))
+        }));
+        let e = AdapterAccess::live_start(&none, spec(&def), DiagTarget::ENGINE).unwrap_err();
+        assert!(e.contains("no adapter connected"), "{e}");
+        // TP2.0 / K-line targets are not live-log transports (UDS or SSM).
+        let (_opens, a) = sim();
+        let e = AdapterAccess::live_start(&*a, spec(&def), DiagTarget::tp20(0x02)).unwrap_err();
+        assert!(e.contains("not supported"), "{e}");
+        // The request is built by the hub's live_request: its own errors come
+        // through unchanged (a missing definition file, fast over SSM).
+        let e = AdapterAccess::live_start(
+            &*a,
+            spec(std::path::Path::new("/nonexistent/logger.xml")),
+            DiagTarget::ENGINE,
+        )
+        .unwrap_err();
+        assert!(e.contains("/nonexistent/logger.xml"), "{e}");
+        let mut s = spec(&def);
+        s.transport = Some("ssm".into());
+        s.fast = true;
+        let e = AdapterAccess::live_start(&*a, s, DiagTarget::ENGINE).unwrap_err();
+        assert_eq!(e, "Fast (0x2C) is UDS; SSM always batches its reads");
+        // No session yet: tick / stop report it instead of hanging.
+        assert!(AdapterAccess::live_tick(&*a).is_err());
+        let _ = std::fs::remove_file(&def);
+    }
+
     #[test]
     fn transport_targets_bind_with_their_driver_options() {
         let a = HubAdapter::new(AdapterHub::spawn(|| {
@@ -547,6 +665,9 @@ mod tests {
         assert_eq!((k.addr.tx_id, k.addr.rx_id), (0x01, 0));
     }
 
+    /// `read` and `start` (typed or direct) only send read services: a write
+    /// is refused by the guard before the wire, and the same module still
+    /// answers reads afterwards.
     #[test]
     fn read_paths_refuse_ecu_changing_services_unsent() {
         let (_opens, a) = sim();

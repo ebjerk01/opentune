@@ -872,6 +872,35 @@ pub trait AdapterAccess: Send + Sync {
     /// build channel is alpha / bench, and hand the job only a
     /// [`RawInterface`] (which refuses flash writes and ECU-changing
     /// requests).
+    /// Start a live-logging session on `target` with the hub's live-log
+    /// engine (polling, UDS `0x2C` fast mode, Subaru SSM, link-loss
+    /// handling), held as one long adapter operation until [`live_stop`]
+    /// or until no tick arrives for the engine's idle time. Blocking: call
+    /// it from a job. Returns the engine's start report (`status`,
+    /// `channels`, `params`, `ssm`, `target`, `link`).
+    ///
+    /// The engine is trusted core code: it sends the session / dynamic-DID
+    /// requests fast mode needs (it never writes ECU data), which is why
+    /// this is its own operation and not a `read` job.
+    ///
+    /// [`live_stop`]: AdapterAccess::live_stop
+    fn live_start(&self, spec: LiveSpec, target: DiagTarget) -> Result<serde_json::Value, String> {
+        let _ = (spec, target);
+        Err(UNSUPPORTED.into())
+    }
+
+    /// One sample of every channel of the running live session
+    /// (`ts`, `samples`, `status`, `rate`, `running`, `ended`, `target`,
+    /// `link`). Blocking (waits for the next sample).
+    fn live_tick(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
+    /// Stop the live session, clear any dynamic DIDs and release the adapter.
+    fn live_stop(&self) -> Result<serde_json::Value, String> {
+        Err(UNSUPPORTED.into())
+    }
+
     fn raw_job(
         &self,
         op: &str,
@@ -1004,6 +1033,31 @@ pub(crate) fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Resul
     r?.downcast::<R>()
         .map(|b| *b)
         .map_err(|_| "adapter returned an unexpected result type".into())
+}
+
+/// A live-logging session request (see [`AdapterAccess::live_start`]): the
+/// logger definition and channels plus the engine options. The cable comes
+/// from the app's link, the module from the target.
+#[derive(Clone, Debug, Default)]
+pub struct LiveSpec {
+    /// Logger definition file (a pack's JSON `LogDef` or a `logger.xml`).
+    pub def_path: String,
+    /// Per-request timeout.
+    pub timeout_ms: u64,
+    /// Channel ids to log.
+    pub ids: Vec<String>,
+    /// UDS `0x2C` fast mode (dynamically defined DIDs) instead of polling.
+    pub fast: bool,
+    pub dynamic_did: Option<String>,
+    pub max_record: Option<usize>,
+    pub fast_session: Option<String>,
+    /// `uds` (default), `ssm` (Subaru K-line) or `ssm-can`.
+    pub transport: Option<String>,
+    /// SSM module (`ecu` / `tcu`).
+    pub ssm_target: Option<String>,
+    pub ssm_max_packet: Option<usize>,
+    /// Reopen and re-arm after a lost link (else the session ends).
+    pub reconnect: bool,
 }
 
 impl dyn AdapterAccess {
