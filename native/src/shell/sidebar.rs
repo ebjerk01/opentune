@@ -18,9 +18,14 @@ pub struct NavGroup {
     pub items: Vec<NavItem>,
 }
 
-fn nav_item(ui: &mut Ui, t: &Tokens, item: &NavItem, active: bool) -> bool {
+fn nav_item(ui: &mut Ui, t: &Tokens, item: &NavItem, active: bool, reveal: bool) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 34.0), Sense::click());
+    if active && reveal {
+        // The view changed (a jump, `--view`, the last session's view):
+        // scroll its row into the list's visible part.
+        resp.scroll_to_me(None);
+    }
     let hovered = resp.hovered();
     let (bg, fg, stroke) = if active {
         (t.accent_soft, t.accent, Stroke::new(1.0, t.accent_line))
@@ -82,6 +87,9 @@ pub fn ui(
     footer: &str,
 ) -> Option<View> {
     let mut picked = None;
+    let shown = egui::Id::unique("opentune-nav-shown-view");
+    let reveal = ui.data(|d| d.get_temp::<View>(shown)) != Some(current);
+    ui.data_mut(|d| d.insert_temp(shown, current));
     let footer_h = 38.0;
     let nav_h = (ui.available_height() - footer_h).max(0.0);
     egui::ScrollArea::vertical()
@@ -107,7 +115,7 @@ pub fn ui(
                                 theme::section_label(ui, t, label);
                             });
                         for item in &g.items {
-                            if nav_item(ui, t, item, item.view == current) {
+                            if nav_item(ui, t, item, item.view == current, reveal) {
                                 picked = Some(item.view);
                             }
                         }
