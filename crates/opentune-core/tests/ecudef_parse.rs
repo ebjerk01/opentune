@@ -2,9 +2,9 @@
 //!
 //! This guards the JSON files against drifting out of sync with the `EcuDef`
 //! schema: a malformed or renamed field fails the build, not a car.
-use opentune_core::ecudef::{self, FullRead};
+use opentune_core::ecudef::{self, FullRead, MIN_IDENTIFY_KEY_LEN};
 use opentune_core::validate;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Locate the repo-root `ecudefs/` directory from this crate.
 fn ecudefs_dir() -> PathBuf {
@@ -178,7 +178,7 @@ fn bmw_ms4x_imports_load_and_validate() {
 /// and that definition must not claim anything an image read would be needed
 /// for (layout, maps, checksum, seed/key).
 /// Regression: `bosch-edc16-toyota` carries placeholder data but real-looking
-/// keys (`0281011…`, sw `1037…`) that overlap `bosch-edc16u34`; it sorted first
+/// keys (`0281011…`, formerly also sw `1037`) that overlap `bosch-edc16u34`; it sorted first
 /// and could claim a real EDC16U34. As an `example` it must never match.
 #[test]
 fn example_definitions_never_match_a_real_unit() {
@@ -223,6 +223,153 @@ fn example_definitions_never_match_a_real_unit() {
     assert_eq!(
         ecudef::match_ecu(&defs, &u34).map(|d| d.id.as_str()),
         Some("bosch-edc16u34")
+    );
+}
+
+/// A synthetic identity: the hardware and software numbers an ECU reports.
+fn ecu(hw: Option<&str>, sw: Option<&str>) -> opentune_core::EcuId {
+    opentune_core::EcuId {
+        hw_number: hw.map(str::to_string),
+        sw_number: sw.map(str::to_string),
+        ..Default::default()
+    }
+}
+
+/// The shipped definitions in load order and reversed, so a test proves the
+/// match does not depend on which definition sorts first.
+fn both_orders() -> [Vec<ecudef::EcuDef>; 2] {
+    let defs = ecudef::load_dir(&ecudefs_dir()).expect("ecudefs parse");
+    let mut rev = defs.clone();
+    rev.reverse();
+    [defs, rev]
+}
+
+fn resolve(defs: &[ecudef::EcuDef], id: &opentune_core::EcuId) -> Option<String> {
+    ecudef::match_ecu(defs, id).map(|d| d.id.clone())
+}
+
+/// Regression: every Bosch software number starts with `1037`, and three
+/// definitions (EDC16U34, ME7, the EDC16 example) carried a bare `"1037"` sw
+/// key, so a Mercedes EDC15C6 dump was claimed by `bosch-edc16u34` (and any
+/// ME7 dump too, because `edc16u34` sorts first). Synthetic identities only.
+#[test]
+fn edc15c6_identity_is_not_claimed_by_a_generic_bosch_prefix() {
+    for defs in both_orders() {
+        // EDC15C6 software 1037351686 with no hardware number, a Bosch
+        // 0281010… one, a Mercedes A611… one, and a Bosch number that falls
+        // inside `bosch-edc16u34`'s `0281011` family prefix: the full software
+        // number is the more specific key and wins every time.
+        for hw in [
+            None,
+            Some("0281010999"),
+            Some("A6111539999"),
+            Some("0281011999"),
+        ] {
+            let id = ecu(hw, Some("1037351686"));
+            assert_eq!(
+                resolve(&defs, &id).as_deref(),
+                Some("bosch-edc15c6"),
+                "{id:?}"
+            );
+        }
+        // An EDC15C6 software variant the definition does not list resolves to
+        // nothing, never to another family through the shared `1037` prefix.
+        for hw in [None, Some("0281010999")] {
+            let id = ecu(hw, Some("1037351999"));
+            assert_eq!(resolve(&defs, &id), None, "{id:?}");
+            let u34 = defs.iter().find(|d| d.id == "bosch-edc16u34").unwrap();
+            assert!(!u34.matches_id(&id), "{id:?}");
+        }
+        // A Bosch identity with nothing but the `1037` family in common with a
+        // definition matches nothing.
+        for hw in [None, Some("0281099999"), Some("0261209999")] {
+            let id = ecu(hw, Some("1037999999"));
+            assert_eq!(resolve(&defs, &id), None, "{id:?}");
+        }
+        // An ME7 identity resolves to ME7 (it used to lose to `edc16u34`'s
+        // `1037` key, which sorts first).
+        let me7 = ecu(Some("0261206999"), Some("1037999999"));
+        assert_eq!(resolve(&defs, &me7).as_deref(), Some("bosch-me7"));
+    }
+}
+
+/// Every identify key of every real (non-example) shipped definition still
+/// resolves to its own definition, in either load order: the specificity rule
+/// changes nothing for genuinely specific keys.
+#[test]
+fn every_identify_key_resolves_to_its_own_definition() {
+    for defs in both_orders() {
+        let mut checked = 0usize;
+        for d in defs.iter().filter(|d| !d.is_example()) {
+            let parts = d
+                .identify
+                .part_numbers
+                .iter()
+                .map(|k| ecu(Some(&format!("{k}999")), None));
+            let sws = d
+                .identify
+                .sw_numbers
+                .iter()
+                .map(|k| ecu(None, Some(&format!("{k}999"))));
+            for id in parts.chain(sws) {
+                assert_eq!(
+                    resolve(&defs, &id).as_deref(),
+                    Some(d.id.as_str()),
+                    "{id:?}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 20, "only {checked} identify keys checked");
+    }
+}
+
+/// The identify keys of every definition file the project ships: the root
+/// set (including `TEMPLATE.json`, which contributors copy), the Android app's
+/// bundled copy and the demo definition in `samples/`.
+fn identify_keys_in(dir: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
+        let path = entry.expect("dir entry").path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("read json");
+        let v: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        for field in ["part_numbers", "sw_numbers"] {
+            for k in v["identify"][field].as_array().into_iter().flatten() {
+                let k = k
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{}: non-string key", path.display()));
+                out.push((
+                    format!("{} identify.{field}", path.display()),
+                    k.to_string(),
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// No shipped definition carries an identify key shorter than
+/// [`MIN_IDENTIFY_KEY_LEN`] (whitespace ignored): such a key is a generic
+/// prefix like `1037`, which the matcher ignores and the validator rejects.
+#[test]
+fn no_identify_key_is_shorter_than_the_minimum() {
+    let root = ecudefs_dir().parent().expect("repo root").to_path_buf();
+    let mut keys = Vec::new();
+    for dir in ["ecudefs", "android/app/src/main/assets/ecudefs", "samples"] {
+        keys.extend(identify_keys_in(&root.join(dir)));
+    }
+    assert!(keys.len() > 20, "only {} identify keys found", keys.len());
+    let short: Vec<_> = keys
+        .iter()
+        .filter(|(_, k)| k.split_whitespace().collect::<String>().len() < MIN_IDENTIFY_KEY_LEN)
+        .collect();
+    assert!(
+        short.is_empty(),
+        "identify keys shorter than {MIN_IDENTIFY_KEY_LEN} characters: {short:#?}"
     );
 }
 
