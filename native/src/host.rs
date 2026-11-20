@@ -20,6 +20,7 @@ use eframe::egui;
 use opentune_checksum::ChecksumAlgo;
 use opentune_core::ecudef::EcuDef;
 use opentune_core::RawDiag;
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -581,29 +582,77 @@ pub struct LinkInfo {
     pub target: Option<DiagTarget>,
 }
 
+/// One diagnostic exchange sequence, run where the driver lives (drivers are
+/// not `Send`, so an implementation may run it on its own worker thread).
+pub type DiagJob =
+    Box<dyn FnOnce(&mut dyn RawDiag) -> Result<Box<dyn Any + Send>, String> + Send + 'static>;
+
 /// Diagnostics through the app's adapter. Implementations serialize access
 /// (one operation at a time) and never let a view open a driver itself.
+///
+/// Call it through the typed wrappers on `dyn AdapterAccess`
+/// ([`read`](#method.read), [`mutate`](#method.mutate)) from a background job.
 pub trait AdapterAccess: Send + Sync {
     fn link(&self) -> LinkInfo;
     /// A read-only operation (identification, reads, live data) on module
     /// `target` (pass [`Host::target`]: the app's one global target).
-    fn read(
+    fn read_job(
         &self,
         op: &str,
         target: DiagTarget,
-        f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
-    ) -> Result<(), String>;
+        job: DiagJob,
+    ) -> Result<Box<dyn Any + Send>, String>;
     /// An operation that changes the ECU. Needs the user's [`Ack`] from
     /// [`Host::confirm_ecu`] and a [`BackupReceipt`] of the data it is about
     /// to change. Implementations address [`Ack::ecu_target`] — the module
     /// the user saw in the dialog — and refuse an `Ack` without one.
-    fn mutate(
+    fn mutate_job(
         &self,
         op: &str,
         ack: Ack,
         backup: &BackupReceipt,
-        f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
-    ) -> Result<(), String>;
+        job: DiagJob,
+    ) -> Result<Box<dyn Any + Send>, String>;
+}
+
+fn boxed<R, F>(f: F) -> DiagJob
+where
+    R: Send + 'static,
+    F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
+{
+    Box::new(move |d: &mut dyn RawDiag| f(d).map(|r| Box::new(r) as Box<dyn Any + Send>))
+}
+
+fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Result<R, String> {
+    r?.downcast::<R>()
+        .map(|b| *b)
+        .map_err(|_| "adapter returned an unexpected result type".into())
+}
+
+impl dyn AdapterAccess {
+    /// Run `f` read-only on module `target` and return its result.
+    pub fn read<R, F>(&self, op: &str, target: DiagTarget, f: F) -> Result<R, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
+    {
+        unbox(self.read_job(op, target, boxed(f)))
+    }
+
+    /// Run `f`, which changes the ECU, on the module the user confirmed.
+    pub fn mutate<R, F>(
+        &self,
+        op: &str,
+        ack: Ack,
+        backup: &BackupReceipt,
+        f: F,
+    ) -> Result<R, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
+    {
+        unbox(self.mutate_job(op, ack, backup, boxed(f)))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1022,27 +1071,32 @@ mod tests {
                 target: None,
             }
         }
-        fn read(
+        fn read_job(
             &self,
             _op: &str,
             target: DiagTarget,
-            f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
-        ) -> Result<(), String> {
+            job: DiagJob,
+        ) -> Result<Box<dyn Any + Send>, String> {
             self.targets.lock().unwrap().push(target);
-            let mut diag = |req: &[u8]| Ok::<Vec<u8>, String>(vec![req[0] + 0x40]);
-            f(&mut diag)
+            // Run on another thread, as a real adapter worker would.
+            std::thread::spawn(move || {
+                let mut diag = |req: &[u8]| Ok::<Vec<u8>, String>(vec![req[0] + 0x40]);
+                job(&mut diag)
+            })
+            .join()
+            .map_err(|_| "job panicked".to_string())?
         }
-        fn mutate(
+        fn mutate_job(
             &self,
             op: &str,
             ack: Ack,
             backup: &BackupReceipt,
-            f: &mut dyn FnMut(&mut dyn RawDiag) -> Result<(), String>,
-        ) -> Result<(), String> {
+            job: DiagJob,
+        ) -> Result<Box<dyn Any + Send>, String> {
             assert!(backup.path.exists(), "{op}: backup must exist");
             let target = ack.ecu_target()?;
             *self.mutations.lock().unwrap() += 1;
-            self.read(op, target, f)
+            self.read_job(op, target, job)
         }
     }
 
@@ -1056,10 +1110,8 @@ mod tests {
         let adapter: Arc<dyn AdapterAccess> = mock.clone();
         let a = adapter.clone();
         let mut h = jobs.spawn("identify", move |p| {
-            let mut reply = Vec::new();
-            a.read("identify", DiagTarget::ENGINE, &mut |d| {
-                reply = d.request(&[0x22, 0xF1, 0x90])?;
-                Ok(())
+            let reply = a.read("identify", DiagTarget::ENGINE, |d| {
+                d.request(&[0x22, 0xF1, 0x90])
             })?;
             p.set(1.0, "done");
             Ok(reply)
@@ -1070,7 +1122,7 @@ mod tests {
         let d = tmp("mut");
         let backup = backup_into_vault(&d, "flash before write", b"ECU-DATA").unwrap();
         adapter
-            .mutate("write", Ack { target: None }, &backup, &mut |dg| {
+            .mutate("write", Ack { target: None }, &backup, |dg| {
                 dg.request(&[0x2E]).map(|_| ())
             })
             .expect_err("a file-write Ack names no module");
@@ -1080,9 +1132,10 @@ mod tests {
             rx: 0x7E9,
         };
         adapter
-            .mutate("write", Ack { target: Some(tcu) }, &backup, &mut |dg| {
-                dg.request(&[0x2E]).map(|_| ())
+            .mutate("write", Ack { target: Some(tcu) }, &backup, |dg| {
+                dg.request(&[0x2E])
             })
+            .map(|r: Vec<u8>| assert_eq!(r, vec![0x6E]))
             .unwrap();
         assert_eq!(*mock.mutations.lock().unwrap(), 1);
         assert_eq!(mock.targets.lock().unwrap().last(), Some(&tcu));
