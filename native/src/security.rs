@@ -91,6 +91,12 @@ impl Unlocker {
         let mut t = RawTransport::new(d);
         let mut uds = UdsClient::new(&mut t);
         let seed = uds.request_seed(level).map_err(|e| denial(e, level))?;
+        if seed.is_empty() {
+            // A key over nothing would only spend one of the ECU's attempts.
+            return Err(format!(
+                "security access 0x{level:02X}: the ECU sent an empty seed; no key sent"
+            ));
+        }
         if seed_is_unlocked(&seed) {
             return Ok(Unlocked::AlreadyUnlocked);
         }
@@ -403,7 +409,6 @@ mod tests {
     /// (KWP already refuses it as "empty seed"); each sent key can spend
     /// one of the ECU's attempts.
     #[test]
-    #[ignore = "BUG: unlock_uds computes and sends a key for an empty seed (67 level with no seed bytes); unlock_kwp refuses it"]
     fn an_empty_uds_seed_sends_no_key() {
         let u = Unlocker::new(keys(), "test-not").unwrap();
         let mut sent = Vec::new();

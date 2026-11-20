@@ -349,10 +349,17 @@ pub fn resolve_target(tx: &str, rx: &str, def: Option<&EcuDef>) -> Result<DiagTa
             rx: parse(rx)?,
         }),
         (true, true) => Ok(match def {
-            Some(d) if d.tx_id != 0 && d.rx_id != 0 && d.tx_id <= 0x1FFF_FFFF => DiagTarget {
-                tx: d.tx_id,
-                rx: d.rx_id,
-            },
+            Some(d)
+                if d.tx_id != 0
+                    && d.rx_id != 0
+                    && d.tx_id <= 0x1FFF_FFFF
+                    && d.rx_id <= 0x1FFF_FFFF =>
+            {
+                DiagTarget {
+                    tx: d.tx_id,
+                    rx: d.rx_id,
+                }
+            }
             _ => DiagTarget::ENGINE,
         }),
         _ => Err("set both the request (tx) and response (rx) ids, or neither".into()),
@@ -407,6 +414,12 @@ pub struct Confirms {
 impl Confirms {
     pub(crate) fn ask(&mut self, req: ConfirmRequest) -> ConfirmResult {
         self.ask_with(req, None)
+    }
+
+    /// Forget any dialog for `key` (open or answered), so no earlier answer
+    /// can be consumed later.
+    pub(crate) fn withdraw(&mut self, key: &str) {
+        self.open.remove(key);
     }
 
     /// Like `ask`, for an operation on module `target`: the dialog shows it
@@ -877,6 +890,9 @@ impl<'a> Host<'a> {
         match &self.target {
             Ok(t) => self.confirms.ask_with(req, Some(*t)),
             Err(e) => {
+                // An earlier dialog for this key must not be accepted later
+                // with a target that is no longer the app's.
+                self.confirms.withdraw(&req.key);
                 *self.status = Some(format!("no target module: {e}"));
                 ConfirmResult::Declined
             }
@@ -1697,7 +1713,6 @@ mod tests {
     /// dialog was open) must not later get an `Accepted` for that old dialog
     /// without the user seeing a new one.
     #[test]
-    #[ignore = "BUG: confirm_ecu returns Declined on an unusable target but leaves an already-open dialog for the key, whose later acceptance a new confirm_ecu consumes without a new dialog"]
     fn a_declined_ecu_confirmation_leaves_no_acceptable_dialog_behind() {
         let mut fx = Fixture::new();
         assert!(matches!(
@@ -1836,7 +1851,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "BUG: resolve_target range-checks only the definition's tx id; an rx id above 29 bits becomes the target"]
     fn resolve_target_refuses_a_definition_rx_beyond_29_bits() {
         assert_eq!(
             resolve_target("", "", Some(&def_with_ids(0x7E1, 0xFFFF_FFFF))),
