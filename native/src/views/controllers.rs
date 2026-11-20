@@ -73,17 +73,7 @@ pub struct ControllersView {
 
 /// Where the definitions folder is looked for, in order.
 fn candidates() -> Vec<PathBuf> {
-    let mut c: Vec<PathBuf> = ["ctrldefs", "../ctrldefs"]
-        .iter()
-        .map(PathBuf::from)
-        .collect();
-    if let Some(d) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-    {
-        c.push(d.join("ctrldefs"));
-    }
-    c
+    crate::paths::candidates("ctrldefs")
 }
 
 fn load_from(tried: Vec<PathBuf>) -> State {

@@ -34,19 +34,7 @@ pub struct App {
 }
 
 fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
-    explicit.or_else(|| {
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
-        let mut c: Vec<PathBuf> = ["ecudefs", "../ecudefs"]
-            .iter()
-            .map(PathBuf::from)
-            .collect();
-        if let Some(d) = exe_dir {
-            c.push(d.join("ecudefs"));
-        }
-        c.into_iter().find(|p| p.is_dir())
-    })
+    explicit.or_else(|| crate::paths::find("ecudefs"))
 }
 
 impl App {
@@ -71,7 +59,9 @@ impl App {
                 format!("{} / {:?}", i.name, i.backend)
             })
             .unwrap_or_else(|| "no wgpu adapter".into());
-        let session = if std::env::var("WAYLAND_DISPLAY").is_ok_and(|v| !v.is_empty()) {
+        let session = if !cfg!(target_os = "linux") {
+            std::env::consts::OS
+        } else if std::env::var("WAYLAND_DISPLAY").is_ok_and(|v| !v.is_empty()) {
             "wayland"
         } else {
             "x11"

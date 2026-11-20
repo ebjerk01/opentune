@@ -42,17 +42,7 @@ pub struct EcuDbView {
 
 /// Where the database folder is looked for, in order.
 fn candidates() -> Vec<PathBuf> {
-    let mut c: Vec<PathBuf> = ["database", "../database"]
-        .iter()
-        .map(PathBuf::from)
-        .collect();
-    if let Some(d) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-    {
-        c.push(d.join("database"));
-    }
-    c
+    crate::paths::candidates("database")
 }
 
 /// The first candidate that is a directory.

@@ -93,6 +93,7 @@ pub fn keep_port(name: &str, kind: &Transport) -> bool {
 }
 
 /// `/sys/class/net/<if>/type` of a CAN netdev is `ARPHRD_CAN` = 280.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn is_can_type(sysfs_type: &str) -> bool {
     sysfs_type.trim() == "280"
 }
@@ -162,6 +163,8 @@ pub fn valid_can_id(s: &str) -> bool {
 pub enum Transport {
     Usb,
     Bluetooth,
+    /// Linux only (SocketCAN netdevs).
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     SocketCan,
     Other,
 }

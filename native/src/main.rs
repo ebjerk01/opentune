@@ -12,6 +12,7 @@ mod hex;
 mod icons;
 mod image;
 mod mapview;
+mod paths;
 mod screenshot;
 mod settings;
 mod shell;
