@@ -2343,6 +2343,8 @@ dependencies = [
 name = "opentune-hub"
 version = "0.7.0"
 dependencies = [
+ "opentune-adaptation",
+ "opentune-candump",
  "opentune-core",
  "opentune-driver-doip",
  "opentune-driver-efp02c",
@@ -2359,6 +2361,8 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-logdef",
+ "opentune-mapfind",
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",
@@ -2384,6 +2388,14 @@ version = "0.7.0"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-mapfind"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
 ]
 
 [[package]]
