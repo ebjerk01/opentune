@@ -71,7 +71,7 @@ section (alpha/bench builds) until they are vehicle-tested.
   new unit without a profile (`database/units/.access-pending` lists the older
   units, and only shrinks). Filled: Bosch EDC15C6 (worked example), EDC15
   (VAG), EDC16U34, EDC16C3x, EDC17CP14, ME7.5, ME7.5.10, Siemens MS41/MS42/MS43,
-  PCR2.1, Mercedes EGS52, DQ250 02E, DQ200, DQ381, DL382, ZF 8HP Gen1 and Haldex
+  PCR2.1, Mercedes EGS52, DQ250 02E, DQ250 MQB, DQ200, DQ381, DL382, ZF 8HP Gen1 and Haldex
   Gen4/Gen5, each from public sources with stated licences; where nobody
   documents a route the profile says "unknown". The ECU database panel shows an
   **Access** card. Docs: [UNIT-ACCESS-PROFILE.md](docs/UNIT-ACCESS-PROFILE.md).

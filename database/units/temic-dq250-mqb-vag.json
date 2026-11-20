@@ -21,8 +21,8 @@
   "read_methods": {
     "obd": "write-only",
     "bench": true,
-    "boot": true,
-    "notes": "VW_Flash / mqb-flash-rs flash the CAL (0x20000) and ASW (0x130000) blocks over UDS on CAN (0x7E1/0x7E9) from an FRF/ODX container (DSG table cipher + LZSS) or a raw 0x180000-byte bin file; a full read uses the SBOOT bench path of DQ250-MQB-Bench-Flash (power-cycle window, RSA-1024 SBOOT check, uploaded flash manager). OpenTune has not validated either path on hardware."
+    "boot": false,
+    "notes": "VW_Flash / mqb-flash-rs flash the CAL (0x20000) and ASW (0x130000) blocks over UDS on CAN (0x7E1/0x7E9) from an FRF/ODX container (DSG table cipher + LZSS) or a raw 0x180000-byte bin file; a full read uses the SBOOT bench path of DQ250-MQB-Bench-Flash (power-cycle window, RSA-1024 SBOOT check, uploaded flash manager). OpenTune has not validated either path on hardware. The boot flag is false because no physical boot entry (strap, pad or debug probe) is documented; the SBOOT full read is a bench route over CAN (see access.bench)."
   },
   "checksum": "dq250",
   "ecudef": "temic-dq250-mqb",
@@ -54,6 +54,58 @@
     {
       "title": "TheFlashBold/DQ250-MQB-Bench-Flash (GPL-3.0): SBOOT bench read/flash, TC1766",
       "url": "https://github.com/TheFlashBold/DQ250-MQB-Bench-Flash"
+    },
+    {
+      "title": "AutoTuner DSG gearboxes support announcement (DQ250 MQB virtual read)",
+      "url": "https://www.autotuner.com/blogs/news/dsg-gearboxes"
+    },
+    {
+      "title": "bri3d/VW_Flash (BSD-2-Clause): UDS programming session security access",
+      "url": "https://raw.githubusercontent.com/bri3d/VW_Flash/master/lib/flash_uds.py"
     }
-  ]
+  ],
+  "access": {
+    "obd": {
+      "mode": "write-only",
+      "protocol": "UDS over CAN",
+      "notes": "VW_Flash supports DQ250-MQB programming. AutoTuner lists virtual reading over OBD. The cited sources document a complete original PFlash read on the bench only.",
+      "confidence": "community",
+      "sources": [
+        0,
+        3,
+        2
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "The bench project uses permanent 12 V, switched ignition supply, ground, CAN-H and CAN-L for access through the TCU connector, including a full PFlash read. The unit record has no connector pin numbers. The documented connection uses CAN only.",
+      "confidence": "community",
+      "sources": [
+        2
+      ]
+    },
+    "boot": {
+      "possible": "unknown",
+      "entry": "unknown",
+      "mcu_mode": null,
+      "points": [],
+      "reset_timing": null,
+      "reachable": "unknown",
+      "notes": "The bench project documents SBOOT over CAN. It identifies no physical boot strap, bridge or probe point for the 0D9. Physical entry and its reset timing remain unknown.",
+      "confidence": "unverified",
+      "sources": [
+        2
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "required",
+      "notes": "VW_Flash requests security access before UDS programming. The cited sources do not establish the access requirement for a complete diagnostic read. OpenTune ships no OEM key.",
+      "confidence": "community",
+      "sources": [
+        0,
+        4
+      ]
+    }
+  }
 }
