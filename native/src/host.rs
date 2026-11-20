@@ -1374,6 +1374,39 @@ impl Default for HostShared {
     }
 }
 
+/// The app's seed/key ring as views see it: lookups only. The ring itself
+/// (which can arm an SA2 script for live SecurityAccess) never leaves this
+/// module: arming goes through [`Host::arm_sa2`] (Bench gate inside), the
+/// actuator's hub prepare through [`Host::actuator_gate`], and unlocking
+/// through [`Host::unlocker`] / [`Host::unlocker_for`].
+#[derive(Clone, Copy)]
+pub(crate) struct KeyRing<'a> {
+    keys: &'a opentune_hub::seedkeys::SeedKeys,
+}
+
+impl<'a> KeyRing<'a> {
+    /// Wrap the app's ring (the app and test fixtures own it).
+    pub(crate) fn new(keys: &'a opentune_hub::seedkeys::SeedKeys) -> Self {
+        Self { keys }
+    }
+    /// The algorithm for `id`, to compute a key (the calculator).
+    pub(crate) fn get(&self, id: &str) -> Option<Box<dyn SeedKey>> {
+        self.keys.get(id)
+    }
+    /// Is `id` answered by OpenTune's SA2 interpreter (an armed script)?
+    pub(crate) fn is_builtin_sa2(&self, id: &str) -> bool {
+        self.keys.is_builtin_sa2(id)
+    }
+    /// Does a plugin resolver answer `id`?
+    pub(crate) fn has_plugin(&self, id: &str) -> bool {
+        self.keys.plugin(id).is_some()
+    }
+    /// The armed SA2 script, if any.
+    pub(crate) fn armed_sa2(&self) -> Option<opentune_hub::seedkeys::ArmedSa2> {
+        self.keys.armed_sa2()
+    }
+}
+
 /// What a view gets every frame.
 pub struct Host<'a> {
     pub(crate) tokens: Tokens,
@@ -1386,7 +1419,7 @@ pub struct Host<'a> {
     pub(crate) checksums: &'a [ChecksumResolver],
     pub(crate) adapter: Option<&'a Arc<dyn AdapterAccess>>,
     pub(crate) diagnostics: Option<&'a Arc<dyn DiagnosticsSink>>,
-    pub(crate) seedkeys: &'a opentune_hub::seedkeys::SeedKeys,
+    pub(crate) seedkeys: KeyRing<'a>,
     pub(crate) target: Result<DiagTarget, String>,
     pub(crate) jobs: &'a Jobs,
     pub(crate) confirms: &'a mut Confirms,
@@ -1465,13 +1498,50 @@ impl<'a> Host<'a> {
             .as_deref()
             .filter(|s| !s.trim().is_empty())
             .ok_or_else(|| format!("the definition '{}' names no seed/key algorithm", d.id))?;
-        Unlocker::new(self.seedkeys.clone(), id)
+        Unlocker::new(self.seedkeys.keys.clone(), id)
     }
 
     /// The unlocker for an explicit seed/key `id` (e.g. a per-module
     /// algorithm the view knows better than the definition).
     pub fn unlocker_for(&self, id: &str) -> Result<Unlocker, String> {
-        Unlocker::new(self.seedkeys.clone(), id)
+        Unlocker::new(self.seedkeys.keys.clone(), id)
+    }
+
+    /// Arm `armed` as seed/key id `sa2` for this run (live SecurityAccess on
+    /// real modules), or disarm with `None`. Arming is Bench tier and refused
+    /// here on any other channel, whatever the caller checked; disarming is
+    /// always allowed. The SA2 view validates the script first.
+    pub(crate) fn arm_sa2(
+        &self,
+        armed: Option<opentune_hub::seedkeys::ArmedSa2>,
+    ) -> Result<(), String> {
+        if armed.is_some() && !self.bench_enabled() {
+            return Err("using an SA2 script on a live module is a Bench-tier feature (alpha / bench builds); nothing was armed".into());
+        }
+        self.seedkeys.keys.arm_sa2(armed);
+        Ok(())
+    }
+
+    /// The hub's actuator gates for a run on the confirmed `module` (Bench
+    /// tier, the ack, a known target, the SecurityAccess id resolving in the
+    /// app's ring). Sends nothing; see `views::actuator::gate`.
+    pub(crate) fn actuator_gate(
+        &self,
+        ask: &opentune_hub::ops::actuator::Ask,
+        ack: &Ack,
+        module: DiagTarget,
+        driver: &str,
+        seedkey: Option<&str>,
+    ) -> Result<opentune_adaptation::actuator::TestPlan, String> {
+        crate::views::actuator::gate(
+            ask,
+            self.channel(),
+            self.seedkeys.keys,
+            ack,
+            module,
+            driver,
+            seedkey,
+        )
     }
 
     /// The build's diagnostics upload target (None in the public build).
@@ -1764,7 +1834,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &keys,
+                seedkeys: KeyRing { keys: &keys },
                 target: Ok(DiagTarget::ENGINE),
                 jobs: &jobs,
                 confirms: &mut confirms,
@@ -1852,7 +1922,9 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
+                seedkeys: KeyRing {
+                    keys: &opentune_hub::seedkeys::SeedKeys::default(),
+                },
                 target,
                 jobs: &jobs,
                 confirms,
@@ -2086,7 +2158,9 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
+                seedkeys: KeyRing {
+                    keys: &opentune_hub::seedkeys::SeedKeys::default(),
+                },
                 target: Ok(DiagTarget::ENGINE),
                 jobs: &jobs,
                 confirms: &mut confirms,
@@ -2167,7 +2241,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &self.keys,
+                seedkeys: KeyRing { keys: &self.keys },
                 target,
                 jobs: &self.jobs,
                 confirms: &mut self.confirms,

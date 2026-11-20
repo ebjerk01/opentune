@@ -267,7 +267,7 @@ impl Fixture {
             checksums: &[],
             adapter: self.adapter.as_ref(),
             diagnostics: None,
-            seedkeys: &self.keys,
+            seedkeys: crate::host::KeyRing::new(&self.keys),
             target: Ok(target),
             jobs: &self.jobs,
             confirms: &mut self.confirms,

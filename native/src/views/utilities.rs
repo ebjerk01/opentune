@@ -9,11 +9,12 @@
 //! loader), labelled as such. OpenTune bundles no OEM algorithm, so an id no
 //! resolver knows is an honest error, never a fabricated key.
 
+use crate::host::KeyRing;
 use crate::host::{Host, NativeView, Tier, ViewGroup};
 use crate::icons;
 use crate::theme::{self, font, Tokens, Tone, MONO_MEDIUM, UI_MEDIUM, UI_STRONG};
 use eframe::egui::{self, Label, RichText, Ui, Vec2};
-use opentune_hub::seedkeys::{generic, SeedKeys};
+use opentune_hub::seedkeys::generic;
 
 /// Registration tier, read before the view is built ([`Tier::Bench`]: only
 /// alpha / bench builds register it).
@@ -123,7 +124,7 @@ pub(crate) fn compute_seedkey(
     mask: &str,
     add: &str,
     level: Option<u8>,
-    keys: &SeedKeys,
+    keys: KeyRing<'_>,
 ) -> Result<KeyResult, String> {
     let algo = algo.trim();
     let s = parse_hex_bytes(seed)?;
@@ -328,7 +329,7 @@ impl Default for UtilitiesView {
 }
 
 impl UtilitiesView {
-    fn compute(&mut self, keys: &SeedKeys) {
+    fn compute(&mut self, keys: KeyRing<'_>) {
         let custom = self.algo == OTHER_ID;
         let algo = if custom { &self.other_id } else { &self.algo };
         let level = if custom {
@@ -652,9 +653,17 @@ fn note(ui: &mut Ui, t: &Tokens, tone: Tone, text: &str) {
 mod tests {
     use super::*;
     use opentune_hub::seedkeys::testkeys::{first, second, vcar};
+    use opentune_hub::seedkeys::SeedKeys;
 
     fn sk(seed: &str, algo: &str, mask: &str, add: &str) -> Result<KeyResult, String> {
-        compute_seedkey(seed, algo, mask, add, None, &SeedKeys::default())
+        compute_seedkey(
+            seed,
+            algo,
+            mask,
+            add,
+            None,
+            KeyRing::new(&SeedKeys::default()),
+        )
     }
 
     #[test]
@@ -688,15 +697,15 @@ mod tests {
     fn resolver_and_sa2_results_are_labelled() {
         let keys = SeedKeys::new(vec![first, second, vcar]);
         // A plugin id resolves (first resolver wins) and is labelled.
-        let r = compute_seedkey("0001", "shared", "", "", Some(0x03), &keys).unwrap();
+        let r = compute_seedkey("0001", "shared", "", "", Some(0x03), KeyRing::new(&keys)).unwrap();
         assert_eq!(r.key, "13 12"); // seed ^ 0x10 ^ level 0x03
         assert_eq!((r.source, r.level), (KeySource::Plugin, Some(3)));
         assert!(r.note.contains("plugin-supplied") && r.note.contains("'first'"));
         // Default level 0x01.
-        let r = compute_seedkey("1234", "vcar-test", "", "", None, &keys).unwrap();
+        let r = compute_seedkey("1234", "vcar-test", "", "", None, KeyRing::new(&keys)).unwrap();
         assert_eq!(r.key, "48 6E");
         // Generic ids are never routed to a resolver.
-        let r = compute_seedkey("0102", "identity", "", "", None, &keys).unwrap();
+        let r = compute_seedkey("0102", "identity", "", "", None, KeyRing::new(&keys)).unwrap();
         assert_eq!(r.source, KeySource::Generic);
         // The SA2 interpreter over an inline synthetic script (NOT seed).
         let r = sk("00000001", "sa2:87FFFFFFFF4C", "", "").unwrap();
@@ -718,11 +727,11 @@ mod tests {
         assert_eq!(v.algo, a[0].id);
         v.algo = OTHER_ID.into();
         v.seed = "00".into();
-        v.compute(&SeedKeys::default());
+        v.compute(KeyRing::new(&SeedKeys::default()));
         assert!(matches!(&v.sk_out, Some(Err(e)) if e.contains("seed/key id")));
         v.other_id = "sa2:87FFFFFFFF4C".into();
         v.level = "0x100".into();
-        v.compute(&SeedKeys::default());
+        v.compute(KeyRing::new(&SeedKeys::default()));
         assert!(matches!(&v.sk_out, Some(Err(e)) if e.contains("one byte")));
     }
 

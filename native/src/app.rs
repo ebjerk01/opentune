@@ -628,7 +628,7 @@ impl eframe::App for App {
                             checksums: &self.flash.checksums,
                             adapter: self.adapter.as_ref(),
                             diagnostics: self.diagnostics.as_ref(),
-                            seedkeys: &self.seedkeys,
+                            seedkeys: crate::host::KeyRing::new(&self.seedkeys),
                             target: target.clone(),
                             jobs: &self.jobs,
                             confirms: &mut self.confirms,

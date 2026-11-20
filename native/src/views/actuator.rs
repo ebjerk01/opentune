@@ -369,21 +369,14 @@ impl ActuatorView {
                         let driver = host.link().driver;
                         let id = self.seedkey.trim().to_string();
                         let sk = (!id.is_empty()).then_some(id.as_str());
-                        let gated = gate(
-                            &ask,
-                            host.channel(),
-                            host.seedkeys,
-                            &ack,
-                            module,
-                            &driver,
-                            sk,
-                        )
-                        .and_then(|plan| match sk {
-                            Some(id) if plan.requires_security => {
-                                host.unlocker_for(id).map(|u| (plan, Some(u)))
-                            }
-                            _ => Ok((plan, None)),
-                        });
+                        let gated = host
+                            .actuator_gate(&ask, &ack, module, &driver, sk)
+                            .and_then(|plan| match sk {
+                                Some(id) if plan.requires_security => {
+                                    host.unlocker_for(id).map(|u| (plan, Some(u)))
+                                }
+                                _ => Ok((plan, None)),
+                            });
                         match (gated, host.adapter()) {
                             (Ok((plan, login)), Some(a)) => {
                                 self.stop = Arc::new(AtomicBool::new(false));

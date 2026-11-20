@@ -8,11 +8,12 @@
 //! FRF key file). The interpreter is `opentune-sa2`; container extraction is
 //! `opentune-container`; text / file decoding is `opentune_hub::sa2script`.
 
+use crate::host::KeyRing;
 use crate::host::{bench_channel, BuildChannel};
 use opentune_hub::sa2script::{
     check_len, read_capped, script_from_file_bytes, script_from_text, MAX_SCRIPT, MAX_SCRIPT_FILE,
 };
-use opentune_hub::seedkeys::{ArmedSa2, SeedKeys, SA2_ID};
+use opentune_hub::seedkeys::{ArmedSa2, SA2_ID};
 use opentune_sa2::{parse_hex, vm, Op, Program, Step};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -407,31 +408,29 @@ pub(crate) struct ArmStatus {
     pub shadowed_by_plugin: bool,
 }
 
-pub(crate) fn status(keys: &SeedKeys, channel: &BuildChannel) -> ArmStatus {
+pub(crate) fn status(keys: KeyRing<'_>, channel: &BuildChannel) -> ArmStatus {
     ArmStatus {
         armed: keys.armed_sa2(),
         live_allowed: bench_channel(channel),
-        shadowed_by_plugin: keys.plugin(SA2_ID).is_some(),
+        shadowed_by_plugin: keys.has_plugin(SA2_ID),
     }
 }
 
-/// Arm `script` (hex or assembler) as seed/key id `sa2` for this run, or
-/// disarm with no script. The Bench-tier gate is HERE, not in the UI:
-/// refused on a stable channel, refused without `ack` (an armed script
+/// Check `script` (hex or assembler) for arming as seed/key id `sa2`, or
+/// disarm with no script: returns what to hand to `Host::arm_sa2` (which
+/// re-checks the channel and does the arming) and the script's lints.
+/// Refused on a stable channel, refused without `ack` (an armed script
 /// answers SecurityAccess on real modules, and wrong keys count against
 /// their attempt limit), and refused when the script does not decode or
-/// fails on any probe seed. Disarming needs neither. Returns the new status
-/// and the script's lints.
+/// fails on any probe seed. Disarming needs neither.
 pub(crate) fn arm(
     script: Option<&str>,
     label: &str,
     ack: bool,
-    keys: &SeedKeys,
     channel: &BuildChannel,
-) -> Result<(ArmStatus, Vec<String>), String> {
+) -> Result<(Option<ArmedSa2>, Vec<String>), String> {
     let Some(script) = script.filter(|s| !s.trim().is_empty()) else {
-        keys.arm_sa2(None);
-        return Ok((status(keys, channel), Vec::new()));
+        return Ok((None, Vec::new()));
     };
     if !bench_channel(channel) {
         return Err(
@@ -449,12 +448,14 @@ pub(crate) fn arm(
         vm::run(&bytes, seed)
             .map_err(|e| format!("refusing to arm: seed {seed:08X} fails: {e}"))?;
     }
-    keys.arm_sa2(Some(ArmedSa2 {
-        script: bytes,
-        label: label.trim().to_string(),
-    }));
     let lints = program.lints().iter().map(ToString::to_string).collect();
-    Ok((status(keys, channel), lints))
+    Ok((
+        Some(ArmedSa2 {
+            script: bytes,
+            label: label.trim().to_string(),
+        }),
+        lints,
+    ))
 }
 
 #[cfg(test)]
@@ -624,23 +625,28 @@ mod tests {
 
     #[test]
     fn arming_is_bench_tier_acknowledged_and_checked() {
+        use opentune_hub::seedkeys::SeedKeys;
         let keys = SeedKeys::default();
+        let ring = KeyRing::new(&keys);
         let stable = BuildChannel::new(BuildChannel::STABLE);
-        assert!(!status(&keys, &stable).live_allowed);
-        let e = arm(Some(NOT_HEX), "", true, &keys, &stable).unwrap_err();
+        assert!(!status(ring, &stable).live_allowed);
+        let e = arm(Some(NOT_HEX), "", true, &stable).unwrap_err();
         assert!(e.contains("Bench"), "{e}");
-        let e = arm(Some(NOT_HEX), "", false, &keys, &bench()).unwrap_err();
+        let e = arm(Some(NOT_HEX), "", false, &bench()).unwrap_err();
         assert!(e.contains("confirmation"), "{e}");
         // Scripts that do not decode, or fail when run, are refused.
-        assert!(arm(Some("81 FF"), "", true, &keys, &bench()).is_err());
-        assert!(arm(Some("68 00 49 4C"), "", true, &keys, &bench()).is_err());
-        assert!(keys.armed_sa2().is_none(), "nothing armed by a refusal");
+        assert!(arm(Some("81 FF"), "", true, &bench()).is_err());
+        assert!(arm(Some("68 00 49 4C"), "", true, &bench()).is_err());
 
-        let (st, lints) = arm(Some(NOT_HEX), " my.odx #0 ", true, &keys, &bench()).unwrap();
+        let (a, lints) = arm(Some(NOT_HEX), " my.odx #0 ", true, &bench()).unwrap();
         assert!(lints.is_empty());
-        let a = st.armed.unwrap();
+        let a = a.unwrap();
         assert_eq!(a.label, "my.odx #0");
         assert_eq!(hexs(&a.script), NOT_HEX);
+        // What Host::arm_sa2 does after its own channel gate.
+        keys.arm_sa2(Some(a));
+        let st = status(ring, &bench());
+        assert!(st.armed.is_some());
         assert!(!st.shadowed_by_plugin);
         let h = keys.get("sa2").unwrap();
         assert_eq!(
@@ -650,8 +656,7 @@ mod tests {
         // A clone (what an adapter operation holds) sees the armed script.
         assert!(keys.clone().get("sa2").is_some());
         // Disarming needs neither the channel nor an acknowledgement.
-        let (st, _) = arm(None, "", false, &keys, &stable).unwrap();
-        assert!(st.armed.is_none());
-        assert!(keys.get("sa2").is_none());
+        let (a, lints) = arm(None, "", false, &stable).unwrap();
+        assert!(a.is_none() && lints.is_empty());
     }
 }

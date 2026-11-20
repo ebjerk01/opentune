@@ -546,26 +546,23 @@ impl Sa2View {
         if let Some(script) = action {
             // The gate is in ops::arm (channel + acknowledgement), whatever
             // the UI enabled.
-            self.arm_msg = Some(
-                match ops::arm(
-                    script.as_deref(),
-                    &self.label,
-                    self.ack,
-                    host.seedkeys,
-                    host.channel(),
-                ) {
-                    Ok((s, lints)) if s.armed.is_some() => (
-                        Tone::Ok,
-                        if lints.is_empty() {
-                            "Armed as sa2 for this run.".into()
-                        } else {
-                            format!("Armed as sa2 for this run (lints: {}).", lints.join("; "))
-                        },
-                    ),
-                    Ok(_) => (Tone::Muted, "Disarmed.".into()),
-                    Err(e) => (Tone::Crit, e),
-                },
-            );
+            // The script checks are in ops::arm; the arming itself (and the
+            // channel gate again) in Host::arm_sa2.
+            let r = ops::arm(script.as_deref(), &self.label, self.ack, host.channel())
+                .and_then(|(armed, lints)| host.arm_sa2(armed).map(|()| lints));
+            let armed = ops::status(host.seedkeys, host.channel()).armed.is_some();
+            self.arm_msg = Some(match r {
+                Ok(lints) if armed => (
+                    Tone::Ok,
+                    if lints.is_empty() {
+                        "Armed as sa2 for this run.".into()
+                    } else {
+                        format!("Armed as sa2 for this run (lints: {}).", lints.join("; "))
+                    },
+                ),
+                Ok(_) => (Tone::Muted, "Disarmed.".into()),
+                Err(e) => (Tone::Crit, e),
+            });
         }
         if let Some((tone, m)) = &self.arm_msg {
             note(ui, t, *tone, m);
@@ -706,21 +703,25 @@ mod tests {
         let mut fx = Fixture::new("sa2-arm");
         fx.shared = HostShared::new(BuildChannel::new(BuildChannel::STABLE), None);
         let keys = fx.keys.clone();
-        let r = fx.host(DiagTarget::ENGINE, |h| {
-            ops::arm(Some("87 FF FF FF FF 4C"), "", true, h.seedkeys, h.channel())
-        });
-        assert!(r.is_err());
+        // A script that passed the view's checks (as if on a bench build).
+        let (script, _) = ops::arm(
+            Some("87 FF FF FF FF 4C"),
+            "t",
+            true,
+            &BuildChannel::new(BuildChannel::BENCH),
+        )
+        .unwrap();
+        // The Host gate refuses it on a stable channel, whatever the caller
+        // checked.
+        let s1 = script.clone();
+        let r = fx.host(DiagTarget::ENGINE, |h| h.arm_sa2(s1));
+        assert!(r.unwrap_err().contains("Bench"));
         assert!(keys.armed_sa2().is_none());
+        // Disarming is always allowed.
+        assert!(fx.host(DiagTarget::ENGINE, |h| h.arm_sa2(None)).is_ok());
         fx.shared = HostShared::new(BuildChannel::new(BuildChannel::BENCH), None);
         fx.host(DiagTarget::ENGINE, |h| {
-            ops::arm(
-                Some("87 FF FF FF FF 4C"),
-                "t",
-                true,
-                h.seedkeys,
-                h.channel(),
-            )
-            .unwrap();
+            h.arm_sa2(script).unwrap();
             // The app's unlocker path resolves the armed script.
             assert!(h.unlocker_for("sa2").is_ok());
         });

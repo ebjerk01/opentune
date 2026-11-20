@@ -1291,7 +1291,7 @@ pub(crate) mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &keys,
+                seedkeys: crate::host::KeyRing::new(&keys),
                 target: Ok(DiagTarget::ENGINE),
                 jobs: &self.jobs,
                 confirms: &mut self.confirms,

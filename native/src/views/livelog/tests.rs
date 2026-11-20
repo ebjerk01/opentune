@@ -172,7 +172,7 @@ impl Rig {
             checksums: &[],
             adapter: self.adapter.as_ref(),
             diagnostics: None,
-            seedkeys: &keys,
+            seedkeys: crate::host::KeyRing::new(&keys),
             target: Ok(DiagTarget::ENGINE),
             jobs: &self.jobs,
             confirms: &mut self.confirms,

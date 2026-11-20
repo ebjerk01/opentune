@@ -973,6 +973,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ot-hublink-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut ask = |target, confirms: &mut crate::host::Confirms| {
+            let keys = opentune_hub::seedkeys::SeedKeys::default();
             let mut h = crate::host::Host {
                 tokens: crate::theme::DARK,
                 image_path: None,
@@ -984,7 +985,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
+                seedkeys: crate::host::KeyRing::new(&keys),
                 target: Ok(target),
                 jobs: &jobs,
                 confirms,
@@ -1747,7 +1748,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
-                seedkeys: &keys,
+                seedkeys: crate::host::KeyRing::new(&keys),
                 target: Ok(TCU),
                 jobs: &jobs,
                 confirms,
