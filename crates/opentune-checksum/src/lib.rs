@@ -17,6 +17,7 @@ pub mod generic;
 pub mod me7;
 pub mod pcr21;
 pub mod simos;
+pub mod subaru_tcu;
 pub mod tcu;
 
 /// Status of one checksum-protected block.
@@ -256,6 +257,9 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
         "haldex" | "haldex-gen5" => Some(Box::new(tcu::HaldexGen5)),
         "simos-crc" | "conti-crc" => Some(Box::new(simos::SimosCrc)),
+        "subaru-tcu-m32r" => Some(Box::new(subaru_tcu::SubaruTcuM32r)),
+        "subaru-tcu-sh7055" => Some(Box::new(subaru_tcu::SubaruTcuSh7055)),
+        "subaru-tcu-mh8104" => Some(Box::new(subaru_tcu::SubaruTcuMh8104)),
         _ => None,
     }
 }
@@ -433,6 +437,39 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     Standalone correct needs one header still verifying (single-header \
                     Ford/EMS3120 reads: pass the stock read as reference) and refuses \
                     an image whose startup-boot header fails (BMW MSD8x).",
+        },
+        AlgoInfo {
+            id: "subaru-tcu-m32r",
+            name: "Subaru Hitachi M32R TCU (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 32-bit word sums over a 0x80000-byte read: sum of \
+                    0x8020.. must equal 0x5AA5A55A (balance @0x8020), and the two's \
+                    complement of the sum of every word except 0x8000..0x8007 is \
+                    stored @0x8000 (copy @0x8004). Synthetic-tested only (FastECU \
+                    port): standalone correct refuses an edited image; pass a \
+                    validating stock dump. A sum-2 low byte of zero is ambiguous \
+                    upstream and never written.",
+        },
+        AlgoInfo {
+            id: "subaru-tcu-sh7055",
+            name: "Subaru Denso SH7055 TCU (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 16-bit word sum over 12 fixed regions \
+                    (0x1000..0x80000 minus four gaps) must equal 0x5AA5; balance \
+                    @0x7FFF4. Synthetic-tested only (FastECU port): standalone \
+                    correct refuses an edited image; pass a validating stock dump.",
+        },
+        AlgoInfo {
+            id: "subaru-tcu-mh8104",
+            name: "Subaru CVT TCU, Mitsubishi MH8104 (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 32-bit word sum over 0x8000..0x80000 minus 0xFFFA \
+                    (FastECU's fixed adjustments) must equal 0x5AA45AAB; balance \
+                    @0x81FC. Synthetic-tested only (FastECU port): standalone \
+                    correct refuses an edited image; pass a validating stock dump.",
         },
     ]
 }
@@ -623,6 +660,9 @@ mod tests {
             "haldex-gen5",
             "simos-crc",
             "conti-crc",
+            "subaru-tcu-m32r",
+            "subaru-tcu-sh7055",
+            "subaru-tcu-mh8104",
         ];
         let infos = algorithms();
         for id in resolvable {
