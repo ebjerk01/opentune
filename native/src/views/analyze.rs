@@ -1262,39 +1262,35 @@ pub(crate) mod tests {
             }
         }
 
+        /// Run `f` with a host over this rig (outside a frame).
+        pub(crate) fn with_host<R>(&mut self, f: impl FnOnce(&mut Host<'_>) -> R) -> R {
+            let keys = opentune_hub::seedkeys::SeedKeys::default();
+            let mut host = Host {
+                tokens: theme::DARK,
+                image_path: self.path.as_deref(),
+                image: self.image.as_deref(),
+                image_edited: false,
+                defs: &self.defs,
+                def_idx: None,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                seedkeys: &keys,
+                target: Ok(DiagTarget::ENGINE),
+                jobs: &self.jobs,
+                confirms: &mut self.confirms,
+                actions: &mut self.actions,
+                status: &mut self.status,
+                shared: &self.shared,
+            };
+            f(&mut host)
+        }
+
         pub(crate) fn frame(&mut self, v: &mut dyn NativeView) {
-            let Self {
-                ctx,
-                jobs,
-                confirms,
-                actions,
-                status,
-                shared,
-                image,
-                path,
-                defs,
-            } = self;
-            let mut out = ctx.clone().run_ui(egui::RawInput::default(), |ui| {
-                let mut host = Host {
-                    tokens: theme::DARK,
-                    image_path: path.as_deref(),
-                    image: image.as_deref(),
-                    image_edited: false,
-                    defs,
-                    def_idx: None,
-                    map_idx: 0,
-                    checksums: &[],
-                    adapter: None,
-                    diagnostics: None,
-                    seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
-                    target: Ok(DiagTarget::ENGINE),
-                    jobs,
-                    confirms,
-                    actions,
-                    status,
-                    shared,
-                };
-                v.ui(ui, &mut host);
+            let ctx = self.ctx.clone();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                self.with_host(|host| v.ui(ui, host));
             });
             // Headless: nothing uploads the font atlas.
             out.textures_delta.clear();
