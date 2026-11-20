@@ -3,10 +3,11 @@
 //! `feat_coding.rs` `write_one`).
 //!
 //! The definition (a coding pack entry or a JSON file) names the module
-//! (`req_id` / `resp_id`); reads go there (else to the app target). A write
-//! is offered only when that module IS the app target, because the
-//! confirmation's `Ack` (and so the write) addresses the app target
-//! ([`plumbing::change_blocker`]).
+//! (`req_id` / `resp_id`); reads and writes go there (else to the app
+//! target). A write is confirmed with `Host::confirm_ecu_for` for exactly
+//! that module, named by the definition ("<definition name> (<ids>)"); the
+//! dialog warns when it is not the app's target, and the write re-checks
+//! `ack.target() == module` before anything is sent.
 //!
 //! ## Per-op table (reviewed before merge)
 //!
@@ -14,10 +15,10 @@
 //! |---|---|---|---|
 //! | Read coding | `22 <did>` per coding block | `read` (the definition's module, else the app target) | n/a (read only) |
 //! | Preview edit | `22 <did>` per block (the engine's dry run builds the plan; no `2E` is ever built into a request) | `read` | n/a (read only) |
-//! | Write parameter — 1. confirm | none | `Host::confirm_ecu` (typed `WRITE`; dialog shows the target module + transport) | — |
+//! | Write parameter — 1. confirm | none | `Host::confirm_ecu_for(req, module, "<definition name> (<ids>)")` (typed `WRITE`; one dialog per module; red warning when the module is not the app target) | — |
 //! | Write parameter — 2. pre-read | `22 <did>` per block | `read` (the confirmed module) | — |
 //! | Write parameter — 3. backup | none | `Host::backup` (refused when empty) | ALL coding blocks read in step 2, concatenated in block order (label names each DID) |
-//! | Write parameter — 4. write | `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only when a seed/key id is entered; a rejected key is never retried); `22 <did>` per block (must equal the backup byte for byte, else NOTHING is written); `22 <did>` per block (the engine's fresh baseline); `2E <did> <block>` per CHANGED block; `22 <did>` per written block (verify); `10 01` (best effort) | `mutate` (the `Ack`'s module; receipt must match the step-2 bytes: CRC + length) | as step 3 |
+//! | Write parameter — 4. write | (`ack.target() == module` re-checked first, else nothing is sent) `10 03`; `27 <lvl>`, `27 <lvl+1> <key>` (only when a seed/key id is entered, via `Host::unlocker_for`; a rejected key is never retried); `22 <did>` per block (must equal the backup byte for byte, else NOTHING is written); `22 <did>` per block (the engine's fresh baseline); `2E <did> <block>` per CHANGED block; `22 <did>` per written block (verify); `10 01` (best effort) | `mutate` (the `Ack`'s module; receipt must match the step-2 bytes: CRC + length) | as step 3 |
 //!
 //! Not ported: a one-click "restore from backup" (the vault keeps the old
 //! blocks; re-applying them is a normal write of the old parameter values).
@@ -139,9 +140,16 @@ pub(crate) struct WriteArgs {
 pub(crate) fn write_op(
     a: &Arc<dyn AdapterAccess>,
     ack: Ack,
+    module: DiagTarget,
     receipt: &BackupReceipt,
     args: WriteArgs,
 ) -> Result<WriteReport, String> {
+    if ack.target() != Some(module) {
+        return Err(format!(
+            "coding write refused: the confirmation does not name module {module}; nothing \
+             was sent"
+        ));
+    }
     let blob = backup_blob(&args.old);
     if receipt.len != blob.len() || receipt.crc32 != crate::views::vault::crc32(&blob) {
         return Err(
@@ -204,6 +212,8 @@ fn outcome_text(o: &WriteOutcome) -> (Tone, String) {
 
 pub(crate) struct Pending {
     pub module: DiagTarget,
+    /// The module's name in the confirmation.
+    pub label: String,
     pub name: String,
     pub value: u64,
     pub unlock: Option<(Unlocker, u8)>,
@@ -317,8 +327,8 @@ impl CodingView {
         }));
     }
 
-    /// Ask for the write (opens the confirmation). Refused, sending nothing,
-    /// when the module is not the app target, there is no backup folder or
+    /// Ask for the write (opens the confirmation for the definition's
+    /// module). Refused, sending nothing, when there is no backup folder or
     /// the seed/key id does not resolve.
     pub(crate) fn request_write(&mut self, host: &mut Host<'_>, name: String, value: u64) {
         let Some(l) = &self.loaded else { return };
@@ -326,21 +336,18 @@ impl CodingView {
             Ok(m) => m,
             Err(e) => return self.msg = Some((Tone::Crit, e)),
         };
-        if let Some(why) = pl::change_blocker(host, module) {
-            return self.msg = Some((Tone::Crit, why));
-        }
         if self.records.near(host).is_none() {
             return self.msg = Some((
                 Tone::Crit,
                 "choose a backup folder first: the old coding must be kept".into(),
             ));
         }
-        let unlock = match self.security.resolve(host) {
+        let unlock = match self.security.resolve(host, 0x01) {
             Ok(u) => u,
             Err(e) => return self.msg = Some((Tone::Crit, e)),
         };
         let req = ConfirmRequest {
-            key: "coding-write".into(),
+            key: pl::confirm_key("coding-write", module),
             title: format!("Write coding: {name} = {value}"),
             body: format!(
                 "Writes the coding of '{}' on the module below. The current coding is read \
@@ -356,6 +363,7 @@ impl CodingView {
             req,
             Pending {
                 module,
+                label: pl::module_label(&l.def.name, module),
                 name,
                 value,
                 unlock,
@@ -382,7 +390,7 @@ impl CodingView {
         }
         self.step = match std::mem::replace(&mut self.step, Step::Idle) {
             Step::Idle => Step::Idle,
-            Step::Confirm(req, p) => match host.confirm_ecu(req.clone()) {
+            Step::Confirm(req, p) => match host.confirm_ecu_for(req.clone(), p.module, &p.label) {
                 ConfirmResult::Pending => Step::Confirm(req, p),
                 ConfirmResult::Declined => {
                     self.msg = Some((Tone::Muted, "write cancelled: nothing was sent".into()));
@@ -466,7 +474,10 @@ impl CodingView {
             unlock: p.unlock,
         };
         let r2 = receipt.clone();
-        let job = host.spawn_job("coding write", move |_| write_op(&a, ack, &r2, args));
+        let module = p.module;
+        let job = host.spawn_job("coding write", move |_| {
+            write_op(&a, ack, module, &r2, args)
+        });
         Step::Write(job, receipt)
     }
 
@@ -646,10 +657,10 @@ impl NativeView for CodingView {
                     ui.add_space(8.0);
                     theme::section_label(ui, &t, "Edit");
                     self.param_editor(ui, host);
-                    let blocker = module
+                    let off = module
                         .as_ref()
                         .ok()
-                        .and_then(|m| pl::change_blocker(host, *m));
+                        .and_then(|m| pl::off_target_note(host, *m));
                     ui.horizontal(|ui| {
                         let sel = self.selected_param();
                         if ui
@@ -661,8 +672,7 @@ impl NativeView for CodingView {
                         {
                             self.start_preview(host);
                         }
-                        let ok =
-                            self.preview.is_some() && blocker.is_none() && !self.busy() && can_diag;
+                        let ok = self.preview.is_some() && !self.busy() && can_diag;
                         if ui
                             .add_enabled_ui(ok, |ui| {
                                 theme::primary_button(ui, &t, Some(icons::WARNING), "Write…")
@@ -675,7 +685,7 @@ impl NativeView for CodingView {
                             }
                         }
                     });
-                    if let Some(b) = &blocker {
+                    if let Some(b) = &off {
                         pl::note(ui, host, Tone::Warn, b);
                     }
                     self.security.ui(ui, host);
@@ -800,7 +810,8 @@ mod tests {
             matches!(v.step, Step::Confirm(..)),
             "pending until answered"
         );
-        fx.confirms.answer("coding-write", false);
+        fx.confirms
+            .answer(&pl::confirm_key("coding-write", BCM), false);
         fx.host(BCM, |h| v.tick(h));
         assert!(matches!(v.step, Step::Idle));
         assert!(bus.wire().is_empty(), "nothing sent: {:02X?}", bus.wire());
@@ -836,8 +847,8 @@ mod tests {
             value: 1,
             unlock: None,
         };
-        let e = write_op(&a, plain, &receipt, args).unwrap_err();
-        assert!(e.contains("confirm_ecu"), "{e}");
+        let e = write_op(&a, plain, BCM, &receipt, args).unwrap_err();
+        assert!(e.contains("does not name module"), "{e}");
         assert!(bus.wire().is_empty());
         assert_eq!(did(&bus, BCM), vec![0x00, 0x11]);
     }
@@ -850,7 +861,8 @@ mod tests {
         let mut v = view(&fx);
         fx.host(BCM, |h| v.request_write(h, "DRL".into(), 1));
         fx.host(BCM, |h| v.tick(h));
-        fx.confirms.answer("coding-write", true);
+        fx.confirms
+            .answer(&pl::confirm_key("coding-write", BCM), true);
         run(&mut v, &mut fx, BCM);
         let rep = v.last.take().unwrap().unwrap();
         assert_eq!(rep.outcome, WriteOutcome::Verified, "{:?}", v.msg);
@@ -871,15 +883,55 @@ mod tests {
     }
 
     #[test]
-    fn a_module_other_than_the_app_target_is_never_written() {
+    fn an_off_target_module_is_confirmed_by_name_and_only_it_is_written() {
         let bus = bus();
         let mut fx = Fixture::new("coding-other");
         fx.adapter = Some(bus.access("sim"));
         let mut v = view(&fx);
-        // The definition names the BCM, the app target is the engine.
+        // The definition names the BCM, the app target is the engine: the
+        // confirmation is for the BCM, by name.
         fx.host(ENGINE, |h| v.request_write(h, "DRL".into(), 1));
-        assert!(matches!(v.step, Step::Idle));
-        assert!(v.msg.as_ref().unwrap().1.contains("app's target"));
+        let Step::Confirm(_, p) = &v.step else {
+            panic!("expected the confirmation")
+        };
+        assert_eq!(p.module, BCM);
+        assert_eq!(p.label, "BCM (tx 0x70E / rx 0x778)");
+        fx.host(ENGINE, |h| v.tick(h));
+        assert!(bus.wire().is_empty(), "nothing before the confirmation");
+        fx.confirms
+            .answer(&pl::confirm_key("coding-write", BCM), true);
+        run(&mut v, &mut fx, ENGINE);
+        assert_eq!(
+            v.last.take().unwrap().unwrap().outcome,
+            WriteOutcome::Verified
+        );
+        assert_eq!(did(&bus, BCM), vec![0x01, 0x11]);
+        assert!(
+            bus.sent_to(0x7E0).is_empty(),
+            "the app target is never touched"
+        );
+        assert_eq!(did(&bus, ENGINE), vec![0x00, 0x11]);
+    }
+
+    #[test]
+    fn an_ack_for_another_module_writes_nothing() {
+        let bus = bus();
+        let a = bus.access("sim");
+        let mut fx = Fixture::new("coding-foreign");
+        let l = load(&def_file(&fx.dir)).unwrap();
+        let old = read_op(&a, BCM, l.def.clone()).unwrap();
+        let receipt = fx.backup(&backup_blob(&old));
+        bus.clear_wire();
+        let engine_ack = fx.ecu_ack(ENGINE);
+        let args = WriteArgs {
+            def: l.def,
+            old,
+            name: "DRL".into(),
+            value: 1,
+            unlock: None,
+        };
+        let e = write_op(&a, engine_ack, BCM, &receipt, args).unwrap_err();
+        assert!(e.contains("does not name module"), "{e}");
         assert!(bus.wire().is_empty());
     }
 
@@ -901,7 +953,7 @@ mod tests {
             value: 1,
             unlock: None,
         };
-        let e = write_op(&a, ack, &receipt, args).unwrap_err();
+        let e = write_op(&a, ack, BCM, &receipt, args).unwrap_err();
         assert!(e.contains("changed since"), "{e}");
         assert!(bus.with_sid(0x2E).is_empty());
         // A receipt for other bytes is refused before the adapter.
@@ -915,7 +967,7 @@ mod tests {
             value: 1,
             unlock: None,
         };
-        let e = write_op(&a, ack, &other, args).unwrap_err();
+        let e = write_op(&a, ack, BCM, &other, args).unwrap_err();
         assert!(e.contains("receipt"), "{e}");
         assert!(bus.wire().is_empty());
     }
@@ -944,7 +996,7 @@ mod tests {
             value: 1,
             unlock: Some((unlock, 0x01)),
         };
-        let rep = write_op(&a, ack, &receipt, args).unwrap();
+        let rep = write_op(&a, ack, BCM, &receipt, args).unwrap();
         assert_eq!(rep.outcome, WriteOutcome::Verified);
         assert_eq!(bus.with_sid(0x27).len(), 2, "seed + key, once");
     }

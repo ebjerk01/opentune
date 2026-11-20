@@ -5,12 +5,12 @@
 //!
 //! **Which module.** A definition may name its module (`req_id` / `resp_id`,
 //! or a KWP `kwp_addr`). Reads go to that module (the read API takes any
-//! target). An ECU change is confirmed with [`Host::confirm_ecu`], whose
-//! [`Ack`](crate::host::Ack) carries the APP's target (Settings → Adapter
-//! settings), and `mutate` / `actuate` address exactly that. So a panel only
-//! offers a change when the module it means IS the app's target
-//! ([`change_blocker`]); otherwise it says which target to set. Nothing is
-//! ever re-addressed behind the user's back.
+//! target). An ECU change is confirmed with [`Host::confirm_ecu_for`] for
+//! exactly that module, named by its role ([`module_label`]); the dialog
+//! warns when it is not the app's target, the [`Ack`](crate::host::Ack)
+//! carries the module, and `mutate` / `actuate` address exactly that. Each
+//! panel re-checks `ack.target() == module` before every change. One
+//! confirmation covers one module ([`confirm_key`] is per module).
 
 use crate::host::{DiagTarget, Host, Transport, Unlocker};
 use crate::icons;
@@ -72,18 +72,36 @@ pub(crate) fn module_of(host: &Host<'_>, named: Option<DiagTarget>) -> Result<Di
     }
 }
 
-/// Why an ECU change on `module` cannot be confirmed now (`None`: it can).
-/// The confirmation, and so the write, goes to the app's target only.
-pub(crate) fn change_blocker(host: &Host<'_>, module: DiagTarget) -> Option<String> {
+/// A note when `module` is not the app's target (`None`: it is). Not a
+/// blocker: the confirmation names the module and warns about it.
+pub(crate) fn off_target_note(host: &Host<'_>, module: DiagTarget) -> Option<String> {
     match host.target() {
-        Err(e) => Some(format!("no usable target module: {e}")),
-        Ok(t) if t != module => Some(format!(
-            "this changes module {module}, but the app's target is {t}. Set Settings → \
-             Adapter settings to {module} first: a confirmed change goes to the app's \
-             target only, never to another module."
+        Ok(t) if t == module => None,
+        Ok(t) => Some(format!(
+            "module {module} is not the app's target ({t}); the confirmation names it and \
+             the change goes to it only"
         )),
-        Ok(_) => None,
+        Err(_) => Some(format!(
+            "the app has no usable target; the confirmation names module {module} and the \
+             change goes to it only"
+        )),
     }
+}
+
+/// The module name a confirmation shows: its role (`name`) and its address.
+pub(crate) fn module_label(name: &str, t: DiagTarget) -> String {
+    let n = name.trim();
+    if n.is_empty() {
+        String::new() // confirm_ecu_for declines an unnamed module
+    } else {
+        format!("{n} ({t})")
+    }
+}
+
+/// A confirmation key that is unique per operation AND module, so an answer
+/// given for one module can never be consumed for another.
+pub(crate) fn confirm_key(op: &str, t: DiagTarget) -> String {
+    format!("{op}:{:?}:{:X}:{:X}", t.transport, t.tx, t.rx)
 }
 
 /// The transport the desktop's `kwp_key` picks for a KWP2000 module by the
@@ -126,38 +144,38 @@ pub(crate) fn is_isotp(t: DiagTarget) -> bool {
 // SecurityAccess inputs
 // ---------------------------------------------------------------------------
 
-/// The optional seed/key id + request-seed level a write may unlock with.
+/// The optional seed/key id + request-seed level a change may unlock with.
 /// Blank id: no SecurityAccess is sent (the module's refusal is shown).
+/// Blank level: the protocol's default (the caller's `default_level`).
+#[derive(Default)]
 pub(crate) struct SecurityInput {
     pub id: String,
     pub level: String,
 }
 
-impl Default for SecurityInput {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            level: "01".into(),
-        }
-    }
-}
-
 impl SecurityInput {
     /// The unlocker and level, resolved before anything is sent; `None` when
     /// no id is given.
-    pub(crate) fn resolve(&self, host: &Host<'_>) -> Result<Option<(Unlocker, u8)>, String> {
+    pub(crate) fn resolve(
+        &self,
+        host: &Host<'_>,
+        default_level: u8,
+    ) -> Result<Option<(Unlocker, u8)>, String> {
         let id = self.id.trim();
         if id.is_empty() {
             return Ok(None);
         }
-        let level = u8::from_str_radix(
-            self.level
-                .trim()
-                .trim_start_matches("0x")
-                .trim_start_matches("0X"),
-            16,
-        )
-        .map_err(|_| format!("security level '{}': expected hex, e.g. 01", self.level))?;
+        let l = self
+            .level
+            .trim()
+            .trim_start_matches("0x")
+            .trim_start_matches("0X");
+        let level = if l.is_empty() {
+            default_level
+        } else {
+            u8::from_str_radix(l, 16)
+                .map_err(|_| format!("security level '{}': expected hex, e.g. 01", self.level))?
+        };
         Ok(Some((host.unlocker_for(id)?, level)))
     }
 
@@ -171,13 +189,18 @@ impl SecurityInput {
                     .hint_text("none"),
             );
             ui.label(RichText::new("level").color(t.fg_dim));
-            ui.add(egui::TextEdit::singleline(&mut self.level).desired_width(36.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.level)
+                    .desired_width(36.0)
+                    .hint_text("auto"),
+            );
         })
         .response
         .on_hover_text(
-            "Optional UDS SecurityAccess before the change (27 level → key → 27 level+1), \
-             through a configured seed/key resolver. OpenTune ships no algorithm. A \
-             rejected key is never retried.",
+            "Optional SecurityAccess for the change (27 level → key → 27 level+1), \
+             through a configured seed/key resolver; blank level = the protocol's default \
+             (UDS 01, VAG KWP 03). OpenTune ships no algorithm. A rejected key is never \
+             retried.",
         );
     }
 }
