@@ -14,7 +14,9 @@ pub mod host;
 mod hublink;
 pub mod icons;
 mod image;
+mod livefeed;
 mod mapview;
+mod ops;
 mod paths;
 mod screenshot;
 mod security;
@@ -23,6 +25,28 @@ mod shell;
 pub mod theme;
 pub mod transfer;
 mod views;
+pub mod widgets;
+
+// Engine crates the scaffold pre-added for the feature batches (so no batch
+// edits Cargo.toml). Anchored here until a view uses them; a batch may drop
+// its line once its view does.
+use opentune_a2l as _;
+use opentune_adaptation as _;
+use opentune_autoscan as _;
+use opentune_candump as _;
+use opentune_coding as _;
+use opentune_container as _;
+use opentune_dtc as _;
+use opentune_haldex as _;
+use opentune_logdef as _;
+use opentune_recipe as _;
+use opentune_sa2 as _;
+use opentune_servicefn as _;
+use opentune_tsini as _;
+use opentune_tsproto as _;
+use opentune_udssim as _;
+use opentune_vin as _;
+use opentune_xdf as _;
 
 use bench::{BenchCfg, Scene};
 pub use host::{Branding, Host, NativeConfig, NativeView, RawTransport, Unlocked, Unlocker};
@@ -38,13 +62,14 @@ pub(crate) struct Args {
     pub screenshot: Option<PathBuf>,
     /// Force a theme for this run ("light" / "dark"), not saved.
     pub theme: Option<String>,
-    /// Open this view first (flash, maps, ecudb, drivers, ...).
+    /// Open this view first (a core view name or a built-in / plugin view
+    /// id: flash, maps, ecudb, drivers, drive, sa2, ...).
     pub view: Option<String>,
 }
 
 const USAGE: &str = "usage: opentune-native [FILE] [--defs DIR] [--def ID]
                        [--bench hex|maps [--frames N] [--px N] [--csv FILE]] [--no-vsync]
-                       [--screenshot OUT.png] [--theme light|dark] [--view flash|maps|ecudb|drivers]";
+                       [--screenshot OUT.png] [--theme light|dark] [--view flash|maps|ecudb|drivers|VIEW-ID]";
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args {

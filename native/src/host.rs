@@ -14,12 +14,32 @@
 //!   and a [`BackupReceipt`] (only [`Host::backup`] makes one). Plugins cannot
 //!   construct either type, so the host's confirm + backup-first sequence
 //!   cannot be skipped through this API.
+//! * A NON-persistent ECU action (output test, mode toggle) runs through
+//!   [`AdapterAccess::actuate`]: it needs the target-stamped [`Ack`] of
+//!   [`Host::confirm_ecu`] but no backup, and its `restore` half always runs
+//!   after `run` (auto-return). It is not a mutation: the write helpers
+//!   (`transfer::download`) refuse inside it.
+//! * Multi-module scans ([`AdapterAccess::scan`]) are read-only, and raw
+//!   driver access ([`AdapterAccess::raw`]) is Bench tier and read-only (see
+//!   [`crate::ops`]).
+//!
+//! # Persistent or not: one table per panel
+//!
+//! Every panel that changes an ECU keeps an explicit, reviewable per-op
+//! table (a `const` slice next to its ops) that classifies each operation it
+//! can send as `mutate` (PERSISTENT: coding, adaptation values, flash,
+//! anything the ECU keeps after a power cycle; read old value, `backup`,
+//! write) or `actuate` (NON-persistent: output tests, timed routines, mode
+//! toggles that the hand-back undoes). The class is written down per op,
+//! never inferred from the service id or the request bytes.
 
 use crate::theme::{self, Tokens};
 use eframe::egui;
 use opentune_checksum::ChecksumAlgo;
 use opentune_core::ecudef::EcuDef;
+pub use opentune_core::Capabilities;
 use opentune_core::RawDiag;
+pub use opentune_hub::channel::BuildChannel;
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -33,10 +53,17 @@ use std::sync::{mpsc, Arc, Mutex, Weak};
 /// Looks up an extra checksum algorithm by id (consulted before the core set).
 pub type ChecksumResolver = fn(&str) -> Option<Box<dyn ChecksumAlgo>>;
 
+pub use crate::livefeed::{FeedEvent, FeedValue, LiveFeed};
+pub use crate::ops::{
+    refuse_ecu_changing, run_then_restore, Actuation, LongJob, ModuleSession, OpHandle, RawBinding,
+    RawInterface, RestoreJob, StopFlag, ECU_CHANGING_SERVICES, UNSUPPORTED,
+};
 pub use crate::security::{Unlocked, Unlocker};
 pub use opentune_core::protocol::seedkey::SeedKey;
 /// Looks up a seed/key algorithm by id (`None` for ids it does not know).
 pub use opentune_hub::seedkeys::SeedKeyResolver;
+/// The UnlockECU-format seed/key definitions loader configuration.
+pub use opentune_seedkey_loader::LoaderConfig;
 
 /// How the app names itself (an embedding build can rebrand).
 #[derive(Clone, Debug)]
@@ -59,10 +86,22 @@ impl Default for Branding {
     }
 }
 
-/// What an embedding build passes to [`crate::run`].
+/// What an embedding build passes to [`crate::run`]. Build it with
+/// `..Default::default()` so new fields keep it compiling.
 #[derive(Default)]
 pub struct NativeConfig {
     pub branding: Branding,
+    /// The build channel (default: [`BuildChannel::compiled`], `alpha` with
+    /// the `alpha` feature). Bench-tier views and raw adapter access exist
+    /// only on `alpha` / `bench` ([`bench_channel`]); a plugin build that
+    /// ships Bench views sets `bench`.
+    pub channel: BuildChannel,
+    /// The user's UnlockECU-format seed/key definitions (see
+    /// `docs/SEEDKEY-LOADER.md`), answering ids `unlockecu:<EcuName>`.
+    /// `None` (the public build) keeps the loader off. Bench tier: honoured
+    /// only on a channel with `debug_enabled()`, ignored with a message on
+    /// stable (as the Tauri app's `DesktopConfig::seedkey_loader`).
+    pub seedkey_loader: Option<LoaderConfig>,
     /// Extra checksum algorithms, consulted before the core set.
     pub checksums: Vec<ChecksumResolver>,
     /// Extra sidebar destinations.
@@ -92,13 +131,53 @@ pub fn resolve_checksum(resolvers: &[ChecksumResolver], id: &str) -> Option<Box<
 // Views
 // ---------------------------------------------------------------------------
 
-/// Where a view appears in the sidebar.
+/// Where a view appears in the sidebar. The groups run top to bottom
+/// Calibration, Vehicle, Reference, Help, then custom groups, then Bench.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ViewGroup {
+    /// The old name of [`ViewGroup::Calibration`] (shown there).
     Workspace,
     Reference,
     /// A group of its own (label shown as the section header).
     Custom(String),
+    Calibration,
+    Vehicle,
+    Help,
+    /// Bench-tier tools. A view with [`Tier::Bench`] is listed here whatever
+    /// group it names (its home group once it graduates).
+    Bench,
+}
+
+impl ViewGroup {
+    /// The sidebar section header.
+    pub fn label(&self) -> &str {
+        match self {
+            ViewGroup::Workspace | ViewGroup::Calibration => "Calibration",
+            ViewGroup::Vehicle => "Vehicle",
+            ViewGroup::Reference => "Reference",
+            ViewGroup::Help => "Help",
+            ViewGroup::Bench => "Bench",
+            ViewGroup::Custom(l) => l,
+        }
+    }
+}
+
+/// How far a view is trusted. Decided at registration: a Bench view is not
+/// registered at all (no sidebar entry, no `ui()`) unless the build channel
+/// is `alpha` or `bench`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tier {
+    /// Tested; shown in every build, in its own group.
+    #[default]
+    Public,
+    /// Untested on a real car or not public: alpha / bench builds only,
+    /// listed in the Bench group. A view graduates by changing its tier.
+    Bench,
+}
+
+/// Does `channel` enable the Bench tier (`alpha` or `bench`)?
+pub fn bench_channel(channel: &BuildChannel) -> bool {
+    matches!(channel.as_str(), BuildChannel::ALPHA | BuildChannel::BENCH)
 }
 
 /// A sidebar destination supplied by an embedding build.
@@ -112,6 +191,10 @@ pub trait NativeView {
     }
     fn group(&self) -> ViewGroup {
         ViewGroup::Custom("Plugins".into())
+    }
+    /// [`Tier::Bench`] views exist only on alpha / bench channels.
+    fn tier(&self) -> Tier {
+        Tier::Public
     }
     /// Right-aligned sidebar count.
     fn count(&self) -> Option<String> {
@@ -638,7 +721,72 @@ pub trait AdapterAccess: Send + Sync {
         backup: &BackupReceipt,
         job: DiagJob,
     ) -> Result<Box<dyn Any + Send>, String>;
+
+    // The methods below are additive: their default bodies refuse with
+    // [`UNSUPPORTED`], so adapters written before them keep compiling.
+
+    /// What the connected adapter can do (its last probe), if known.
+    fn capabilities(&self) -> Option<Capabilities> {
+        None
+    }
+
+    /// A NON-persistent action on the module the user confirmed
+    /// ([`Ack::ecu_target`], from [`Host::confirm_ecu`]; no backup). `run`
+    /// then `restore` on the same link, through [`run_then_restore`]:
+    /// `restore` ALWAYS runs, also when `run` fails or panics. It is not a
+    /// mutation: implementations must not mark it as one, so
+    /// `transfer::download` refuses inside it. `Err` means nothing ran
+    /// (refused, busy, the link would not open).
+    fn actuate_job(
+        &self,
+        op: &str,
+        ack: Ack,
+        run: DiagJob,
+        restore: RestoreJob,
+    ) -> Result<Actuation<Box<dyn Any + Send>>, String> {
+        let _ = (op, ack, run, restore);
+        Err(UNSUPPORTED.into())
+    }
+
+    /// Start a long-running READ-ONLY operation on `target` and return once
+    /// it is queued. It holds the adapter until the job returns (every other
+    /// operation gets "adapter busy" meanwhile); the job must end on its own
+    /// when its [`StopFlag`] is set. The implementation calls exactly one of
+    /// [`LongJob::run`] / [`LongJob::fail`].
+    fn start_job(&self, op: &str, target: DiagTarget, job: LongJob) -> Result<(), String> {
+        let _ = (op, target, job);
+        Err(UNSUPPORTED.into())
+    }
+
+    /// One READ-ONLY operation over several modules: the job re-binds with
+    /// [`ModuleSession::bind`]. Implementations refuse ECU-changing requests
+    /// ([`refuse_ecu_changing`]).
+    fn scan_job(&self, op: &str, job: ScanJob) -> Result<Box<dyn Any + Send>, String> {
+        let _ = (op, job);
+        Err(UNSUPPORTED.into())
+    }
+
+    /// Raw driver access, Bench tier: implementations refuse it unless the
+    /// build channel is alpha / bench, and hand the job only a
+    /// [`RawInterface`] (which refuses flash writes and ECU-changing
+    /// requests).
+    fn raw_job(
+        &self,
+        op: &str,
+        bind: RawBinding,
+        job: RawJob,
+    ) -> Result<Box<dyn Any + Send>, String> {
+        let _ = (op, bind, job);
+        Err(UNSUPPORTED.into())
+    }
 }
+
+/// A multi-module read-only job ([`AdapterAccess::scan_job`]).
+pub type ScanJob =
+    Box<dyn FnOnce(&mut dyn ModuleSession) -> Result<Box<dyn Any + Send>, String> + Send + 'static>;
+/// A raw driver job ([`AdapterAccess::raw_job`]).
+pub type RawJob =
+    Box<dyn FnOnce(&mut RawInterface<'_>) -> Result<Box<dyn Any + Send>, String> + Send + 'static>;
 
 /// Run the core protocol clients (`UdsClient`, `Kwp2000Client`) over the
 /// [`RawDiag`] an adapter job gets:
@@ -693,6 +841,11 @@ impl opentune_core::protocol::DiagTransport for RawTransport<'_> {
 pub(crate) fn test_ack(t: DiagTarget) -> Ack {
     Ack { target: Some(t) }
 }
+/// A file-write confirmation (names no module).
+#[cfg(test)]
+pub(crate) fn test_file_ack() -> Ack {
+    Ack { target: None }
+}
 #[cfg(test)]
 pub(crate) fn test_backup(dir: &Path, data: &[u8]) -> BackupReceipt {
     backup_into_vault(dir, "test", data).unwrap()
@@ -733,7 +886,7 @@ where
     Box::new(move |d: &mut dyn RawDiag| f(d).map(|r| Box::new(r) as Box<dyn Any + Send>))
 }
 
-fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Result<R, String> {
+pub(crate) fn unbox<R: 'static>(r: Result<Box<dyn Any + Send>, String>) -> Result<R, String> {
     r?.downcast::<R>()
         .map(|b| *b)
         .map_err(|_| "adapter returned an unexpected result type".into())
@@ -768,6 +921,62 @@ impl dyn AdapterAccess {
         };
         unbox(self.mutate_job(op, ack, backup, boxed(f)))
     }
+
+    /// Run the NON-persistent action `run` on the module the user confirmed,
+    /// then `restore` (always, also after an error or a panic). Not a
+    /// mutation: no backup, and the write helpers refuse inside it. `Err`:
+    /// nothing ran; otherwise check [`Actuation::restored`].
+    pub fn actuate<R, F, G>(
+        &self,
+        op: &str,
+        ack: Ack,
+        run: F,
+        restore: G,
+    ) -> Result<Actuation<R>, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut dyn RawDiag) -> Result<R, String> + Send + 'static,
+        G: FnOnce(&mut dyn RawDiag) -> Result<(), String> + Send + 'static,
+    {
+        let a = self.actuate_job(op, ack, boxed(run), Box::new(restore))?;
+        Ok(a.map(|b| unbox(Ok(b))))
+    }
+
+    /// Start the long-running read-only `f` on `target`; it should return
+    /// once its [`StopFlag`] is set. Dropping the handle stops it.
+    pub fn start<R, F>(&self, op: &str, target: DiagTarget, f: F) -> Result<OpHandle<R>, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut dyn RawDiag, &StopFlag) -> Result<R, String> + Send + 'static,
+    {
+        let (job, handle) = LongJob::new(f);
+        self.start_job(op, target, job)?;
+        Ok(handle)
+    }
+
+    /// Run the read-only multi-module `f` as one operation.
+    pub fn scan<R, F>(&self, op: &str, f: F) -> Result<R, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut dyn ModuleSession) -> Result<R, String> + Send + 'static,
+    {
+        let job: ScanJob = Box::new(move |m: &mut dyn ModuleSession| {
+            f(m).map(|r| Box::new(r) as Box<dyn Any + Send>)
+        });
+        unbox(self.scan_job(op, job))
+    }
+
+    /// Run `f` on the raw driver (Bench tier; see [`RawInterface`]).
+    pub fn raw<R, F>(&self, op: &str, bind: RawBinding, f: F) -> Result<R, String>
+    where
+        R: Send + 'static,
+        F: FnOnce(&mut RawInterface<'_>) -> Result<R, String> + Send + 'static,
+    {
+        let job: RawJob = Box::new(move |i: &mut RawInterface<'_>| {
+            f(i).map(|r| Box::new(r) as Box<dyn Any + Send>)
+        });
+        unbox(self.raw_job(op, bind, job))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -775,7 +984,7 @@ impl dyn AdapterAccess {
 // ---------------------------------------------------------------------------
 
 /// Something a view asks the app to do after its `ui()` returns.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum HostAction {
     OpenImage(PathBuf),
     SelectDefinition(String),
@@ -789,6 +998,92 @@ pub enum HostAction {
         map: usize,
         cells: Vec<(usize, f64)>,
     },
+    /// Add an ECU definition for this session (an imported XDF / A2L, a
+    /// promoted map region). It is appended to the definitions; one with the
+    /// same id replaces the earlier one. Nothing is written to disk.
+    AddDefinition(Box<EcuDef>),
+}
+
+impl PartialEq for HostAction {
+    fn eq(&self, other: &Self) -> bool {
+        use HostAction::*;
+        match (self, other) {
+            (OpenImage(a), OpenImage(b)) => a == b,
+            (SelectDefinition(a), SelectDefinition(b)) => a == b,
+            (SelectMap(a), SelectMap(b)) => a == b,
+            (HexJump(a), HexJump(b)) => a == b,
+            (EditCells { map: m, cells: c }, EditCells { map: n, cells: d }) => m == n && c == d,
+            // EcuDef has no PartialEq: compare the serialized definitions.
+            (AddDefinition(a), AddDefinition(b)) => {
+                serde_json::to_value(a).ok() == serde_json::to_value(b).ok()
+            }
+            _ => false,
+        }
+    }
+}
+
+/// The bundled data folders a view may read (see `paths.rs` for where each
+/// is looked for).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DataRoot {
+    EcuDefs,
+    Database,
+    CtrlDefs,
+    /// The vehicle catalog.
+    Catalog,
+    /// Definition packs.
+    Packs,
+    /// The in-app guide (Markdown).
+    Guide,
+}
+
+impl DataRoot {
+    pub const ALL: [DataRoot; 6] = [
+        DataRoot::EcuDefs,
+        DataRoot::Database,
+        DataRoot::CtrlDefs,
+        DataRoot::Catalog,
+        DataRoot::Packs,
+        DataRoot::Guide,
+    ];
+
+    /// The folder name.
+    pub fn dir_name(self) -> &'static str {
+        match self {
+            DataRoot::EcuDefs => "ecudefs",
+            DataRoot::Database => "database",
+            DataRoot::CtrlDefs => "ctrldefs",
+            DataRoot::Catalog => "catalog",
+            DataRoot::Packs => "packs",
+            DataRoot::Guide => "guide",
+        }
+    }
+}
+
+/// App-lifetime state every view's [`Host`] shares (built once by the app).
+pub(crate) struct HostShared {
+    pub(crate) channel: BuildChannel,
+    pub(crate) data: crate::paths::DataRoots,
+    pub(crate) live: LiveFeed,
+    pub(crate) gps: crate::widgets::gps::GpsSource,
+}
+
+impl HostShared {
+    pub(crate) fn new(channel: BuildChannel, ctx: Option<egui::Context>) -> Self {
+        Self {
+            channel,
+            data: crate::paths::DataRoots::resolve(),
+            live: ctx.map(LiveFeed::new).unwrap_or_default(),
+            gps: Default::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Default for HostShared {
+    fn default() -> Self {
+        Self::new(BuildChannel::new(BuildChannel::STABLE), None)
+    }
 }
 
 /// What a view gets every frame.
@@ -809,9 +1104,36 @@ pub struct Host<'a> {
     pub(crate) confirms: &'a mut Confirms,
     pub(crate) actions: &'a mut Vec<HostAction>,
     pub(crate) status: &'a mut Option<String>,
+    pub(crate) shared: &'a HostShared,
 }
 
 impl<'a> Host<'a> {
+    /// The build channel.
+    pub fn channel(&self) -> &BuildChannel {
+        &self.shared.channel
+    }
+    /// Is the Bench tier on (channel `alpha` or `bench`)? A view checks it
+    /// before offering a Bench-only operation inside a public view.
+    pub fn bench_enabled(&self) -> bool {
+        bench_channel(&self.shared.channel)
+    }
+    /// Where the bundled data folder `root` was found, if anywhere.
+    pub fn data_dir(&self, root: DataRoot) -> Option<&Path> {
+        self.shared.data.get(root)
+    }
+    /// The live feed (Dashboard / Live log publish, the Drive view reads).
+    pub fn live_feed(&self) -> LiveFeed {
+        self.shared.live.clone()
+    }
+    /// The app-wide GPS source (one receiver, shared by the panels' GPS
+    /// cards).
+    pub fn gps(&self) -> crate::widgets::gps::GpsSource {
+        self.shared.gps.clone()
+    }
+    /// What the connected adapter can do (its last probe), if known.
+    pub fn capabilities(&self) -> Option<Capabilities> {
+        self.adapter.and_then(|a| a.capabilities())
+    }
     /// Theme tokens (use them with `theme::*` helpers so the view looks native).
     pub fn tokens(&self) -> &Tokens {
         &self.tokens
@@ -1129,6 +1451,7 @@ mod tests {
                 confirms: &mut confirms,
                 actions: &mut actions,
                 status: &mut status,
+                shared: &HostShared::default(),
             };
             (
                 h.unlocker().map(|u| u.id().to_string()),
@@ -1226,6 +1549,7 @@ mod tests {
                 confirms,
                 actions: &mut actions,
                 status: &mut status,
+                shared: &HostShared::default(),
             };
             f(&mut h)
         };
@@ -1462,6 +1786,7 @@ mod tests {
                 confirms: &mut confirms,
                 actions: &mut actions,
                 status: &mut status,
+                shared: &HostShared::default(),
             };
             view.ui(ui, &mut host);
         });
@@ -1542,6 +1867,7 @@ mod tests {
                 confirms: &mut self.confirms,
                 actions: &mut self.actions,
                 status: &mut self.status,
+                shared: &HostShared::default(),
             };
             f(&mut h)
         }
@@ -2072,5 +2398,72 @@ mod tests {
         let a: Arc<dyn AdapterAccess> = Arc::new(WrongType);
         let e = a.read("r", TCU, |_| Ok(7u32)).unwrap_err();
         assert!(e.contains("unexpected result type"), "{e}");
+    }
+
+    /// An adapter written before actuate / start / scan / raw (only the
+    /// three original methods) still compiles and refuses them.
+    #[test]
+    fn older_adapters_refuse_the_newer_operations() {
+        let mock = Arc::new(MockAdapter {
+            mutations: Mutex::new(0),
+            targets: Mutex::new(Vec::new()),
+        });
+        let a: Arc<dyn AdapterAccess> = mock.clone();
+        assert_eq!(a.capabilities(), None);
+        let e = a
+            .actuate("x", test_ack(TCU), |_d| Ok(()), |_d| Ok(()))
+            .unwrap_err();
+        assert_eq!(e, UNSUPPORTED);
+        let e = a.start("x", TCU, |_d, _s| Ok(())).err().unwrap();
+        assert_eq!(e, UNSUPPORTED);
+        assert_eq!(a.scan("x", |_m| Ok(())).unwrap_err(), UNSUPPORTED);
+        let e = a.raw("x", RawBinding::new(TCU), |_i| Ok(())).unwrap_err();
+        assert_eq!(e, UNSUPPORTED);
+        assert!(mock.targets.lock().unwrap().is_empty(), "nothing ran");
+    }
+
+    #[test]
+    fn the_host_exposes_channel_data_roots_and_shared_state() {
+        let mut f = Fixture::new();
+        f.host(Ok(TCU), |h| {
+            assert_eq!(h.channel().as_str(), BuildChannel::STABLE);
+            assert!(!h.bench_enabled());
+            assert_eq!(h.capabilities(), None);
+            // From native/ (cargo test) the repository's folders are found.
+            if Path::new("../ecudefs").is_dir() {
+                assert!(h.data_dir(DataRoot::EcuDefs).is_some());
+                assert!(h.data_dir(DataRoot::Packs).is_some());
+                assert!(h.data_dir(DataRoot::Guide).is_some());
+            }
+            // Clones of the feed and the GPS source are the app's one each.
+            let rx = h.live_feed().subscribe();
+            h.live_feed()
+                .publish(FeedEvent::Stop { source: "t".into() });
+            assert!(rx.try_recv().is_ok());
+            assert!(!h.gps().is_open());
+            h.act(HostAction::AddDefinition(Box::new(def_with_ids(
+                0x7E1, 0x7E9,
+            ))));
+        });
+        assert_eq!(
+            f.actions,
+            vec![HostAction::AddDefinition(Box::new(def_with_ids(
+                0x7E1, 0x7E9
+            )))]
+        );
+        assert_ne!(
+            f.actions[0],
+            HostAction::AddDefinition(Box::new(def_with_ids(0x7E0, 0x7E8)))
+        );
+        for (name, on) in [
+            (BuildChannel::STABLE, false),
+            (BuildChannel::ALPHA, true),
+            (BuildChannel::BENCH, true),
+            ("beta", false),
+        ] {
+            assert_eq!(bench_channel(&BuildChannel::new(name)), on, "{name}");
+        }
+        assert_eq!(ViewGroup::Workspace.label(), "Calibration");
+        assert_eq!(ViewGroup::Custom("Plugins".into()).label(), "Plugins");
     }
 }

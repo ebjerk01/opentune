@@ -6,6 +6,7 @@
 //! its results and draws them.
 
 use crate::adapters::{self, BusyPort, Candidate, DetectReport, Link, LinkState, LinkStatus};
+use crate::host::AdapterAccess;
 use crate::hublink::{HubAdapter, LinkCfg};
 use crate::icons;
 use crate::settings::{Settings, Units};
@@ -20,8 +21,8 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Known driver ids and their labels for the cable select.
-pub const DRIVERS: &[(&str, &str)] = &[
+/// Shorter labels for the common cables (others use the registry's name).
+const SHORT_LABELS: &[(&str, &str)] = &[
     ("elm327obd", "ELM327 OBD"),
     ("kkl", "KKL (K-line)"),
     ("j2534", "J2534 PassThru"),
@@ -32,8 +33,26 @@ pub const DRIVERS: &[(&str, &str)] = &[
     ("vcar", "Virtual car (simulator)"),
 ];
 
+/// Every driver this build can open, `(id, label)`, in registry order: the
+/// full `opentune_hub::drivers::registry()`, so the Bench-tier drivers
+/// (isotp-ble, doip, esp32) appear only in alpha builds.
+pub fn drivers() -> &'static [(&'static str, &'static str)] {
+    static LIST: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
+        std::sync::OnceLock::new();
+    LIST.get_or_init(|| {
+        opentune_hub::drivers::registry()
+            .list()
+            .iter()
+            .map(|e| {
+                let short = SHORT_LABELS.iter().find(|(id, _)| *id == e.id);
+                (e.id, short.map_or(e.display_name, |(_, l)| *l))
+            })
+            .collect()
+    })
+}
+
 pub fn driver_label(id: &str) -> &str {
-    DRIVERS
+    drivers()
         .iter()
         .find(|(d, _)| *d == id)
         .map(|(_, l)| *l)
@@ -295,7 +314,13 @@ impl TopBar {
         // Serial / netdev cables need a port; USB and simulated ones do not.
         let needs_port = matches!(
             driver,
-            adapters::ELM_DRIVER | "kkl" | "slcan" | "socketcan" | "openport2"
+            adapters::ELM_DRIVER
+                | "elm327"
+                | "elm327net"
+                | "kkl"
+                | "slcan"
+                | "socketcan"
+                | "openport2"
         );
         if driver.is_empty() {
             self.notify("Pick a cable first (or run Auto-detect)", Tone::Warn);
@@ -383,7 +408,7 @@ impl TopBar {
                 pick = Some((String::new(), None));
             }
             menu_heading(ui, t, "Drivers");
-            for (id, label) in DRIVERS {
+            for (id, label) in drivers() {
                 if ui.selectable_label(driver == *id, *label).clicked() {
                     pick = Some((id.to_string(), None));
                 }
@@ -481,15 +506,16 @@ impl TopBar {
             .on_hover_cursor(CursorIcon::PointingHand);
         let tip = match link.status {
             LinkStatus::Connected => format!(
-                "{} on {} at {} baud\nClick to disconnect",
+                "{} on {} at {} baud\nCan do: {}\nClick to disconnect",
                 link.ident.as_deref().unwrap_or("ELM327"),
                 link.port,
-                link.baud
+                link.baud,
+                crate::widgets::caps::summary(self.hub.capabilities().as_ref()),
             ),
             LinkStatus::Connecting => format!("Opening {}…\nClick to cancel", link.port),
             LinkStatus::Idle => match &link.error {
                 Some(e) => format!("Click to connect\nLast attempt: {e}"),
-                None => "Click to connect (ELM327 only in the native app)".to_string(),
+                None => "Click to connect".to_string(),
             },
         };
         if r.on_hover_text(tip).clicked() {
@@ -622,7 +648,7 @@ impl TopBar {
                             .width(220.0)
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut a.driver, String::new(), "No cable");
-                                for (id, l) in DRIVERS {
+                                for (id, l) in drivers() {
                                     ui.selectable_value(&mut a.driver, id.to_string(), *l);
                                 }
                             });
@@ -896,5 +922,13 @@ mod tests {
         assert_eq!(short_port("COM3"), "COM3");
         assert_eq!(driver_label("kkl"), "KKL (K-line)");
         assert_eq!(driver_label(""), "No cable");
+        // The cable select lists the whole registry, alpha drivers only in
+        // alpha builds.
+        let ids: Vec<&str> = drivers().iter().map(|(id, _)| *id).collect();
+        for id in ["elm327obd", "elm327", "elm327net", "mock", "efp02c", "vcar"] {
+            assert!(ids.contains(&id), "{id}");
+        }
+        assert_eq!(ids.contains(&"doip"), cfg!(feature = "alpha"));
+        assert_eq!(driver_label("elm327net"), "ELM327 over WiFi / Bluetooth");
     }
 }

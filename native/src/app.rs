@@ -3,7 +3,8 @@
 
 use crate::bench::{self, Bench};
 use crate::host::{
-    AdapterAccess, Branding, Confirms, Host, HostAction, Jobs, NativeConfig, NativeView, ViewGroup,
+    AdapterAccess, Branding, Confirms, Host, HostAction, HostShared, Jobs, NativeConfig,
+    NativeView, Tier, ViewGroup,
 };
 use crate::settings::{Settings, STORAGE_KEY};
 use crate::shell::sidebar::{self, NavGroup, NavItem};
@@ -32,7 +33,12 @@ pub struct App {
     controllers: views::controllers::ControllersView,
     env: String,
     branding: Branding,
+    /// Built-in NativeViews (`views::builtin`), registered for the channel.
+    builtin_views: Vec<Box<dyn NativeView>>,
+    /// The embedding build's views (Bench-tier ones only on alpha / bench).
     plugin_views: Vec<Box<dyn NativeView>>,
+    /// What every view's Host shares: channel, data roots, live feed, GPS.
+    shared: HostShared,
     adapter: Option<Arc<dyn AdapterAccess>>,
     /// The built-in adapter (the top bar's link; the views' default adapter).
     hub: Arc<crate::hublink::HubAdapter>,
@@ -57,7 +63,22 @@ fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, args: Args, config: NativeConfig) -> Self {
-        let hub = Arc::new(crate::hublink::HubAdapter::with_registry());
+        let channel = config.channel.clone();
+        let hub =
+            Arc::new(crate::hublink::HubAdapter::with_registry().with_channel(channel.clone()));
+        // The tier is decided at registration: a Bench view is never built on
+        // a stable channel.
+        let builtin_views = views::builtin::views(&channel);
+        let plugin_views: Vec<Box<dyn NativeView>> = config
+            .views
+            .into_iter()
+            .filter(|v| views::builtin::admitted(v.tier(), &channel))
+            .collect();
+        let loader = opentune_hub::seedkeys::loader_for(config.seedkey_loader.as_ref(), &channel)
+            .unwrap_or_else(|e| {
+                eprintln!("{e}");
+                None
+            });
         let mut settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
@@ -129,14 +150,25 @@ impl App {
                 env
             );
         }
+        let view = args
+            .view
+            .as_deref()
+            .and_then(|s| {
+                View::parse(s)
+                    .or_else(|| {
+                        let i = builtin_views.iter().position(|v| v.id() == s)?;
+                        Some(View::Builtin(i as u16))
+                    })
+                    .or_else(|| {
+                        let i = plugin_views.iter().position(|v| v.id() == s)?;
+                        Some(View::Plugin(i as u16))
+                    })
+            })
+            .unwrap_or(View::Flash);
         Self {
             settings,
             top: TopBar::new(hub.clone()),
-            view: args
-                .view
-                .as_deref()
-                .and_then(View::parse)
-                .unwrap_or(View::Flash),
+            view,
             defs,
             defs_note,
             flash,
@@ -148,7 +180,9 @@ impl App {
             controllers: Default::default(),
             env,
             branding: config.branding,
-            plugin_views: config.views,
+            builtin_views,
+            plugin_views,
+            shared: HostShared::new(channel, Some(cc.egui_ctx.clone())),
             // An embedding build may bring its own adapter for the views;
             // by default they share the top bar's hub session.
             adapter: config
@@ -156,7 +190,7 @@ impl App {
                 .or_else(|| Some(hub.clone() as Arc<dyn AdapterAccess>)),
             hub,
             diagnostics: config.diagnostics,
-            seedkeys: opentune_hub::seedkeys::SeedKeys::new(config.seedkeys),
+            seedkeys: opentune_hub::seedkeys::SeedKeys::new(config.seedkeys).with_loader(loader),
             jobs: Jobs::new(cc.egui_ctx.clone()),
             confirms: Confirms::default(),
             quit_ask: false,
@@ -247,6 +281,23 @@ impl App {
                         Ok(n) => self.host_status = Some(format!("{n} cell(s) edited")),
                         Err(e) => self.host_status = Some(format!("edit refused: {e}")),
                     }
+                }
+                HostAction::AddDefinition(def) => {
+                    let def = *def;
+                    let id = def.id.clone();
+                    match self.defs.iter().position(|d| d.id == id) {
+                        Some(i) => {
+                            self.defs[i] = def;
+                            // The selected definition changed: re-select it
+                            // so the Flash view re-reads its maps.
+                            if self.flash.def_idx == Some(i) {
+                                self.flash.select_def(&self.defs, Some(i));
+                            }
+                        }
+                        None => self.defs.push(def),
+                    }
+                    self.defs_note = format!("{} definitions", self.defs.len());
+                    self.host_status = Some(format!("definition '{id}' added for this session"));
                 }
             }
         }
@@ -362,36 +413,45 @@ impl eframe::App for App {
             View::Drivers => Some(views::drivers::count().to_string()),
             _ => None,
         };
-        let core = |v: View| NavItem {
-            view: v,
-            label: v.label().into(),
-            icon: v.icon().into(),
-            count: count(v),
-        };
-        let mut groups = vec![
-            NavGroup {
-                label: "Workspace".into(),
-                items: View::WORKSPACE.iter().map(|&v| core(v)).collect(),
-            },
-            NavGroup {
-                label: "Reference".into(),
-                items: View::REFERENCE.iter().map(|&v| core(v)).collect(),
-            },
-        ];
-        for (i, pv) in self.plugin_views.iter().enumerate() {
+        // Every destination with its group and NAV_ORDER rank; a Bench-tier
+        // view sits in the Bench group whatever its home group.
+        let mut entries: Vec<(ViewGroup, usize, NavItem)> = View::CORE
+            .iter()
+            .map(|&v| {
+                let item = NavItem {
+                    view: v,
+                    label: v.label().into(),
+                    icon: v.icon().into(),
+                    count: count(v),
+                };
+                (v.group(), views::nav_rank(v.id()), item)
+            })
+            .collect();
+        let natives = (self.builtin_views.iter().enumerate())
+            .map(|(i, v)| (View::Builtin(i as u16), v))
+            .chain(
+                (self.plugin_views.iter().enumerate()).map(|(i, v)| (View::Plugin(i as u16), v)),
+            );
+        for (view, pv) in natives {
+            let group = match pv.tier() {
+                Tier::Bench => ViewGroup::Bench,
+                Tier::Public => pv.group(),
+            };
             let item = NavItem {
-                view: View::Plugin(i as u16),
+                view,
                 label: pv.label().into(),
                 icon: pv.icon().into(),
                 count: pv.count(),
             };
-            let label = match pv.group() {
-                ViewGroup::Workspace => "Workspace".to_string(),
-                ViewGroup::Reference => "Reference".to_string(),
-                ViewGroup::Custom(l) => l,
-            };
-            match groups.iter_mut().find(|g| g.label == label) {
-                Some(g) => g.items.push(item),
+            entries.push((group, views::nav_rank(pv.id()), item));
+        }
+        // Stable sort: unlisted (plugin) views keep their own order.
+        entries.sort_by_key(|(g, rank, _)| (views::group_rank(g), *rank));
+        let mut groups: Vec<NavGroup> = Vec::new();
+        for (g, _, item) in entries {
+            let label = g.label().to_string();
+            match groups.iter_mut().find(|x| x.label == label) {
+                Some(x) => x.items.push(item),
                 None => groups.push(NavGroup {
                     label,
                     items: vec![item],
@@ -452,9 +512,15 @@ impl eframe::App for App {
                 }
                 View::Log => self.logview.ui(ui, &t),
                 View::Controllers => self.controllers.ui(ui, &t),
-                View::Plugin(i) => {
+                // Built-in and plugin NativeViews: the same Host path.
+                View::Builtin(_) | View::Plugin(_) => {
                     let mut actions = Vec::new();
-                    if let Some(pv) = self.plugin_views.get_mut(i as usize) {
+                    let pv = match self.view {
+                        View::Builtin(i) => self.builtin_views.get_mut(i as usize),
+                        View::Plugin(i) => self.plugin_views.get_mut(i as usize),
+                        _ => None,
+                    };
+                    if let Some(pv) = pv {
                         let img = self.flash.image.as_ref();
                         let mut host = Host {
                             tokens: t,
@@ -473,12 +539,12 @@ impl eframe::App for App {
                             confirms: &mut self.confirms,
                             actions: &mut actions,
                             status: &mut self.host_status,
+                            shared: &self.shared,
                         };
                         pv.ui(ui, &mut host);
                     }
                     self.apply(actions);
                 }
-                other => views::placeholder::ui(ui, &t, other),
             });
         self.confirms.ui(&ctx);
 

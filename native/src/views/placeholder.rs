@@ -1,18 +1,30 @@
-//! Empty states for views that are not ported to the native app yet.
+//! The honest empty state of a view that is registered but not ported to
+//! the native app yet (the scaffold stubs call it).
 
-use crate::theme::{self, Tokens};
-use crate::views::View;
-use eframe::egui::Ui;
+use crate::host::Host;
+use crate::theme::{self, font, UI_MEDIUM, UI_STRONG};
+use eframe::egui::{RichText, Ui};
 
-pub fn ui(ui: &mut Ui, t: &Tokens, view: View) {
-    let text = match view {
-        View::Project => "Tuning projects (.otproj): coming to the native app.",
-        View::Vault => "The flash backup vault: coming to the native app.",
-        View::Drive => "Live drive view over the selected adapter: coming to the native app.",
-        View::Log => "Datalog viewer: coming to the native app.",
-        View::Controllers => "Controller definitions: coming to the native app.",
-        View::Sa2 => "SA2 script runner (your own scripts): coming to the native app.",
-        _ => "Coming to the native app.",
-    };
-    theme::empty_state(ui, t, view.icon(), view.label(), text);
+/// `what` the view will do, and that it does nothing yet: it sends nothing
+/// to an adapter and changes no file.
+pub fn not_ported(ui: &mut Ui, host: &Host<'_>, icon: &str, label: &str, what: &str) {
+    let t = *host.tokens();
+    theme::empty_state(ui, &t, icon, label, what);
+    ui.vertical_centered(|ui| {
+        ui.add_space(12.0);
+        ui.label(
+            RichText::new("Not yet ported")
+                .font(font(UI_STRONG, 13.0))
+                .color(t.warn),
+        );
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(
+                "This panel is not in the native app yet: it does nothing and sends nothing. \
+                 The webview app has it today.",
+            )
+            .font(font(UI_MEDIUM, 12.5))
+            .color(t.fg_faint),
+        );
+    });
 }
