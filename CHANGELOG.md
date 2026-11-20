@@ -189,6 +189,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
   the new workspace crate `opentune-hub`, so a second front end can share it.
   No behaviour change; the desktop re-exports it under the same public paths.
+- Internal: the desktop's long-running adapter operations moved into
+  `opentune-hub` as `opentune_hub::ops`: the CAN capture job with its
+  counters and stop handling (`ops::candump`), and the actuator-test gates,
+  live run, exchange log, STOP and automatic return of control
+  (`ops::actuator`), so a second front end runs the same code. The desktop
+  keeps only the Tauri commands; its session log plugs in through a small
+  `ExchangeLog` trait. No behaviour change.
 - CI and `scripts/check.sh` build, lint and test with `--locked` (the
   workspace, `desktop/src-tauri` and the release builds), so a stale
   `Cargo.lock` fails the run instead of being silently updated.

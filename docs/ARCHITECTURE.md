@@ -48,7 +48,11 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   connection), module addressing (`Addr`, `ConnKey`, `resolve`, refusal of
   writes to an unknown target), the driver registry and adapter probe,
   plugin seed/key lookup with the built-in SA2 interpreter, the build
-  channel, map cell codecs and vault listing. The desktop re-exports it under
+  channel, map cell codecs and vault listing. The long-running adapter
+  operations live there too (`opentune_hub::ops`): the CAN capture job
+  (`ops::candump`) and the actuator-test gates, run, stop and return of
+  control (`ops::actuator`), each on `AdapterHub::start_op`; the desktop
+  keeps only their Tauri commands. The desktop re-exports it under
   its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device

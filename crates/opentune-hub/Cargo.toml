@@ -32,6 +32,9 @@ opentune-driver-kkl = { path = "../drivers/kkl" }
 opentune-driver-vcar = { path = "../drivers/vcar" }
 opentune-driver-efp02c = { path = "../drivers/efp02c" }
 opentune-udssim = { path = "../opentune-udssim" }
+# Long-running operations (`ops`): CAN capture and actuator tests.
+opentune-candump = { path = "../opentune-candump" }
+opentune-adaptation = { path = "../opentune-adaptation" }
 # Bench tier: the ESP32 ISO-TP BLE bridge driver (unverified), alpha builds only.
 opentune-driver-isotp-ble = { path = "../drivers/isotp-ble-bridge", optional = true }
 # Bench tier: DoIP (ISO 13400, UDS over Ethernet), loopback-tested only, alpha builds only.
