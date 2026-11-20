@@ -1,6 +1,10 @@
 //! OpenTune native frontend (prototype): egui/eframe on wgpu, calling the Rust
 //! core in-process. See README.md.
 
+// A GUI program on Windows: no console window next to the app in release
+// builds (output still reaches a caller that redirects stdout/stderr).
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod adapters;
 mod app;
 mod bench;
