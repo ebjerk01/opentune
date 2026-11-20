@@ -6,6 +6,7 @@ use crate::{
     image::part_breakdown,
     seedkeys::{self, SeedKeys},
 };
+use opentune_hub::seedkeys::generic;
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -64,21 +65,11 @@ pub fn dtc_lookup(code: String) -> Result<Value, String> {
 /// calculator the user drives: they pick a transform and supply its parameters.
 /// It never pretends to compute a real ECU's key from a bundled secret. (A
 /// plugin build may add options for its own [`SeedKeys`] ids from its UI
-/// overlay; [`seedkey_compute`] resolves those through the plugin.)
+/// overlay; [`seedkey_compute`] resolves those through the plugin.) The
+/// transforms live in [`opentune_hub::seedkeys::generic`].
 #[tauri::command]
 pub fn seedkey_algos() -> Value {
-    json!([
-        { "id": "identity", "name": "Identity (key = seed)", "params": [],
-          "desc": "Echoes the seed. Some access levels accept the seed unchanged." },
-        { "id": "xor-mask", "name": "XOR mask", "params": ["mask"],
-          "desc": "key[i] = seed[i] XOR mask[i] (mask repeats if shorter)." },
-        { "id": "add-const", "name": "Add constant (per byte)", "params": ["add"],
-          "desc": "key[i] = seed[i] + k (mod 256)." },
-        { "id": "xor-add", "name": "XOR then add (demo shape)", "params": ["mask", "add"],
-          "desc": "key[i] = (seed[i] XOR m) + k (mod 256), m = first mask byte." },
-        { "id": "byteswap", "name": "Reverse byte order", "params": [],
-          "desc": "key = seed reversed." }
-    ])
+    generic::catalog()
 }
 
 /// Compute a key from a seed with a user-selected generic transform, or with a
@@ -118,25 +109,11 @@ fn compute_seedkey(
         None => Vec::new(),
     };
 
-    let key: Vec<u8> = match algo {
-        "identity" => s.clone(),
-        "byteswap" => s.iter().rev().copied().collect(),
-        "add-const" => s.iter().map(|&b| b.wrapping_add(add_val)).collect(),
-        "xor-mask" => {
-            if mask_bytes.is_empty() {
-                return Err("XOR mask needs a mask value".into());
-            }
-            s.iter()
-                .enumerate()
-                .map(|(i, &b)| b ^ mask_bytes[i % mask_bytes.len()])
-                .collect()
-        }
-        "xor-add" => {
-            let m = *mask_bytes.first().ok_or("XOR-add needs a mask byte")?;
-            s.iter().map(|&b| (b ^ m).wrapping_add(add_val)).collect()
-        }
-        "" => return Err("pick a transform first".into()),
-        other => {
+    let key: Vec<u8> = match generic::transform(algo, &s, &mask_bytes, add_val) {
+        Some(key) => key?,
+        None if algo.is_empty() => return Err("pick a transform first".into()),
+        None => {
+            let other = algo;
             let Some(handler) = seedkeys.get(other) else {
                 return Err(format!(
                     "no seed/key algorithm '{other}' is available — the public edition ships no OEM routines; pick a generic transform or supply one"
@@ -170,7 +147,7 @@ fn compute_seedkey(
         "key": hexs(&key),
         "algo": algo,
         "source": "generic",
-        "note": "Generic transform — NOT an OEM algorithm. The public edition bundles no vehicle-specific seed/key routines.",
+        "note": generic::NOTE,
     }))
 }
 

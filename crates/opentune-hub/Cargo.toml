@@ -14,6 +14,9 @@ opentune-core = { path = "../opentune-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# The two-image diff / map-delta cores behind `compare`, shared with the CLI.
+opentune-mapfind = { path = "../opentune-mapfind" }
+
 # VAG SA2 seed/key interpreter + the user's own seed/key definitions loader.
 opentune-sa2 = { path = "../opentune-sa2" }
 opentune-seedkey-loader = { path = "../opentune-seedkey-loader" }

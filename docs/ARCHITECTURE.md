@@ -47,9 +47,13 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   worker thread owning the opened driver, one operation at a time, a reused
   connection), module addressing (`Addr`, `ConnKey`, `resolve`, refusal of
   writes to an unknown target), the driver registry and adapter probe,
-  plugin seed/key lookup with the built-in SA2 interpreter, the build
-  channel, map cell codecs and vault listing. The desktop re-exports it under
-  its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
+  plugin seed/key lookup with the built-in SA2 interpreter and the seed/key
+  calculator's generic transforms (`seedkeys::generic`), the build
+  channel, map cell codecs, vault listing, the Find maps / Compare payloads
+  (`compare`, over `opentune_mapfind::diff`) and the "What's new" changelog
+  highlights, semver order and seen-version check (`whatsnew`). The desktop
+  re-exports it under its old paths (`opentune_desktop::adapter`,
+  `seedkeys`, `BuildChannel`, …) and keeps only the Tauri commands.
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).
@@ -207,7 +211,7 @@ apps that need it.
 | `opentune-logdef` | RomRaider-style `logger.xml` parser, RomRaider logger import/export with a safe conversion-expression evaluator and calculated parameters, `LogDef::validate` + live logging: per-channel polling, fast mode over UDS `0x2C` dynamic DIDs, Subaru SSM2 parameter selection + batched `A8` reads, and datalogging triggers (gated windows, marker rows) ([LIVE-LOGGING.md](LIVE-LOGGING.md)) |
 | `opentune-gps` | Optional GPS/GNSS source for live logging: own NMEA 0183 parser (`$--RMC`/`GGA`/`VTG`, any talker, checksum-verified, rejected lines counted), latest-fix tracker with staleness, background serial reader (u-blox style CDC-ACM, no gpsd) and deterministic file replay; `opentune_logdef::gps` turns it into `gps_*` channels ([LIVE-LOGGING.md](LIVE-LOGGING.md#gps-channels)) |
 | `opentune-logview` | Log file reader (Live log + generic CSV), series decimation/stats, map-overlay binning |
-| `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence |
+| `opentune-mapfind` | Single-image map finder: counted-table headers + axis pairs, scored candidates with evidence; `diff`: stock/tuned region clustering, 16-bit shape guess and per-map cell deltas (shared by `findmaps`/`compare` in the CLI and the desktop) |
 | `opentune-recipe` | Portable tune recipes: anchored patches + source identity, strict/relocating apply |
 | `opentune-packs` | Versioned definition packs (defs, labels, channels, scripts, …) |
 | `opentune-sa2` | VAG SA2 seed→key script VM (real instruction set; the script is always the user's own), disassembler and assembler |

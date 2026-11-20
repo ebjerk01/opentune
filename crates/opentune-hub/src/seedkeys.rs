@@ -241,6 +241,8 @@ pub fn compute(
         .map_err(|e| format!("seed/key '{}': {e}", handler.id()))
 }
 
+pub mod generic;
+
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkeys {
     //! Test-only resolvers. `vcar-test` is the virtual car's documented

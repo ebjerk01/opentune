@@ -24,10 +24,12 @@
 
 pub mod adapter;
 pub mod channel;
+pub mod compare;
 pub mod drivers;
 pub mod maps;
 pub mod sa2script;
 pub mod seedkeys;
 pub mod vault;
+pub mod whatsnew;
 
 pub use channel::BuildChannel;

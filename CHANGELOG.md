@@ -189,6 +189,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
   the new workspace crate `opentune-hub`, so a second front end can share it.
   No behaviour change; the desktop re-exports it under the same public paths.
+- Internal: more desktop helpers moved into shared crates, no behaviour
+  change: the stock/tuned diff clustering, 16-bit shape guess and map cell
+  deltas into `opentune_mapfind::diff` (the CLI's `findmaps` / `compare` and
+  the desktop now share one copy), the Find maps / Compare payloads into
+  `opentune_hub::compare`, the seed/key calculator's generic transforms into
+  `opentune_hub::seedkeys::generic`, and the "What's new" changelog parsing,
+  semver order and seen-version check into `opentune_hub::whatsnew`.
 - CI and `scripts/check.sh` build, lint and test with `--locked` (the
   workspace, `desktop/src-tauri` and the release builds), so a stale
   `Cargo.lock` fails the run instead of being silently updated.
