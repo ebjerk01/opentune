@@ -2089,10 +2089,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "opentune-a2l"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+]
+
+[[package]]
+name = "opentune-adaptation"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-attest"
+version = "0.7.0"
+dependencies = [
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-flash",
+]
+
+[[package]]
+name = "opentune-autoscan"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "opentune-dtc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-candump"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+]
+
+[[package]]
 name = "opentune-checksum"
 version = "0.7.0"
 dependencies = [
  "opentune-core",
+]
+
+[[package]]
+name = "opentune-coding"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "roxmltree",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2135,6 +2188,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-driver-doip"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+]
+
+[[package]]
 name = "opentune-driver-efp02c"
 version = "0.7.0"
 dependencies = [
@@ -2168,12 +2228,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-driver-esp32"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
+]
+
+[[package]]
 name = "opentune-driver-gsusb"
 version = "0.1.0"
 dependencies = [
  "opentune-core",
  "opentune-driver-socketcan",
  "socketcan",
+]
+
+[[package]]
+name = "opentune-driver-isotp-ble"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serialport",
 ]
 
 [[package]]
@@ -2248,15 +2324,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-gps"
+version = "0.7.0"
+dependencies = [
+ "serde",
+ "serialport",
+]
+
+[[package]]
+name = "opentune-haldex"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+]
+
+[[package]]
 name = "opentune-hub"
 version = "0.7.0"
 dependencies = [
  "opentune-core",
+ "opentune-driver-doip",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
  "opentune-driver-elm327-obd",
  "opentune-driver-elm327net",
+ "opentune-driver-esp32",
  "opentune-driver-gsusb",
+ "opentune-driver-isotp-ble",
  "opentune-driver-j2534",
  "opentune-driver-kkl",
  "opentune-driver-mock",
@@ -2267,6 +2362,18 @@ dependencies = [
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-logdef"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "opentune-gps",
+ "opentune-xdf",
+ "roxmltree",
  "serde",
  "serde_json",
 ]
@@ -2286,20 +2393,67 @@ dependencies = [
  "eframe",
  "egui_plot",
  "embed-resource",
+ "opentune-a2l",
+ "opentune-adaptation",
+ "opentune-autoscan",
+ "opentune-candump",
  "opentune-checksum",
+ "opentune-coding",
+ "opentune-container",
  "opentune-core",
  "opentune-ctrldef",
  "opentune-db",
+ "opentune-dtc",
  "opentune-flash",
+ "opentune-gps",
+ "opentune-haldex",
  "opentune-hub",
+ "opentune-logdef",
  "opentune-logview",
+ "opentune-packs",
+ "opentune-recipe",
+ "opentune-sa2",
  "opentune-scan",
+ "opentune-seedkey-loader",
+ "opentune-servicefn",
+ "opentune-tsini",
+ "opentune-tsproto",
  "opentune-udssim",
+ "opentune-vin",
+ "opentune-xdf",
  "png",
  "rfd",
  "serde",
  "serde_json",
  "serialport",
+]
+
+[[package]]
+name = "opentune-packs"
+version = "0.7.0"
+dependencies = [
+ "opentune-adaptation",
+ "opentune-autoscan",
+ "opentune-coding",
+ "opentune-core",
+ "opentune-ctrldef",
+ "opentune-logdef",
+ "opentune-servicefn",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-recipe"
+version = "0.7.0"
+dependencies = [
+ "opentune-attest",
+ "opentune-checksum",
+ "opentune-core",
+ "opentune-flash",
+ "opentune-scan",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2334,6 +2488,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-servicefn"
+version = "0.1.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentune-tsini"
+version = "0.7.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentune-tsproto"
+version = "0.7.0"
+dependencies = [
+ "opentune-tsini",
+ "serialport",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "opentune-udssim"
 version = "0.7.0"
 dependencies = [
@@ -2343,6 +2524,14 @@ dependencies = [
 [[package]]
 name = "opentune-vin"
 version = "0.1.0"
+
+[[package]]
+name = "opentune-xdf"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "roxmltree",
+]
 
 [[package]]
 name = "orbclient"

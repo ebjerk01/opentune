@@ -8,9 +8,10 @@
 //! checksum algorithm, notes, map edits and created / saved times (ISO 8601
 //! UTC). It never holds a copy of the image.
 //!
-//! The native app has no map editor yet, so it does not create map edits;
-//! edits (and any field it does not know) of a project made in the webview
-//! app are kept verbatim when the project is saved again for the same image.
+//! The native app edits map cells (`HostAction::EditCells`, the Flash view),
+//! but a project does not record or re-apply those edits yet; edits (and any
+//! field it does not know) of a project made in the webview app are kept
+//! verbatim when the project is saved again for the same image.
 
 use crate::icons;
 use crate::theme::{self, font, Tokens, Tone, UI_STRONG};

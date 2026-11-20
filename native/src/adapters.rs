@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-/// Driver id of the ELM327 serial OBD driver (see `topbar::DRIVERS`).
+/// Driver id of the ELM327 serial OBD driver (see `topbar::drivers`).
 pub const ELM_DRIVER: &str = "elm327obd";
 
 /// Serial bauds tried for an ELM327, most common first: 38400 (most USB

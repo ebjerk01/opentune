@@ -9,9 +9,20 @@
 //! A view's operation that starts while a battery poll is running waits for
 //! it (briefly) instead of failing with "adapter busy"; any other running
 //! operation still makes it fail fast, as in the hub.
+//!
+//! Operation shapes (see [`crate::ops`]): `read` / `mutate` / `actuate` /
+//! `scan` / `raw` run as one [`AdapterHub::run`] each; `start` maps onto
+//! [`AdapterHub::start_op`] and keeps the busy slot until its job returns.
+//! Raw access is refused unless the channel is alpha / bench.
 
-use crate::host::{Ack, AdapterAccess, BackupReceipt, DiagJob, DiagTarget, LinkInfo};
-use opentune_hub::adapter::{AdapterHub, Addr, ConnKey};
+use crate::host::{
+    bench_channel, Ack, Actuation, AdapterAccess, BackupReceipt, BuildChannel, Capabilities,
+    DiagJob, DiagTarget, LinkInfo, LongJob, ModuleSession, RawBinding, RawInterface, RawJob,
+    RestoreJob, ScanJob,
+};
+use opentune_core::resilient::LINK_LOST_PREFIX;
+use opentune_core::{CoreDiag, RawDiag};
+use opentune_hub::adapter::{AdapterHub, Addr, ConnKey, Session};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -46,6 +57,10 @@ pub struct HubAdapter {
     cfg: Mutex<Option<LinkCfg>>,
     target: Mutex<DiagTarget>,
     info: Mutex<LinkInfo>,
+    /// The last probe of the opened adapter (cleared with the link).
+    caps: Mutex<Option<Capabilities>>,
+    /// Gates the Bench-tier operations (raw access) in this backend.
+    channel: BuildChannel,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -64,7 +79,16 @@ impl HubAdapter {
             cfg: Mutex::new(None),
             target: Mutex::new(DiagTarget::ENGINE),
             info: Mutex::new(LinkInfo::default()),
+            caps: Mutex::new(None),
+            channel: BuildChannel::compiled(),
         }
+    }
+
+    /// The same adapter on build channel `channel` (it decides whether the
+    /// Bench-tier operations run).
+    pub fn with_channel(mut self, channel: BuildChannel) -> Self {
+        self.channel = channel;
+        self
     }
 
     /// The app's global target (the link poll keeps the session bound to it,
@@ -87,6 +111,7 @@ impl HubAdapter {
             };
         }
         let release = cfg.is_none();
+        *lock(&self.caps) = None;
         *lock(&self.cfg) = cfg;
         if release {
             // Best effort: the hub also closes an idle driver on its own.
@@ -135,8 +160,9 @@ impl HubAdapter {
                     Some(fw) => format!("{} ({})", i.display_name, fw.trim()),
                     None => i.display_name,
                 };
+                let caps = d.capabilities();
                 let mv = d.battery_millivolts().map_err(|e| e.to_string())?;
-                Ok((ident, mv.map(|m| m as f32 / 1000.0)))
+                Ok((ident, mv.map(|m| m as f32 / 1000.0), caps))
             })();
             if r.is_err() {
                 s.invalidate();
@@ -145,17 +171,54 @@ impl HubAdapter {
         });
         let mut info = lock(&self.info);
         match &r {
-            Ok((_, v)) => {
+            Ok((_, v, caps)) => {
                 info.connected = true;
                 info.battery_v = *v;
+                *lock(&self.caps) = Some(*caps);
             }
             Err(e) if e.starts_with("adapter busy") => {}
             Err(_) => {
                 info.connected = false;
                 info.battery_v = None;
+                *lock(&self.caps) = None;
             }
         }
-        r
+        r.map(|(i, v, _)| (i, v))
+    }
+
+    /// Run `f(session, job)` as one hub operation. While the top bar's
+    /// battery poll holds the hub, wait for it (briefly) instead of failing
+    /// with "adapter busy"; `job` is handed over only once, when `f` runs.
+    fn run_on_hub<J, R, F>(&self, op: &str, job: J, f: F) -> Result<R, String>
+    where
+        J: Send + 'static,
+        R: Send + 'static,
+        F: Fn(&mut Session, J) -> Result<R, String> + Clone + Send + 'static,
+    {
+        let slot = Arc::new(Mutex::new(Some(job)));
+        let deadline = Instant::now() + POLL_WAIT;
+        loop {
+            let (sl, f) = (slot.clone(), f.clone());
+            let r = self.hub.run(op, move |s| {
+                let job = lock(&sl).take().ok_or("internal error: job already ran")?;
+                f(s, job)
+            });
+            match r {
+                Err(e) if self.retry_after_poll(&e, || lock(&slot).is_some(), deadline) => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// Is `e` the hub refusing because the battery poll is running, with the
+    /// job not handed over yet and time left to wait?
+    fn retry_after_poll(&self, e: &str, pending: impl Fn() -> bool, deadline: Instant) -> bool {
+        e.starts_with("adapter busy")
+            && pending()
+            && Instant::now() < deadline
+            && self.hub.current().is_none_or(|c| c == LINK_POLL)
     }
 
     fn run_job(
@@ -166,27 +229,70 @@ impl HubAdapter {
         job: DiagJob,
     ) -> Result<Box<dyn Any + Send>, String> {
         let key = self.key(target)?;
-        let slot = Arc::new(Mutex::new(Some(job)));
-        let deadline = Instant::now() + POLL_WAIT;
-        loop {
-            let (k, sl) = (key.clone(), slot.clone());
-            let r = self.hub.run(op, move |s| {
-                let job = lock(&sl).take().ok_or("internal error: job already ran")?;
-                s.with_diag(&k, timeout_ms, |d| job(d))
-            });
-            let waiting_on_poll = || self.hub.current().is_none_or(|c| c == LINK_POLL);
-            match r {
-                Err(e)
-                    if e.starts_with("adapter busy")
-                        && lock(&slot).is_some()
-                        && Instant::now() < deadline
-                        && waiting_on_poll() =>
-                {
-                    std::thread::sleep(Duration::from_millis(25));
-                }
-                other => return other,
-            }
+        self.run_on_hub(op, job, move |s, job: DiagJob| {
+            s.with_diag(&key, timeout_ms, |d| job(d))
+        })
+    }
+}
+
+/// The link a [`ModuleSession`] hands out: requests go to the bound module
+/// through the hub's session (re-opened on a rebind), ECU-changing ones are
+/// refused unsent.
+struct HubModules<'s> {
+    s: &'s mut Session,
+    base: ConnKey,
+    timeout_ms: u64,
+    bound: Option<(DiagTarget, ConnKey)>,
+}
+
+impl ModuleSession for HubModules<'_> {
+    fn bind(&mut self, target: DiagTarget) -> Result<&mut dyn RawDiag, String> {
+        let key = self.base.with_addr(Addr {
+            tx_id: target.tx,
+            rx_id: target.rx,
+        });
+        self.bound = None;
+        let r = self.s.interface(&key).and_then(|d| {
+            d.diag()
+                .map(|_| ())
+                .ok_or_else(|| format!("driver '{}' has no diagnostic transport", key.driver))
+        });
+        if let Err(e) = r {
+            self.s.invalidate();
+            return Err(e);
         }
+        self.bound = Some((target, key));
+        Ok(self)
+    }
+
+    fn bound(&self) -> Option<DiagTarget> {
+        self.bound.as_ref().map(|(t, _)| *t)
+    }
+}
+
+impl RawDiag for HubModules<'_> {
+    fn request(&mut self, req: &[u8]) -> Result<Vec<u8>, String> {
+        crate::ops::refuse_ecu_changing(req)?;
+        let key = match &self.bound {
+            Some((_, k)) => k.clone(),
+            None => return Err("no module bound: call bind(target) first".into()),
+        };
+        let drv = self
+            .s
+            .interface(&key)
+            .map_err(|e| format!("{LINK_LOST_PREFIX}{e}"))?;
+        let r = match drv.diag() {
+            Some(t) => CoreDiag::new(t, self.timeout_ms).request(req),
+            None => Err(format!(
+                "{LINK_LOST_PREFIX}driver no longer exposes a diagnostic transport"
+            )),
+        };
+        // As `Session::with_diag`: a failed exchange drops the adapter, the
+        // next request (or bind) opens it afresh.
+        if r.is_err() {
+            self.s.invalidate();
+        }
+        r
     }
 }
 
@@ -221,7 +327,111 @@ impl AdapterAccess for HubAdapter {
                 backup.path.display()
             ));
         }
+        // SAFETY INVARIANT: a receipt means a real, NON-EMPTY backup. The
+        // typed `mutate` wrapper refuses an empty one too; this covers a
+        // direct `mutate_job` call.
+        crate::host::refuse_empty_receipt(op, backup)?;
         self.run_job(MUTATE_TIMEOUT_MS, op, target, job)
+    }
+
+    fn capabilities(&self) -> Option<Capabilities> {
+        *lock(&self.caps)
+    }
+
+    fn actuate_job(
+        &self,
+        op: &str,
+        ack: Ack,
+        run: DiagJob,
+        restore: RestoreJob,
+    ) -> Result<Actuation<Box<dyn Any + Send>>, String> {
+        // The module the user confirmed. No MutationScope: an actuation is
+        // not a mutation, so the write helpers refuse inside it.
+        let target = ack.ecu_target()?;
+        let key = self.key(target)?;
+        self.run_on_hub(
+            op,
+            (run, restore),
+            move |s, (run, restore): (DiagJob, RestoreJob)| {
+                let a = s.with_diag(&key, MUTATE_TIMEOUT_MS, |d| {
+                    Ok(crate::ops::run_then_restore(d, run, restore))
+                })?;
+                if a.result.is_err() || a.restored.is_err() {
+                    s.invalidate();
+                }
+                Ok(a)
+            },
+        )
+    }
+
+    fn start_job(&self, op: &str, target: DiagTarget, job: LongJob) -> Result<(), String> {
+        let key = self.key(target)?;
+        let slot = Arc::new(Mutex::new(Some(job)));
+        let deadline = Instant::now() + POLL_WAIT;
+        loop {
+            let (k, sl) = (key.clone(), slot.clone());
+            // `start_op` claims the busy slot before it takes the closure, so
+            // a refusal leaves the job in `slot` for the next attempt.
+            let r = self.hub.start_op(op, move |s| {
+                let mut job = lock(&sl).take();
+                let r = s.with_diag(&k, READ_TIMEOUT_MS, |d| match job.take() {
+                    Some(j) => j.run(d),
+                    None => Err("internal error: job already ran".into()),
+                });
+                if let (Err(e), Some(j)) = (r, job) {
+                    j.fail(e); // the adapter did not open: the job never ran
+                }
+            });
+            match r {
+                Err(e) if self.retry_after_poll(&e, || lock(&slot).is_some(), deadline) => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                other => return other,
+            }
+        }
+    }
+
+    fn scan_job(&self, op: &str, job: ScanJob) -> Result<Box<dyn Any + Send>, String> {
+        // The cable and bus of the link; `bind` sets the module per step.
+        let base = self.key(*lock(&self.target))?;
+        self.run_on_hub(op, job, move |s, job: ScanJob| {
+            let mut m = HubModules {
+                s,
+                base: base.clone(),
+                timeout_ms: READ_TIMEOUT_MS,
+                bound: None,
+            };
+            job(&mut m)
+        })
+    }
+
+    fn raw_job(
+        &self,
+        op: &str,
+        bind: RawBinding,
+        job: RawJob,
+    ) -> Result<Box<dyn Any + Send>, String> {
+        if !bench_channel(&self.channel) {
+            return Err(format!(
+                "{op}: raw adapter access is a Bench-tier feature (alpha / bench builds); \
+                 refused on the '{}' channel",
+                self.channel.as_str()
+            ));
+        }
+        let key = bind
+            .options
+            .iter()
+            .fold(self.key(bind.target)?, |k, (o, v)| k.with_option(o, v));
+        self.run_on_hub(op, job, move |s, job: RawJob| {
+            let r = match s.interface(&key) {
+                Ok(d) => job(&mut RawInterface::guard(d)),
+                Err(e) => Err(e),
+            };
+            // Raw use leaves the driver in an unknown state (baud, an open
+            // TP2.0 channel): the next operation opens it afresh.
+            s.invalidate();
+            r
+        })
     }
 }
 
@@ -366,6 +576,7 @@ mod tests {
                 confirms,
                 actions: &mut actions,
                 status: &mut status,
+                shared: &crate::host::HostShared::default(),
             };
             let r = h.confirm_ecu(req());
             let b = h.backup(&dir, "before write", b"OLD").unwrap();
@@ -455,6 +666,11 @@ mod tests {
     /// Like [`sim`], plus the bus's fault switches (the bus lives on the
     /// worker; its `SimFault` is shared, so it is handed back from there).
     fn sim_faulty() -> (Arc<HubAdapter>, Arc<SimFault>, Arc<Mutex<Vec<u32>>>) {
+        sim_on(BuildChannel::compiled())
+    }
+
+    /// [`sim_faulty`] on build channel `channel`.
+    fn sim_on(channel: BuildChannel) -> (Arc<HubAdapter>, Arc<SimFault>, Arc<Mutex<Vec<u32>>>) {
         let opens = Arc::new(Mutex::new(Vec::new()));
         let log = opens.clone();
         let (ftx, frx) = std::sync::mpsc::channel();
@@ -470,7 +686,7 @@ mod tests {
             })
         });
         let fault = frx.recv_timeout(Duration::from_secs(5)).unwrap();
-        let a = Arc::new(HubAdapter::new(hub));
+        let a = Arc::new(HubAdapter::new(hub).with_channel(channel));
         a.set_link(Some(LinkCfg {
             driver: "sim".into(),
             port: String::new(),
@@ -728,5 +944,457 @@ mod tests {
         // The calling thread never was in a mutation.
         assert!(!crate::host::in_mutation());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // actuate / start / scan / raw
+    // -----------------------------------------------------------------------
+
+    type Log = Arc<Mutex<Vec<String>>>;
+
+    fn note(log: &Log, s: &str) {
+        lock(log).push(s.to_string());
+    }
+
+    #[test]
+    fn actuate_hands_back_after_success_error_and_panic_on_the_confirmed_module() {
+        let (a, fault, opens) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let log: Log = Default::default();
+        let (l1, l2) = (log.clone(), log.clone());
+        // The action and its hand-back go to the Ack's module (the TCU),
+        // not the app's global target (the engine), on one open.
+        let act = d
+            .actuate(
+                "output test",
+                crate::host::test_ack(TCU),
+                move |dg| {
+                    note(&l1, "run");
+                    dg.request(&[0x3E, 0x00])
+                },
+                move |dg| {
+                    note(&l2, "restore");
+                    dg.request(&[0x3E, 0x00]).map(|_| ())
+                },
+            )
+            .unwrap();
+        assert_eq!(act.result.as_deref(), Ok(&[0x7E, 0x00][..]));
+        assert!(act.restored.is_ok());
+        assert_eq!(*lock(&opens), vec![0x7E1]);
+        assert_eq!(opened(&fault), 1, "run and restore share one session");
+
+        // `run` fails: the hand-back still runs.
+        let l = log.clone();
+        let act = d
+            .actuate(
+                "x",
+                crate::host::test_ack(TCU),
+                |_dg| -> Result<(), String> { Err("NRC 0x22".into()) },
+                move |_dg| {
+                    note(&l, "restore after error");
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert!(act.restored.is_ok());
+        assert!(act.into_result().unwrap_err().contains("handed back"));
+
+        // `run` panics: the hand-back still runs, the hub stays usable.
+        let l = log.clone();
+        let act = d
+            .actuate(
+                "x",
+                crate::host::test_ack(TCU),
+                |_dg| -> Result<(), String> { panic!("synthetic panic in an action") },
+                move |dg| {
+                    note(&l, "restore after panic");
+                    dg.request(&[0x3E, 0x00]).map(|_| ())
+                },
+            )
+            .unwrap();
+        assert!(act.result.unwrap_err().contains("synthetic"));
+        assert!(act.restored.is_ok());
+        assert_eq!(a.busy(), None);
+        assert_eq!(
+            *lock(&log),
+            [
+                "run",
+                "restore",
+                "restore after error",
+                "restore after panic"
+            ]
+        );
+
+        // A failed hand-back is reported as such.
+        let act = d
+            .actuate(
+                "x",
+                crate::host::test_ack(TCU),
+                |_dg| Ok(()),
+                |_dg| Err("return control refused".into()),
+            )
+            .unwrap();
+        let e = act.into_result().unwrap_err();
+        assert!(e.contains("FAILED") && e.contains("actuated state"), "{e}");
+
+        // A file-write Ack (no module) is refused before anything opens.
+        let n = opened(&fault);
+        let e = d
+            .actuate(
+                "x",
+                crate::host::test_file_ack(),
+                |_dg| Ok(()),
+                |_dg| Ok(()),
+            )
+            .unwrap_err();
+        assert!(e.contains("confirm_ecu"), "{e}");
+        assert_eq!(opened(&fault), n);
+    }
+
+    #[test]
+    fn actuate_is_not_a_mutation_so_downloads_refuse_inside_it() {
+        use crate::transfer::{download, Download, NoProgress, TransferError};
+        let (a, _fault, _) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a;
+        // Count what reaches the link through the download.
+        let attempt = |dg: &mut dyn RawDiag| {
+            let mut sent = 0u32;
+            let mut counting = |r: &[u8]| {
+                sent += 1;
+                dg.request(r)
+            };
+            let r = download(
+                &mut counting,
+                &Download::new(0x8000, &[1, 2, 3]),
+                &NoProgress,
+            );
+            (r, sent, crate::host::in_mutation())
+        };
+        let act = d
+            .actuate(
+                "x",
+                crate::host::test_ack(TCU),
+                move |dg| Ok(attempt(dg)),
+                move |dg| {
+                    let (r, sent, in_mut) = attempt(dg);
+                    assert!(matches!(r, Err(TransferError::NotStarted { .. })));
+                    assert_eq!((sent, in_mut), (0, false));
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert!(act.restored.is_ok());
+        let (r, sent, in_mut) = act.result.unwrap();
+        let e = r.unwrap_err().to_string();
+        assert!(e.contains("adapter.mutate"), "{e}");
+        assert_eq!(sent, 0, "nothing was sent");
+        assert!(!in_mut, "an actuation is not marked as a mutation");
+    }
+
+    #[test]
+    fn a_long_operation_holds_the_adapter_until_stopped() {
+        let (a, fault, opens) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let mut h = d
+            .start("live poll", TCU, |dg, stop| {
+                let mut polls = 0u32;
+                while !stop.is_stopped() {
+                    dg.request(&[0x3E, 0x00])?;
+                    polls += 1;
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Ok(polls)
+            })
+            .unwrap();
+        let t0 = Instant::now();
+        while a.busy().is_none() {
+            assert!(t0.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(h.is_running());
+        // Everything else gets "adapter busy" meanwhile.
+        let e = tester_present(&d, DiagTarget::ENGINE).unwrap_err();
+        assert!(e.contains("live poll"), "{e}");
+        std::thread::sleep(Duration::from_millis(30));
+        h.stop();
+        let polls = h.join().unwrap();
+        assert!(polls > 0);
+        let t0 = Instant::now();
+        while a.busy().is_some() {
+            assert!(t0.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        tester_present(&d, DiagTarget::ENGINE).unwrap();
+        assert_eq!(*lock(&opens), vec![0x7E1, 0x7E0]);
+
+        // A link that will not open reaches the handle as the error.
+        a.hub
+            .run("close", |s| {
+                s.invalidate();
+                Ok(())
+            })
+            .unwrap();
+        fault.refuse_opens.store(1, Ordering::SeqCst);
+        let h = d.start("live poll", TCU, |_dg, _s| Ok(())).unwrap();
+        let e = h.join().unwrap_err();
+        assert!(e.contains("no such device"), "{e}");
+
+        // Dropping the handle stops a running operation.
+        let h = d
+            .start("forgotten", TCU, |_dg, stop| {
+                while !stop.is_stopped() {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Ok(())
+            })
+            .unwrap();
+        drop(h);
+        let t0 = Instant::now();
+        while a.busy().is_some() {
+            assert!(t0.elapsed() < Duration::from_secs(5), "not stopped");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        // No cable: refused before anything is queued.
+        a.set_link(None);
+        let e = d.start("x", TCU, |_dg, _s| Ok(())).err().unwrap();
+        assert!(e.contains("no adapter connected"), "{e}");
+    }
+
+    #[test]
+    fn a_scan_rebinds_per_module_and_stays_read_only() {
+        let (a, fault, opens) = sim_faulty();
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let absent = DiagTarget {
+            tx: 0x7E5,
+            rx: 0x7ED,
+        };
+        let found = d
+            .scan("auto-scan", move |m| {
+                assert!(m.bound().is_none());
+                let mut found = Vec::new();
+                for t in [DiagTarget::ENGINE, absent, TCU] {
+                    let link = m.bind(t)?;
+                    if link.request(&[0x3E, 0x00]).is_ok() {
+                        found.push(t);
+                    }
+                    assert_eq!(m.bound(), Some(t));
+                }
+                // Read-only: a write is refused unsent (the session stays).
+                let e = m.bind(TCU)?.request(&[0x2E, 0xF1, 0x90, 0x00]).unwrap_err();
+                assert!(e.contains("read-only"), "{e}");
+                let e = m.bind(TCU)?.request(&[0x14, 0xFF, 0xFF, 0xFF]).unwrap_err();
+                assert!(e.contains("read-only"), "{e}");
+                Ok(found)
+            })
+            .unwrap();
+        assert_eq!(found, vec![DiagTarget::ENGINE, TCU]);
+        // One open per module; the absent one timed out and was dropped.
+        assert_eq!(*lock(&opens), vec![0x7E0, 0x7E5, 0x7E1]);
+        assert_eq!(opened(&fault), 3, "the refused writes reopened nothing");
+        assert_eq!(a.busy(), None);
+    }
+
+    #[test]
+    fn raw_access_is_bench_only_and_refuses_flash_writes() {
+        // Stable: refused in the backend, nothing opened.
+        let (a, fault, _) = sim_on(BuildChannel::new(BuildChannel::STABLE));
+        let d: Arc<dyn AdapterAccess> = a;
+        let e = d
+            .raw("can monitor", RawBinding::new(TCU), |_i| Ok(()))
+            .unwrap_err();
+        assert!(e.contains("Bench-tier") && e.contains("stable"), "{e}");
+        assert_eq!(opened(&fault), 0);
+
+        // Bench: the job gets the guarded driver.
+        let (a, fault, opens) = sim_on(BuildChannel::new(BuildChannel::BENCH));
+        let d: Arc<dyn AdapterAccess> = a;
+        let bind = RawBinding::new(TCU).with_option("transport", "tp20");
+        let (id, reply, write, diag_write, reopen, caps) = d
+            .raw("raw", bind, |i| {
+                use opentune_core::{Interface, MemoryRegion};
+                let id = i.info().id;
+                let t = i.diag().ok_or("no diag")?;
+                let reply = t.request(&[0x3E, 0x00], 500).map_err(|e| e.to_string())?;
+                let diag_write = t
+                    .request(&[0x34, 0x00, 0x44, 0, 0, 0, 0, 0, 0, 0, 16], 500)
+                    .unwrap_err()
+                    .to_string();
+                let write = i
+                    .write_memory(MemoryRegion::new(0, 4), &[0; 4], &mut |_| {})
+                    .unwrap_err()
+                    .to_string();
+                let reopen = i.open(&Default::default()).is_err() && i.close().is_err();
+                Ok((id, reply, write, diag_write, reopen, i.capabilities()))
+            })
+            .unwrap();
+        assert_eq!(id, "sim");
+        assert_eq!(reply, vec![0x7E, 0x00]);
+        assert!(write.contains("write_memory is refused"), "{write}");
+        assert!(diag_write.contains("read-only"), "{diag_write}");
+        assert!(reopen, "open / close are the hub's");
+        assert!(!caps.write_memory);
+        assert_eq!(*lock(&opens), vec![0x7E1]);
+        // The raw use dropped the session: the next operation reopens.
+        tester_present(&d, TCU).unwrap();
+        assert_eq!(opened(&fault), 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // Invariant: a BackupReceipt means a real, NON-EMPTY backup was written
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn mutate_job_refuses_a_zero_length_receipt_and_actuate_needs_none() {
+        let (a, fault, opens) = sim_faulty();
+        let dir = std::env::temp_dir().join(format!("ot-hublink-empty-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut empty = crate::host::test_backup(&dir, b"OLD");
+        empty.len = 0; // the file exists; the receipt claims 0 bytes
+                       // Straight at the trait method (bypassing the typed wrapper).
+        let job: DiagJob = Box::new(|d: &mut dyn RawDiag| {
+            d.request(&[0x2E, 0xF1, 0x90, 0x00])
+                .map(|r| Box::new(r) as Box<dyn Any + Send>)
+        });
+        let e = a
+            .mutate_job("write", crate::host::test_ack(TCU), &empty, job)
+            .unwrap_err();
+        assert!(e.contains("empty (0 bytes)"), "{e}");
+        assert!(
+            lock(&opens).is_empty() && opened(&fault) == 0,
+            "nothing sent"
+        );
+        // actuate takes no receipt at all.
+        let d: Arc<dyn AdapterAccess> = a;
+        let act = d
+            .actuate(
+                "output test",
+                crate::host::test_ack(TCU),
+                |dg| dg.request(&[0x3E, 0x00]),
+                |_dg| Ok(()),
+            )
+            .unwrap();
+        assert!(act.into_result().is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A representative PERSISTENT write, end to end through the host's
+    /// seams: confirm_ecu (accepted) -> read the old value from the module
+    /// -> Host::backup -> adapter.mutate(ack, &backup, write) over the hub's
+    /// simulated bus. The old bytes are in the vault, the write reached the
+    /// confirmed module only, and the backup is still there afterwards.
+    #[test]
+    fn a_persistent_write_end_to_end_confirm_backup_mutate() {
+        const DID: u16 = 0xF1A0;
+        let hub = AdapterHub::spawn(|| {
+            let bus = SimBus::default();
+            let mut engine = UdsServer::new();
+            engine.set_did(DID, b"ENGINE-CODING".to_vec());
+            let mut tcu = UdsServer::new();
+            tcu.set_did(DID, b"OLD-CODING".to_vec());
+            bus.add(0x7E0, 0x7E8, engine);
+            bus.add(0x7E1, 0x7E9, tcu);
+            bus.opener()
+        });
+        let a = Arc::new(HubAdapter::new(hub));
+        a.set_link(Some(LinkCfg {
+            driver: "sim".into(),
+            port: String::new(),
+            baud: 0,
+            bus: "hs".into(),
+        }));
+        let d: Arc<dyn AdapterAccess> = a.clone();
+        let read_did = |t: DiagTarget| {
+            d.read("read coding", t, |dg| {
+                let r = dg.request(&[0x22, (DID >> 8) as u8, DID as u8])?;
+                match r.first() {
+                    Some(0x62) => Ok(r[3..].to_vec()),
+                    _ => Err(format!("negative reply {r:02X?}")),
+                }
+            })
+        };
+        let dir = std::env::temp_dir().join(format!("ot-hublink-e2e-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // The app's global target is the engine; the user works on the TCU.
+        a.set_target(DiagTarget::ENGINE);
+        let jobs = crate::host::Jobs::new(eframe::egui::Context::default());
+        let mut confirms = crate::host::Confirms::default();
+        let (mut actions, mut status) = (Vec::new(), None);
+        let shared = crate::host::HostShared::default();
+        let keys = opentune_hub::seedkeys::SeedKeys::default();
+        let req = || ConfirmRequest {
+            key: "write-coding".into(),
+            title: "Write coding?".into(),
+            body: "b".into(),
+            typed: None,
+            confirm_label: "Write".into(),
+        };
+        let mut frame = |confirms: &mut crate::host::Confirms| {
+            let mut h = crate::host::Host {
+                tokens: crate::theme::DARK,
+                image_path: None,
+                image: None,
+                image_edited: false,
+                defs: &[],
+                def_idx: None,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                seedkeys: &keys,
+                target: Ok(TCU),
+                jobs: &jobs,
+                confirms,
+                actions: &mut actions,
+                status: &mut status,
+                shared: &shared,
+            };
+            match h.confirm_ecu(req()) {
+                crate::host::ConfirmResult::Accepted(ack) => {
+                    // 1. read the value the write will replace, 2. back it up.
+                    let old = read_did(ack.ecu_target().unwrap()).unwrap();
+                    let backup = h.backup(&dir, "coding before write", &old).unwrap();
+                    Some((ack, backup, old))
+                }
+                _ => None,
+            }
+        };
+        assert!(frame(&mut confirms).is_none(), "the dialog opens");
+        confirms.answer("write-coding", true);
+        let (ack, backup, old) = frame(&mut confirms).expect("accepted");
+        assert_eq!(old, b"OLD-CODING");
+        assert_eq!(std::fs::read(&backup.path).unwrap(), b"OLD-CODING");
+        assert!(backup.path.starts_with(dir.join("opentune-vault")));
+
+        // 3. the write, on the module the user confirmed.
+        let reply: Vec<u8> = d
+            .mutate("write coding", ack, &backup, |dg| {
+                let mut req = vec![0x2E, (DID >> 8) as u8, DID as u8];
+                req.extend_from_slice(b"NEW-CODING");
+                assert!(crate::host::in_mutation());
+                dg.request(&req)
+            })
+            .unwrap();
+        assert_eq!(reply, vec![0x6E, 0xF1, 0xA0]);
+        assert_eq!(read_did(TCU).unwrap(), b"NEW-CODING");
+        assert_eq!(
+            read_did(DiagTarget::ENGINE).unwrap(),
+            b"ENGINE-CODING",
+            "the engine (the global target) was not written"
+        );
+        assert!(backup.path.is_file(), "the backup is kept");
+        assert_eq!(std::fs::read(&backup.path).unwrap(), b"OLD-CODING");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_link_poll_records_the_adapters_capabilities() {
+        let (a, _fault, _) = sim_faulty();
+        assert_eq!(a.capabilities(), None);
+        a.poll_link().unwrap();
+        assert_eq!(a.capabilities(), Some(Capabilities::default()));
+        a.set_link(None);
+        assert_eq!(a.capabilities(), None);
     }
 }
