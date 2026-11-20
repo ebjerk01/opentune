@@ -1468,6 +1468,7 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-udssim",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

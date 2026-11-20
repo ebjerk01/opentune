@@ -2847,6 +2847,7 @@ version = "0.7.0"
 dependencies = [
  "opentune-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
