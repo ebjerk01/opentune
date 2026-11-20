@@ -1357,7 +1357,12 @@ pub(crate) mod tests {
         let mut rig = Rig::new(Some(img), Vec::new());
         let mut v = synthetic_view();
         rig.frame(&mut v);
-        assert!(v.job.is_some(), "auto-analysis of the opened dump");
+        // The first frame starts the analysis; on a tiny synthetic image the
+        // job can already have finished and been collected in that frame.
+        assert!(
+            v.job.is_some() || v.report.is_some(),
+            "auto-analysis of the opened dump"
+        );
         rig.until(&mut v, |v| v.job.is_none());
         let r = v.report.as_ref().expect("report");
         assert_eq!(r.family, "ME7");
