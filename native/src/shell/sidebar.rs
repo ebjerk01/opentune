@@ -4,10 +4,21 @@ use crate::theme::{self, font, Tokens, MONO_MEDIUM, UI_MEDIUM, UI_STRONG};
 use crate::views::View;
 use eframe::egui::{self, CornerRadius, Margin, RichText, Sense, Stroke, Ui, Vec2};
 
-/// Right-aligned count shown on a nav row (e.g. "1 MiB", "34").
-pub type Counts = dyn Fn(View) -> Option<String>;
+/// One row: a destination with its label, icon and right-aligned count.
+pub struct NavItem {
+    pub view: View,
+    pub label: String,
+    pub icon: String,
+    pub count: Option<String>,
+}
 
-fn nav_item(ui: &mut Ui, t: &Tokens, view: View, active: bool, count: Option<String>) -> bool {
+/// A section of rows under an uppercase header.
+pub struct NavGroup {
+    pub label: String,
+    pub items: Vec<NavItem>,
+}
+
+fn nav_item(ui: &mut Ui, t: &Tokens, item: &NavItem, active: bool) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 34.0), Sense::click());
     let hovered = resp.hovered();
@@ -30,7 +41,7 @@ fn nav_item(ui: &mut Ui, t: &Tokens, view: View, active: bool, count: Option<Str
     p.text(
         egui::pos2(left, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        view.icon(),
+        &item.icon,
         egui::FontId::proportional(17.0),
         fg,
     );
@@ -42,11 +53,11 @@ fn nav_item(ui: &mut Ui, t: &Tokens, view: View, active: bool, count: Option<Str
     p.text(
         egui::pos2(left + 28.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        view.label(),
+        &item.label,
         f,
         fg,
     );
-    if let Some(c) = count {
+    if let Some(c) = &item.count {
         let cc = if active { t.accent } else { t.fg_faint };
         p.text(
             egui::pos2(rect.right() - 10.0, rect.center().y),
@@ -63,7 +74,13 @@ fn nav_item(ui: &mut Ui, t: &Tokens, view: View, active: bool, count: Option<Str
 }
 
 /// Draw the sidebar contents; returns the newly picked view, if any.
-pub fn ui(ui: &mut Ui, t: &Tokens, current: View, counts: &Counts) -> Option<View> {
+pub fn ui(
+    ui: &mut Ui,
+    t: &Tokens,
+    current: View,
+    groups: &[NavGroup],
+    footer: &str,
+) -> Option<View> {
     let mut picked = None;
     let footer_h = 38.0;
     let nav_h = (ui.available_height() - footer_h).max(0.0);
@@ -76,10 +93,8 @@ pub fn ui(ui: &mut Ui, t: &Tokens, current: View, counts: &Counts) -> Option<Vie
                 .inner_margin(Margin::symmetric(10, 12))
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
-                    for (label, group) in [
-                        ("Workspace", &View::WORKSPACE[..]),
-                        ("Reference", &View::REFERENCE[..]),
-                    ] {
+                    for g in groups.iter().filter(|g| !g.items.is_empty()) {
+                        let label = g.label.as_str();
                         ui.add_space(8.0);
                         egui::Frame::new()
                             .inner_margin(Margin {
@@ -91,9 +106,9 @@ pub fn ui(ui: &mut Ui, t: &Tokens, current: View, counts: &Counts) -> Option<Vie
                             .show(ui, |ui| {
                                 theme::section_label(ui, t, label);
                             });
-                        for &v in group {
-                            if nav_item(ui, t, v, v == current, counts(v)) {
-                                picked = Some(v);
+                        for item in &g.items {
+                            if nav_item(ui, t, item, item.view == current) {
+                                picked = Some(item.view);
                             }
                         }
                     }
@@ -106,7 +121,7 @@ pub fn ui(ui: &mut Ui, t: &Tokens, current: View, counts: &Counts) -> Option<Vie
                 ui.horizontal(|ui| {
                     theme::dot(ui, t.ok, t.ok_soft);
                     ui.label(
-                        RichText::new(format!("OpenTune native {}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(footer)
                             .font(font(MONO_MEDIUM, 11.0))
                             .color(t.fg_faint),
                     );

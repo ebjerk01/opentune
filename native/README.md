@@ -65,6 +65,34 @@ cargo run --release -- dump.bin --bench hex --frames 600 --px 24 --csv hex.csv [
 Views for `--view`: flash, maps, ecudb, drivers, vault, project, log,
 controllers, sa2, drive.
 
+## Embedding (plugin host)
+
+The crate is a library (`opentune_native`) plus a thin binary. Another build
+embeds it with its own configuration:
+
+```rust
+use opentune_native::{host::*, NativeConfig};
+fn main() -> eframe::Result {
+    opentune_native::run(NativeConfig {
+        branding: Branding { name: "My build".into(), pill: String::new(), app_id: "my-build".into() },
+        checksums: vec![my_resolver],          // consulted before the core algorithms
+        views: vec![Box::new(MyView::default())], // extra sidebar destinations
+        adapter: None,                         // or Some(Arc<dyn AdapterAccess>)
+    })
+}
+```
+
+A view implements `host::NativeView` (`id`, `label`, `icon`, `group`,
+`count`, `ui(ui, &mut Host)`). `Host` gives read access to the open image,
+the definitions and the selection, theme tokens, background jobs
+(`spawn_job` with progress + cancel), file dialogs, a status line, actions
+(open image, select map, hex jump), backups to the vault, and the adapter.
+
+The host enforces the safety rules: `write_file` needs an `Ack` (only
+`confirm` creates one) and archives the old contents to the vault first;
+`AdapterAccess::mutate` needs an `Ack` and a `BackupReceipt` (only `backup`
+creates one). Neither type can be constructed outside this crate.
+
 ## Safety
 
 - Nothing here writes to an ECU. The adapter layer only sends ELM327 AT

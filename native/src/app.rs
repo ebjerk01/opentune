@@ -2,14 +2,19 @@
 //! and the routed view in the middle.
 
 use crate::bench::{self, Bench};
+use crate::host::{
+    AdapterAccess, Branding, Confirms, Host, HostAction, Jobs, NativeConfig, NativeView, ViewGroup,
+};
 use crate::settings::{Settings, STORAGE_KEY};
-use crate::shell::{sidebar, topbar::TopBar};
+use crate::shell::sidebar::{self, NavGroup, NavItem};
+use crate::shell::topbar::TopBar;
 use crate::theme::{self, font, Tokens, MONO_MEDIUM};
 use crate::views::{self, flash::FlashView, View};
 use crate::Args;
 use eframe::egui::{self, Margin, RichText};
 use opentune_core::ecudef::EcuDef;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 pub struct App {
@@ -26,6 +31,12 @@ pub struct App {
     logview: views::logview::LogView,
     controllers: views::controllers::ControllersView,
     env: String,
+    branding: Branding,
+    plugin_views: Vec<Box<dyn NativeView>>,
+    adapter: Option<Arc<dyn AdapterAccess>>,
+    jobs: Jobs,
+    confirms: Confirms,
+    host_status: Option<String>,
     /// Scripted runs (bench / screenshot) never save settings.
     scripted: bool,
     shot: Option<crate::screenshot::Shot>,
@@ -38,7 +49,7 @@ fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, args: Args, config: NativeConfig) -> Self {
         let mut settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
@@ -82,6 +93,7 @@ impl App {
             None => (Vec::new(), "no ecudefs directory (--defs DIR)".into()),
         };
         let mut flash = FlashView::new(args.bench.clone().map(Bench::new));
+        flash.checksums = config.checksums.clone();
         let def_id = args.def.clone().or_else(|| settings.last_def.clone());
         if let Some(id) = &def_id {
             flash.select_def(&defs, defs.iter().position(|d| &d.id == id));
@@ -127,6 +139,12 @@ impl App {
             logview: Default::default(),
             controllers: Default::default(),
             env,
+            branding: config.branding,
+            plugin_views: config.views,
+            adapter: config.adapter,
+            jobs: Jobs::new(cc.egui_ctx.clone()),
+            confirms: Confirms::default(),
+            host_status: None,
             scripted,
             shot: args.screenshot.clone().map(crate::screenshot::Shot::new),
             last_frame: None,
@@ -156,9 +174,27 @@ impl App {
             }
             sep(ui);
             ui.label(m(self.defs_note.clone(), t.fg_faint));
+            // Running background jobs: name, bar, message.
+            for (name, frac, msg) in self.jobs.active() {
+                sep(ui);
+                ui.label(m(name, t.fg));
+                ui.add(
+                    egui::ProgressBar::new(frac)
+                        .desired_width(90.0)
+                        .desired_height(8.0)
+                        .fill(t.accent),
+                );
+                if !msg.is_empty() {
+                    ui.label(m(msg, t.fg_dim));
+                }
+            }
+            if let Some(s) = &self.host_status {
+                sep(ui);
+                ui.label(m(s.clone(), t.fg_dim));
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(m(
-                    format!("OpenTune native {}", env!("CARGO_PKG_VERSION")),
+                    format!("{} {}", self.branding.name, env!("CARGO_PKG_VERSION")),
                     t.accent,
                 ));
                 sep(ui);
@@ -171,6 +207,26 @@ impl App {
                     .on_hover_text(&self.env);
             });
         });
+    }
+}
+
+impl App {
+    /// Carry out what a plugin view asked for.
+    fn apply(&mut self, actions: Vec<HostAction>) {
+        for a in actions {
+            match a {
+                HostAction::OpenImage(p) => {
+                    self.flash.open(&self.defs, p, &mut self.settings);
+                    self.view = View::Flash;
+                }
+                HostAction::SelectDefinition(id) => {
+                    let idx = self.defs.iter().position(|d| d.id == id);
+                    self.flash.select_def(&self.defs, idx);
+                }
+                HostAction::SelectMap(m) => self.flash.open_map(m),
+                HostAction::HexJump(addr) => self.flash.hex_jump(addr),
+            }
+        }
     }
 }
 
@@ -229,7 +285,9 @@ impl eframe::App for App {
 
         egui::Panel::top("gbar")
             .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
-            .show(ui, |ui| self.top.ui(ui, &t, &mut self.settings));
+            .show(ui, |ui| {
+                self.top.ui(ui, &t, &mut self.settings, &self.branding)
+            });
         let flash_size = self
             .flash
             .image
@@ -241,19 +299,56 @@ impl eframe::App for App {
             .map(|i| self.defs[i].maps.len())
             .filter(|n| *n > 0);
         let db_count = self.ecudb.count();
-        let counts = move |v: View| match v {
+        let count = |v: View| match v {
             View::Flash => flash_size.clone(),
             View::Maps => map_count.map(|n| n.to_string()),
             View::EcuDb => db_count.map(|n| n.to_string()),
             View::Drivers => Some(views::drivers::count().to_string()),
             _ => None,
         };
+        let core = |v: View| NavItem {
+            view: v,
+            label: v.label().into(),
+            icon: v.icon().into(),
+            count: count(v),
+        };
+        let mut groups = vec![
+            NavGroup {
+                label: "Workspace".into(),
+                items: View::WORKSPACE.iter().map(|&v| core(v)).collect(),
+            },
+            NavGroup {
+                label: "Reference".into(),
+                items: View::REFERENCE.iter().map(|&v| core(v)).collect(),
+            },
+        ];
+        for (i, pv) in self.plugin_views.iter().enumerate() {
+            let item = NavItem {
+                view: View::Plugin(i as u16),
+                label: pv.label().into(),
+                icon: pv.icon().into(),
+                count: pv.count(),
+            };
+            let label = match pv.group() {
+                ViewGroup::Workspace => "Workspace".to_string(),
+                ViewGroup::Reference => "Reference".to_string(),
+                ViewGroup::Custom(l) => l,
+            };
+            match groups.iter_mut().find(|g| g.label == label) {
+                Some(g) => g.items.push(item),
+                None => groups.push(NavGroup {
+                    label,
+                    items: vec![item],
+                }),
+            }
+        }
+        let footer = format!("{} {}", self.branding.name, env!("CARGO_PKG_VERSION"));
         egui::Panel::left("nav")
             .exact_size(230.0)
             .resizable(false)
             .frame(egui::Frame::new().fill(t.surface))
             .show(ui, |ui| {
-                if let Some(v) = sidebar::ui(ui, &t, self.view, &counts) {
+                if let Some(v) = sidebar::ui(ui, &t, self.view, &groups, &footer) {
                     self.view = v;
                 }
             });
@@ -298,8 +393,31 @@ impl eframe::App for App {
                 }
                 View::Log => self.logview.ui(ui, &t),
                 View::Controllers => self.controllers.ui(ui, &t),
+                View::Plugin(i) => {
+                    let mut actions = Vec::new();
+                    if let Some(pv) = self.plugin_views.get_mut(i as usize) {
+                        let img = self.flash.image.as_ref();
+                        let mut host = Host {
+                            tokens: t,
+                            image_path: img.map(|i| i.path.as_path()),
+                            image: img.map(|i| i.bytes.as_slice()),
+                            defs: &self.defs,
+                            def_idx: self.flash.def_idx,
+                            map_idx: self.flash.map_idx,
+                            checksums: &self.flash.checksums,
+                            adapter: self.adapter.as_ref(),
+                            jobs: &self.jobs,
+                            confirms: &mut self.confirms,
+                            actions: &mut actions,
+                            status: &mut self.host_status,
+                        };
+                        pv.ui(ui, &mut host);
+                    }
+                    self.apply(actions);
+                }
                 other => views::placeholder::ui(ui, &t, other),
             });
+        self.confirms.ui(&ctx);
 
         if hovering_file {
             let r = ctx.content_rect();

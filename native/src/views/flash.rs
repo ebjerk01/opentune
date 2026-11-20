@@ -64,6 +64,8 @@ pub struct FlashView {
     checksum: Option<Result<ChecksumResult, String>>,
     pub bench: Option<Bench>,
     pub error: Option<String>,
+    /// Extra checksum algorithms from the embedding build (before the core).
+    pub checksums: Vec<crate::host::ChecksumResolver>,
     pub note: Option<String>,
 }
 
@@ -73,6 +75,11 @@ impl FlashView {
             bench,
             ..Default::default()
         }
+    }
+
+    /// Scroll the hex view to `addr`.
+    pub fn hex_jump(&mut self, addr: usize) {
+        self.hex.jump(addr);
     }
 
     /// Show map `idx` of the current definition and jump the hex view to it.
@@ -157,7 +164,7 @@ impl FlashView {
     fn verify(&mut self) {
         let Some(img) = &self.image else { return };
         let id = self.algo.clone();
-        self.checksum = Some(match opentune_checksum::get(&id) {
+        self.checksum = Some(match crate::host::resolve_checksum(&self.checksums, &id) {
             None => Err(format!("unknown checksum '{id}'")),
             Some(a) => {
                 let t = Instant::now();
@@ -186,7 +193,7 @@ impl FlashView {
     /// Correct the checksums into a NEW file (never the opened one).
     fn fix_and_save(&mut self) {
         let Some(img) = &self.image else { return };
-        let Some(algo) = opentune_checksum::get(&self.algo) else {
+        let Some(algo) = crate::host::resolve_checksum(&self.checksums, &self.algo) else {
             return;
         };
         let mut fixed = img.bytes.clone();

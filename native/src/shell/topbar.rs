@@ -65,7 +65,13 @@ pub struct TopBar {
 }
 
 impl TopBar {
-    pub fn ui(&mut self, ui: &mut Ui, t: &Tokens, settings: &mut Settings) {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        t: &Tokens,
+        settings: &mut Settings,
+        branding: &crate::host::Branding,
+    ) {
         let ctx = ui.ctx().clone();
         self.poll(settings);
         let link = self.link.snapshot();
@@ -88,13 +94,15 @@ impl TopBar {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 ui.label(
-                    RichText::new("OpenTune")
+                    RichText::new(&branding.name)
                         .font(font(DISPLAY, 15.0))
                         .color(t.fg),
                 );
-                ui.horizontal(|ui| {
-                    theme::pill(ui, t, "native", Tone::Accent, false);
-                });
+                if !branding.pill.is_empty() {
+                    ui.horizontal(|ui| {
+                        theme::pill(ui, t, &branding.pill, Tone::Accent, false);
+                    });
+                }
             });
 
             ui.add_space((ui.available_width() - self.right_w).max(0.0));

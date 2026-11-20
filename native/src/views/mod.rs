@@ -26,6 +26,8 @@ pub enum View {
     Drivers,
     Controllers,
     Sa2,
+    /// A view supplied by an embedding build (index into its view list).
+    Plugin(u16),
 }
 
 impl View {
@@ -68,6 +70,7 @@ impl View {
             View::Drivers => "Drivers",
             View::Controllers => "Controllers",
             View::Sa2 => "SA2 script",
+            View::Plugin(_) => "Plugin",
         }
     }
 
@@ -83,6 +86,7 @@ impl View {
             View::Drivers => icons::WRENCH,
             View::Controllers => icons::CIRCUITRY,
             View::Sa2 => icons::CODE,
+            View::Plugin(_) => icons::SQUARES_FOUR,
         }
     }
 }

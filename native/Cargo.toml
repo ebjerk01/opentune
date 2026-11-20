@@ -11,6 +11,11 @@ publish = false
 # tree and lockfile stay out of the core workspace and its CI.
 [workspace]
 
+# Library (embeddable: `opentune_native::run(NativeConfig)`) + thin binary.
+[lib]
+name = "opentune_native"
+path = "src/lib.rs"
+
 [[bin]]
 name = "opentune-native"
 path = "src/main.rs"
@@ -21,6 +26,8 @@ opentune-core = { path = "../crates/opentune-core" }
 opentune-checksum = { path = "../crates/opentune-checksum" }
 opentune-scan = { path = "../crates/opentune-scan" }
 opentune-db = { path = "../crates/opentune-db" }
+# The flash backup vault (Host::backup / guarded writes).
+opentune-flash = { path = "../crates/opentune-flash" }
 # Log viewer: CSV parsing (OpenTune Live log + generic wide CSV) and stats.
 opentune-logview = { path = "../crates/opentune-logview" }
 # Controllers view: drivetrain controller definitions (ctrldefs/).
@@ -40,5 +47,3 @@ png = "0.18"
 serialport = "4"
 
 [dev-dependencies]
-# Vault tests write backups with the core's own writer (real on-disk layout).
-opentune-flash = { path = "../crates/opentune-flash" }
