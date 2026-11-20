@@ -38,10 +38,10 @@
   "checksum": null,
   "seedkey": null,
   "full_read": "obd",
-  "_notes_identify": "Shortest part/software prefixes that are still specific to this family. Matched case/space-insensitively by prefix or substring against the ECU's reported HW/SW numbers.",
+  "_notes_identify": "Shortest part/software prefixes that are still specific to this family, at least 6 characters (a generic prefix such as Bosch '1037' is rejected). Matched case/space-insensitively by prefix or substring against the ECU's reported HW/SW numbers; the definition with the longest hitting key wins.",
   "identify": {
     "part_numbers": ["0000000"],
-    "sw_numbers": ["0000"]
+    "sw_numbers": ["0000000000"]
   },
   "_notes_maps": "Optional. A definition with no maps is valid (identify + checksum still work); add diff-confirmed maps in follow-up PRs. EVERY map's notes MUST carry a confidence label: 'CONFIDENCE: HIGH|MEDIUM|LOW' (with source) or 'EXAMPLE ONLY'. rows=Y, cols=X; axis count must equal the map's size on that dimension; stored axes must be monotonic; give every map a unit.",
   "maps": [

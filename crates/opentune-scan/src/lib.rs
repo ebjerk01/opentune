@@ -476,9 +476,9 @@ fn grade_core(
 
     // ecudef match identifies the *ECU* (family + supplier), NOT the car: its
     // `maker` is Bosch/Siemens, not a vehicle make. So it corroborates the ECU
-    // family via a part#, but yields no car -> Low, make left None. (The shipped
-    // ecudef identify keys are also loose — e.g. a "1037" sw-prefix matches most
-    // Bosch diesel cals — so trusting this for a car would be dishonest.)
+    // family via a part#, but yields no car -> Low, make left None. (Identify
+    // keys are family prefixes such as "0281011" or "03G906", shared by many
+    // cars, so trusting this for a car would be dishonest.)
     if let Some(d) = ecd {
         return (
             Assignment {
