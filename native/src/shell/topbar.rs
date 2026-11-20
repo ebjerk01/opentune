@@ -692,16 +692,45 @@ impl TopBar {
                         });
                         ui.end_row();
 
-                        ui.label(RichText::new("Request id (tx)").color(t.fg_dim));
-                        hex_field(ui, t, &mut a.tx, "7E0");
-                        ui.end_row();
-                        ui.label(RichText::new("Response id (rx)").color(t.fg_dim));
-                        hex_field(ui, t, &mut a.rx, "7E8");
+                        ui.label(RichText::new("Transport").color(t.fg_dim));
+                        ui.horizontal(|ui| {
+                            let cur = a.transport.trim().to_ascii_lowercase();
+                            for (id, label) in [
+                                ("isotp", "ISO-TP (CAN ids)"),
+                                ("tp20", "VW TP2.0"),
+                                ("kline", "K-line"),
+                            ] {
+                                let on = cur == id || (id == "isotp" && cur.is_empty());
+                                if ui.selectable_label(on, label).clicked() {
+                                    a.transport = id.into();
+                                }
+                            }
+                        });
                         ui.end_row();
 
+                        let by_module = matches!(a.transport.as_str(), "tp20" | "kline");
+                        if by_module {
+                            ui.label(RichText::new("Module address").color(t.fg_dim));
+                            hex_field(ui, t, &mut a.module, "02");
+                            ui.end_row();
+                        } else {
+                            ui.label(RichText::new("Request id (tx)").color(t.fg_dim));
+                            hex_field(ui, t, &mut a.tx, "7E0");
+                            ui.end_row();
+                            ui.label(RichText::new("Response id (rx)").color(t.fg_dim));
+                            hex_field(ui, t, &mut a.rx, "7E8");
+                            ui.end_row();
+                        }
+
                         ui.label(RichText::new("Target module").color(t.fg_dim));
-                        let typed = !a.tx.trim().is_empty() || !a.rx.trim().is_empty();
-                        match crate::host::resolve_target(&a.tx, &a.rx, None) {
+                        let typed = by_module || !a.tx.trim().is_empty() || !a.rx.trim().is_empty();
+                        match crate::host::resolve_target_with(
+                            &a.transport,
+                            &a.module,
+                            &a.tx,
+                            &a.rx,
+                            None,
+                        ) {
                             Ok(tg) if typed => ui.label(
                                 RichText::new(tg.to_string())
                                     .font(theme::font(theme::MONO_STRONG, 12.5))

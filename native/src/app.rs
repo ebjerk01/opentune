@@ -358,7 +358,9 @@ impl eframe::App for App {
         let hovering_file = ctx.input(|i| !i.raw.hovered_files.is_empty());
 
         // The one diagnostic target, for the hub link and every view.
-        let target = crate::host::resolve_target(
+        let target = crate::host::resolve_target_with(
+            &self.settings.adapter.transport,
+            &self.settings.adapter.module,
             &self.settings.adapter.tx,
             &self.settings.adapter.rx,
             self.flash.def_idx.map(|i| &self.defs[i]),

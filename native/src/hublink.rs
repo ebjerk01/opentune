@@ -18,7 +18,7 @@
 use crate::host::{
     bench_channel, Ack, Actuation, AdapterAccess, BackupReceipt, BuildChannel, Capabilities,
     DiagJob, DiagTarget, LinkInfo, LongJob, ModuleSession, RawBinding, RawInterface, RawJob,
-    RestoreJob, ScanJob,
+    RestoreJob, ScanJob, Transport,
 };
 use opentune_core::resilient::LINK_LOST_PREFIX;
 use opentune_core::{CoreDiag, RawDiag};
@@ -136,7 +136,7 @@ impl HubAdapter {
             .link_cfg()
             .ok_or("no adapter connected: pick a cable and connect it in the top bar")?;
         let baud = (cfg.baud != 0).then(|| cfg.baud.to_string());
-        Ok(ConnKey::new(
+        let key = ConnKey::new(
             &cfg.driver,
             Some(&cfg.port),
             baud.as_deref(),
@@ -145,7 +145,35 @@ impl HubAdapter {
                 tx_id: target.tx,
                 rx_id: target.rx,
             },
-        ))
+        );
+        // The transport is part of the confirmed target: a cable that cannot
+        // carry it is refused here, before anything opens.
+        use opentune_adaptation::kwp::{KLINE_DRIVERS, TP20_DRIVERS};
+        match target.transport {
+            Transport::IsoTp => Ok(key),
+            Transport::Tp20 { addr } => {
+                if !TP20_DRIVERS.contains(&cfg.driver.as_str()) {
+                    return Err(format!(
+                        "{target} needs a raw-CAN cable ({}); '{}' cannot carry TP2.0",
+                        TP20_DRIVERS.join(", "),
+                        cfg.driver
+                    ));
+                }
+                Ok(key
+                    .with_option("transport", "tp20")
+                    .with_option("tp20_addr", &format!("0x{addr:02X}")))
+            }
+            Transport::KLine { .. } => {
+                if !KLINE_DRIVERS.contains(&cfg.driver.as_str()) {
+                    return Err(format!(
+                        "{target} needs a K-line cable ({}); '{}' is not one",
+                        KLINE_DRIVERS.join(", "),
+                        cfg.driver
+                    ));
+                }
+                Ok(key)
+            }
+        }
     }
 
     /// Open (or reuse) the driver for the current target and read the
@@ -476,6 +504,36 @@ mod tests {
     /// is refused by the guard before the wire, and the same module still
     /// answers reads afterwards.
     #[test]
+    fn transport_targets_bind_with_their_driver_options() {
+        let a = HubAdapter::new(AdapterHub::spawn(|| {
+            Box::new(|_k: &ConnKey| Err("no hardware in tests".to_string()))
+        }));
+        let cable = |driver: &str| LinkCfg {
+            driver: driver.into(),
+            port: "can0".into(),
+            baud: 0,
+            bus: String::new(),
+        };
+        a.set_link(Some(cable("socketcan")));
+        let k = a.key(DiagTarget::tp20(0x02)).unwrap();
+        assert_eq!((k.addr.tx_id, k.addr.rx_id), (0x02, 0x300));
+        assert!(k.options.contains(&("transport".into(), "tp20".into())));
+        assert!(k.options.contains(&("tp20_addr".into(), "0x02".into())));
+        // ISO-TP carries no transport option.
+        assert!(a.key(DiagTarget::ENGINE).unwrap().options.is_empty());
+        // A cable that cannot carry the confirmed transport is refused here,
+        // before anything is opened.
+        let e = a.key(DiagTarget::kline(0x01)).unwrap_err();
+        assert!(e.contains("K-line") && e.contains("socketcan"), "{e}");
+        a.set_link(Some(cable("elm327obd")));
+        let e = a.key(DiagTarget::tp20(0x02)).unwrap_err();
+        assert!(e.contains("TP2.0") && e.contains("elm327obd"), "{e}");
+        a.set_link(Some(cable("kkl")));
+        let k = a.key(DiagTarget::kline(0x01)).unwrap();
+        assert_eq!((k.addr.tx_id, k.addr.rx_id), (0x01, 0));
+    }
+
+    #[test]
     fn read_paths_refuse_ecu_changing_services_unsent() {
         let (_opens, a) = sim();
         let dynamic: Arc<dyn AdapterAccess> = a.clone();
@@ -509,6 +567,12 @@ mod tests {
             })
             .unwrap();
         refused(h.join().unwrap_err());
+        // The long op's busy slot is released just after its result lands.
+        let t0 = Instant::now();
+        while a.busy().is_some() {
+            assert!(t0.elapsed() < Duration::from_secs(5), "slot never freed");
+            std::thread::sleep(Duration::from_millis(5));
+        }
         // Reads (incl. a session change and security access) still work.
         let r: Vec<u8> = dynamic
             .read("reads", DiagTarget::ENGINE, |d| {
@@ -529,10 +593,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(r[0], 0x7E);
-        let tcu = DiagTarget {
-            tx: 0x7E1,
-            rx: 0x7E9,
-        };
+        let tcu = DiagTarget::can(0x7E1, 0x7E9);
         a.read("tcu", tcu, |d| d.request(&[0x3E, 0x00])).unwrap();
         a.read("tcu again", tcu, |d| d.request(&[0x3E, 0x00]))
             .unwrap();
@@ -596,10 +657,7 @@ mod tests {
         let jobs = crate::host::Jobs::new(ctx);
         let mut confirms = crate::host::Confirms::default();
         let (mut actions, mut status) = (Vec::new(), None);
-        let tcu = DiagTarget {
-            tx: 0x7E1,
-            rx: 0x7E9,
-        };
+        let tcu = DiagTarget::can(0x7E1, 0x7E9);
         let req = || ConfirmRequest {
             key: "w".into(),
             title: "t".into(),
@@ -709,10 +767,7 @@ mod tests {
     use opentune_hub::adapter::testkit::SimFault;
     use std::sync::atomic::Ordering;
 
-    const TCU: DiagTarget = DiagTarget {
-        tx: 0x7E1,
-        rx: 0x7E9,
-    };
+    const TCU: DiagTarget = DiagTarget::can(0x7E1, 0x7E9);
 
     /// Like [`sim`], plus the bus's fault switches (the bus lives on the
     /// worker; its `SimFault` is shared, so it is handed back from there).
@@ -885,10 +940,7 @@ mod tests {
     fn an_absent_module_times_out_with_the_operation_budget() {
         let (a, fault, opens) = sim_faulty();
         let d: Arc<dyn AdapterAccess> = a;
-        let absent = DiagTarget {
-            tx: 0x7E5,
-            rx: 0x7ED,
-        };
+        let absent = DiagTarget::can(0x7E5, 0x7ED);
         let e = tester_present(&d, absent).unwrap_err();
         assert!(
             e.contains(&format!("timed out after {READ_TIMEOUT_MS} ms")),
@@ -1215,10 +1267,7 @@ mod tests {
     fn a_scan_rebinds_per_module_and_stays_read_only() {
         let (a, fault, opens) = sim_faulty();
         let d: Arc<dyn AdapterAccess> = a.clone();
-        let absent = DiagTarget {
-            tx: 0x7E5,
-            rx: 0x7ED,
-        };
+        let absent = DiagTarget::can(0x7E5, 0x7ED);
         let found = d
             .scan("auto-scan", move |m| {
                 assert!(m.bound().is_none());

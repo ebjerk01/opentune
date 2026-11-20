@@ -35,6 +35,11 @@ pub struct AdapterSettings {
     /// Request / response CAN ids (hex, blank = definition default).
     pub tx: String,
     pub rx: String,
+    /// How the target is reached: "" / "isotp" (CAN ids above), "tp20"
+    /// (VW TP2.0) or "kline" (KWP over K-line), the latter two to `module`.
+    pub transport: String,
+    /// Logical module address (hex) for TP2.0 / K-line, e.g. "02".
+    pub module: String,
     /// Serial baud an ELM327 answered at during auto-detect / connect; tried
     /// first on the next connect (0 = try the common bauds).
     pub baud: u32,

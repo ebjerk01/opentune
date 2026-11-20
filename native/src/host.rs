@@ -375,21 +375,66 @@ impl Ack {
     }
 }
 
-/// The diagnostic module requests go to: request (tx) and response (rx)
-/// CAN ids. One global target for the whole app (Settings → Adapter
-/// settings, else the definition's ids, else the engine).
+/// How the target module is reached. Part of the confirmed target: the
+/// confirmation dialog names it and the [`Ack`] carries it, so a write goes
+/// over the channel the user saw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum Transport {
+    /// ISO-TP over CAN, to the CAN ids `tx` / `rx` (UDS, or KWP on CAN).
+    #[default]
+    IsoTp,
+    /// VW TP2.0 channel to the KWP2000 module at logical address `addr`
+    /// (e.g. `0x01` engine, `0x02` gearbox); needs a raw-CAN cable.
+    Tp20 { addr: u8 },
+    /// KWP2000 over K-line to the module at address `addr`; needs a K-line
+    /// cable.
+    KLine { addr: u8 },
+}
+
+/// The diagnostic module requests go to: its CAN ids and the [`Transport`].
+/// One global target for the whole app (Settings → Adapter settings, else
+/// the definition's, else the engine). Build one with [`DiagTarget::can`],
+/// [`DiagTarget::tp20`] or [`DiagTarget::kline`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct DiagTarget {
+    /// ISO-TP request id; for TP2.0 / K-line the module address.
     pub tx: u32,
+    /// ISO-TP response id; for TP2.0 the tester's channel id; K-line: 0.
     pub rx: u32,
+    pub transport: Transport,
 }
 
 impl DiagTarget {
     /// The engine ECU's physical diagnostic address (ISO 15765-4).
-    pub const ENGINE: DiagTarget = DiagTarget {
-        tx: 0x7E0,
-        rx: 0x7E8,
-    };
+    pub const ENGINE: DiagTarget = DiagTarget::can(0x7E0, 0x7E8);
+
+    /// A module on ISO-TP CAN ids `tx` / `rx`.
+    pub const fn can(tx: u32, rx: u32) -> Self {
+        Self {
+            tx,
+            rx,
+            transport: Transport::IsoTp,
+        }
+    }
+
+    /// The KWP2000 module at logical address `addr` over a VW TP2.0 channel.
+    pub const fn tp20(addr: u8) -> Self {
+        Self {
+            tx: addr as u32,
+            rx: opentune_core::protocol::tp20channel::DEFAULT_TESTER_RX_ID,
+            transport: Transport::Tp20 { addr },
+        }
+    }
+
+    /// The KWP2000 module at address `addr` over K-line.
+    pub const fn kline(addr: u8) -> Self {
+        Self {
+            tx: addr as u32,
+            rx: 0,
+            transport: Transport::KLine { addr },
+        }
+    }
 }
 
 impl Default for DiagTarget {
@@ -407,7 +452,57 @@ impl std::fmt::Display for DiagTarget {
                 format!("0x{v:03X}")
             }
         };
-        write!(f, "tx {} / rx {}", id(self.tx), id(self.rx))
+        match self.transport {
+            Transport::IsoTp => write!(f, "tx {} / rx {}", id(self.tx), id(self.rx)),
+            Transport::Tp20 { addr } => write!(f, "TP2.0 → module 0x{addr:02X}"),
+            Transport::KLine { addr } => write!(f, "K-line → module 0x{addr:02X}"),
+        }
+    }
+}
+
+/// [`resolve_target`] with a transport from Adapter settings: `transport`
+/// `"tp20"` / `"kline"` needs `module` (hex logical address, e.g. `02`);
+/// anything else (`""`, `"isotp"`) uses the CAN ids. A definition whose
+/// protocol is VW TP2.0 defaults to its module address over TP2.0.
+pub fn resolve_target_with(
+    transport: &str,
+    module: &str,
+    tx: &str,
+    rx: &str,
+    def: Option<&EcuDef>,
+) -> Result<DiagTarget, String> {
+    let addr = || {
+        let h = module.trim();
+        let h = h
+            .strip_prefix("0x")
+            .or_else(|| h.strip_prefix("0X"))
+            .unwrap_or(h);
+        u8::from_str_radix(h, 16)
+            .ok()
+            .filter(|_| !h.is_empty() && h.len() <= 2)
+            .ok_or_else(|| {
+                format!(
+                    "'{}' is not a module address (hex, 00..FF, e.g. 02 for the gearbox)",
+                    module.trim()
+                )
+            })
+    };
+    match transport.trim().to_ascii_lowercase().as_str() {
+        "tp20" | "tp2.0" => Ok(DiagTarget::tp20(addr()?)),
+        "kline" | "k-line" => Ok(DiagTarget::kline(addr()?)),
+        "" | "isotp" | "iso-tp" => {
+            if tx.trim().is_empty() && rx.trim().is_empty() {
+                if let Some(d) = def {
+                    if d.protocol == opentune_core::Protocol::Vwtp20 && d.tx_id <= 0xFF {
+                        return Ok(DiagTarget::tp20(d.tx_id as u8));
+                    }
+                }
+            }
+            resolve_target(tx, rx, def)
+        }
+        other => Err(format!(
+            "unknown transport '{other}' (isotp, tp20 or kline)"
+        )),
     }
 }
 
@@ -427,10 +522,7 @@ pub fn resolve_target(tx: &str, rx: &str, def: Option<&EcuDef>) -> Result<DiagTa
             .ok_or_else(|| format!("'{}' is not a hex CAN id", s.trim()))
     };
     match (tx.trim().is_empty(), rx.trim().is_empty()) {
-        (false, false) => Ok(DiagTarget {
-            tx: parse(tx)?,
-            rx: parse(rx)?,
-        }),
+        (false, false) => Ok(DiagTarget::can(parse(tx)?, parse(rx)?)),
         (true, true) => Ok(match def {
             Some(d)
                 if d.tx_id != 0
@@ -438,10 +530,7 @@ pub fn resolve_target(tx: &str, rx: &str, def: Option<&EcuDef>) -> Result<DiagTa
                     && d.tx_id <= 0x1FFF_FFFF
                     && d.rx_id <= 0x1FFF_FFFF =>
             {
-                DiagTarget {
-                    tx: d.tx_id,
-                    rx: d.rx_id,
-                }
+                DiagTarget::can(d.tx_id, d.rx_id)
             }
             _ => DiagTarget::ENGINE,
         }),
@@ -1513,10 +1602,7 @@ mod tests {
             d.rx_id = rx;
             d
         };
-        let tcu = DiagTarget {
-            tx: 0x7E1,
-            rx: 0x7E9,
-        };
+        let tcu = DiagTarget::can(0x7E1, 0x7E9);
         assert_eq!(resolve_target("", "", None), Ok(DiagTarget::ENGINE));
         assert_eq!(resolve_target(" ", "", Some(&d(0x7E1, 0x7E9))), Ok(tcu));
         assert_eq!(
@@ -1537,11 +1623,7 @@ mod tests {
         );
         assert_eq!(tcu.to_string(), "tx 0x7E1 / rx 0x7E9");
         assert_eq!(
-            DiagTarget {
-                tx: 0x18DA10F1,
-                rx: 0x18DAF110
-            }
-            .to_string(),
+            DiagTarget::can(0x18DA10F1, 0x18DAF110).to_string(),
             "tx 0x18DA10F1 / rx 0x18DAF110"
         );
     }
@@ -1555,10 +1637,7 @@ mod tests {
         let mut confirms = Confirms::default();
         let mut actions = Vec::new();
         let mut status = None;
-        let tcu = DiagTarget {
-            tx: 0x7E1,
-            rx: 0x7E9,
-        };
+        let tcu = DiagTarget::can(0x7E1, 0x7E9);
         let req = || ConfirmRequest {
             key: "flash-tcu".into(),
             title: "Write".into(),
@@ -1735,10 +1814,7 @@ mod tests {
             })
             .expect_err("a file-write Ack names no module");
         assert_eq!(*mock.mutations.lock().unwrap(), 0);
-        let tcu = DiagTarget {
-            tx: 0x7E1,
-            rx: 0x7E9,
-        };
+        let tcu = DiagTarget::can(0x7E1, 0x7E9);
         adapter
             .mutate("write", Ack { target: Some(tcu) }, &backup, |dg| {
                 dg.request(&[0x2E])
@@ -1920,10 +1996,7 @@ mod tests {
         }
     }
 
-    const TCU: DiagTarget = DiagTarget {
-        tx: 0x7E1,
-        rx: 0x7E9,
-    };
+    const TCU: DiagTarget = DiagTarget::can(0x7E1, 0x7E9);
 
     #[test]
     fn job_progress_is_clamped_and_finished_jobs_leave_the_list() {
@@ -2049,10 +2122,7 @@ mod tests {
             "{s}"
         );
         // A 29-bit target is stamped exactly as shown.
-        let ext = DiagTarget {
-            tx: 0x18DA_10F1,
-            rx: 0x18DA_F110,
-        };
+        let ext = DiagTarget::can(0x18DA_10F1, 0x18DA_F110);
         assert!(matches!(
             fx.host(Ok(ext), |h| h.confirm_ecu(req("w"))),
             ConfirmResult::Pending
@@ -2144,6 +2214,60 @@ mod tests {
         assert_eq!(r2.unwrap(), b"EDIT-1");
     }
 
+    /// TP2.0 / K-line targets: resolved from Adapter settings or a TP2.0
+    /// definition, named in the confirmation, and stamped into the Ack.
+    #[test]
+    fn transport_targets_resolve_display_and_stamp() {
+        let gearbox = DiagTarget::tp20(0x02);
+        assert_eq!(gearbox.transport, Transport::Tp20 { addr: 0x02 });
+        assert_eq!((gearbox.tx, gearbox.rx), (0x02, 0x300));
+        assert_eq!(gearbox.to_string(), "TP2.0 → module 0x02");
+        assert_eq!(DiagTarget::kline(0x01).to_string(), "K-line → module 0x01");
+        assert_eq!(DiagTarget::ENGINE.transport, Transport::IsoTp);
+        // Settings.
+        assert_eq!(resolve_target_with("tp20", "02", "", "", None), Ok(gearbox));
+        assert_eq!(
+            resolve_target_with(" TP20 ", "0x02", "7E0", "7E8", None),
+            Ok(gearbox)
+        );
+        assert_eq!(
+            resolve_target_with("kline", "1", "", "", None),
+            Ok(DiagTarget::kline(0x01))
+        );
+        for bad in ["", "100", "zz", "0x"] {
+            let e = resolve_target_with("tp20", bad, "", "", None).unwrap_err();
+            assert!(e.contains("module address"), "{bad}: {e}");
+        }
+        assert!(resolve_target_with("doip", "02", "", "", None).is_err());
+        // ISO-TP behaves exactly like resolve_target.
+        assert_eq!(
+            resolve_target_with("", "", "7E1", "7E9", None),
+            resolve_target("7E1", "7E9", None)
+        );
+        assert_eq!(
+            resolve_target_with("isotp", "02", "", "", None),
+            Ok(DiagTarget::ENGINE)
+        );
+        // A TP2.0 definition defaults to its module over TP2.0.
+        let mut d = def_with_ids(0x02, 0);
+        d.protocol = opentune_core::Protocol::Vwtp20;
+        assert_eq!(resolve_target_with("", "", "", "", Some(&d)), Ok(gearbox));
+        // …unless CAN ids are typed.
+        assert_eq!(
+            resolve_target_with("", "", "7E1", "7E9", Some(&d)),
+            Ok(DiagTarget::can(0x7E1, 0x7E9))
+        );
+        // The dialog shows it and the Ack carries it, transport included.
+        let mut fx = Fixture::new();
+        fx.host(Ok(gearbox), |h| h.confirm_ecu(req("tp")));
+        assert_eq!(fx.confirms.open["tp"].3, Some(gearbox));
+        fx.confirms.answer("tp", true);
+        match fx.host(Ok(DiagTarget::ENGINE), |h| h.confirm_ecu(req("tp"))) {
+            ConfirmResult::Accepted(ack) => assert_eq!(ack.ecu_target(), Ok(gearbox)),
+            other => panic!("{other:?}"),
+        }
+    }
+
     fn def_with_ids(tx: u32, rx: u32) -> EcuDef {
         let mut d = EcuDef::from_json(
             r#"{"id":"t","name":"T","maker":"x","family":"x","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"flash_size":0,"regions":[],"full_read":"obd"}"#,
@@ -2156,10 +2280,7 @@ mod tests {
 
     #[test]
     fn resolve_target_hex_forms_and_limits() {
-        let ext = DiagTarget {
-            tx: 0x18DA_10F1,
-            rx: 0x18DA_F110,
-        };
+        let ext = DiagTarget::can(0x18DA_10F1, 0x18DA_F110);
         // 29-bit ids with surrounding whitespace, lower case, both prefixes.
         assert_eq!(resolve_target("  18DA10F1\t", "\n18DAF110 ", None), Ok(ext));
         assert_eq!(resolve_target("18da10f1", "0x18daf110", None), Ok(ext));
@@ -2168,10 +2289,7 @@ mod tests {
         // The 29-bit maximum is accepted, one more is not.
         assert_eq!(
             resolve_target("1FFFFFFF", "0", None),
-            Ok(DiagTarget {
-                tx: 0x1FFF_FFFF,
-                rx: 0
-            })
+            Ok(DiagTarget::can(0x1FFF_FFFF, 0))
         );
         for bad in [
             "20000000",
@@ -2206,7 +2324,7 @@ mod tests {
             "half a definition is not a target"
         );
         // Display switches to 8 digits above 11 bits.
-        let t = |tx, rx| DiagTarget { tx, rx }.to_string();
+        let t = |tx, rx| DiagTarget::can(tx, rx).to_string();
         assert_eq!(t(0x7FF, 0x800), "tx 0x7FF / rx 0x00000800");
         assert_eq!(t(0, 1), "tx 0x000 / rx 0x001");
         assert_eq!(DiagTarget::default(), DiagTarget::ENGINE);

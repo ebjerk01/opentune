@@ -141,6 +141,19 @@ it; `AdapterAccess::mutate` addresses `Ack::ecu_target()`, so a write reaches
 exactly the module the user confirmed, and a plain `confirm` Ack (file
 writes) cannot drive a mutation.
 
+A target also names its **transport**: `DiagTarget::can(tx, rx)` (ISO-TP),
+`DiagTarget::tp20(addr)` (VW TP2.0 to a KWP module, e.g. `0x02` gearbox) or
+`DiagTarget::kline(addr)`. The confirmation shows it ("TP2.0 → module
+0x02"), the `Ack` carries it, and the adapter refuses a cable that cannot
+carry it before anything opens. Adapter settings has a Transport choice and
+a module address; a VW TP2.0 definition defaults to its module over TP2.0.
+
+**Read paths are read-only.** `read`, `start`, `scan` and raw access admit
+only the services in `READ_SERVICES` (an allow-list; unknown services are
+refused unsent). Every ECU change goes through `confirm_ecu` + `mutate`
+(persistent, backup first) or `actuate` (non-persistent, control handed
+back).
+
 **Protocol clients.** Inside an adapter job, wrap the `RawDiag` in
 `RawTransport::new(d)` to use the core `UdsClient` / `Kwp2000Client`. The
 responsePending (0x78) wait is done once by the driver's transport, which
