@@ -10,7 +10,11 @@
 //! * **JAMCRC (DQ250-MQB)** — `TheFlashBold/DQ250-MQB-Bench-Flash` (GPL-3.0).
 //!   `jamcrc = !crc32` (reflected CRC-32 with **no** final inversion), stored
 //!   little-endian in the **last 4 bytes** of each flash block; SBOOT checks it
-//!   on every boot.
+//!   on every boot. Independently confirmed by `bri3d/VW_Flash`
+//!   (`lib/dsg_checksum.py`, `lib/modules/dq250mqb.py`, `docs/dsg.md`;
+//!   BSD-2-Clause): the complement of zlib CRC-32 over the block minus its last
+//!   four bytes, compared with the little-endian trailer, ASW and CAL checked,
+//!   the driver block not. Public vector: `"123456789"` + `D9 C6 0B 34`.
 //! * **CRC32-VW (DQ381)** and **ZF 8HP CAL CRC-32** — `dspl1236/vag-tcu-tools`
 //!   (MIT). DQ381 protects each of its **BOOT, ASW and CAL** programming blocks
 //!   with a big-endian zlib **CRC-32**; every block is self-describing with the
@@ -1046,6 +1050,30 @@ mod tests {
         assert!(algo.correct(&mut m.clone()).unwrap().is_empty());
     }
 
+    /// The public trailer vector: `"123456789"` followed by `D9 C6 0B 34`, the
+    /// little-endian JAMCRC (pins the algorithm AND the trailer byte order).
+    /// A block carrying the trailer big-endian does not verify.
+    #[test]
+    fn dq250_trailer_is_little_endian() {
+        assert_eq!(jamcrc(b"123456789").to_le_bytes(), [0xD9, 0xC6, 0x0B, 0x34]);
+        let img = synthetic_dq250();
+        let blk = &DQ250_MQB_BLOCKS[0];
+        let store = blk.offset + blk.len - 4;
+        let body = &img[blk.offset..store];
+        assert_eq!(img[store..store + 4], jamcrc(body).to_le_bytes());
+        // Store the same value big-endian: that block no longer verifies.
+        let mut be = img.clone();
+        let c = jamcrc(&be[blk.offset..store]);
+        assert_ne!(
+            c.to_le_bytes(),
+            c.to_be_bytes(),
+            "a symmetric CRC proves nothing"
+        );
+        be[store..store + 4].copy_from_slice(&c.to_be_bytes());
+        let st = Dq250Jamcrc.verify(&be).unwrap();
+        assert!(st.iter().any(|s| !s.ok), "a big-endian trailer must fail");
+    }
+
     #[test]
     fn dq250_unrecognised_is_refused() {
         // Right size but no valid JAMCRC anywhere → refuse (wrong layout/algorithm).
@@ -1451,6 +1479,45 @@ mod tests {
         assert_eq!(fixes[0].name, "haldex-CAL");
         assert!(algo.verify(&m).unwrap().iter().all(|s| s.ok));
         assert!(algo.correct(&mut m.clone()).unwrap().is_empty());
+    }
+
+    /// The 10-byte header window is excluded from the sum: a covered word
+    /// changes the checksum, any of the window's first 8 bytes (block address
+    /// and length) does not. Pinned for every published block offset.
+    #[test]
+    fn haldex_covered_word_counts_header_window_does_not() {
+        for name in ["CAL", "ASW", "VERSION"] {
+            let def = haldex_def(name);
+            let len = def.cs_loc + 0x40;
+            let mut blk = vec![0u8; len];
+            for (i, b) in blk.iter_mut().enumerate() {
+                *b = (i as u8).wrapping_mul(29).wrapping_add(7);
+            }
+            let base = haldex_checksum(&blk, def.cs_loc).unwrap();
+            // A covered word just after the window.
+            let mut covered = blk.clone();
+            covered[def.cs_loc + HALDEX_HDR_WINDOW] ^= 0x01;
+            assert_ne!(
+                haldex_checksum(&covered, def.cs_loc).unwrap(),
+                base,
+                "{name}"
+            );
+            // Each of the window's first 8 bytes (address + length).
+            for k in 0..HALDEX_CKSUM_OFF {
+                let mut hdr = blk.clone();
+                hdr[def.cs_loc + k] ^= 0xFF;
+                assert_eq!(
+                    haldex_checksum(&hdr, def.cs_loc).unwrap(),
+                    base,
+                    "{name}: header byte {k} must not count"
+                );
+            }
+            // The stored checksum bytes themselves do not count either.
+            let mut cs = blk.clone();
+            cs[def.cs_loc + HALDEX_CKSUM_OFF] ^= 0xFF;
+            cs[def.cs_loc + HALDEX_CKSUM_OFF + 1] ^= 0xFF;
+            assert_eq!(haldex_checksum(&cs, def.cs_loc).unwrap(), base, "{name}");
+        }
     }
 
     #[test]
