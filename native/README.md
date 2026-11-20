@@ -107,6 +107,15 @@ writes) cannot drive a mutation.
 responsePending (0x78) wait is done once by the driver's transport, which
 never re-sends a request.
 
+**Security access.** `NativeConfig::seedkeys` takes seed/key resolvers
+(empty in the public build: OpenTune ships no algorithm). The ECU
+definition's `seedkey` field names the id; `Host::unlocker()` resolves it
+(nothing is sent if it cannot), and inside the adapter job
+`unlocker.unlock_uds(d, level)` / `unlock_kwp(d, level)` runs
+`27 level` → key → `27 level+1`. The level (odd) is the operation's, so
+the view passes it. A rejected key is never retried; an all-zero seed means
+already unlocked.
+
 **Diagnostics.** `NativeConfig::diagnostics` is an optional upload seam
 (`DiagnosticsSink`); it is `None` in the public build, which never uploads
 anything.

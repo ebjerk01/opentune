@@ -17,13 +17,14 @@ mod image;
 mod mapview;
 mod paths;
 mod screenshot;
+mod security;
 mod settings;
 mod shell;
 pub mod theme;
 mod views;
 
 use bench::{BenchCfg, Scene};
-pub use host::{Branding, Host, NativeConfig, NativeView, RawTransport};
+pub use host::{Branding, Host, NativeConfig, NativeView, RawTransport, Unlocked, Unlocker};
 use std::path::PathBuf;
 
 pub(crate) struct Args {

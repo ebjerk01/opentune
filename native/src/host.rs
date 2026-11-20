@@ -33,6 +33,11 @@ use std::sync::{mpsc, Arc, Mutex, Weak};
 /// Looks up an extra checksum algorithm by id (consulted before the core set).
 pub type ChecksumResolver = fn(&str) -> Option<Box<dyn ChecksumAlgo>>;
 
+pub use crate::security::{Unlocked, Unlocker};
+pub use opentune_core::protocol::seedkey::SeedKey;
+/// Looks up a seed/key algorithm by id (`None` for ids it does not know).
+pub use opentune_hub::seedkeys::SeedKeyResolver;
+
 /// How the app names itself (an embedding build can rebrand).
 #[derive(Clone, Debug)]
 pub struct Branding {
@@ -64,6 +69,10 @@ pub struct NativeConfig {
     pub views: Vec<Box<dyn NativeView>>,
     /// The adapter the views run diagnostics through (None: no adapter layer).
     pub adapter: Option<Arc<dyn AdapterAccess>>,
+    /// Seed/key algorithms by id, consulted in order (empty in the public
+    /// build: OpenTune ships none). An ECU definition names the id it needs
+    /// (`seedkey`); views unlock with [`Host::unlocker`].
+    pub seedkeys: Vec<SeedKeyResolver>,
     /// Where an embedding build may send diagnostics reports (None in the
     /// public build: nothing is ever uploaded). The core never calls it on
     /// its own; a build that sets it decides what is sent and when, with the
@@ -736,6 +745,7 @@ pub struct Host<'a> {
     pub(crate) checksums: &'a [ChecksumResolver],
     pub(crate) adapter: Option<&'a Arc<dyn AdapterAccess>>,
     pub(crate) diagnostics: Option<&'a Arc<dyn DiagnosticsSink>>,
+    pub(crate) seedkeys: &'a opentune_hub::seedkeys::SeedKeys,
     pub(crate) target: Result<DiagTarget, String>,
     pub(crate) jobs: &'a Jobs,
     pub(crate) confirms: &'a mut Confirms,
@@ -775,6 +785,27 @@ impl<'a> Host<'a> {
         self.adapter.cloned()
     }
     /// The link, with the app's current target module.
+    /// The SecurityAccess unlocker for the selected definition's `seedkey`
+    /// id. An error (nothing sent) when no definition is selected, it names
+    /// no algorithm, or no configured resolver knows the id.
+    pub fn unlocker(&self) -> Result<Unlocker, String> {
+        let d = self
+            .definition()
+            .ok_or("select an ECU definition first (it names the seed/key algorithm)")?;
+        let id = d
+            .seedkey
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| format!("the definition '{}' names no seed/key algorithm", d.id))?;
+        Unlocker::new(self.seedkeys.clone(), id)
+    }
+
+    /// The unlocker for an explicit seed/key `id` (e.g. a per-module
+    /// algorithm the view knows better than the definition).
+    pub fn unlocker_for(&self, id: &str) -> Result<Unlocker, String> {
+        Unlocker::new(self.seedkeys.clone(), id)
+    }
+
     /// The build's diagnostics upload target (None in the public build).
     pub fn diagnostics(&self) -> Option<Arc<dyn DiagnosticsSink>> {
         self.diagnostics.cloned()
@@ -982,9 +1013,72 @@ mod tests {
     fn public_default_uploads_nothing_and_has_no_adapter() {
         let c = NativeConfig::default();
         assert!(c.diagnostics.is_none());
+        assert!(
+            c.seedkeys.is_empty(),
+            "OpenTune ships no seed/key algorithm"
+        );
         assert!(c.adapter.is_none());
         assert!(c.views.is_empty() && c.checksums.is_empty());
         assert_eq!(c.branding.name, "OpenTune");
+    }
+
+    #[test]
+    fn unlocker_follows_the_definition_and_the_resolvers() {
+        fn resolver(id: &str) -> Option<Box<dyn SeedKey>> {
+            struct K;
+            impl SeedKey for K {
+                fn id(&self) -> &str {
+                    "test-k"
+                }
+                fn compute(&self, s: &[u8], _l: u8) -> opentune_core::Result<Vec<u8>> {
+                    Ok(s.to_vec())
+                }
+            }
+            (id == "test-k").then(|| Box::new(K) as Box<dyn SeedKey>)
+        }
+        let mk = |seedkey: Option<&str>| {
+            let mut d = EcuDef::from_json(
+                r#"{"id":"t","name":"T","maker":"x","family":"x","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"flash_size":0,"regions":[],"full_read":"obd"}"#,
+            )
+            .unwrap();
+            d.seedkey = seedkey.map(str::to_string);
+            d
+        };
+        let defs = vec![mk(None), mk(Some("test-k")), mk(Some("vendor-y"))];
+        let ctx = egui::Context::default();
+        let jobs = Jobs::new(ctx);
+        let mut confirms = Confirms::default();
+        let (mut actions, mut status) = (Vec::new(), None);
+        let keys = opentune_hub::seedkeys::SeedKeys::new(vec![resolver]);
+        let mut on = |def_idx: Option<usize>| {
+            let h = Host {
+                tokens: crate::theme::DARK,
+                image_path: None,
+                image: None,
+                image_edited: false,
+                defs: &defs,
+                def_idx,
+                map_idx: 0,
+                checksums: &[],
+                adapter: None,
+                diagnostics: None,
+                seedkeys: &keys,
+                target: Ok(DiagTarget::ENGINE),
+                jobs: &jobs,
+                confirms: &mut confirms,
+                actions: &mut actions,
+                status: &mut status,
+            };
+            (
+                h.unlocker().map(|u| u.id().to_string()),
+                h.unlocker_for("test-k").is_ok(),
+            )
+        };
+        assert!(on(None).0.unwrap_err().contains("select an ECU definition"));
+        assert!(on(Some(0)).0.unwrap_err().contains("names no seed/key"));
+        assert_eq!(on(Some(1)).0, Ok("test-k".to_string()));
+        assert!(on(Some(2)).0.unwrap_err().contains("vendor-y"));
+        assert!(on(None).1);
     }
 
     #[test]
@@ -1065,6 +1159,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
+                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
                 target,
                 jobs: &jobs,
                 confirms,
@@ -1293,6 +1388,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
+                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
                 target: Ok(DiagTarget::ENGINE),
                 jobs: &jobs,
                 confirms: &mut confirms,

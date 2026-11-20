@@ -343,6 +343,7 @@ mod tests {
                 checksums: &[],
                 adapter: None,
                 diagnostics: None,
+                seedkeys: &opentune_hub::seedkeys::SeedKeys::default(),
                 target: Ok(target),
                 jobs: &jobs,
                 confirms,

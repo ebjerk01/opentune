@@ -37,6 +37,7 @@ pub struct App {
     /// The built-in adapter (the top bar's link; the views' default adapter).
     hub: Arc<crate::hublink::HubAdapter>,
     diagnostics: Option<Arc<dyn crate::host::DiagnosticsSink>>,
+    seedkeys: opentune_hub::seedkeys::SeedKeys,
     jobs: Jobs,
     confirms: Confirms,
     host_status: Option<String>,
@@ -155,6 +156,7 @@ impl App {
                 .or_else(|| Some(hub.clone() as Arc<dyn AdapterAccess>)),
             hub,
             diagnostics: config.diagnostics,
+            seedkeys: opentune_hub::seedkeys::SeedKeys::new(config.seedkeys),
             jobs: Jobs::new(cc.egui_ctx.clone()),
             confirms: Confirms::default(),
             quit_ask: false,
@@ -465,6 +467,7 @@ impl eframe::App for App {
                             checksums: &self.flash.checksums,
                             adapter: self.adapter.as_ref(),
                             diagnostics: self.diagnostics.as_ref(),
+                            seedkeys: &self.seedkeys,
                             target: target.clone(),
                             jobs: &self.jobs,
                             confirms: &mut self.confirms,
