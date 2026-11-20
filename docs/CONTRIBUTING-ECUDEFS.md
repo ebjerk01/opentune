@@ -114,20 +114,27 @@ offline string scanner in `crates/opentune-scan/src/extract.rs`. You provide:
 ```json
 "identify": {
   "part_numbers": ["03G906"],
-  "sw_numbers": ["1037"]
+  "sw_numbers": ["1037516722"]
 }
 ```
 
 - **`part_numbers`** — hardware / spare-part numbers *or prefixes*
   (e.g. `03G906`, `0281011`). Matched against the ECU's reported `hw_number`.
 - **`sw_numbers`** — software / calibration numbers *or prefixes*
-  (e.g. `1037516722`, or just `1037`). Matched against `sw_number`.
+  (e.g. `1037516722`). Matched against `sw_number`.
 
 Matching is **case- and whitespace-insensitive**, and a key hits if the reported
 value **starts with** or **contains** it. So a short family prefix like `03G906`
 covers every `03G906021xx` variant — prefer the shortest key that is still
 specific to the family, so one definition covers a family without colliding with
 others.
+
+A key must be at least **6 characters** (whitespace not counted). A shorter key
+is a generic prefix, not an identity — every Bosch software number starts with
+`1037` — so the matcher ignores it and `ecudefs validate` rejects it
+(`identify.key_short`). When several definitions match, the one whose **longest
+hitting key** is longest wins (a full software number beats a hardware family
+prefix); on a tie the first definition by id wins.
 
 Where the numbers come from: the scanner reads part/software numbers straight out
 of a `.bin` (the EPROM identity block, the ASAM/EPK descriptor), and a live ECU

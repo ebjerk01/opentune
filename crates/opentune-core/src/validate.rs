@@ -16,7 +16,7 @@
 //!   out-of-image map, missing honesty label, malformed identity). CI fails.
 //! - [`Severity::Warn`] — a quality / plausibility concern a reviewer should look
 //!   at (missing unit, implausible scaling, non-monotonic axis). CI does not fail.
-use crate::ecudef::{AxisDef, DataType, EcuDef, Endian, MapDef};
+use crate::ecudef::{AxisDef, DataType, EcuDef, Endian, MapDef, MIN_IDENTIFY_KEY_LEN};
 
 /// How serious a [`ValidationIssue`] is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -458,11 +458,16 @@ impl EcuDef {
                         format!("identify key '{k}' has non-alphanumeric characters"),
                     ));
                 }
-                if n.len() < 3 {
-                    out.push(ValidationIssue::warn(
+                if n.len() < MIN_IDENTIFY_KEY_LEN {
+                    // The matcher ignores such a key, and as a prefix it would
+                    // claim unrelated ECUs (every Bosch SW number starts `1037`).
+                    out.push(ValidationIssue::error(
                         "identify.key_short",
                         loc.clone(),
-                        format!("identify key '{k}' is very short and may match unrelated ECUs"),
+                        format!(
+                            "identify key '{k}' is shorter than {MIN_IDENTIFY_KEY_LEN} characters: \
+                             a generic prefix that would match unrelated ECUs (it is never matched)"
+                        ),
                     ));
                 }
                 if seen.contains(&n) {
@@ -927,7 +932,7 @@ mod tests {
             "protocol": "iso_tp", "diag_layer": "uds", "bitrate": 500000,
             "flash_size": 524288,
             "checksum": "edc16",
-            "identify": { "part_numbers": ["0281011"], "sw_numbers": ["1037"] }
+            "identify": { "part_numbers": ["0281011"], "sw_numbers": ["1037999999"] }
         }"#,
         )
         .expect("base parses")
@@ -1025,6 +1030,24 @@ mod tests {
         let issues = d.validate();
         assert!(codes(&issues).contains(&"identify.empty_key"));
         assert!(codes(&issues).contains(&"identify.duplicate_key"));
+    }
+
+    #[test]
+    fn generic_short_identify_keys_error() {
+        // `1037` begins every Bosch SW number: a prefix, not an identity.
+        let mut d = base_def();
+        d.identify.sw_numbers = vec!["1037".into(), " 10 37 9 ".into()];
+        let issues = d.validate();
+        let short: Vec<_> = issues
+            .iter()
+            .filter(|i| i.code == "identify.key_short")
+            .collect();
+        assert_eq!(short.len(), 2, "{issues:?}");
+        assert!(short.iter().all(|i| i.severity == Severity::Error));
+        // Exactly the minimum (a VAG family prefix) is accepted.
+        let mut d = base_def();
+        d.identify.part_numbers = vec!["03G906".into()];
+        assert!(!codes(&d.validate()).contains(&"identify.key_short"));
     }
 
     #[test]
