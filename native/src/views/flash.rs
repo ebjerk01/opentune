@@ -5,10 +5,12 @@ use crate::bench::{Bench, Scene};
 use crate::hex::{parse_addr, HexView, BYTES_PER_ROW};
 use crate::host::{ConfirmRequest, ConfirmResult, Confirms};
 use crate::icons;
-use crate::image::{fmt_val, CellEdit, Image};
+use crate::image::{data_len, fmt_val, map_values, read_elem, shape, CellEdit, Image, Refusal};
+use crate::mapview::mapops::{self, Op, Sel};
 use crate::mapview::{self, CellCommand, CellCursor};
 use crate::settings::Settings;
 use crate::theme::{self, font, Tokens, Tone, DISPLAY, MONO_MEDIUM, UI_STRONG};
+use crate::views::project;
 use eframe::egui::{
     self, CornerRadius, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
 };
@@ -71,6 +73,14 @@ pub struct FlashView {
     cursor: CellCursor,
     /// An operation waiting for the user's confirmation.
     pending: Option<Pending>,
+    /// The map editor's typed operand (Set / + / − / ×%).
+    op_value: String,
+    /// The last copied block (also put on the system clipboard as text).
+    clip: Option<mapops::Block>,
+    /// The egui context of the last frame (to publish edit snapshots).
+    ctx: Option<egui::Context>,
+    /// What the last published snapshot described: (image, generation, def).
+    published: Option<(PathBuf, u64, Option<usize>)>,
 }
 
 /// Operations that need the user's OK first.
@@ -266,8 +276,9 @@ impl FlashView {
     }
 
     /// Apply edits to map `map` of the current definition (plugins, scripted
-    /// changes). Stops at the first refused cell; edits before it stay (undo
-    /// walks them back one by one).
+    /// changes): all or nothing, one undo step. When any cell is refused
+    /// nothing changes and the refusals are returned. Returns the number of
+    /// cells given (those already holding the value count too).
     pub fn apply_edits(
         &mut self,
         defs: &[EcuDef],
@@ -279,13 +290,95 @@ impl FlashView {
             .and_then(|d| defs[d].maps.get(map))
             .ok_or("no such map in the selected definition")?;
         let img = self.image.as_mut().ok_or("no dump open")?;
-        let mut n = 0;
-        for &(i, v) in cells {
-            img.edit_cell(m, i, CellEdit::Set(v))?;
-            n += 1;
-        }
+        let edits: Vec<(usize, CellEdit)> =
+            cells.iter().map(|&(i, v)| (i, CellEdit::Set(v))).collect();
+        img.edit_cells(m, &edits)
+            .map_err(|r| refusal_text("Edit", m, cells.len(), &r))?;
         self.reverify();
-        Ok(n)
+        self.publish(defs);
+        Ok(cells.len())
+    }
+
+    /// Publish the unsaved edits for the Project view (when they changed).
+    fn publish(&mut self, defs: &[EcuDef]) {
+        let (Some(ctx), Some(img)) = (&self.ctx, &self.image) else {
+            return;
+        };
+        let key = (img.path.clone(), img.generation(), self.def_idx);
+        if self.published.as_ref() == Some(&key) {
+            return;
+        }
+        let def = self.def_idx.and_then(|i| defs.get(i));
+        project::publish_snapshot(
+            ctx,
+            project::EditSnapshot {
+                image: img.path.clone(),
+                algo: (!self.algo.is_empty()).then(|| self.algo.clone()),
+                edits: def
+                    .map(|d| project::capture_edits(img, d))
+                    .unwrap_or_default(),
+            },
+        );
+        self.published = Some(key);
+    }
+
+    /// Carry out a project's apply request once its dump is the one open
+    /// (after the user answered any "discard unsaved edits?" question).
+    fn take_apply_request(&mut self, ctx: &egui::Context, defs: &[EcuDef]) {
+        if self.pending.is_some() || project::pending_apply(ctx).is_none() {
+            return;
+        }
+        let Some(req) = project::take_apply(ctx) else {
+            return;
+        };
+        let name = if req.project.is_empty() {
+            "the project".to_string()
+        } else {
+            format!("'{}'", req.project)
+        };
+        let Some(img) = self.image.as_mut().filter(|i| i.path == req.image) else {
+            self.error = Some(format!(
+                "Edits of {name} not applied: {} is not the dump open here.",
+                req.image.display()
+            ));
+            return;
+        };
+        if img.is_dirty() {
+            self.error = Some(format!(
+                "Edits of {name} not applied: {} has unsaved edits. Save or revert them, \
+                 then open the project again.",
+                img.name()
+            ));
+            return;
+        }
+        match project::apply_project_edits(img, defs, &req.edits) {
+            Ok(maps) => {
+                let cells: usize = maps.iter().map(|m| m.1).sum();
+                self.error = None;
+                self.note = Some(format!(
+                    "Applied {name}: {cells} cell(s) in {} map(s), one undo step (Ctrl+Z). \
+                     Nothing is written until you save.",
+                    maps.len()
+                ));
+                self.reverify();
+            }
+            Err(problems) => {
+                let more = problems.len().saturating_sub(4);
+                let mut msg = format!(
+                    "Edits of {name} NOT applied (all or nothing, nothing changed): {}",
+                    problems
+                        .iter()
+                        .take(4)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+                if more > 0 {
+                    msg.push_str(&format!("; and {more} more"));
+                }
+                self.error = Some(msg);
+            }
+        }
     }
 
     /// Re-check after an edit (results always describe the working bytes).
@@ -311,19 +404,120 @@ impl FlashView {
                 }
                 Err(e) => self.error = Some(format!("Not changed: {e}")),
             },
+            CellCommand::Step(sel, n) => {
+                let cols = shape(m).1;
+                let edits: Vec<(usize, CellEdit)> = sel
+                    .cells(cols)
+                    .map(|(i, _, _)| (i, CellEdit::Step(n)))
+                    .collect();
+                let label = if n > 0 { "Step up" } else { "Step down" };
+                self.apply_cells(m, label, edits);
+            }
+            CellCommand::Copy(sel) => {
+                let Some(vals) = map_values(&img.bytes, m) else {
+                    return;
+                };
+                let block = mapops::copy(&vals, shape(m).1, sel);
+                if let Some(ctx) = &self.ctx {
+                    ctx.copy_text(mapops::to_tsv(&block));
+                }
+                self.note = Some(format!(
+                    "Copied {} × {} cell(s).",
+                    sel.width(),
+                    sel.height()
+                ));
+                self.error = None;
+                self.clip = Some(block);
+            }
+            CellCommand::Paste(sel, text) => {
+                let block = match mapops::parse_block(&text) {
+                    Ok(b) => b,
+                    Err(e) => match &self.clip {
+                        Some(b) if text.trim().is_empty() => b.clone(),
+                        _ => {
+                            self.error = Some(format!("Not pasted: {e}"));
+                            return;
+                        }
+                    },
+                };
+                let (rows, cols) = shape(m);
+                match mapops::paste(&block, cols, rows, sel) {
+                    Ok(t) => self.apply_targets(m, "Paste", t),
+                    Err(e) => self.error = Some(format!("Not pasted: {e}")),
+                }
+            }
         }
     }
 
-    fn undo(&mut self, defs: &[EcuDef]) {
+    /// Run a range operation on the selected map's selection.
+    fn run_op(&mut self, defs: &[EcuDef], op: Op) {
+        let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) else {
+            return;
+        };
+        let Some(img) = self.image.as_ref() else {
+            return;
+        };
+        let Some(sel) = self.cursor.range() else {
+            self.error = Some(format!("{}: select cells first.", op.label()));
+            return;
+        };
+        let Some(vals) = map_values(&img.bytes, m) else {
+            return;
+        };
+        let (rows, cols) = shape(m);
+        match mapops::apply(op, &vals, cols, rows, sel) {
+            Ok(t) => self.apply_targets(m, op.label(), t),
+            Err(e) => self.error = Some(format!("{}: {e}", op.label())),
+        }
+    }
+
+    /// Store physical values in cells of `m`: all or nothing, one undo step.
+    fn apply_targets(
+        &mut self,
+        m: &opentune_core::ecudef::MapDef,
+        label: &str,
+        t: Vec<(usize, f64)>,
+    ) {
+        let edits = t.into_iter().map(|(i, v)| (i, CellEdit::Set(v))).collect();
+        self.apply_cells(m, label, edits);
+    }
+
+    fn apply_cells(
+        &mut self,
+        m: &opentune_core::ecudef::MapDef,
+        label: &str,
+        edits: Vec<(usize, CellEdit)>,
+    ) {
         let Some(img) = self.image.as_mut() else {
             return;
         };
-        if let Some(off) = img.undo() {
+        match img.edit_cells(m, &edits) {
+            Ok(n) => {
+                self.error = None;
+                self.note = Some(if n == 0 {
+                    format!("{label}: no cell changed (the values are already stored).")
+                } else {
+                    format!("{label}: {n} cell(s) changed, one undo step (Ctrl+Z).")
+                });
+                self.reverify();
+            }
+            Err(r) => self.error = Some(refusal_text(label, m, edits.len(), &r)),
+        }
+    }
+
+    /// Undo (`redo == false`) or redo the last operation; the cursor goes
+    /// to the first cell it touched.
+    fn undo(&mut self, defs: &[EcuDef], redo: bool) {
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        let off = if redo { img.redo() } else { img.undo() };
+        if let Some(off) = off {
             if let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) {
                 let w = m.data_type.byte_len() as usize;
                 let a = m.address as usize;
-                if (a..a + m.byte_len() as usize).contains(&off) {
-                    self.cursor.select((off - a) / w, m.cols as usize);
+                if (a..a + data_len(m) as usize).contains(&off) {
+                    self.cursor.select((off - a) / w, shape(m).1);
                 }
             }
             self.hex.jump(off);
@@ -547,14 +741,31 @@ impl FlashView {
         settings: &mut Settings,
         confirms: &mut Confirms,
     ) {
+        self.ctx = Some(ui.ctx().clone());
         self.pending_ui(defs, settings, confirms);
-        if self.pending.is_none()
-            && !ui.ctx().egui_wants_keyboard_input()
-            && self.image.as_ref().is_some_and(Image::can_undo)
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z))
-        {
-            self.undo(defs);
+        self.take_apply_request(ui.ctx(), defs);
+        if self.pending.is_none() && !ui.ctx().egui_wants_keyboard_input() {
+            // Redo first: the undo shortcut also matches with Shift held.
+            let redo = ui.input_mut(|i| {
+                i.consume_key(
+                    egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                    egui::Key::Z,
+                ) || i.consume_key(egui::Modifiers::COMMAND, egui::Key::Y)
+            });
+            if redo && self.image.as_ref().is_some_and(Image::can_redo) {
+                self.undo(defs, true);
+            } else if !redo
+                && self.image.as_ref().is_some_and(Image::can_undo)
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z))
+            {
+                self.undo(defs, false);
+            }
         }
+        self.ui_body(ui, t, defs, settings);
+        self.publish(defs);
+    }
+
+    fn ui_body(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef], settings: &mut Settings) {
         egui::Frame::new()
             .fill(t.surface)
             .inner_margin(Margin::symmetric(18, 11))
@@ -712,7 +923,7 @@ impl FlashView {
                 self.hex.jump(m.address as usize);
             }
         }
-        let hl = sel.map(|m| m.address as usize..(m.address + m.byte_len()) as usize);
+        let hl = sel.map(|m| m.address as usize..m.address as usize + data_len(m) as usize);
         let top = (self.hex_offset / self.hex.row_height.max(1.0)) as usize * BYTES_PER_ROW;
         let mut jump = None;
         let mut jump_text = std::mem::take(&mut self.hex.jump_text);
@@ -818,10 +1029,17 @@ impl FlashView {
         let mut all = self.show_all_maps;
         let mut jump_to = None;
         let mut cell_cmd = None;
+        let mut tool = None;
         let editable = !show_all && self.pending.is_none();
         if let Some(m) = sel {
             self.cursor.follow(m);
         }
+        let (can_undo, can_redo) = self
+            .image
+            .as_ref()
+            .map_or((false, false), |i| (i.can_undo(), i.can_redo()));
+        let has_clip = self.clip.is_some();
+        let op_value = &mut self.op_value;
         let cursor = &mut self.cursor;
         theme::panel(
             ui,
@@ -871,6 +1089,24 @@ impl FlashView {
                     );
                     return;
                 }
+                if editable && sel.is_some() {
+                    egui::Frame::new()
+                        .inner_margin(Margin {
+                            left: 14,
+                            right: 14,
+                            top: 8,
+                            bottom: 0,
+                        })
+                        .show(ui, |ui| {
+                            tool = edit_toolbar(
+                                ui,
+                                t,
+                                op_value,
+                                cursor.range(),
+                                (can_undo, can_redo, has_clip),
+                            );
+                        });
+                }
                 let mut area = egui::ScrollArea::both()
                     .id_salt("mappane")
                     .auto_shrink([false, false]);
@@ -914,13 +1150,22 @@ impl FlashView {
                                     meta(ui, t, "@", &format!("0x{:06X}", m.address));
                                 });
                                 ui.add_space(6.0);
-                                let out = mapview::draw_map_ex(
+                                let w = m.data_type.byte_len() as usize;
+                                let out = mapview::draw_map_edit(
                                     ui,
                                     t,
                                     &img.bytes,
                                     m,
                                     editable.then_some(&mut *cursor),
                                     &|i| img.cell_changed(m, i),
+                                    &|i| {
+                                        if !img.cell_changed(m, i) {
+                                            return None;
+                                        }
+                                        let off = m.address as usize + i * w;
+                                        read_elem(img.saved_bytes(), off, m.data_type, m.endian)
+                                            .map(|r| m.scaling.to_physical(r))
+                                    },
                                 );
                                 ui.add_space(8.0);
                                 if let Some(o) = out {
@@ -937,7 +1182,7 @@ impl FlashView {
                                         );
                                         ui.label(
                                             RichText::new(if editable {
-                                                "click a cell, type a value + Enter · +/− step · Ctrl+Z undo"
+                                                "click a cell, type a value + Enter · shift-click / drag to select · +/− step · Ctrl+C / Ctrl+V · Ctrl+Z undo, Ctrl+Y redo"
                                             } else {
                                                 "hover a cell for its value"
                                             })
@@ -959,6 +1204,32 @@ impl FlashView {
         }
         if let Some(c) = cell_cmd {
             self.run_cell_command(defs, c);
+        }
+        match tool {
+            None => {}
+            Some(Tool::Op(op)) => self.run_op(defs, op),
+            Some(Tool::NoValue) => {
+                self.error = Some(format!("'{}' is not a number.", self.op_value.trim()))
+            }
+            Some(Tool::Copy) => {
+                if let Some(r) = self.cursor.range() {
+                    self.run_cell_command(defs, CellCommand::Copy(r));
+                }
+            }
+            Some(Tool::Paste) => match (self.cursor.range(), self.clip.clone()) {
+                (Some(r), Some(b)) => {
+                    self.run_cell_command(defs, CellCommand::Paste(r, mapops::to_tsv(&b)))
+                }
+                _ => self.error = Some("Copy cells first (or paste text with Ctrl+V).".into()),
+            },
+            Some(Tool::All) => {
+                if let Some(m) = maps.get(self.map_idx) {
+                    let (rows, cols) = shape(m);
+                    self.cursor.select_range(Sel::all(cols, rows));
+                }
+            }
+            Some(Tool::Undo) => self.undo(defs, false),
+            Some(Tool::Redo) => self.undo(defs, true),
         }
         if let Some(a) = jump_to {
             self.hex.jump(a);
@@ -1031,6 +1302,183 @@ impl FlashView {
             self.verify();
         }
     }
+}
+
+/// A map editor toolbar action.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Tool {
+    Op(Op),
+    /// A value operation with no number typed.
+    NoValue,
+    Copy,
+    Paste,
+    All,
+    Undo,
+    Redo,
+}
+
+/// The map editor toolbar: the selection, an operand, the range operations,
+/// clipboard and undo / redo.
+fn edit_toolbar(
+    ui: &mut Ui,
+    t: &Tokens,
+    value: &mut String,
+    range: Option<Sel>,
+    (can_undo, can_redo, has_clip): (bool, bool, bool),
+) -> Option<Tool> {
+    let mut tool = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        let sel_text = match range {
+            Some(r) if r.count() > 1 => {
+                format!("{} × {} · {} cells", r.width(), r.height(), r.count())
+            }
+            Some(_) => "1 cell".to_string(),
+            None => "no selection".to_string(),
+        };
+        theme::pill(ui, t, &sel_text, Tone::Muted, true).on_hover_text(
+            "Shift-click, drag or Shift+arrows select a range. An operation is all or \
+             nothing: if any cell does not fit the data type or the map's limits, nothing \
+             changes (values are refused, never clamped). One undo step per operation.",
+        );
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(64.0)
+                .font(font(MONO_MEDIUM, 12.0))
+                .hint_text("value"),
+        );
+        let v = mapview::parse_value(value);
+        let has = range.is_some();
+        let multi = range.is_some_and(|r| r.count() > 1);
+        let mut b = |ui: &mut Ui, on: bool, label: &str, tip: &str, act: Tool| {
+            if ui
+                .add_enabled(
+                    on,
+                    egui::Button::new(RichText::new(label).font(font(UI_STRONG, 12.0))),
+                )
+                .on_hover_text(tip)
+                .clicked()
+            {
+                tool = Some(act);
+            }
+        };
+        let val = |f: fn(f64) -> Op| v.map_or(Tool::NoValue, |x| Tool::Op(f(x)));
+        b(
+            ui,
+            has,
+            "=",
+            "Set every selected cell to the value",
+            val(Op::Set),
+        );
+        b(
+            ui,
+            has,
+            "+",
+            "Add the value to every selected cell",
+            val(Op::Add),
+        );
+        b(
+            ui,
+            has,
+            "−",
+            "Subtract the value from every selected cell",
+            val(Op::Sub),
+        );
+        b(
+            ui,
+            has,
+            "×%",
+            "Multiply every selected cell by value % (110 = +10 %)",
+            val(Op::MulPct),
+        );
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            multi,
+            "Interpolate",
+            "Bilinear between the selection's four corners",
+            Tool::Op(Op::Bilinear),
+        );
+        b(
+            ui,
+            multi,
+            icons::ARROWS_HORIZONTAL,
+            "Interpolate each row between its first and last selected cell",
+            Tool::Op(Op::InterpRows),
+        );
+        b(
+            ui,
+            multi,
+            icons::ARROWS_VERTICAL,
+            "Interpolate each column between its top and bottom selected cell",
+            Tool::Op(Op::InterpCols),
+        );
+        b(
+            ui,
+            has,
+            "Smooth",
+            "Average every selected cell with its neighbours (3 × 3)",
+            Tool::Op(Op::Smooth),
+        );
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            has,
+            icons::COPY,
+            "Copy the selection (Ctrl+C)",
+            Tool::Copy,
+        );
+        b(
+            ui,
+            has && has_clip,
+            icons::CLIPBOARD,
+            "Paste at the selection (Ctrl+V pastes text from other apps)",
+            Tool::Paste,
+        );
+        b(ui, true, "All", "Select the whole map (Ctrl+A)", Tool::All);
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            can_undo,
+            icons::ARROW_COUNTER_CLOCKWISE,
+            "Undo the last operation (Ctrl+Z)",
+            Tool::Undo,
+        );
+        b(
+            ui,
+            can_redo,
+            icons::ARROW_CLOCKWISE,
+            "Redo (Ctrl+Y / Ctrl+Shift+Z)",
+            Tool::Redo,
+        );
+    });
+    tool
+}
+
+/// "Set refused: 2 of 12 cell(s) … nothing changed. row 0 col 1: …".
+fn refusal_text(
+    label: &str,
+    m: &opentune_core::ecudef::MapDef,
+    total: usize,
+    r: &[Refusal],
+) -> String {
+    let cols = shape(m).1;
+    let list: Vec<String> = r
+        .iter()
+        .take(3)
+        .map(|x| format!("row {} col {}: {}", x.idx / cols, x.idx % cols, x.reason))
+        .collect();
+    let more = r.len().saturating_sub(3);
+    format!(
+        "{label} refused: {} of {total} cell(s) cannot be stored, so nothing changed. {}{}",
+        r.len(),
+        list.join("; "),
+        if more > 0 {
+            format!("; and {more} more")
+        } else {
+            String::new()
+        }
+    )
 }
 
 fn checksum_body(ui: &mut Ui, t: &Tokens, r: &ChecksumResult) {
@@ -1299,6 +1747,106 @@ mod tests {
         assert!(backups.contains(&orig), "the original is in the vault");
         assert!(fv.note.as_deref().unwrap_or("").contains("NOT corrected"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Range operations through the Flash view: all or nothing, one undo
+    /// step each, redo; a project's apply request lands only on its own,
+    /// clean dump.
+    #[test]
+    fn range_ops_undo_redo_and_project_apply() {
+        let mut d = def("t", "Test", "test");
+        d.maps.push(opentune_core::ecudef::MapDef {
+            name: "m".into(),
+            address: 4,
+            rows: 2,
+            cols: 3,
+            max: Some(100.0),
+            ..Default::default()
+        });
+        let defs = vec![d];
+        let path = PathBuf::from("synthetic-ops.bin");
+        let mut fv = FlashView {
+            image: Some(Image::from_bytes(path.clone(), vec![10u8; 16])),
+            def_idx: Some(0),
+            ..Default::default()
+        };
+        fv.cursor.follow(&defs[0].maps[0]);
+        // No selection: refused with a message.
+        fv.run_op(&defs, Op::Add(1.0));
+        assert!(fv.error.as_deref().unwrap_or("").contains("select cells"));
+        fv.cursor.select_range(Sel::span((0, 0), (2, 0)));
+        fv.run_op(&defs, Op::MulPct(150.0));
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        // One cell over max: the whole operation is refused, nothing clamped.
+        fv.cursor.select_range(Sel::all(3, 2));
+        fv.run_op(&defs, Op::Add(86.0));
+        let e = fv.error.clone().unwrap();
+        assert!(e.contains("refused") && e.contains("3 of 6"), "{e}");
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        // Paste a 2 × 1 block at (1,1); undo / redo walk whole operations.
+        fv.cursor.select_range(Sel::cell(1, 1));
+        fv.run_cell_command(&defs, CellCommand::Paste(Sel::cell(1, 1), "1\t2".into()));
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 1, 2]
+        );
+        fv.undo(&defs, false);
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        fv.undo(&defs, true);
+        assert_eq!(&fv.image.as_ref().unwrap().bytes[7..10], &[10, 1, 2]);
+
+        // The snapshot the Project view reads, then an apply request.
+        let ctx = egui::Context::default();
+        fv.ctx = Some(ctx.clone());
+        fv.publish(&defs);
+        let snap = project::snapshot(&ctx).unwrap();
+        assert_eq!(snap.image, path);
+        assert_eq!(snap.edits.len(), 1);
+        let edits: Vec<serde_json::Value> = snap
+            .edits
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .collect();
+        let req = |image: &Path| project::ApplyRequest {
+            image: image.to_path_buf(),
+            project: "p".into(),
+            edits: edits.clone(),
+        };
+        // Refused while the dump has unsaved edits (the request is consumed).
+        project::request_apply(&ctx, req(&path));
+        fv.take_apply_request(&ctx, &defs);
+        assert!(fv.error.as_deref().unwrap_or("").contains("unsaved edits"));
+        assert!(project::pending_apply(&ctx).is_none());
+        // Another dump: refused.
+        fv.image.as_mut().unwrap().revert();
+        project::request_apply(&ctx, req(Path::new("other.bin")));
+        fv.take_apply_request(&ctx, &defs);
+        assert!(fv
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("not the dump open"));
+        // Waits while a confirmation is open, then applies as one step.
+        project::request_apply(&ctx, req(&path));
+        fv.pending = Some(Pending::Revert);
+        fv.take_apply_request(&ctx, &defs);
+        assert!(project::pending_apply(&ctx).is_some());
+        fv.pending = None;
+        fv.take_apply_request(&ctx, &defs);
+        let img = fv.image.as_mut().unwrap();
+        assert_eq!(&img.bytes[4..10], &[15, 15, 15, 10, 1, 2]);
+        assert!(fv.note.as_deref().unwrap_or("").contains("one undo step"));
+        img.undo();
+        assert!(!img.is_dirty() && !img.can_undo());
     }
 
     fn def(id: &str, name: &str, family: &str) -> EcuDef {
