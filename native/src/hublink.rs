@@ -20,8 +20,14 @@ use std::time::{Duration, Instant};
 pub const LINK_POLL: &str = "adapter link";
 /// How long a view's operation waits for a running battery poll.
 const POLL_WAIT: Duration = Duration::from_secs(3);
-/// Per-request diagnostic timeout.
-const TIMEOUT_MS: u64 = 2500;
+/// Per-response timeout of a read-only operation (an absent module fails
+/// fast).
+const READ_TIMEOUT_MS: u64 = 2500;
+/// Per-response timeout of an ECU-changing operation: the UDS P2* budget
+/// (the longest an ECU may stay silent between responsePending replies,
+/// e.g. during an erase routine or a transfer exit) plus a margin, so a slow
+/// but healthy routine is never abandoned halfway.
+const MUTATE_TIMEOUT_MS: u64 = opentune_core::protocol::uds::P2_STAR_CLIENT_MS + 1000;
 
 /// The cable the user connected.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -154,6 +160,7 @@ impl HubAdapter {
 
     fn run_job(
         &self,
+        timeout_ms: u64,
         op: &str,
         target: DiagTarget,
         job: DiagJob,
@@ -165,7 +172,7 @@ impl HubAdapter {
             let (k, sl) = (key.clone(), slot.clone());
             let r = self.hub.run(op, move |s| {
                 let job = lock(&sl).take().ok_or("internal error: job already ran")?;
-                s.with_diag(&k, TIMEOUT_MS, |d| job(d))
+                s.with_diag(&k, timeout_ms, |d| job(d))
             });
             let waiting_on_poll = || self.hub.current().is_none_or(|c| c == LINK_POLL);
             match r {
@@ -196,7 +203,7 @@ impl AdapterAccess for HubAdapter {
         target: DiagTarget,
         job: DiagJob,
     ) -> Result<Box<dyn Any + Send>, String> {
-        self.run_job(op, target, job)
+        self.run_job(READ_TIMEOUT_MS, op, target, job)
     }
 
     fn mutate_job(
@@ -214,7 +221,7 @@ impl AdapterAccess for HubAdapter {
                 backup.path.display()
             ));
         }
-        self.run_job(op, target, job)
+        self.run_job(MUTATE_TIMEOUT_MS, op, target, job)
     }
 }
 
@@ -297,6 +304,16 @@ mod tests {
             })
             .expect("vcar answers");
         assert!(!r.is_empty());
+    }
+
+    #[test]
+    fn mutations_wait_the_full_p2_star_budget() {
+        use opentune_core::protocol::uds::{P2_CLIENT_MS, P2_STAR_CLIENT_MS};
+        // Checked at compile time: a mutation outwaits an ECU's longest
+        // silence between 0x78s; a read stays near P2 to fail fast.
+        const _: () = assert!(MUTATE_TIMEOUT_MS > P2_STAR_CLIENT_MS);
+        const _: () =
+            assert!(READ_TIMEOUT_MS >= P2_CLIENT_MS && READ_TIMEOUT_MS < P2_STAR_CLIENT_MS);
     }
 
     #[test]
