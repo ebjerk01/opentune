@@ -1,12 +1,14 @@
 //! Auto-scan: presence, identification and stored fault codes of every
 //! module in a vehicle's module list, over [`opentune_autoscan`] (port of the
-//! webview app's Auto-scan panel, `feat_scan.rs`), plus clearing ONE
-//! module's fault codes.
+//! webview app's Auto-scan panel, `feat_scan.rs`), plus clearing fault codes
+//! of one module or of all modules that reported codes.
 //!
 //! The scan is one read-only `adapter.scan` that binds each module's own
 //! `req_id` / `resp_id` before probing it. Clearing is a separate, confirmed
-//! `actuate` per module, offered only for the module that IS the app target
-//! (the confirmation's `Ack` addresses the app target).
+//! `actuate` PER MODULE, confirmed with `Host::confirm_ecu_for` for that
+//! module by name. "Clear all" never fans out: one summary lists every module
+//! first (it authorises nothing), then each module gets its own read, DTC
+//! report and typed confirmation; a declined module is skipped.
 //!
 //! ## Per-op table (reviewed before merge)
 //!
@@ -15,11 +17,10 @@
 //! | Scan all modules | per module, in list order, after `bind(req_id/resp_id)`: UDS `3E 00`, `22 F190`, `22 F187`, `22 F189`, `22 F191`, `22 F195`, `19 02 FF`; OBD `01 00`, `03` (an absent module gets only the ping) | `scan` (`ModuleSession::bind` per module; read-only) | n/a (read only) |
 //! | Clear one module's DTCs — 1. read | UDS `3E 00`, the identity `22`s, `19 02 FF`; OBD `01 00`, `03` | `read` (that module) | — |
 //! | Clear — 2. DTC report | none | a NEW file `<vault>/dtc-reports/<time>-<module>.txt` (panel record, not a `BackupReceipt`); no report, no clear | the codes read in step 1 |
-//! | Clear — 3. confirm | none | `Host::confirm_ecu`, typed `CLEAR`, text "clears stored fault codes — not reversible" | — |
-//! | Clear — 4. clear | run: UDS `3E 00`, identity `22`s, `19 02 FF` (the codes must equal the report, else NOTHING is cleared), `3E 00`, `14 FF FF FF`; OBD `01 00`, `03`, `01 00`, `04`. restore: sends nothing (a clear holds no session or output to hand back) | `actuate` (the `Ack`'s module) | n/a (not reversible; the step-2 report is the record) |
-//!
-//! Not ported: "clear all modules" in one go (each module needs its own
-//! confirmation of a module that is the app target).
+//! | Clear — 3. confirm | none | `Host::confirm_ecu_for(req, module, "<module name> (<ids>)")`, per-module key, typed `CLEAR`, text "Clears stored fault codes — not reversible …" | — |
+//! | Clear — 4. clear | (`ack.target() == module` re-checked first) run: UDS `3E 00`, identity `22`s, `19 02 FF` (the codes must equal the report, else NOTHING is cleared), `3E 00`, `14 FF FF FF`; OBD `01 00`, `03`, `01 00`, `04`. restore: sends nothing (a clear holds no session or output to hand back) | `actuate` (the `Ack`'s module) | n/a (not reversible; the step-2 report is the record) |
+//! | Clear all — summary | none | a plain `Host::confirm` listing EVERY module that will be touched; it names no module and authorises none | n/a |
+//! | Clear all — per module | steps 1–4 above for each listed module in turn, each with its own report and its own `confirm_ecu_for` (declined → skipped, nothing sent to it) | `read` → `actuate` per module | n/a (per-module report) |
 
 use super::coding::plumbing as pl;
 use crate::host::{
@@ -170,11 +171,64 @@ pub(crate) fn clear_op(
 }
 
 // ---------------------------------------------------------------------------
-// Clear pipeline: read → report → confirm → actuate
+// Clear pipeline: (summary →) per module: read → report → confirm → actuate
 // ---------------------------------------------------------------------------
+
+/// The confirmation key of clearing module `m` (one per module: an answer
+/// for one module can never be consumed for another).
+pub(crate) fn clear_key(m: &ModuleAddr) -> String {
+    pl::confirm_key("autoscan-clear", target_of(m))
+}
+
+/// The one summary shown before "Clear all" starts: every module that will
+/// be touched. Accepting it authorises NO module; each is confirmed alone.
+pub(crate) fn summary_request(mods: &[(ModuleAddr, usize)]) -> ConfirmRequest {
+    let list: Vec<String> = mods
+        .iter()
+        .map(|(m, n)| format!("• {}: {n} code(s)", pl::module_label(&m.name, target_of(m))))
+        .collect();
+    ConfirmRequest {
+        key: "autoscan-clear-all".into(),
+        title: format!("Clear fault codes on {} modules", mods.len()),
+        body: format!(
+            "These modules will be touched, one at a time:\n{}\n\nNothing is cleared by this \
+             step. For EACH module, OpenTune first reads its codes again and saves them to a \
+             DTC report, then asks you to confirm that module on its own (typed CLEAR). A \
+             module you decline is skipped; the others still need their own confirmation.",
+            list.join("\n")
+        ),
+        typed: None,
+        confirm_label: "Review modules one by one".into(),
+    }
+}
+
+/// The confirmation of clearing ONE module (`index` of `total`).
+pub(crate) fn module_request(
+    m: &ModuleAddr,
+    codes: usize,
+    report: &Path,
+    index: usize,
+    total: usize,
+) -> ConfirmRequest {
+    let label = pl::module_label(&m.name, target_of(m));
+    ConfirmRequest {
+        key: clear_key(m),
+        title: format!("Clear fault codes: {}", m.name),
+        body: format!(
+            "Clears stored fault codes — not reversible. {codes} code(s) on {label}; the list \
+             was saved to {}. Freeze-frame data and readiness monitors may be reset too. This \
+             confirmation covers {label} only (module {index} of {total}).",
+            report.display()
+        ),
+        typed: Some("CLEAR".into()),
+        confirm_label: "Clear codes".into(),
+    }
+}
 
 pub(crate) enum Step {
     Idle,
+    /// The clear-all summary (a plain confirmation: it authorises nothing).
+    Summary(ConfirmRequest, Vec<ModuleAddr>),
     Read(JobHandle<ModuleResult>, ModuleAddr),
     Confirm(ConfirmRequest, ModuleAddr, Vec<Dtc>),
     Clear(JobHandle<Actuation<ClearResult>>, String),
@@ -186,8 +240,15 @@ pub struct AutoscanView {
     scan_job: Option<JobHandle<Vec<ModuleResult>>>,
     pub(crate) results: Vec<ModuleResult>,
     pub(crate) step: Step,
+    /// Modules still to clear (each with its own read, report and confirm).
+    pub(crate) queue: std::collections::VecDeque<ModuleAddr>,
+    /// How many modules the current clear run covers.
+    total: usize,
+    /// `(module, outcome)` of the current / last clear run.
+    pub(crate) outcomes: Vec<(String, String)>,
     pub(crate) records: pl::Records,
     pub(crate) last_report: Option<PathBuf>,
+    pub(crate) reports: Vec<PathBuf>,
     pub(crate) msg: Option<(Tone, String)>,
 }
 
@@ -199,8 +260,12 @@ impl Default for AutoscanView {
             scan_job: None,
             results: Vec::new(),
             step: Step::Idle,
+            queue: Default::default(),
+            total: 0,
+            outcomes: Vec::new(),
             records: Default::default(),
             last_report: None,
+            reports: Vec::new(),
             msg: None,
         }
     }
@@ -229,23 +294,81 @@ impl AutoscanView {
         self.scan_job = Some(host.spawn_job("auto-scan", move |_| scan_op(&a, m)));
     }
 
-    /// Start clearing module `m`: read its codes (read path) first. Refused,
-    /// sending nothing, unless `m` is the app target and a folder for the
-    /// report is set.
-    pub(crate) fn request_clear(&mut self, host: &mut Host<'_>, m: ModuleAddr) {
-        if let Some(why) = pl::change_blocker(host, target_of(&m)) {
-            return self.msg = Some((Tone::Crit, why));
-        }
+    fn can_clear(&mut self, host: &Host<'_>) -> bool {
         if self.records.near(host).is_none() {
-            return self.msg = Some((
+            self.msg = Some((
                 Tone::Crit,
                 "choose a folder first: the codes are saved in a report before clearing".into(),
             ));
+            return false;
         }
-        let Some(a) = host.adapter() else { return };
+        host.adapter().is_some()
+    }
+
+    /// Clear module `m` (any module of the list): its codes are read and
+    /// saved first, then it gets its own confirmation.
+    pub(crate) fn request_clear(&mut self, host: &mut Host<'_>, m: ModuleAddr) {
+        if !self.can_clear(host) {
+            return;
+        }
+        self.outcomes.clear();
+        self.total = 1;
+        self.queue = [m].into();
+        self.step = self.next_module(host);
+    }
+
+    /// Clear every scanned module that reported codes: one summary listing
+    /// them all first, then module by module, each confirmed on its own.
+    pub(crate) fn request_clear_all(&mut self, host: &mut Host<'_>) {
+        let Some(mods) = self.modules.clone() else {
+            return;
+        };
+        let list: Vec<(ModuleAddr, usize)> = self
+            .results
+            .iter()
+            .zip(&mods.modules)
+            .filter(|(r, _)| r.present && !r.dtcs.is_empty())
+            .map(|(r, m)| (m.clone(), r.dtcs.len()))
+            .collect();
+        if list.is_empty() {
+            return self.msg = Some((Tone::Muted, "no module reported codes".into()));
+        }
+        if !self.can_clear(host) {
+            return;
+        }
+        let req = summary_request(&list);
+        self.step = Step::Summary(req, list.into_iter().map(|(m, _)| m).collect());
+    }
+
+    /// The next module's read (or the end of the run).
+    fn next_module(&mut self, host: &Host<'_>) -> Step {
+        let (Some(m), Some(a)) = (self.queue.pop_front(), host.adapter()) else {
+            if self.total > 1 {
+                let done: Vec<String> = self
+                    .outcomes
+                    .iter()
+                    .map(|(m, o)| format!("{m}: {o}"))
+                    .collect();
+                self.msg = Some((
+                    Tone::Muted,
+                    format!("clear all finished. {}", done.join("; ")),
+                ));
+            }
+            self.queue.clear();
+            return Step::Idle;
+        };
         let mm = m.clone();
-        let job = host.spawn_job("read DTCs", move |_| read_codes_op(&a, mm));
-        self.step = Step::Read(job, m);
+        Step::Read(
+            host.spawn_job("read DTCs", move |_| read_codes_op(&a, mm)),
+            m,
+        )
+    }
+
+    /// Record how module `name` ended and go on with the next one.
+    fn finish(&mut self, host: &Host<'_>, name: &str, tone: Tone, outcome: String) -> Step {
+        self.msg = Some((tone, format!("{name}: {outcome}")));
+        self.outcomes.push((name.to_string(), outcome));
+        self.next_module(host)
     }
 
     pub(crate) fn tick(&mut self, host: &mut Host<'_>) {
@@ -260,74 +383,87 @@ impl AutoscanView {
         }
         self.step = match std::mem::replace(&mut self.step, Step::Idle) {
             Step::Idle => Step::Idle,
+            Step::Summary(req, list) => match host.confirm(req.clone()) {
+                ConfirmResult::Pending => Step::Summary(req, list),
+                ConfirmResult::Declined => {
+                    self.msg = Some((Tone::Muted, "clear all cancelled: nothing was sent".into()));
+                    Step::Idle
+                }
+                // A plain confirmation: it names no module and authorises
+                // nothing; each module is confirmed on its own below.
+                ConfirmResult::Accepted(_plain) => {
+                    self.outcomes.clear();
+                    self.total = list.len();
+                    self.queue = list.into();
+                    self.next_module(host)
+                }
+            },
             Step::Read(mut job, m) => match job.take() {
                 None => Step::Read(job, m),
-                Some(Err(e)) => {
-                    self.msg = Some((Tone::Crit, format!("nothing cleared: {e}")));
-                    Step::Idle
-                }
+                Some(Err(e)) => self.finish(host, &m.name, Tone::Crit, format!("not cleared: {e}")),
                 Some(Ok(r)) => self.save_report(host, m, r),
             },
-            Step::Confirm(req, m, dtcs) => match host.confirm_ecu(req.clone()) {
-                ConfirmResult::Pending => Step::Confirm(req, m, dtcs),
-                ConfirmResult::Declined => {
-                    self.msg = Some((Tone::Muted, "clear cancelled: nothing was sent".into()));
-                    Step::Idle
-                }
-                ConfirmResult::Accepted(ack) => match host.adapter() {
-                    Some(a) => {
-                        let name = m.name.clone();
-                        let job = host.spawn_job("clear DTCs", move |_| clear_op(&a, ack, m, dtcs));
-                        Step::Clear(job, name)
+            Step::Confirm(req, m, dtcs) => {
+                let label = pl::module_label(&m.name, target_of(&m));
+                match host.confirm_ecu_for(req.clone(), target_of(&m), &label) {
+                    ConfirmResult::Pending => Step::Confirm(req, m, dtcs),
+                    ConfirmResult::Declined => {
+                        let n = m.name.clone();
+                        self.finish(
+                            host,
+                            &n,
+                            Tone::Muted,
+                            "skipped (declined): nothing sent".into(),
+                        )
                     }
-                    None => Step::Idle,
-                },
-            },
+                    ConfirmResult::Accepted(ack) => match host.adapter() {
+                        Some(a) => {
+                            let name = m.name.clone();
+                            let job =
+                                host.spawn_job("clear DTCs", move |_| clear_op(&a, ack, m, dtcs));
+                            Step::Clear(job, name)
+                        }
+                        None => Step::Idle,
+                    },
+                }
+            }
             Step::Clear(mut job, name) => match job.take() {
                 None => Step::Clear(job, name),
-                Some(r) => {
-                    self.msg = Some(match r.and_then(Actuation::into_result) {
-                        Ok(_) => (Tone::Ok, format!("{name}: fault codes cleared")),
-                        Err(e) => (Tone::Crit, format!("{name}: {e}")),
-                    });
-                    Step::Idle
-                }
+                Some(r) => match r.and_then(Actuation::into_result) {
+                    Ok(_) => self.finish(host, &name, Tone::Ok, "fault codes cleared".into()),
+                    Err(e) => self.finish(host, &name, Tone::Crit, e),
+                },
             },
         };
     }
 
     fn save_report(&mut self, host: &Host<'_>, m: ModuleAddr, r: ModuleResult) -> Step {
         let Some(near) = self.records.near(host) else {
-            return Step::Idle;
+            return self.finish(host, &m.name, Tone::Crit, "no report folder".into());
         };
         if r.dtcs.is_empty() {
-            self.msg = Some((Tone::Muted, format!("{}: no stored codes to clear", m.name)));
-            return Step::Idle;
+            return self.finish(
+                host,
+                &m.name,
+                Tone::Muted,
+                "no stored codes to clear".into(),
+            );
         }
         let path = match pl::save_dtc_report(&near, &m.name, &report_text(&m, &r)) {
             Ok(p) => p,
             Err(e) => {
-                self.msg = Some((
+                return self.finish(
+                    host,
+                    &m.name,
                     Tone::Crit,
                     format!("report not saved, nothing cleared: {e}"),
-                ));
-                return Step::Idle;
+                )
             }
         };
-        let req = ConfirmRequest {
-            key: "autoscan-clear".into(),
-            title: format!("Clear fault codes: {}", m.name),
-            body: format!(
-                "Clears stored fault codes — not reversible. {} code(s) on {}; the list was \
-                 saved to {}. Freeze-frame data and readiness monitors may be reset too.",
-                r.dtcs.len(),
-                m.name,
-                path.display()
-            ),
-            typed: Some("CLEAR".into()),
-            confirm_label: "Clear codes".into(),
-        };
-        self.last_report = Some(path);
+        let index = self.total - self.queue.len();
+        let req = module_request(&m, r.dtcs.len(), &path, index, self.total);
+        self.last_report = Some(path.clone());
+        self.reports.push(path);
         Step::Confirm(req, m, r.dtcs)
     }
 }
@@ -408,7 +544,23 @@ impl NativeView for AutoscanView {
                     }
                     self.records.ui(ui, host);
                     ui.add_space(6.0);
-                    let app_target = host.target().ok();
+                    let any_codes = self.results.iter().any(|r| r.present && !r.dtcs.is_empty());
+                    if ui
+                        .add_enabled_ui(can && any_codes && !self.busy(), |ui| {
+                            theme::button(ui, &t, Some(icons::ERASER), "Clear all…")
+                        })
+                        .inner
+                        .on_hover_text(
+                            "Lists every module first, then reads, reports and confirms each \
+                             module on its own.",
+                        )
+                        .clicked()
+                    {
+                        self.request_clear_all(host);
+                    }
+                    for (m, o) in &self.outcomes {
+                        pl::mono(ui, host, &format!("{m}: {o}"));
+                    }
                     let mut clear = None;
                     for (r, m) in self.results.iter().zip(&mods.modules) {
                         ui.separator();
@@ -429,16 +581,12 @@ impl NativeView for AutoscanView {
                                     Tone::Warn,
                                     false,
                                 );
-                                let ok = !self.busy() && can && app_target == Some(target_of(m));
+                                let ok = !self.busy() && can;
                                 if ui
                                     .add_enabled_ui(ok, |ui| {
                                         theme::button(ui, &t, Some(icons::ERASER), "Clear…")
                                     })
                                     .inner
-                                    .on_disabled_hover_text(
-                                        "Set this module as the app target (Settings → Adapter \
-                                         settings) to clear its codes.",
-                                    )
                                     .clicked()
                                 {
                                     clear = Some(m.clone());
@@ -524,7 +672,7 @@ mod tests {
         let t0 = std::time::Instant::now();
         loop {
             fx.host(t, |h| v.tick(h));
-            if matches!(v.step, Step::Idle | Step::Confirm(..)) {
+            if matches!(v.step, Step::Idle | Step::Confirm(..) | Step::Summary(..)) {
                 break;
             }
             assert!(t0.elapsed() < std::time::Duration::from_secs(10), "stuck");
@@ -557,8 +705,11 @@ mod tests {
             records: pl::Records::in_dir(&fx.dir),
             ..Default::default()
         };
-        fx.host(ABS, |h| v.request_clear(h, mods.modules[1].clone()));
-        run(&mut v, &mut fx, ABS);
+        // The ABS is not the app target (the engine is): it is confirmed by
+        // name and only it is cleared.
+        const APP: DiagTarget = DiagTarget::ENGINE;
+        fx.host(APP, |h| v.request_clear(h, mods.modules[1].clone()));
+        run(&mut v, &mut fx, APP);
         // The report is on disk before anything changing is sent.
         let report = v.last_report.clone().expect("report saved");
         let text = std::fs::read_to_string(&report).unwrap();
@@ -568,11 +719,12 @@ mod tests {
             panic!("expected the confirmation")
         };
         assert!(req.body.contains("not reversible"));
-        fx.host(ABS, |h| v.tick(h)); // the dialog opens
+        assert!(req.body.contains("covers ABS (tx 0x760 / rx 0x768) only"));
+        fx.host(APP, |h| v.tick(h)); // the dialog opens
         assert!(matches!(v.step, Step::Confirm(..)));
         assert!(bus.with_sid(0x14).is_empty(), "nothing while pending");
-        fx.confirms.answer("autoscan-clear", true);
-        run(&mut v, &mut fx, ABS);
+        fx.confirms.answer(&clear_key(&mods.modules[1]), true);
+        run(&mut v, &mut fx, APP);
         assert_eq!(v.msg.as_ref().unwrap().0, Tone::Ok, "{:?}", v.msg);
         assert_eq!(
             bus.with_sid(0x14),
@@ -596,17 +748,11 @@ mod tests {
             records: pl::Records::in_dir(&fx.dir),
             ..Default::default()
         };
-        // Not the app target: refused before any request.
-        fx.host(DiagTarget::ENGINE, |h| {
-            v.request_clear(h, mods.modules[1].clone())
-        });
-        assert!(matches!(v.step, Step::Idle));
-        assert!(bus.wire().is_empty());
         // Declined.
         fx.host(ABS, |h| v.request_clear(h, mods.modules[1].clone()));
         run(&mut v, &mut fx, ABS);
         fx.host(ABS, |h| v.tick(h)); // the dialog opens
-        fx.confirms.answer("autoscan-clear", false);
+        fx.confirms.answer(&clear_key(&mods.modules[1]), false);
         fx.host(ABS, |h| v.tick(h));
         assert!(matches!(v.step, Step::Idle));
         assert!(bus.with_sid(0x14).is_empty());
@@ -629,6 +775,99 @@ mod tests {
         assert!(clear_op(&a, engine_ack, mods.modules[1].clone(), reported).is_err());
         assert!(bus.with_sid(0x14).is_empty());
         assert_eq!(dtcs(&bus, ABS), 1);
+    }
+
+    /// A clear-all run up to its summary, after a scan.
+    fn clear_all_view(bus: &Bus, mods: &VehicleModules, fx: &mut Fixture) -> AutoscanView {
+        let mut v = AutoscanView {
+            records: pl::Records::in_dir(&fx.dir),
+            modules: Some(mods.clone()),
+            results: scan_op(&bus.access("sim"), mods.clone()).unwrap(),
+            ..Default::default()
+        };
+        bus.clear_wire();
+        fx.host(DiagTarget::ENGINE, |h| v.request_clear_all(h));
+        v
+    }
+
+    #[test]
+    fn clear_all_lists_every_module_first_and_sends_nothing_for_it() {
+        let (bus, mods) = vehicle();
+        let mut fx = Fixture::new("scan-all-summary");
+        fx.adapter = Some(bus.access("sim"));
+        let mut v = clear_all_view(&bus, &mods, &mut fx);
+        let Step::Summary(req, list) = &v.step else {
+            panic!("expected the summary")
+        };
+        // Every module that will be touched (the absent airbag is not).
+        assert!(req
+            .body
+            .contains("• Engine (tx 0x7E0 / rx 0x7E8): 1 code(s)"));
+        assert!(req.body.contains("• ABS (tx 0x760 / rx 0x768): 1 code(s)"));
+        assert!(!req.body.contains("Airbag"));
+        assert_eq!(list.len(), 2);
+        // Declining the summary sends nothing at all.
+        fx.host(DiagTarget::ENGINE, |h| v.tick(h));
+        fx.confirms.answer("autoscan-clear-all", false);
+        fx.host(DiagTarget::ENGINE, |h| v.tick(h));
+        assert!(matches!(v.step, Step::Idle));
+        assert!(bus.wire().is_empty());
+    }
+
+    #[test]
+    fn one_confirmation_never_authorises_more_than_one_module() {
+        let (bus, mods) = vehicle();
+        let mut fx = Fixture::new("scan-all");
+        fx.adapter = Some(bus.access("sim"));
+        const APP: DiagTarget = DiagTarget::ENGINE;
+        let mut v = clear_all_view(&bus, &mods, &mut fx);
+        // Accepting the summary authorises no module: nothing is cleared.
+        fx.host(APP, |h| v.tick(h));
+        fx.confirms.answer("autoscan-clear-all", true);
+        run(&mut v, &mut fx, APP);
+        assert!(bus.with_sid(0x14).is_empty());
+        let Step::Confirm(req, m, _) = &v.step else {
+            panic!("expected the engine's own confirmation")
+        };
+        assert_eq!(m.name, "Engine");
+        assert!(req.body.contains("(module 1 of 2)"), "{}", req.body);
+        assert_eq!(v.reports.len(), 1, "the engine's report, before its clear");
+        // An answer for the ABS given now (its dialog is not open) is no
+        // answer at all; the engine's acceptance covers the engine only.
+        fx.confirms.answer(&clear_key(&mods.modules[1]), true);
+        fx.host(APP, |h| v.tick(h)); // the engine dialog opens
+        fx.confirms.answer(&clear_key(&mods.modules[0]), true);
+        run(&mut v, &mut fx, APP);
+        assert_eq!(
+            bus.with_sid(0x14),
+            vec![(0x7E0, vec![0x14, 0xFF, 0xFF, 0xFF])]
+        );
+        // The ABS now has its own report and its own pending confirmation.
+        let Step::Confirm(req, m, _) = &v.step else {
+            panic!("expected the ABS's own confirmation")
+        };
+        assert_eq!(m.name, "ABS");
+        assert!(req.body.contains("(module 2 of 2)"));
+        assert_eq!(v.reports.len(), 2);
+        assert_ne!(v.reports[0], v.reports[1]);
+        for _ in 0..5 {
+            fx.host(APP, |h| v.tick(h));
+        }
+        assert!(matches!(v.step, Step::Confirm(..)), "still pending");
+        assert_eq!(
+            dtcs(&bus, ABS),
+            1,
+            "not cleared without its own confirmation"
+        );
+        // Declined: skipped, nothing sent to it.
+        fx.confirms.answer(&clear_key(&mods.modules[1]), false);
+        run(&mut v, &mut fx, APP);
+        assert!(matches!(v.step, Step::Idle));
+        assert_eq!(bus.with_sid(0x14).len(), 1);
+        assert_eq!(dtcs(&bus, ABS), 1);
+        assert_eq!(dtcs(&bus, DiagTarget::ENGINE), 0);
+        assert_eq!(v.outcomes.len(), 2);
+        assert!(v.outcomes[1].1.contains("skipped"));
     }
 
     #[test]
