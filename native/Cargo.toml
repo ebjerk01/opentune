@@ -34,6 +34,29 @@ opentune-logview = { path = "../crates/opentune-logview" }
 opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
 # The shared adapter session (driver registry, one owner of the hardware).
 opentune-hub = { path = "../crates/opentune-hub" }
+# Engines the ported panels use (added once by the scaffold batch so the
+# feature batches never touch this file).
+opentune-packs = { path = "../crates/opentune-packs" }
+opentune-coding = { path = "../crates/opentune-coding" }
+opentune-adaptation = { path = "../crates/opentune-adaptation" }
+opentune-autoscan = { path = "../crates/opentune-autoscan" }
+opentune-servicefn = { path = "../crates/opentune-servicefn" }
+opentune-logdef = { path = "../crates/opentune-logdef" }
+opentune-gps = { path = "../crates/opentune-gps" }
+opentune-candump = { path = "../crates/opentune-candump" }
+opentune-haldex = { path = "../crates/opentune-haldex" }
+opentune-tsini = { path = "../crates/opentune-tsini" }
+opentune-tsproto = { path = "../crates/opentune-tsproto" }
+opentune-sa2 = { path = "../crates/opentune-sa2" }
+opentune-container = { path = "../crates/opentune-container" }
+opentune-vin = { path = "../crates/opentune-vin" }
+opentune-dtc = { path = "../crates/opentune-dtc" }
+opentune-xdf = { path = "../crates/opentune-xdf" }
+opentune-a2l = { path = "../crates/opentune-a2l" }
+opentune-recipe = { path = "../crates/opentune-recipe" }
+opentune-seedkey-loader = { path = "../crates/opentune-seedkey-loader" }
+# The offline UDS simulator (Debug panel, demo sessions; also the tests' bus).
+opentune-udssim = { path = "../crates/opentune-udssim" }
 
 # GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
 eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
@@ -48,6 +71,11 @@ png = "0.18"
 # Adapter discovery + the ELM327 AT link (top bar); same major as the core drivers.
 serialport = "4"
 
+[features]
+# Alpha channel: the hub registers its Bench-tier drivers and
+# `BuildChannel::compiled()` reports `alpha`, which registers the Bench views.
+alpha = ["opentune-hub/alpha"]
+
 [build-dependencies]
 # build.rs: the Windows exe icon + version info (no-op on other targets).
 embed-resource = "3"
@@ -55,4 +83,3 @@ embed-resource = "3"
 [dev-dependencies]
 # Simulated multi-module CAN bus for the hub adapter tests.
 opentune-hub = { path = "../crates/opentune-hub", features = ["testkit"] }
-opentune-udssim = { path = "../crates/opentune-udssim" }
