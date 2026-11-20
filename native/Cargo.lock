@@ -2337,6 +2337,7 @@ version = "0.7.0"
 dependencies = [
  "opentune-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2345,7 +2346,10 @@ version = "0.7.0"
 dependencies = [
  "opentune-adaptation",
  "opentune-candump",
+ "opentune-checksum",
  "opentune-core",
+ "opentune-ctrldef",
+ "opentune-db",
  "opentune-driver-doip",
  "opentune-driver-efp02c",
  "opentune-driver-elm327",
@@ -2361,8 +2365,11 @@ dependencies = [
  "opentune-driver-slcan",
  "opentune-driver-socketcan",
  "opentune-driver-vcar",
+ "opentune-haldex",
  "opentune-logdef",
+ "opentune-logview",
  "opentune-mapfind",
+ "opentune-packs",
  "opentune-sa2",
  "opentune-seedkey-loader",
  "opentune-udssim",
@@ -2514,6 +2521,7 @@ version = "0.7.0"
 dependencies = [
  "roxmltree",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 
