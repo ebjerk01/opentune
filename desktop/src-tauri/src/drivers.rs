@@ -8,7 +8,7 @@ use serde_json::Value;
 // The registry, the driver openers and the probe itself live in
 // `opentune_hub::drivers`, shared with other front ends.
 pub use opentune_hub::drivers::open_registry_driver;
-pub(crate) use opentune_hub::drivers::{open_file, probe_json, registry, SSM_SIM_DRIVER};
+pub(crate) use opentune_hub::drivers::{open_file, probe_json, registry};
 
 /// Probe for an adapter: open the selected driver fresh (which, for
 /// `elm327obd`, runs the ELM327 handshake) and report whether it answered, its

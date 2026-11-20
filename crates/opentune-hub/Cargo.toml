@@ -7,12 +7,14 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 publish = false
-description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs and vault listing."
+description = "Frontend-neutral adapter/session layer for OpenTune front ends: the app-wide adapter hub (one worker thread, one operation at a time, reused connection), module addressing, driver registry and probe, plugin seed/key lookup, build channel, map cell codecs, vault listing and the live-log session engine."
 
 [dependencies]
 opentune-core = { path = "../opentune-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Logger definitions and the live session (0x2C fast mode, SSM) for `livelog`.
+opentune-logdef = { path = "../opentune-logdef" }
 
 # The two-image diff / map-delta cores behind `compare`, shared with the CLI.
 opentune-mapfind = { path = "../opentune-mapfind" }

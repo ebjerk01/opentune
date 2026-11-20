@@ -711,7 +711,8 @@ real adapter mid-drive.
 
 The desktop **Live log** panel's sessions (*Fast (0x2C)*, an SSM transport, or
 *Reconnect*) use this API (`desktop/src-tauri/src/feat_logging.rs`:
-`log_start` / `log_tick` / `log_stop`, synthetic-tested). It drives
+`log_start` / `log_tick` / `log_stop`, synthetic-tested, thin glue over the
+shared engine in `crates/opentune-hub/src/livelog.rs`). It drives
 `opentune_logdef::LiveSession` as one long adapter operation on the app's
 adapter hub, every request through that operation's own hub `Session`:
 
