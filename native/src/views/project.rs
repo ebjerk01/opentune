@@ -8,19 +8,41 @@
 //! checksum algorithm, notes, map edits and created / saved times (ISO 8601
 //! UTC). It never holds a copy of the image.
 //!
-//! The native app edits map cells (`HostAction::EditCells`, the Flash view),
-//! but a project does not record or re-apply those edits yet; edits (and any
-//! field it does not know) of a project made in the webview app are kept
-//! verbatim when the project is saved again for the same image.
+//! Map edits use the Tauri `MapEdit` record (`kind`, `def_id`, `map_name`,
+//! `mapdef`, `cells` = the edited physical grid, `baseline` = the file's
+//! grid, `notes`). Saving captures every map of the selected definition whose
+//! bytes differ from the file on disk ([`capture_edits`]); records of other
+//! maps (and unknown fields) are kept verbatim. Maps of a session definition
+//! (an imported XDF / A2L, a promoted region) are stored as `adhoc` records
+//! with their `mapdef`, as the webview app does, so they reopen without it.
+//!
+//! Applying a project ([`apply_project_edits`]) lays the recorded cells onto
+//! the open dump through `Image::edit_maps`: every cell is checked like a
+//! typed one (refused, never clamped) and the whole project is ONE undo step,
+//! ALL OR NOTHING: if any record cannot be resolved or any cell is refused,
+//! nothing changes and every problem is listed (a partly applied tune could
+//! leave related maps inconsistent). Only cells whose recorded value differs
+//! from the dump are written, so a stock value outside a definition's limits
+//! does not block a project that did not touch it.
+//!
+//! The Flash view owns the dump and the Project view the project. They meet
+//! through two small hand-offs in the egui context's temporary data (no app
+//! state, nothing global): the Flash view publishes an [`EditSnapshot`] of
+//! its unsaved edits whenever they change, and the Project view posts an
+//! [`ApplyRequest`] that the Flash view carries out once the project's dump is
+//! the one open there (and has no unsaved edits of its own).
 
 use crate::icons;
+use crate::image::{fmt_val, shape, CellEdit, Image};
 use crate::theme::{self, font, Tokens, Tone, UI_STRONG};
 use crate::views::maps::{kv, two_pane};
 use crate::views::vault::{self, callout, list_row, show_msg, Msg, ROW_H};
 use eframe::egui::{self, Label, Margin, RichText, Sense, Ui, UiBuilder, Vec2};
+use opentune_core::ecudef::{EcuDef, MapDef};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// What the Project view asks the app to do.
@@ -288,6 +310,280 @@ fn file_safe(s: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Map edits: capture and apply (pure, unit-tested)
+// ---------------------------------------------------------------------------
+
+/// Id prefix of a definition that exists only in this session (an imported
+/// XDF / A2L or promoted maps); its maps are recorded as `adhoc` edits.
+pub(crate) const SESSION_DEF_PREFIX: &str = "session-";
+
+/// One edited map, the Tauri app's `MapEdit` record.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct MapEdit {
+    /// `def` (a map of a definition) or `adhoc` (`mapdef` carries the map).
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub def_id: Option<String>,
+    #[serde(default)]
+    pub map_name: String,
+    #[serde(default)]
+    pub mapdef: Option<MapDef>,
+    /// The edited physical values, row by row.
+    #[serde(default)]
+    pub cells: Vec<Vec<f64>>,
+    /// The file's values when the edit was captured.
+    #[serde(default)]
+    pub baseline: Vec<Vec<f64>>,
+    #[serde(default)]
+    pub notes: String,
+}
+
+impl MapEdit {
+    fn adhoc(&self) -> bool {
+        self.kind == "adhoc" || (self.kind.is_empty() && self.mapdef.is_some())
+    }
+
+    /// Identity of the edited map (the webview's `editKey`): a record with
+    /// the same key replaces the earlier one.
+    pub fn key(&self) -> String {
+        if self.adhoc() {
+            let addr = self
+                .mapdef
+                .as_ref()
+                .map(|m| m.address.to_string())
+                .unwrap_or_default();
+            format!("adhoc:{}:{addr}", self.map_name)
+        } else {
+            format!(
+                "def:{}:{}",
+                self.def_id.as_deref().unwrap_or("null"),
+                self.map_name
+            )
+        }
+    }
+
+    /// Cells that differ from the baseline (the webview's `cellsChanged`).
+    pub fn changed_cells(&self) -> usize {
+        self.cells
+            .iter()
+            .enumerate()
+            .map(|(r, row)| {
+                row.iter()
+                    .enumerate()
+                    .filter(|(c, v)| {
+                        let b = self.baseline.get(r).and_then(|b| b.get(*c));
+                        b.is_some_and(|b| (*v - b).abs() > 1e-9)
+                    })
+                    .count()
+            })
+            .sum()
+    }
+
+    /// `rows × cols` of the recorded grid.
+    pub fn dims(&self) -> (usize, usize) {
+        (self.cells.len(), self.cells.first().map_or(0, Vec::len))
+    }
+}
+
+/// A stored record as a [`MapEdit`], or `None` when it is not one.
+pub(crate) fn parse_edit(v: &Value) -> Option<MapEdit> {
+    v.is_object()
+        .then(|| serde_json::from_value(v.clone()).ok())
+        .flatten()
+}
+
+/// Every map of `def` whose bytes in the working image differ from the file
+/// on disk, as edit records (edited grid + the file's grid).
+pub(crate) fn capture_edits(img: &Image, def: &EcuDef) -> Vec<MapEdit> {
+    let adhoc = def.id.starts_with(SESSION_DEF_PREFIX);
+    let grid = |b: &[u8], m: &MapDef| opentune_hub::maps::decode_cells(b, m);
+    def.maps
+        .iter()
+        .filter(|m| img.map_changed(m))
+        .filter_map(|m| {
+            Some(MapEdit {
+                kind: if adhoc { "adhoc" } else { "def" }.into(),
+                def_id: (!adhoc).then(|| def.id.clone()),
+                map_name: m.name.clone(),
+                mapdef: adhoc.then(|| m.clone()),
+                cells: grid(&img.bytes, m)?,
+                baseline: grid(img.saved_bytes(), m)?,
+                notes: String::new(),
+            })
+        })
+        .collect()
+}
+
+/// The project's records with `captured` folded in: a captured map replaces
+/// the record with the same key (keeping its notes), new ones are appended,
+/// every other record (and anything that is not a map edit) stays verbatim.
+pub(crate) fn merge_edits(existing: &[Value], captured: &[MapEdit]) -> Vec<Value> {
+    let mut out: Vec<Value> = existing.to_vec();
+    for e in captured {
+        let mut e = e.clone();
+        let at = out
+            .iter()
+            .position(|v| parse_edit(v).is_some_and(|x| x.key() == e.key()));
+        match at {
+            Some(i) => {
+                if let Some(old) = parse_edit(&out[i]) {
+                    e.notes = old.notes;
+                }
+                out[i] = serde_json::to_value(&e).unwrap_or(Value::Null);
+            }
+            None => out.push(serde_json::to_value(&e).unwrap_or(Value::Null)),
+        }
+    }
+    out
+}
+
+/// The map a record edits: its own `mapdef` (adhoc), else the named map of
+/// the named definition.
+fn resolve<'a>(e: &'a MapEdit, defs: &'a [EcuDef]) -> Result<&'a MapDef, String> {
+    if e.adhoc() {
+        return e
+            .mapdef
+            .as_ref()
+            .ok_or_else(|| "an ad-hoc record without its map definition".to_string());
+    }
+    let id = e.def_id.as_deref().unwrap_or("");
+    let d = defs
+        .iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| format!("definition '{id}' is not loaded"))?;
+    d.maps
+        .iter()
+        .find(|m| m.name == e.map_name)
+        .ok_or_else(|| format!("'{id}' has no map named '{}'", e.map_name))
+}
+
+/// Lay a project's map edits onto `img`: all or nothing, one undo step.
+/// Returns `(map name, cells changed)` per record, or every problem (a record
+/// that cannot be resolved, a size mismatch, each refused cell); then the
+/// image is unchanged.
+pub(crate) fn apply_project_edits(
+    img: &mut Image,
+    defs: &[EcuDef],
+    edits: &[Value],
+) -> Result<Vec<(String, usize)>, Vec<String>> {
+    let mut problems = Vec::new();
+    let mut plan: Vec<(MapDef, Vec<(usize, CellEdit)>)> = Vec::new();
+    for (k, v) in edits.iter().enumerate() {
+        let Some(e) = parse_edit(v) else {
+            problems.push(format!("record {}: not a map edit", k + 1));
+            continue;
+        };
+        let m = match resolve(&e, defs) {
+            Ok(m) => m,
+            Err(why) => {
+                problems.push(format!("'{}': {why}", e.map_name));
+                continue;
+            }
+        };
+        let (rows, cols) = shape(m);
+        if e.dims() != (rows, cols) || e.cells.iter().any(|r| r.len() != cols) {
+            let (r, c) = e.dims();
+            problems.push(format!(
+                "'{}': the record is {c} × {r} but the map is {cols} × {rows}",
+                e.map_name
+            ));
+            continue;
+        }
+        let Some(now) = crate::image::map_values(&img.bytes, m) else {
+            problems.push(format!(
+                "'{}' runs past the end of the open dump",
+                e.map_name
+            ));
+            continue;
+        };
+        // Only cells the record changes: an untouched stock value outside the
+        // definition's limits must not block the project.
+        let cells = e
+            .cells
+            .iter()
+            .flatten()
+            .enumerate()
+            .filter(|(i, v)| (**v - now[*i]).abs() > 1e-9 * now[*i].abs().max(1.0))
+            .map(|(i, v)| (i, CellEdit::Set(*v)))
+            .collect();
+        plan.push((m.clone(), cells));
+    }
+    if !problems.is_empty() {
+        return Err(problems);
+    }
+    let ops: Vec<(&MapDef, &[(usize, CellEdit)])> =
+        plan.iter().map(|(m, c)| (m, c.as_slice())).collect();
+    match img.edit_maps(&ops) {
+        Ok(n) => Ok(plan.iter().map(|(m, _)| m.name.clone()).zip(n).collect()),
+        Err(refused) => Err(refused
+            .into_iter()
+            .map(|(k, r)| {
+                let m = &plan[k].0;
+                let cols = shape(m).1;
+                format!(
+                    "'{}' row {} col {}: {}",
+                    m.name,
+                    r.idx / cols,
+                    r.idx % cols,
+                    r.reason
+                )
+            })
+            .collect()),
+    }
+}
+
+/// What the Flash view last published about its unsaved edits.
+#[derive(Debug, Clone)]
+pub(crate) struct EditSnapshot {
+    pub image: PathBuf,
+    pub algo: Option<String>,
+    pub edits: Vec<MapEdit>,
+}
+
+/// A project's edits to lay onto `image` once it is open in the Flash view.
+#[derive(Debug, Clone)]
+pub(crate) struct ApplyRequest {
+    pub image: PathBuf,
+    pub project: String,
+    pub edits: Vec<Value>,
+}
+
+fn snapshot_id() -> egui::Id {
+    egui::Id::unique("opentune-native/project/edit-snapshot")
+}
+
+fn apply_id() -> egui::Id {
+    egui::Id::unique("opentune-native/project/apply-request")
+}
+
+/// Flash view → Project view: the current unsaved edits.
+pub(crate) fn publish_snapshot(ctx: &egui::Context, s: EditSnapshot) {
+    ctx.data_mut(|d| d.insert_temp(snapshot_id(), Arc::new(s)));
+}
+
+pub(crate) fn snapshot(ctx: &egui::Context) -> Option<Arc<EditSnapshot>> {
+    ctx.data(|d| d.get_temp::<Arc<EditSnapshot>>(snapshot_id()))
+}
+
+/// Project view → Flash view: apply these edits (replaces an earlier request).
+pub(crate) fn request_apply(ctx: &egui::Context, r: ApplyRequest) {
+    ctx.data_mut(|d| d.insert_temp(apply_id(), Some(Arc::new(r))));
+}
+
+/// The waiting request, if any (not removed).
+pub(crate) fn pending_apply(ctx: &egui::Context) -> Option<Arc<ApplyRequest>> {
+    ctx.data(|d| d.get_temp::<Option<Arc<ApplyRequest>>>(apply_id()))
+        .flatten()
+}
+
+/// Remove and return the waiting request.
+pub(crate) fn take_apply(ctx: &egui::Context) -> Option<Arc<ApplyRequest>> {
+    ctx.data_mut(|d| d.remove_temp::<Option<Arc<ApplyRequest>>>(apply_id()))
+        .flatten()
+}
+
+// ---------------------------------------------------------------------------
 // View
 // ---------------------------------------------------------------------------
 
@@ -338,7 +634,8 @@ impl ProjectView {
                 act = Some(a);
             }
         });
-        self.apply(act?, image, def_id)
+        let ctx = ui.ctx().clone();
+        self.apply(act?, image, def_id, &ctx)
     }
 
     fn apply(
@@ -346,6 +643,7 @@ impl ProjectView {
         act: Act,
         image: Option<&Path>,
         def_id: Option<&str>,
+        ctx: &egui::Context,
     ) -> Option<ProjectAction> {
         match act {
             Act::OpenDialog => {
@@ -356,9 +654,9 @@ impl ProjectView {
                     d = d.set_directory(dir);
                 }
                 let p = d.pick_file()?;
-                self.open_path(p)
+                self.open_path(p, ctx)
             }
-            Act::OpenPath(p) => self.open_path(p),
+            Act::OpenPath(p) => self.open_path(p, ctx),
             Act::New => {
                 *self = ProjectView {
                     recent: std::mem::take(&mut self.recent),
@@ -368,14 +666,15 @@ impl ProjectView {
             }
             Act::Save => {
                 let image = image?;
-                self.save(image, def_id);
+                let snap = snapshot(ctx).filter(|s| s.image == image);
+                self.save(image, def_id, snap.as_deref());
                 None
             }
             Act::Recheck => {
                 self.status = Some(check_image(&self.draft));
                 None
             }
-            Act::OpenInFlash => self.open_action(),
+            Act::OpenInFlash => self.open_action(ctx),
         }
     }
 
@@ -388,9 +687,24 @@ impl ProjectView {
             .map(Path::to_path_buf)
     }
 
-    fn open_action(&self) -> Option<ProjectAction> {
+    /// Open the project's dump (and definition) in the Flash view; its map
+    /// edits follow as an [`ApplyRequest`] the Flash view carries out there.
+    fn open_action(&self, ctx: &egui::Context) -> Option<ProjectAction> {
         let img = self.draft.base_image.path.trim();
-        (!img.is_empty()).then(|| ProjectAction::Open {
+        if img.is_empty() {
+            return None;
+        }
+        if !self.draft.edits.is_empty() {
+            request_apply(
+                ctx,
+                ApplyRequest {
+                    image: PathBuf::from(img),
+                    project: self.draft.name.clone(),
+                    edits: self.draft.edits.clone(),
+                },
+            );
+        }
+        Some(ProjectAction::Open {
             image: PathBuf::from(img),
             def_id: self.draft.ecudef_id.clone(),
         })
@@ -398,7 +712,7 @@ impl ProjectView {
 
     /// Load and check a project. A matching image opens straight away in the
     /// Flash view; otherwise the project is shown with a warning.
-    fn open_path(&mut self, path: PathBuf) -> Option<ProjectAction> {
+    fn open_path(&mut self, path: PathBuf, ctx: &egui::Context) -> Option<ProjectAction> {
         let p = match load_project(&path) {
             Ok(p) => p,
             Err(e) => {
@@ -413,13 +727,22 @@ impl ProjectView {
         self.status = Some(status.clone());
         self.msg = None;
         match status {
-            ImageStatus::Match => self.open_action(),
+            ImageStatus::Match => self.open_action(ctx),
             _ => None,
         }
     }
 
-    fn save(&mut self, image: &Path, def_id: Option<&str>) {
+    /// `snap`: the Flash view's unsaved edits of this dump (captured into the
+    /// project).
+    fn save(&mut self, image: &Path, def_id: Option<&str>, snap: Option<&EditSnapshot>) {
         let (mut p, dropped) = build_for_save(&self.draft, image, def_id, now_iso());
+        let captured = snap.map_or(0, |s| s.edits.len());
+        if let Some(s) = snap {
+            p.edits = merge_edits(&p.edits, &s.edits);
+            if s.algo.is_some() {
+                p.checksum_algo.clone_from(&s.algo);
+            }
+        }
         let file_name = self
             .draft_path
             .as_deref()
@@ -454,6 +777,11 @@ impl ProjectView {
         match save_project(&dest, &mut p) {
             Ok(fingerprinted) => {
                 let mut s = format!("Saved {}.", dest.display());
+                if captured > 0 {
+                    s.push_str(&format!(
+                        " {captured} edited map(s) captured from Flash dump."
+                    ));
+                }
                 if !fingerprinted {
                     s.push_str(" The dump could not be read, so no fingerprint was recorded.");
                 }
@@ -604,6 +932,7 @@ impl ProjectView {
         let can_open = !self.draft.base_image.path.trim().is_empty()
             && !matches!(self.status, Some(ImageStatus::Missing));
         let mismatch = matches!(self.status, Some(ImageStatus::Mismatch { .. }));
+        let n = self.draft.edits.len();
         let mut head = None;
         theme::panel(
             ui,
@@ -621,13 +950,18 @@ impl ProjectView {
                     head = Some(Act::Save);
                 }
                 if can_open {
-                    let label = if mismatch {
-                        "Open anyway"
-                    } else {
-                        "Open in Flash dump"
+                    let label = match (mismatch, n) {
+                        (true, 0) => "Open anyway".to_string(),
+                        (true, n) => format!("Open anyway & apply {n} edit(s)"),
+                        (false, 0) => "Open in Flash dump".to_string(),
+                        (false, n) => format!("Open & apply {n} edit(s)"),
                     };
+                    let label = label.as_str();
                     if theme::button(ui, t, Some(icons::ARROW_SQUARE_OUT), label)
-                        .on_hover_text("Open the project's dump and definition in Flash dump")
+                        .on_hover_text(
+                            "Open the project's dump and definition in Flash dump; its map \
+                             edits are applied there as one undo step (all or nothing)",
+                        )
                         .clicked()
                     {
                         head = Some(Act::OpenInFlash);
@@ -704,18 +1038,14 @@ impl ProjectView {
                     |s: &Option<String>| s.as_deref().map(short_time).unwrap_or_else(|| "–".into());
                 kv(ui, t, "Created", &tm(&self.draft.created));
                 kv(ui, t, "Saved", &tm(&self.draft.saved));
-                if !self.draft.edits.is_empty() {
-                    kv(
-                        ui,
-                        t,
-                        "Map edits",
-                        &format!(
-                            "{} (made in the webview app; kept when saved for the same dump)",
-                            self.draft.edits.len()
-                        ),
-                    );
-                }
+                kv(ui, t, "Map edits", &self.draft.edits.len().to_string());
             });
+        if !self.draft.edits.is_empty() {
+            ui.add_space(14.0);
+            theme::section_label(ui, t, "Map edits");
+            ui.add_space(4.0);
+            edits_table(ui, t, &mut self.draft.edits);
+        }
 
         let bi = &self.draft.base_image;
         if !bi.path.is_empty() {
@@ -759,13 +1089,43 @@ impl ProjectView {
             );
             return act;
         };
+        let snap = snapshot(ui.ctx()).filter(|s| s.image == img);
         egui::Grid::new("project-save")
             .num_columns(2)
             .spacing(Vec2::new(18.0, 7.0))
             .show(ui, |ui| {
                 kv(ui, t, "Dump", &img.display().to_string());
                 kv(ui, t, "Definition", def_id.unwrap_or("none selected"));
+                let edited = match &snap {
+                    Some(s) if !s.edits.is_empty() => s
+                        .edits
+                        .iter()
+                        .map(|e| format!("{} ({} cells)", e.map_name, e.changed_cells()))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    _ => "none".into(),
+                };
+                kv(ui, t, "Unsaved map edits", &edited);
             });
+        if let Some(r) = pending_apply(ui.ctx()) {
+            ui.add_space(8.0);
+            callout(
+                ui,
+                t,
+                icons::INFO,
+                t.accent,
+                t.accent_soft,
+                &format!(
+                    "{} map edit(s) of {} are waiting to be applied in Flash dump.",
+                    r.edits.len(),
+                    if r.project.is_empty() {
+                        "the project"
+                    } else {
+                        &r.project
+                    }
+                ),
+            );
+        }
         let same =
             !self.draft.base_image.path.is_empty() && Path::new(&self.draft.base_image.path) == img;
         if !same && !self.draft.edits.is_empty() {
@@ -786,6 +1146,88 @@ impl ProjectView {
             );
         }
         act
+    }
+}
+
+/// The project's map edits: map, size, source, changed cells, notes, remove.
+/// Notes are written back into the stored record (other fields untouched).
+fn edits_table(ui: &mut Ui, t: &Tokens, edits: &mut Vec<Value>) {
+    let mut remove = None;
+    egui::Grid::new("project-edits")
+        .striped(true)
+        .num_columns(6)
+        .spacing(Vec2::new(14.0, 6.0))
+        .show(ui, |ui| {
+            for h in ["Map", "Size", "From", "Changed", "Notes", ""] {
+                ui.label(
+                    RichText::new(h.to_uppercase())
+                        .font(font(UI_STRONG, 10.5))
+                        .color(t.fg_faint),
+                );
+            }
+            ui.end_row();
+            for (i, v) in edits.iter_mut().enumerate() {
+                let Some(e) = parse_edit(v) else {
+                    ui.label(RichText::new("(not a map edit)").color(t.fg_dim));
+                    for _ in 0..4 {
+                        ui.label("");
+                    }
+                    if ui.small_button(icons::X).on_hover_text("Remove").clicked() {
+                        remove = Some(i);
+                    }
+                    ui.end_row();
+                    continue;
+                };
+                ui.label(RichText::new(&e.map_name).color(t.fg));
+                let (r, c) = e.dims();
+                ui.label(RichText::new(format!("{c} × {r}")).color(t.fg_dim));
+                let from = if e.kind == "adhoc" {
+                    "ad-hoc".to_string()
+                } else {
+                    e.def_id.clone().unwrap_or_else(|| "–".into())
+                };
+                ui.label(RichText::new(from).color(t.fg_dim));
+                let n = e.changed_cells();
+                let max_delta = e
+                    .cells
+                    .iter()
+                    .flatten()
+                    .zip(e.baseline.iter().flatten())
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0, f64::max);
+                theme::pill(
+                    ui,
+                    t,
+                    &n.to_string(),
+                    if n > 0 { Tone::Warn } else { Tone::Muted },
+                    true,
+                )
+                .on_hover_text(format!("largest change {}", fmt_val(max_delta)));
+                let mut notes = e.notes.clone();
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut notes)
+                            .hint_text("notes")
+                            .desired_width(160.0),
+                    )
+                    .changed()
+                {
+                    if let Some(o) = v.as_object_mut() {
+                        o.insert("notes".into(), Value::String(notes));
+                    }
+                }
+                if ui
+                    .small_button(icons::X)
+                    .on_hover_text("Remove this edit from the project")
+                    .clicked()
+                {
+                    remove = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+    if let Some(i) = remove {
+        edits.remove(i);
     }
 }
 
@@ -1078,5 +1520,163 @@ mod tests {
         assert_eq!(short_time("yesterday"), "yesterday");
         assert_eq!(file_safe(" my tune/v2 "), "my_tune_v2");
         assert_eq!(file_safe(""), "tune");
+    }
+
+    // -------------------------------------------------------------------
+    // Map edits: capture, merge, apply
+    // -------------------------------------------------------------------
+
+    fn edit_def() -> EcuDef {
+        use opentune_core::ecudef::{DataType, Endian, Scaling};
+        let mut d: EcuDef = serde_json::from_value(serde_json::json!({
+            "id": "demo", "name": "Demo", "maker": "Bosch", "family": "EDC16",
+            "protocol": "iso_tp", "diag_layer": "uds", "bitrate": 500000
+        }))
+        .unwrap();
+        let m = |name: &str, address| MapDef {
+            name: name.into(),
+            address,
+            rows: 2,
+            cols: 2,
+            data_type: DataType::U8,
+            endian: Endian::Big,
+            scaling: Scaling {
+                factor: 0.5,
+                offset: 0.0,
+            },
+            max: Some(100.0),
+            ..Default::default()
+        };
+        d.maps = vec![m("injection limiter", 0), m("boost", 8)];
+        d
+    }
+
+    fn img() -> Image {
+        Image::from_bytes(PathBuf::from("stock.bin"), vec![20u8; 16])
+    }
+
+    #[test]
+    fn tauri_records_parse_and_keep_their_key() {
+        let p = parse_project(&tauri_json("/x.bin", 0, "")).unwrap();
+        let e = parse_edit(&p.edits[0]).unwrap();
+        assert_eq!(e.key(), "def:edc16-demo:injection limiter");
+        assert_eq!(e.dims(), (2, 2));
+        assert_eq!(e.changed_cells(), 3);
+        let adhoc = MapEdit {
+            kind: "adhoc".into(),
+            map_name: "x".into(),
+            mapdef: Some(MapDef {
+                address: 16,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(adhoc.key(), "adhoc:x:16");
+        assert!(parse_edit(&Value::String("no".into())).is_none());
+    }
+
+    #[test]
+    fn capture_then_merge_keeps_other_records_and_notes() {
+        let d = edit_def();
+        let mut im = img();
+        assert!(capture_edits(&im, &d).is_empty());
+        im.edit_cells(
+            &d.maps[1],
+            &[(0, CellEdit::Set(15.0)), (3, CellEdit::Set(20.0))],
+        )
+        .unwrap();
+        let cap = capture_edits(&im, &d);
+        assert_eq!(cap.len(), 1);
+        let e = &cap[0];
+        assert_eq!(
+            (e.kind.as_str(), e.def_id.as_deref()),
+            ("def", Some("demo"))
+        );
+        assert_eq!(e.cells, vec![vec![15.0, 10.0], vec![10.0, 20.0]]);
+        assert_eq!(e.baseline, vec![vec![10.0, 10.0], vec![10.0, 10.0]]);
+        assert_eq!(e.changed_cells(), 2);
+        assert!(e.mapdef.is_none());
+
+        // An earlier record for the same map (with notes) and an unrelated
+        // record / unknown value.
+        let mut old = e.clone();
+        old.cells[0][0] = 99.0;
+        old.notes = "keep me".into();
+        let other = serde_json::json!({"kind": "def", "def_id": "x", "map_name": "y",
+            "cells": [[1.0]], "baseline": [[1.0]], "notes": "", "future": 1});
+        let existing = vec![other.clone(), serde_json::to_value(&old).unwrap()];
+        let merged = merge_edits(&existing, &cap);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0], other, "untouched records stay verbatim");
+        let m = parse_edit(&merged[1]).unwrap();
+        assert_eq!(m.cells[0][0], 15.0, "replaced by the capture");
+        assert_eq!(m.notes, "keep me");
+
+        // A session definition records ad-hoc edits with their map.
+        let mut s = d.clone();
+        s.id = format!("{SESSION_DEF_PREFIX}xdf-demo");
+        let a = capture_edits(&im, &s);
+        assert_eq!(a[0].kind, "adhoc");
+        assert_eq!(a[0].def_id, None);
+        assert_eq!(a[0].mapdef.as_ref().map(|m| m.address), Some(8));
+    }
+
+    /// The pinned apply contract: all or nothing, one undo step, refusals
+    /// per cell, never clamped.
+    #[test]
+    fn applying_a_project_is_all_or_nothing_and_one_undo_step() {
+        let d = edit_def();
+        let defs = vec![d.clone()];
+        let mut src = img();
+        src.edit_cell(&d.maps[0], 1, CellEdit::Set(30.0)).unwrap();
+        src.edit_cell(&d.maps[1], 2, CellEdit::Set(40.0)).unwrap();
+        let edits: Vec<Value> = capture_edits(&src, &d)
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .collect();
+        assert_eq!(edits.len(), 2);
+
+        // Applied onto a fresh stock image: both maps, one undo step.
+        let mut im = img();
+        let r = apply_project_edits(&mut im, &defs, &edits).unwrap();
+        assert_eq!(
+            r,
+            vec![
+                ("injection limiter".to_string(), 1),
+                ("boost".to_string(), 1)
+            ]
+        );
+        assert_eq!(im.bytes, src.bytes);
+        assert_eq!(im.undo(), Some(1));
+        assert!(!im.is_dirty() && !im.can_undo(), "ONE undo step");
+
+        // One refused cell (over max 100; also too big for u8): nothing
+        // changes, and the refusal names the map, row and column.
+        let mut bad = edits.clone();
+        bad[1]["cells"][1][1] = serde_json::json!(200.0);
+        let mut im = img();
+        let e = apply_project_edits(&mut im, &defs, &bad).unwrap_err();
+        assert_eq!(e.len(), 1);
+        assert!(e[0].contains("'boost' row 1 col 1"), "{e:?}");
+        assert_eq!(im.bytes, vec![20u8; 16], "not clamped, not partly applied");
+        assert!(!im.can_undo());
+
+        // An unknown definition / map or a size mismatch blocks it too.
+        let mut unknown = edits.clone();
+        unknown[0]["def_id"] = serde_json::json!("nope");
+        unknown[1]["cells"] = serde_json::json!([[1.0]]);
+        let e = apply_project_edits(&mut im, &defs, &unknown).unwrap_err();
+        assert_eq!(e.len(), 2, "{e:?}");
+        assert!(e[0].contains("not loaded") && e[1].contains("1 × 1"));
+        assert_eq!(im.bytes, vec![20u8; 16]);
+
+        // A stock value outside the limits that the project does not change
+        // does not block it.
+        let mut odd = Image::from_bytes(PathBuf::from("odd.bin"), vec![20u8; 16]);
+        odd.bytes[0] = 250; // 125 > max 100, as found in the file
+        odd.mark_saved(PathBuf::from("odd.bin"), odd.bytes.clone());
+        let mut keep = edits.clone();
+        keep[0]["cells"][0][0] = serde_json::json!(125.0);
+        assert!(apply_project_edits(&mut odd, &defs, &keep).is_ok());
     }
 }

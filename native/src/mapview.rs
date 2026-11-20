@@ -2,12 +2,20 @@
 //! heat-coloured between the map's own min and max with the classic
 //! blue→red ramp of the design spec. Cells outside the clip rectangle are
 //! skipped, so a long stack of maps costs only what is visible.
+//!
+//! An editable map has a cursor (the active cell) and a rectangular range
+//! (shift-click, drag, Shift+arrows, Ctrl+A); the range operations live in
+//! [`mapops`].
+
+#[path = "mapops.rs"]
+pub mod mapops;
 
 use crate::image::{axis_values, fmt_val, map_values};
 use crate::theme::{font, Tokens, MONO_MEDIUM};
 use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Margin, Pos2, Rect, RichText, Sense, Stroke, Vec2,
 };
+use mapops::Sel;
 use opentune_core::ecudef::MapDef;
 
 pub const CELL_H: f32 = 22.0;
@@ -102,8 +110,10 @@ pub fn legend(ui: &mut egui::Ui, t: &Tokens, w: f32, lo: &str, hi: &str) {
 pub struct CellCursor {
     /// Address of the map the cursor belongs to (reset on another map).
     pub map_addr: Option<u32>,
-    /// Selected cell (column, row).
+    /// Selected (active) cell (column, row).
     pub sel: Option<(usize, usize)>,
+    /// The other corner of the selected range (`None`: just `sel`).
+    pub anchor: Option<(usize, usize)>,
     /// Text being typed into the selected cell.
     pub text: Option<String>,
     focus_text: bool,
@@ -127,8 +137,29 @@ impl CellCursor {
     pub fn select(&mut self, idx: usize, cols: usize) {
         let cols = cols.max(1);
         self.sel = Some((idx % cols, idx / cols));
+        self.anchor = None;
         self.text = None;
         self.scroll_to_sel = true;
+    }
+
+    /// The selected range: from the anchor to the active cell.
+    pub fn range(&self) -> Option<Sel> {
+        let s = self.sel?;
+        Some(Sel::span(self.anchor.unwrap_or(s), s))
+    }
+
+    /// Select a whole `cols × rows` map (the active cell at the top left).
+    pub fn select_whole(&mut self, cols: usize, rows: usize) {
+        self.sel = Some((0, 0));
+        self.anchor = Some((cols.max(1) - 1, rows.max(1) - 1));
+        self.text = None;
+    }
+
+    /// Select the range `s` (active cell at its top left).
+    pub fn select_range(&mut self, s: Sel) {
+        self.sel = Some((s.c0, s.r0));
+        self.anchor = Some((s.c1, s.r1));
+        self.text = None;
     }
 }
 
@@ -137,6 +168,12 @@ impl CellCursor {
 pub enum CellCommand {
     /// Cell index (row-major) and the edit.
     Edit(usize, crate::image::CellEdit),
+    /// `+` / `-` on a range of more than one cell: raw steps for every cell.
+    Step(Sel, i32),
+    /// Copy (or cut) the range.
+    Copy(Sel),
+    /// Paste text at the range.
+    Paste(Sel, String),
     /// Typed text that is not a number.
     Invalid(String),
 }
@@ -164,11 +201,25 @@ pub fn parse_value(s: &str) -> Option<f64> {
 }
 
 /// Keys of a focused, editable map that are not text entry.
-fn nav_keys(ui: &egui::Ui) -> (i32, i32, i32, bool, bool, Option<char>) {
+#[derive(Default)]
+struct NavKeys {
+    dx: i32,
+    dy: i32,
+    /// Shift held with the arrows: extend the range instead of moving it.
+    extend: bool,
+    step: i32,
+    edit: bool,
+    cancel: bool,
+    ch: Option<char>,
+    select_all: bool,
+    copy: bool,
+    paste: Option<String>,
+}
+
+fn nav_keys(ui: &egui::Ui) -> NavKeys {
     use egui::{Event, Key};
     ui.input(|i| {
-        let (mut dx, mut dy, mut step, mut edit, mut cancel, mut ch) =
-            (0, 0, 0, false, false, None);
+        let mut k = NavKeys::default();
         let big = if i.modifiers.shift { 10 } else { 1 };
         for e in &i.events {
             match e {
@@ -178,19 +229,27 @@ fn nav_keys(ui: &egui::Ui) -> (i32, i32, i32, bool, bool, Option<char>) {
                     modifiers,
                     ..
                 } if !modifiers.command => match key {
-                    Key::ArrowLeft => dx -= 1,
-                    Key::ArrowRight => dx += 1,
-                    Key::ArrowUp => dy -= 1,
-                    Key::ArrowDown => dy += 1,
-                    Key::Enter | Key::F2 => edit = true,
-                    Key::Escape => cancel = true,
+                    Key::ArrowLeft => k.dx -= 1,
+                    Key::ArrowRight => k.dx += 1,
+                    Key::ArrowUp => k.dy -= 1,
+                    Key::ArrowDown => k.dy += 1,
+                    Key::Enter | Key::F2 => k.edit = true,
+                    Key::Escape => k.cancel = true,
                     _ => {}
                 },
+                Event::Key {
+                    key: Key::A,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if modifiers.command => k.select_all = true,
+                Event::Copy | Event::Cut => k.copy = true,
+                Event::Paste(s) => k.paste = Some(s.clone()),
                 Event::Text(s) if !i.modifiers.command => match s.as_str() {
-                    "+" | "=" => step += big,
-                    "-" => step -= big,
+                    "+" | "=" => k.step += big,
+                    "-" => k.step -= big,
                     _ => {
-                        ch = s
+                        k.ch = s
                             .chars()
                             .find(|c| c.is_ascii_digit() || *c == '.' || *c == ',');
                     }
@@ -198,7 +257,8 @@ fn nav_keys(ui: &egui::Ui) -> (i32, i32, i32, bool, bool, Option<char>) {
                 _ => {}
             }
         }
-        (dx, dy, step, edit, cancel, ch)
+        k.extend = i.modifiers.shift;
+        k
     })
 }
 
@@ -210,8 +270,24 @@ pub fn draw_map_ex(
     t: &Tokens,
     img: &[u8],
     m: &MapDef,
+    cursor: Option<&mut CellCursor>,
+    changed: &dyn Fn(usize) -> bool,
+) -> Option<MapOut> {
+    draw_map_edit(ui, t, img, m, cursor, changed, &|_| None)
+}
+
+/// [`draw_map_ex`] plus ranges: shift-click / drag / Shift+arrows select a
+/// rectangle, Ctrl+A all, Ctrl+C / Ctrl+V copy and paste it, `+`/`-` step
+/// every selected cell. `was(idx)` is a changed cell's value in the saved
+/// file (shown with the difference when hovering it).
+pub fn draw_map_edit(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    img: &[u8],
+    m: &MapDef,
     mut cursor: Option<&mut CellCursor>,
     changed: &dyn Fn(usize) -> bool,
+    was: &dyn Fn(usize) -> Option<f64>,
 ) -> Option<MapOut> {
     let Some(vals) = map_values(img, m) else {
         ui.colored_label(t.crit, "This map runs past the end of the image.");
@@ -234,7 +310,7 @@ pub fn draw_map_ex(
     let (resp, painter) = ui.allocate_painter(
         size,
         if editable {
-            Sense::click()
+            Sense::click_and_drag()
         } else {
             Sense::hover()
         },
@@ -279,11 +355,39 @@ pub fn draw_map_ex(
     // Editing input (before painting, so the frame shows the new state).
     let mut cmd = None;
     let mut sel = None;
+    let mut range: Option<Sel> = None;
     if let Some(cur) = cursor.as_deref_mut() {
+        let shift = ui.input(|i| i.modifiers.shift);
+        if resp.drag_started() {
+            let origin = ui.input(|i| i.pointer.press_origin());
+            if let Some(p) = origin.and_then(at) {
+                if !shift || cur.sel.is_none() {
+                    cur.anchor = Some(p);
+                } else if cur.anchor.is_none() {
+                    cur.anchor = cur.sel;
+                }
+                cur.sel = Some(p);
+                cur.text = None;
+                resp.request_focus();
+            }
+        }
+        if resp.dragged() {
+            if let Some(p) = resp.interact_pointer_pos().and_then(at) {
+                cur.sel = Some(p);
+            }
+        }
         if resp.clicked() || resp.double_clicked() {
             if let Some(p) = resp.interact_pointer_pos().and_then(at) {
                 if cur.sel != Some(p) {
                     cur.text = None;
+                }
+                if shift && cur.sel.is_some() && !resp.double_clicked() {
+                    // Extend the range from its anchor (or the active cell).
+                    if cur.anchor.is_none() {
+                        cur.anchor = cur.sel;
+                    }
+                } else {
+                    cur.anchor = None;
                 }
                 cur.sel = Some(p);
                 resp.request_focus();
@@ -299,6 +403,11 @@ pub fn draw_map_ex(
                 cur.sel = None;
             }
         }
+        if let Some((c, r)) = cur.anchor {
+            if c >= cols || r >= rows || cur.sel.is_none() {
+                cur.anchor = None;
+            }
+        }
         if resp.has_focus() && cur.text.is_none() {
             ui.memory_mut(|mem| {
                 mem.set_focus_lock_filter(
@@ -311,34 +420,51 @@ pub fn draw_map_ex(
                     },
                 )
             });
-            let (dx, dy, step, edit, cancel, ch) = nav_keys(ui);
+            let k = nav_keys(ui);
+            if k.select_all {
+                cur.select_whole(cols, rows);
+            }
             if let Some((c, r)) = cur.sel {
-                if dx != 0 || dy != 0 {
-                    let nc = (c as i32 + dx).clamp(0, cols as i32 - 1) as usize;
-                    let nr = (r as i32 + dy).clamp(0, rows as i32 - 1) as usize;
+                let range = cur.range().unwrap_or(Sel::cell(c, r));
+                if k.dx != 0 || k.dy != 0 {
+                    let nc = (c as i32 + k.dx).clamp(0, cols as i32 - 1) as usize;
+                    let nr = (r as i32 + k.dy).clamp(0, rows as i32 - 1) as usize;
+                    if k.extend {
+                        cur.anchor = cur.anchor.or(Some((c, r)));
+                    } else {
+                        cur.anchor = None;
+                    }
                     cur.sel = Some((nc, nr));
                     cur.scroll_to_sel = true;
                 }
                 let i = r * cols + c;
-                if step != 0 {
-                    cmd = Some(CellCommand::Edit(i, crate::image::CellEdit::Step(step)));
-                } else if edit {
+                if k.copy {
+                    cmd = Some(CellCommand::Copy(range));
+                } else if let Some(text) = k.paste {
+                    cmd = Some(CellCommand::Paste(range, text));
+                } else if k.step != 0 && range.count() > 1 {
+                    cmd = Some(CellCommand::Step(range, k.step));
+                } else if k.step != 0 {
+                    cmd = Some(CellCommand::Edit(i, crate::image::CellEdit::Step(k.step)));
+                } else if k.edit {
                     cur.text = Some(fmt_val(vals[i]));
                     cur.focus_text = true;
                     cur.select_all = true;
-                } else if let Some(ch) = ch {
+                } else if let Some(ch) = k.ch {
                     cur.text = Some(ch.to_string());
                     cur.focus_text = true;
                     cur.select_all = false;
                 }
-                if cancel {
+                if k.cancel {
                     cur.sel = None;
+                    cur.anchor = None;
                 }
-            } else if dx != 0 || dy != 0 {
+            } else if k.dx != 0 || k.dy != 0 {
                 cur.sel = Some((0, 0));
             }
         }
         sel = cur.sel;
+        range = cur.range().filter(|r| r.count() > 1);
     }
 
     for (rw, y) in ys.iter().enumerate() {
@@ -366,6 +492,16 @@ pub fn draw_map_ex(
             let picked = sel == Some((c, rw));
             let rr = if hot || picked { r.expand(2.0) } else { r };
             painter.rect_filled(rr, CornerRadius::same(4), heat(k));
+            if range.is_some_and(|s| s.contains(c, rw)) {
+                // In the selected range: a tint and a thin accent frame.
+                painter.rect(
+                    rr,
+                    CornerRadius::same(4),
+                    t.accent.gamma_multiply(0.30),
+                    Stroke::new(1.5, t.accent),
+                    egui::StrokeKind::Inside,
+                );
+            }
             if hot || picked {
                 painter.rect_stroke(
                     rr,
@@ -429,6 +565,7 @@ pub fn draw_map_ex(
                     if rw + 1 < rows {
                         cur.sel = Some((c, rw + 1));
                     }
+                    cur.anchor = None;
                 }
                 cur.text = None;
                 // Keep the keyboard on the grid.
@@ -458,6 +595,19 @@ pub fn draw_map_ex(
                     .font(font(crate::theme::DISPLAY, 15.0))
                     .color(t.accent),
             );
+            if let Some(w) = was(i).filter(|w| *w != vals[i]) {
+                let d = vals[i] - w;
+                ui.label(
+                    RichText::new(format!(
+                        "was {} · {}{}",
+                        fmt_val(w),
+                        if d > 0.0 { "+" } else { "−" },
+                        fmt_val(d.abs())
+                    ))
+                    .font(FontId::monospace(11.5))
+                    .color(t.warn),
+                );
+            }
             ui.label(
                 RichText::new(format!(
                     "{x_name} {} · {y_name} {}",
@@ -564,6 +714,134 @@ mod tests {
         frame(vec![], &mut cur);
         assert_eq!(frame(vec![key(Key::Escape)], &mut cur), None);
         assert_eq!(cur.text, None);
+    }
+
+    /// Ranges: shift-click, drag, Shift+arrows, Ctrl+A, and the range
+    /// commands (step all, copy, paste).
+    #[test]
+    fn ranges_by_shift_click_drag_keys_and_clipboard() {
+        use egui::{Event, Key, Modifiers, PointerButton, RawInput};
+        let ctx = egui::Context::default();
+        crate::theme::setup(&ctx, crate::theme::ThemeMode::Dark);
+        let m = MapDef {
+            name: "m".into(),
+            rows: 3,
+            cols: 3,
+            data_type: opentune_core::ecudef::DataType::U8,
+            ..Default::default()
+        };
+        let img = [1u8, 2, 3, 4, 5, 6, 7, 8, 9];
+        let mut cur = CellCursor::default();
+        cur.follow(&m);
+        let origin = std::cell::Cell::new(Pos2::ZERO);
+        let frame = |events: Vec<Event>, mods: Modifiers, cur: &mut CellCursor| {
+            let mut cmd = None;
+            let mut events = events;
+            events.insert(0, Event::ModifiersChanged(mods));
+            let input = RawInput {
+                events,
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0))),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                origin.set(ui.next_widget_position());
+                cmd = draw_map_ex(ui, &crate::theme::DARK, &img, &m, Some(cur), &|_| false)
+                    .and_then(|o| o.cmd);
+            });
+            out.textures_delta.clear();
+            cmd
+        };
+        frame(vec![], Modifiers::NONE, &mut cur);
+        let cw = 34.0;
+        let at = |c: usize, r: usize| {
+            origin.get()
+                + Vec2::new(
+                    AXIS_W + c as f32 * (cw + GAP) + 8.0,
+                    (r + 1) as f32 * (CELL_H + GAP) + 8.0,
+                )
+        };
+        let btn = |p, pressed, modifiers| Event::PointerButton {
+            pos: p,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers,
+        };
+        let click = |p: Pos2, mods: Modifiers, cur: &mut CellCursor| {
+            frame(vec![Event::PointerMoved(p), btn(p, true, mods)], mods, cur);
+            frame(vec![btn(p, false, mods)], mods, cur);
+        };
+        // Click (0,0), shift-click (1,2): a 2 × 3 range, active cell (1,2).
+        click(at(0, 0), Modifiers::NONE, &mut cur);
+        assert_eq!(cur.range(), Some(Sel::cell(0, 0)));
+        click(at(1, 2), Modifiers::SHIFT, &mut cur);
+        assert_eq!(cur.sel, Some((1, 2)));
+        assert_eq!(cur.range(), Some(Sel::span((0, 0), (1, 2))));
+        // `+` steps every cell of the range at once.
+        assert_eq!(
+            frame(vec![Event::Text("+".into())], Modifiers::NONE, &mut cur),
+            Some(CellCommand::Step(Sel::span((0, 0), (1, 2)), 1))
+        );
+        // Copy and paste name the range.
+        assert_eq!(
+            frame(vec![Event::Copy], Modifiers::NONE, &mut cur),
+            Some(CellCommand::Copy(Sel::span((0, 0), (1, 2))))
+        );
+        assert_eq!(
+            frame(vec![Event::Paste("1\t2".into())], Modifiers::NONE, &mut cur),
+            Some(CellCommand::Paste(Sel::span((0, 0), (1, 2)), "1\t2".into()))
+        );
+        // A plain arrow collapses the range; Shift+arrow grows it again.
+        let key = |k, modifiers| Event::Key {
+            key: k,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        frame(
+            vec![key(Key::ArrowUp, Modifiers::NONE)],
+            Modifiers::NONE,
+            &mut cur,
+        );
+        assert_eq!(cur.range(), Some(Sel::cell(1, 1)));
+        frame(
+            vec![key(Key::ArrowRight, Modifiers::SHIFT)],
+            Modifiers::SHIFT,
+            &mut cur,
+        );
+        assert_eq!(cur.range(), Some(Sel::span((1, 1), (2, 1))));
+        // Ctrl+A: the whole map.
+        frame(
+            vec![key(Key::A, Modifiers::COMMAND)],
+            Modifiers::COMMAND,
+            &mut cur,
+        );
+        assert_eq!(cur.range(), Some(Sel::all(3, 3)));
+        // Drag from (2,0) to (0,1).
+        let (a, b) = (at(2, 0), at(0, 1));
+        frame(
+            vec![Event::PointerMoved(a), btn(a, true, Modifiers::NONE)],
+            Modifiers::NONE,
+            &mut cur,
+        );
+        for k in 1..=6 {
+            let p = a + (b - a) * (k as f32 / 6.0);
+            frame(vec![Event::PointerMoved(p)], Modifiers::NONE, &mut cur);
+        }
+        frame(
+            vec![btn(b, false, Modifiers::NONE)],
+            Modifiers::NONE,
+            &mut cur,
+        );
+        assert_eq!(cur.range(), Some(Sel::span((0, 0), (2, 1))));
+        assert_eq!(cur.sel, Some((0, 1)), "the active cell follows the pointer");
+        // Esc clears the selection.
+        frame(
+            vec![key(Key::Escape, Modifiers::NONE)],
+            Modifiers::NONE,
+            &mut cur,
+        );
+        assert_eq!(cur.range(), None);
     }
 
     #[test]
