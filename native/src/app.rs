@@ -57,6 +57,37 @@ pub struct App {
     frame_ms: f64,
 }
 
+/// Open the local diagnostics log (masked records, size caps, rotation) in
+/// the app's storage dir and chain the panic hook into it. Local only:
+/// nothing is uploaded (see `NativeConfig::diagnostics`). A failure only
+/// disables the log.
+fn start_diagnostics_log(branding: &crate::host::Branding, channel: &crate::host::BuildChannel) {
+    use opentune_diaglog as dl;
+    let Some(dir) = eframe::storage_dir(&branding.app_id) else {
+        dl::global().disable();
+        return;
+    };
+    let version = env!("CARGO_PKG_VERSION");
+    let info = dl::SessionInfo {
+        app: branding.name.clone(),
+        version: version.to_string(),
+        channel: channel.as_str().to_string(),
+        webkit: None,
+        render: serde_json::json!({ "renderer": "egui/wgpu" }),
+    };
+    if dl::global()
+        .open(
+            &dir.join(dl::DIR_NAME),
+            dl::session_header_with_core(&info, version),
+        )
+        .is_err()
+    {
+        dl::global().disable();
+        return;
+    }
+    dl::install_panic_hook();
+}
+
 fn find_defs_dir(explicit: Option<PathBuf>) -> Option<PathBuf> {
     explicit.or_else(|| crate::paths::find("ecudefs"))
 }
@@ -90,6 +121,9 @@ impl App {
         };
         theme::setup(&cc.egui_ctx, forced.unwrap_or(settings.theme));
         let scripted = args.bench.is_some() || args.screenshot.is_some();
+        if !scripted {
+            start_diagnostics_log(&config.branding, &channel);
+        }
 
         let adapter = cc
             .wgpu_render_state
@@ -167,7 +201,7 @@ impl App {
             .unwrap_or(View::Flash);
         Self {
             settings,
-            top: TopBar::new(hub.clone()),
+            top: TopBar::new(hub.clone(), channel.clone()),
             view,
             defs,
             defs_note,
@@ -392,6 +426,19 @@ impl eframe::App for App {
             }
         }
 
+        // The top bar's help opens the panel help of the view on screen.
+        let view_id = match self.view {
+            View::Builtin(i) => self
+                .builtin_views
+                .get(i as usize)
+                .map(|v| v.id().to_string()),
+            View::Plugin(i) => self
+                .plugin_views
+                .get(i as usize)
+                .map(|v| v.id().to_string()),
+            v => Some(v.id().to_string()),
+        };
+        self.top.set_view(view_id.as_deref().unwrap_or(""));
         egui::Panel::top("gbar")
             .frame(theme::bar_frame(&t, Margin::symmetric(14, 9)))
             .show(ui, |ui| {

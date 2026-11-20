@@ -2188,6 +2188,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentune-diaglog"
+version = "0.7.0"
+dependencies = [
+ "opentune-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opentune-driver-doip"
 version = "0.7.0"
 dependencies = [
@@ -2422,6 +2431,7 @@ dependencies = [
  "opentune-core",
  "opentune-ctrldef",
  "opentune-db",
+ "opentune-diaglog",
  "opentune-dtc",
  "opentune-flash",
  "opentune-gps",

@@ -97,6 +97,10 @@ pub struct TopBar {
     whatsnew: whatsnew::WhatsNewUi,
     help: help::HelpWindow,
     doip: DoipUi,
+    /// The app's build channel (gates the Bench tools here).
+    channel: crate::host::BuildChannel,
+    /// Id of the view on screen (the help button opens its panel help).
+    view_id: Option<String>,
 }
 
 /// DoIP discovery in Adapter settings.
@@ -108,15 +112,10 @@ struct DoipUi {
     found: Option<Result<doip::Found, String>>,
 }
 
-/// The channel the top bar's Bench tools check: the compiled one (the top
-/// bar is not handed the app's `NativeConfig::channel`; the alpha-only
-/// `doip` driver is in the registry only on alpha builds anyway).
-fn channel() -> crate::host::BuildChannel {
-    crate::host::BuildChannel::compiled()
-}
-
 impl TopBar {
-    pub fn new(hub: Arc<HubAdapter>) -> Self {
+    /// `channel`: the app's `NativeConfig::channel` (the top bar's Bench
+    /// tools check it).
+    pub fn new(hub: Arc<HubAdapter>, channel: crate::host::BuildChannel) -> Self {
         Self {
             link: Link::default(),
             hub,
@@ -131,7 +130,14 @@ impl TopBar {
             whatsnew: Default::default(),
             help: Default::default(),
             doip: Default::default(),
+            channel,
+            view_id: None,
         }
+    }
+
+    /// The view on screen, by id (help opens that panel's help).
+    pub fn set_view(&mut self, id: &str) {
+        self.view_id = (!id.is_empty()).then(|| id.to_string());
     }
 
     pub fn ui(
@@ -585,9 +591,9 @@ impl TopBar {
             self.doip.vin.clone(),
             self.doip.eid.clone(),
         );
-        let ctx = ctx.clone();
+        let (ctx, channel) = (ctx.clone(), self.channel.clone());
         std::thread::spawn(move || {
-            let _ = tx.send(doip::discover(&channel(), &port, &vin, &eid, None));
+            let _ = tx.send(doip::discover(&channel, &port, &vin, &eid, None));
             ctx.request_repaint();
         });
         self.doip.found = None;
@@ -621,13 +627,30 @@ impl TopBar {
                     .on_hover_text("What each panel does, what it needs, how to use it")
                     .clicked()
                 {
-                    self.help.show_for(None);
+                    self.help.show_for(self.view_id.as_deref());
                     ui.close();
                 }
                 let ver = whatsnew::VERSION;
                 if menu_row(ui, t, "What's new", RowValue::Text(ver)).clicked() {
                     self.whatsnew.open();
                     ui.close();
+                }
+                if let Some(dir) = opentune_diaglog::log_dir() {
+                    if menu_row(ui, t, "Diagnostics log…", RowValue::None)
+                        .on_hover_text(
+                            "Open the folder of the local diagnostics log (masked; never \
+                             uploaded by itself)",
+                        )
+                        .clicked()
+                    {
+                        if let Err(e) = crate::views::vault::reveal(&dir) {
+                            self.notify(
+                                &format!("Could not open {}: {e}", dir.display()),
+                                Tone::Crit,
+                            );
+                        }
+                        ui.close();
+                    }
                 }
                 menu_sep(ui, t);
                 if menu_row(ui, t, "Check for updates", RowValue::None)
@@ -874,7 +897,7 @@ impl TopBar {
                         };
                         ui.end_row();
                     });
-                if a.driver == "doip" && doip::gate(&channel()).is_ok() {
+                if a.driver == "doip" && doip::gate(&self.channel).is_ok() {
                     ui.add_space(10.0);
                     discover = doip_section(ui, t, dp, &mut a.port);
                 }
@@ -936,7 +959,7 @@ impl TopBar {
                     });
                 };
                 line(ui, "Version", whatsnew::VERSION);
-                line(ui, "Build", channel().as_str());
+                line(ui, "Build", self.channel.as_str());
                 line(ui, "Licence", "GPL-3.0-or-later");
                 line(ui, "UI", "egui / eframe on wgpu");
                 line(
