@@ -1,0 +1,453 @@
+[
+  {
+    "id": "flash",
+    "title": "Flash dump",
+    "summary": "Open a flash dump and page through it as hex, view the selected definition's maps as a heat grid, verify its checksums and edit map cells. Saving asks first, archives the old file in the vault and corrects the checksums; Fix & save writes a new file.",
+    "needs": [
+      "Flash image (.bin)",
+      "Definition (for maps and checksums)"
+    ],
+    "risk": "writes-file",
+    "guide": "10-image",
+    "steps": [
+      "Open a dump (Ctrl+O, or drop it on the window)",
+      "Pick the matching definition and check the checksum status",
+      "Edit cells, then Save: confirm, vault backup, checksums corrected"
+    ]
+  },
+  {
+    "id": "analyze",
+    "title": "Analyze bin",
+    "summary": "Work out ECU family, identity strings, catalog and definition matches, checksum status and known maps from a raw dump, with a graded confidence. Early alpha.",
+    "needs": [
+      "Flash image (.bin)"
+    ],
+    "risk": "read-only",
+    "guide": "11-analyze-bin",
+    "steps": [
+      "Choose a .bin file",
+      "Read the family, identity strings and matches",
+      "Open a match in Identify or Maps"
+    ]
+  },
+  {
+    "id": "maps",
+    "title": "Maps",
+    "summary": "Every map of every ECU definition, searchable, with its address, storage, scaling, axes and bounds, and a live heat-grid preview when the open dump holds it. Picking one opens it in the Flash dump view.",
+    "needs": [
+      "Definitions",
+      "Flash image (for the preview)"
+    ],
+    "risk": "read-only",
+    "guide": "14-maps",
+    "steps": [
+      "Search by name, address or definition",
+      "Read the map's scaling, axes and bounds",
+      "Open it in the Flash dump view to edit"
+    ]
+  },
+  {
+    "id": "compare",
+    "title": "Compare",
+    "summary": "Decode every map of a definition from two images and show per map how many cells changed and by how much, in physical units.",
+    "needs": [
+      "Two flash images",
+      "Definition"
+    ],
+    "risk": "read-only",
+    "guide": "15-compare",
+    "steps": [
+      "Choose a stock and a tuned image",
+      "Pick the definition both share",
+      "Read changed cells per map in real units"
+    ]
+  },
+  {
+    "id": "project",
+    "title": "Project",
+    "summary": "Save the dump reference (path + fingerprint), its definition, checksum algorithm and notes as a small .otproj file, and reopen them together later. Same format as the desktop app; it never holds a copy of the image.",
+    "needs": [
+      "Base image",
+      "Definition"
+    ],
+    "risk": "writes-file",
+    "guide": "19-project",
+    "steps": [
+      "Open a dump and pick its definition",
+      "Save the .otproj next to the image",
+      "Reopen it to continue later"
+    ]
+  },
+  {
+    "id": "vault",
+    "title": "Vault",
+    "summary": "The full-image backups OpenTune saves before every write, with their .meta sidecars and a CRC-32 re-check. Nothing here changes a backup: open it read-only, reveal it in the file manager, or copy it to a new file.",
+    "needs": [
+      "Backup folder (opentune-vault/)"
+    ],
+    "risk": "read-only",
+    "guide": "17-vault",
+    "steps": [
+      "Open a dump, or choose the backup folder",
+      "Check each backup's CRC-32",
+      "Copy the .bin you need to a new file"
+    ]
+  },
+  {
+    "id": "drive",
+    "title": "Drive view",
+    "summary": "Big, high-contrast tiles readable at arm's length: RPM, speed, coolant, intake air, boost and load (plus GPS speed and speed error when present) with min/max/peak hold, a 60 s sparkline and warn/critical colouring. A tile that is not fresh says so (stale, no data, link lost) instead of showing a frozen number. Replay plays any log the Log viewer opens at 1×–8× with a scrub bar, offline. Live mode (Bench builds) shows the Dashboard's polling.",
+    "needs": [
+      "A CSV log to replay",
+      "Live: the Dashboard's adapter (Bench builds)"
+    ],
+    "risk": "none",
+    "guide": "40-drive-view",
+    "steps": [
+      "Replay: Open log… (or ▶ Drive view in the Log viewer), then play at 1×–8×",
+      "Live (Bench): Start, or keep the Dashboard / a Live log session running",
+      "F fullscreen, R reset min/max, Space pause"
+    ]
+  },
+  {
+    "id": "log",
+    "title": "Log viewer",
+    "summary": "Open a CSV datalog, plot and zoom its channels, and overlay it on a map to see which cells were used, for how long and with which values, then Open in Maps to edit that map. Units are compared, never converted.",
+    "needs": [
+      "CSV log",
+      "Definition + image for the map overlay"
+    ],
+    "risk": "none",
+    "guide": "35-log-viewer",
+    "steps": [
+      "Open a CSV log and tick channels to plot",
+      "Zoom with the wheel, drag to pan, read values at the cursor",
+      "Map overlay: definition, map, image, X/Y channels → Overlay"
+    ]
+  },
+  {
+    "id": "dashboard",
+    "title": "Dashboard",
+    "summary": "Live gauges over OBD-II mode 01 (RPM, load, temperatures, boost, MAF, EGT, rail pressure, battery). Only values the ECU supports are shown. Record writes the polled values to a Live-log CSV for the Log viewer. Optional GPS card: an NMEA receiver (or recorded file) adds position, GPS speed and the speedometer error.",
+    "needs": [
+      "Adapter: CAN",
+      "Ignition on",
+      "Engine running",
+      "HS-CAN"
+    ],
+    "risk": "read-only",
+    "guide": "23-dashboard",
+    "steps": [
+      "Detect the adapter, engine running",
+      "Pick a preset or your own values",
+      "Start: only values the ECU reports are shown"
+    ]
+  },
+  {
+    "id": "inspection",
+    "title": "Inspection",
+    "summary": "Emissions-inspection data over generic OBD-II: check-engine lamp, readiness monitors, stored / pending / permanent codes, freeze frame, and calibration IDs with their verification numbers (CVN). One module or every OBD module.",
+    "needs": [
+      "Adapter: CAN",
+      "Ignition on",
+      "HS-CAN"
+    ],
+    "risk": "read-only",
+    "guide": "34-inspection",
+    "steps": [
+      "Detect the adapter, ignition on",
+      "Read all (tick All OBD modules for every ECU)",
+      "Check MIL, monitors not ready, codes and CVNs"
+    ]
+  },
+  {
+    "id": "livelog",
+    "title": "Live log",
+    "summary": "Stream ECU values from a RomRaider-style logger.xml or a pack's logger JSON (e.g. the bundled generic OBD-II mode-01 set) into a live table and save them as CSV. UDS 0x22 DIDs, OBD-II mode-01 PIDs and 0x23 memory reads are driven; identification DIDs marked as text/BCD/hex show their decoded text. Fast (0x2C) mode packs the channels into dynamically defined DIDs (one request per sample) and falls back to polling with the reason. Subaru SSM over K-line or CAN (ECU or TCU, or a simulated module offline) identifies the module and lists the parameters it leaves out. Reconnect (opt-in) re-opens the adapter after a dropped link; link events go into the CSV. Optional GPS card: an NMEA receiver (or recorded file) adds gps_* channels and the vehicle-vs-GPS speed error to the CSV.",
+    "needs": [
+      "Adapter: CAN",
+      "logger.xml",
+      "Ignition on"
+    ],
+    "risk": "read-only",
+    "guide": "25-live-log",
+    "steps": [
+      "Load a logger definition",
+      "Pick parameters and Start",
+      "Save the log as CSV"
+    ]
+  },
+  {
+    "id": "autoscan",
+    "title": "Auto-scan",
+    "summary": "Probe every module in a vehicle's module list for presence, identity and stored fault codes. Scanning is read-only; Clear all DTCs writes.",
+    "needs": [
+      "Adapter: CAN",
+      "Module list (.json)",
+      "Ignition on",
+      "HS/MS switch on module bus"
+    ],
+    "risk": "writes-ecu",
+    "guide": "22-auto-scan",
+    "steps": [
+      "Detect the adapter (HS/MS switch on the module bus)",
+      "Choose the vehicle's module list and Scan",
+      "Clear codes per module only after fixing the cause"
+    ]
+  },
+  {
+    "id": "coding",
+    "title": "Coding",
+    "summary": "Read and decode a module's coding, preview a change as a dry run, and write it with a backup and read-back verify.",
+    "needs": [
+      "Adapter: CAN",
+      "Coding definition (.json)",
+      "Target module ids",
+      "Ignition on",
+      "Battery charger"
+    ],
+    "risk": "writes-ecu",
+    "guide": "27-coding",
+    "steps": [
+      "Load a coding definition and set the target module",
+      "Read, change a value, preview the diff",
+      "Confirm and Write: backup first, read-back verify after"
+    ]
+  },
+  {
+    "id": "adaptation",
+    "title": "Adaptation",
+    "summary": "Read adaptation values, run basic-settings routines and actuator tests from an adaptation definition (UDS, or VAG KWP2000 over TP2.0 / K-line). Tests move real parts.",
+    "needs": [
+      "Adapter: CAN",
+      "Adaptation definition (.json)",
+      "Target module ids",
+      "Ignition on",
+      "Vehicle stationary"
+    ],
+    "risk": "writes-ecu",
+    "guide": "28-adaptation",
+    "steps": [
+      "Load an adaptation definition and set the target",
+      "Read channels before changing anything",
+      "Routines and tests ask for confirmation"
+    ]
+  },
+  {
+    "id": "actuator",
+    "title": "Actuator tests",
+    "summary": "Drive one declared output (fan, lamp, solenoid) for a set time with UDS 0x2F, inside its declared range and time limit. Control returns to the ECU at the end, on STOP and on any error. Moves real parts.",
+    "needs": [
+      "Adapter: CAN",
+      "Adaptation definition with actuator channels (.json)",
+      "Target module ids",
+      "Ignition on",
+      "Vehicle stationary"
+    ],
+    "risk": "writes-ecu",
+    "guide": "41-actuator-tests",
+    "steps": [
+      "Load an adaptation definition with actuator channels",
+      "Pick an output, a value and a time inside its limits",
+      "Confirm: the output runs, then control returns to the ECU"
+    ]
+  },
+  {
+    "id": "service",
+    "title": "Service functions",
+    "summary": "Plan (send nothing) or run a ServiceScript procedure such as DPF regeneration, service reset, SAS calibration or EPB service mode.",
+    "needs": [
+      "Adapter: CAN",
+      "Service script (.json)",
+      "Target module ids",
+      "Vehicle stationary"
+    ],
+    "risk": "writes-ecu",
+    "guide": "29-service-functions",
+    "steps": [
+      "Load a service script",
+      "Plan shows every step without sending",
+      "Run only with the car stationary and charged"
+    ]
+  },
+  {
+    "id": "haldex",
+    "title": "Haldex AWD",
+    "summary": "OpenHaldex controller status (lock, slip) and drive mode over its UDS DIDs on 0x70F/0x779, a read-only Haldex Gen4 read (refused on real hardware until a driver opens VW TP2.0; simulated unit available), and an offline decoder for drivetrain-CAN captures with lock, clutch and temperature charts.",
+    "needs": [
+      "Adapter: CAN (drivetrain CAN on PQ cars)",
+      "OpenHaldex unit, or a CAN log"
+    ],
+    "risk": "writes-ecu",
+    "guide": "36-haldex",
+    "steps": [
+      "Tick Simulated unit to try it, or connect to the drivetrain CAN",
+      "Read status; change the mode only when stationary (confirm + read-back)",
+      "Decode a CAN capture offline: lock, clutch and temperature charts"
+    ]
+  },
+  {
+    "id": "candump",
+    "title": "CAN capture",
+    "summary": "Capture all CAN bus traffic to a candump log, CSV or Vector ASC file with a live per-ID table. Listen-only where the adapter supports it.",
+    "needs": [
+      "Adapter: CAN",
+      "Ignition on",
+      "Correct bus and speed"
+    ],
+    "risk": "read-only",
+    "guide": "26-CAN-dump",
+    "steps": [
+      "Detect a CAN-capable adapter on the right bus",
+      "Choose format and file, then Start",
+      "Stop to close the file; watch Dropped"
+    ]
+  },
+  {
+    "id": "ts",
+    "title": "Aftermarket ECU",
+    "summary": "Speeduino, rusEFI and MegaSquirt through their TunerStudio INI: load and edit tunes (.msq) offline with the INI's limits, then connect over serial (or the simulated ECU), check the signature, read, plan a write, and write with a backup first, read-back verify and an optional burn. Live channel tiles.",
+    "needs": [
+      "TunerStudio INI for the firmware",
+      "USB serial to the ECU (or sim)",
+      "Engine off, ignition on, stable supply for writes"
+    ],
+    "risk": "writes-ecu",
+    "guide": "37-aftermarket-ECU",
+    "steps": [
+      "Load the INI for the ECU's firmware (and a .msq, or read the ECU)",
+      "Edit tables and settings: values outside the INI's limits are refused",
+      "Connect (port or sim), Plan write, then Write: backup first, verify, burn"
+    ]
+  },
+  {
+    "id": "wizard",
+    "title": "Check my car",
+    "summary": "A guided, read-only check for anyone: connect the adapter, read the VIN, scan for trouble codes and readiness, get them explained in plain words, take a short live snapshot and save or print a report. Nothing is written and no codes are cleared.",
+    "needs": [
+      "Adapter: CAN (or the virtual car / OBD simulator)",
+      "Ignition on",
+      "Engine idling for the live check"
+    ],
+    "risk": "read-only",
+    "guide": "42-check-my-car",
+    "steps": [
+      "Plug in the adapter, ignition on, then Check the adapter",
+      "Run each step in turn: skip or retry any of them",
+      "Save or print the report at the end"
+    ]
+  },
+  {
+    "id": "ecudb",
+    "title": "ECU database",
+    "summary": "Searchable reference of ECUs, TCUs and AWD units: CPU, flash size, how to read them, checksum family, vehicles and bench pinouts with a confidence level.",
+    "needs": [],
+    "risk": "none",
+    "guide": "21-ECU-database",
+    "steps": [
+      "Search by name, part number or car",
+      "Open a unit for read methods and checksum",
+      "Check the pinout confidence before wiring a bench"
+    ]
+  },
+  {
+    "id": "drivers",
+    "title": "Drivers",
+    "summary": "The interface drivers in this build and what each can do. Pick one in the top bar's cable list.",
+    "needs": [],
+    "risk": "none",
+    "guide": "18-drivers",
+    "steps": [
+      "Find your cable in the list",
+      "Check what it can do (CAN, K-line, flash)",
+      "Pick it in the top bar's cable list"
+    ]
+  },
+  {
+    "id": "controllers",
+    "title": "Controllers",
+    "summary": "Drivetrain controller definitions (gearbox TCUs, AWD couplings) from the built-in set and from definition packs: identity, diagnostics, CAN frame sets and signals, live channels, tables, gear ratios, safety notes, sources and validation state. Decodes a CAN log offline with a definition's frame sets.",
+    "needs": [
+      "A CAN log (candump, CSV or Vector ASC) to decode"
+    ],
+    "risk": "none",
+    "guide": "39-controllers",
+    "steps": [
+      "Search by name, maker or protocol",
+      "Read the safety notes first",
+      "Decode a CAN log offline with a definition's frame sets"
+    ]
+  },
+  {
+    "id": "utilities",
+    "title": "Utilities",
+    "summary": "Offline VIN, part-number and DTC decoders, and a calculator for generic (non-OEM) seed/key transforms.",
+    "needs": [],
+    "risk": "none",
+    "guide": "20-utilities",
+    "steps": [
+      "Type a VIN, part number or fault code",
+      "Read the decoded fields",
+      "Seed/key: pick a generic transform and enter a seed"
+    ]
+  },
+  {
+    "id": "sa2",
+    "title": "SA2 script",
+    "summary": "Run your own VAG SA2 seed/key script offline: paste it, load a file or pick it from your own FRF / ODX / SGO container, read the disassembly and lints, and compute the key for a seed. OpenTune ships no script.",
+    "needs": [
+      "Your own SA2 script or flash container"
+    ],
+    "risk": "none",
+    "guide": "38-SA2-script",
+    "steps": [
+      "Paste a script, load a file, or open your own container and pick a candidate",
+      "Read the disassembly and lints",
+      "Enter a seed you know the key for and Compute key"
+    ]
+  },
+  {
+    "id": "guide",
+    "title": "Guide",
+    "summary": "This offline guide: general pages and one page per panel.",
+    "needs": [],
+    "risk": "none",
+    "guide": "32-guide",
+    "steps": [
+      "Pick a page in the list",
+      "Read the panel's page",
+      "Use the panel help for a short version"
+    ]
+  },
+  {
+    "id": "debug",
+    "title": "Debug",
+    "summary": "Read-only raw diagnostic requests to the app's target module, the offline UDS simulator, a guided auto-debug self-test and the session log. Requests that would change the ECU are refused unsent; ECU changes go through the module panels' confirmation and backup. Alpha builds only.",
+    "needs": [
+      "Alpha build",
+      "Adapter (for raw requests and auto-debug)"
+    ],
+    "risk": "read-only",
+    "guide": "31-debug",
+    "steps": [
+      "Connect the adapter and check the target module (Adapter settings)",
+      "Send a read request, or try it on the simulator first",
+      "Copy or save the session log for analysis"
+    ]
+  },
+  {
+    "id": "about",
+    "title": "About & updates",
+    "summary": "The installed version, the highlights of this version and a Check for updates button that opens the OpenTune releases page in your browser. The app never downloads or installs anything itself.",
+    "needs": [
+      "Internet (only to view the releases page)"
+    ],
+    "risk": "none",
+    "guide": "33-about",
+    "steps": [
+      "Open About from the help or settings menu",
+      "Read What's new for this version",
+      "Check for updates opens the releases page"
+    ]
+  }
+]

@@ -1,0 +1,1894 @@
+//! Flash dump workspace: dump identity bar, then resizable panes — hex
+//! (left) | map (top right) / checksum (bottom right).
+
+use crate::bench::{Bench, Scene};
+use crate::hex::{parse_addr, HexView, BYTES_PER_ROW};
+use crate::host::{ConfirmRequest, ConfirmResult, Confirms};
+use crate::icons;
+use crate::image::{data_len, fmt_val, map_values, read_elem, shape, CellEdit, Image, Refusal};
+use crate::mapview::mapops::{self, Op, Sel};
+use crate::mapview::{self, CellCommand, CellCursor};
+use crate::settings::Settings;
+use crate::theme::{self, font, Tokens, Tone, DISPLAY, MONO_MEDIUM, UI_STRONG};
+use crate::views::project;
+use eframe::egui::{
+    self, CornerRadius, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
+};
+use opentune_checksum::{Recognition, Representation};
+use opentune_core::ecudef::EcuDef;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+const SPLIT: f32 = 14.0;
+
+struct Identity {
+    family: String,
+    hw: Option<String>,
+    sw: Option<String>,
+    took_ms: f64,
+}
+
+struct Block {
+    name: String,
+    start: u32,
+    stored: u64,
+    computed: u64,
+    ok: bool,
+}
+
+struct ChecksumResult {
+    algo: String,
+    recognised: bool,
+    blocks: Vec<Block>,
+    took_ms: f64,
+}
+
+/// What the status bar shows about the workspace.
+#[derive(Default)]
+pub struct Status {
+    pub path: Option<String>,
+    pub offset: Option<usize>,
+    pub family: Option<String>,
+}
+
+#[derive(Default)]
+pub struct FlashView {
+    pub image: Option<Image>,
+    identity: Option<Identity>,
+    pub def_idx: Option<usize>,
+    pub map_idx: usize,
+    show_all_maps: bool,
+    pending_jump_to_map: bool,
+    hex: HexView,
+    hex_offset: f32,
+    hex_max: f32,
+    maps_max: f32,
+    algo: String,
+    checksum: Option<Result<ChecksumResult, String>>,
+    pub bench: Option<Bench>,
+    pub error: Option<String>,
+    /// Extra checksum algorithms from the embedding build (before the core).
+    pub checksums: Vec<crate::host::ChecksumResolver>,
+    pub note: Option<String>,
+    cursor: CellCursor,
+    /// An operation waiting for the user's confirmation.
+    pending: Option<Pending>,
+    /// The map editor's typed operand (Set / + / − / ×%).
+    op_value: String,
+    /// The last copied block (also put on the system clipboard as text).
+    clip: Option<mapops::Block>,
+    /// The egui context of the last frame (to publish edit snapshots).
+    ctx: Option<egui::Context>,
+    /// What the last published snapshot described: (image, generation, def).
+    published: Option<(PathBuf, u64, Option<usize>)>,
+}
+
+/// Operations that need the user's OK first.
+#[derive(Clone, Debug, PartialEq)]
+enum Pending {
+    /// Replace the opened file with the edited image.
+    Save,
+    /// Replace another, existing file.
+    SaveAs(PathBuf),
+    /// Open another dump, discarding unsaved edits.
+    Open(PathBuf),
+    /// Drop every unsaved edit.
+    Revert,
+}
+
+impl FlashView {
+    pub fn new(bench: Option<Bench>) -> Self {
+        Self {
+            bench,
+            ..Default::default()
+        }
+    }
+
+    /// Scroll the hex view to `addr`.
+    pub fn hex_jump(&mut self, addr: usize) {
+        self.hex.jump(addr);
+    }
+
+    /// Show map `idx` of the current definition and jump the hex view to it.
+    pub fn open_map(&mut self, idx: usize) {
+        self.map_idx = idx;
+        self.show_all_maps = false;
+        self.pending_jump_to_map = true;
+    }
+
+    pub fn select_def(&mut self, defs: &[EcuDef], idx: Option<usize>) {
+        self.def_idx = idx;
+        self.map_idx = 0;
+        if let Some(c) = idx.and_then(|i| defs[i].checksum.clone()) {
+            if c != self.algo {
+                self.algo = c;
+                // Results always belong to the algorithm shown.
+                if self.image.is_some() {
+                    self.verify();
+                }
+            }
+        }
+    }
+
+    /// Unsaved map edits present?
+    pub fn is_dirty(&self) -> bool {
+        self.image.as_ref().is_some_and(Image::is_dirty)
+    }
+
+    /// Open a dump; with unsaved edits the user is asked first.
+    pub fn open(&mut self, defs: &[EcuDef], path: PathBuf, settings: &mut Settings) {
+        if self.is_dirty() {
+            self.pending = Some(Pending::Open(path));
+            return;
+        }
+        self.open_now(defs, path, settings);
+    }
+
+    fn open_now(&mut self, defs: &[EcuDef], path: PathBuf, settings: &mut Settings) {
+        self.cursor = CellCursor::default();
+        match Image::open(path) {
+            Ok(img) => {
+                let t = Instant::now();
+                let ctx = opentune_scan::ScanContext {
+                    catalog: Vec::new(),
+                    ecudefs: defs.to_vec(),
+                };
+                let root = img.path.parent().unwrap_or(Path::new(".")).to_path_buf();
+                let rec = opentune_scan::scan_file(&ctx, &root, &img.path, &img.bytes);
+                let fam = match &rec.ecu_variant {
+                    Some(v) if !rec.ecu_family.contains(v.as_str()) => {
+                        format!("{} {v}", rec.ecu_family)
+                    }
+                    _ => rec.ecu_family.to_string(),
+                };
+                let supplier = rec
+                    .ecu_supplier
+                    .map(|s| format!("{s} "))
+                    .unwrap_or_default();
+                self.identity = Some(Identity {
+                    family: format!("{supplier}{fam}"),
+                    hw: rec
+                        .bosch_numbers
+                        .iter()
+                        .find(|n| n.starts_with("0281") || n.starts_with("0261"))
+                        .cloned(),
+                    sw: rec.sw_numbers.first().cloned().or_else(|| {
+                        rec.bosch_numbers
+                            .iter()
+                            .find(|n| n.starts_with("1037"))
+                            .cloned()
+                    }),
+                    took_ms: t.elapsed().as_secs_f64() * 1000.0,
+                });
+                if let Some(idx) = pick_def(
+                    defs,
+                    rec.ecu_family,
+                    rec.ecu_variant.as_deref(),
+                    rec.ecudef_match.as_ref().map(|h| h.id.as_str()),
+                ) {
+                    self.select_def(defs, Some(idx));
+                }
+                settings.last_file = Some(img.path.display().to_string());
+                self.checksum = None;
+                self.error = None;
+                self.note = None;
+                self.image = Some(img);
+                // Start the hex view at the selected map, not the boot area.
+                self.pending_jump_to_map = self.def_idx.is_some();
+                if !self.algo.is_empty() {
+                    self.verify();
+                }
+            }
+            Err(e) => self.error = Some(format!("open failed: {e}")),
+        }
+    }
+
+    fn verify(&mut self) {
+        let Some(img) = &self.image else { return };
+        let id = self.algo.clone();
+        self.checksum = Some(match crate::host::resolve_checksum(&self.checksums, &id) {
+            None => Err(format!("unknown checksum '{id}'")),
+            Some(a) => {
+                let t = Instant::now();
+                a.verify_report(&img.bytes, Representation::RawFullImage)
+                    .map(|v| ChecksumResult {
+                        algo: id.clone(),
+                        recognised: !v.is_empty()
+                            && v.iter().all(|r| r.recognition == Recognition::Recognised),
+                        blocks: v
+                            .into_iter()
+                            .map(|r| Block {
+                                name: r.status.name,
+                                start: r.status.region.address,
+                                stored: r.status.stored,
+                                computed: r.status.computed,
+                                ok: r.status.ok,
+                            })
+                            .collect(),
+                        took_ms: t.elapsed().as_secs_f64() * 1000.0,
+                    })
+                    .map_err(|e| e.to_string())
+            }
+        });
+    }
+
+    /// Correct the checksums into a NEW file (never the opened one).
+    fn fix_and_save(&mut self) {
+        let Some(img) = &self.image else { return };
+        let Some(algo) = crate::host::resolve_checksum(&self.checksums, &self.algo) else {
+            return;
+        };
+        let mut fixed = img.bytes.clone();
+        match algo.correct(&mut fixed) {
+            Err(e) => self.error = Some(format!("checksum fix refused: {e}")),
+            Ok(fixes) if fixes.is_empty() => self.note = Some("No corrections needed.".into()),
+            Ok(fixes) => {
+                let stem = img
+                    .path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "image".into());
+                let dir = img.path.parent().map(Path::to_path_buf).unwrap_or_default();
+                if let Some(out) = rfd::FileDialog::new()
+                    .set_directory(dir)
+                    .set_file_name(format!("{stem}_fixed.bin"))
+                    .save_file()
+                {
+                    if out == img.path {
+                        self.error = Some(
+                            "Pick a new file name: the opened dump is never overwritten.".into(),
+                        );
+                        return;
+                    }
+                    match std::fs::write(&out, &fixed) {
+                        Ok(()) => {
+                            self.note = Some(format!(
+                                "Saved {} with {} corrected block(s).",
+                                out.display(),
+                                fixes.len()
+                            ))
+                        }
+                        Err(e) => self.error = Some(format!("save failed: {e}")),
+                    }
+                }
+            }
+        }
+    }
+
+    /// Apply edits to map `map` of the current definition (plugins, scripted
+    /// changes): all or nothing, one undo step. When any cell is refused
+    /// nothing changes and the refusals are returned. Returns the number of
+    /// cells given (those already holding the value count too).
+    pub fn apply_edits(
+        &mut self,
+        defs: &[EcuDef],
+        map: usize,
+        cells: &[(usize, f64)],
+    ) -> Result<usize, String> {
+        let m = self
+            .def_idx
+            .and_then(|d| defs[d].maps.get(map))
+            .ok_or("no such map in the selected definition")?;
+        let img = self.image.as_mut().ok_or("no dump open")?;
+        let edits: Vec<(usize, CellEdit)> =
+            cells.iter().map(|&(i, v)| (i, CellEdit::Set(v))).collect();
+        img.edit_cells(m, &edits)
+            .map_err(|r| refusal_text("Edit", m, cells.len(), &r))?;
+        self.reverify();
+        self.publish(defs);
+        Ok(cells.len())
+    }
+
+    /// Publish the unsaved edits for the Project view (when they changed).
+    fn publish(&mut self, defs: &[EcuDef]) {
+        let (Some(ctx), Some(img)) = (&self.ctx, &self.image) else {
+            return;
+        };
+        let key = (img.path.clone(), img.generation(), self.def_idx);
+        if self.published.as_ref() == Some(&key) {
+            return;
+        }
+        let def = self.def_idx.and_then(|i| defs.get(i));
+        project::publish_snapshot(
+            ctx,
+            project::EditSnapshot {
+                image: img.path.clone(),
+                algo: (!self.algo.is_empty()).then(|| self.algo.clone()),
+                edits: def
+                    .map(|d| project::capture_edits(img, d))
+                    .unwrap_or_default(),
+            },
+        );
+        self.published = Some(key);
+    }
+
+    /// Carry out a project's apply request once its dump is the one open
+    /// (after the user answered any "discard unsaved edits?" question).
+    fn take_apply_request(&mut self, ctx: &egui::Context, defs: &[EcuDef]) {
+        if self.pending.is_some() || project::pending_apply(ctx).is_none() {
+            return;
+        }
+        let Some(req) = project::take_apply(ctx) else {
+            return;
+        };
+        let name = if req.project.is_empty() {
+            "the project".to_string()
+        } else {
+            format!("'{}'", req.project)
+        };
+        let Some(img) = self.image.as_mut().filter(|i| i.path == req.image) else {
+            self.error = Some(format!(
+                "Edits of {name} not applied: {} is not the dump open here.",
+                req.image.display()
+            ));
+            return;
+        };
+        if img.is_dirty() {
+            self.error = Some(format!(
+                "Edits of {name} not applied: {} has unsaved edits. Save or revert them, \
+                 then open the project again.",
+                img.name()
+            ));
+            return;
+        }
+        match project::apply_project_edits(img, defs, &req.edits) {
+            Ok(maps) => {
+                let cells: usize = maps.iter().map(|m| m.1).sum();
+                self.error = None;
+                self.note = Some(format!(
+                    "Applied {name}: {cells} cell(s) in {} map(s), one undo step (Ctrl+Z). \
+                     Nothing is written until you save.",
+                    maps.len()
+                ));
+                self.reverify();
+            }
+            Err(problems) => {
+                let more = problems.len().saturating_sub(4);
+                let mut msg = format!(
+                    "Edits of {name} NOT applied (all or nothing, nothing changed): {}",
+                    problems
+                        .iter()
+                        .take(4)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+                if more > 0 {
+                    msg.push_str(&format!("; and {more} more"));
+                }
+                self.error = Some(msg);
+            }
+        }
+    }
+
+    /// Re-check after an edit (results always describe the working bytes).
+    fn reverify(&mut self) {
+        if self.image.is_some() && !self.algo.is_empty() {
+            self.verify();
+        }
+    }
+
+    fn run_cell_command(&mut self, defs: &[EcuDef], cmd: CellCommand) {
+        let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) else {
+            return;
+        };
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        match cmd {
+            CellCommand::Invalid(s) => self.error = Some(format!("'{s}' is not a number")),
+            CellCommand::Edit(i, e) => match img.edit_cell(m, i, e) {
+                Ok(_) => {
+                    self.error = None;
+                    self.reverify();
+                }
+                Err(e) => self.error = Some(format!("Not changed: {e}")),
+            },
+            CellCommand::Step(sel, n) => {
+                let cols = shape(m).1;
+                let edits: Vec<(usize, CellEdit)> = sel
+                    .cells(cols)
+                    .map(|(i, _, _)| (i, CellEdit::Step(n)))
+                    .collect();
+                let label = if n > 0 { "Step up" } else { "Step down" };
+                self.apply_cells(m, label, edits);
+            }
+            CellCommand::Copy(sel) => {
+                let Some(vals) = map_values(&img.bytes, m) else {
+                    return;
+                };
+                let block = mapops::copy(&vals, shape(m).1, sel);
+                if let Some(ctx) = &self.ctx {
+                    ctx.copy_text(mapops::to_tsv(&block));
+                }
+                self.note = Some(format!(
+                    "Copied {} × {} cell(s).",
+                    sel.width(),
+                    sel.height()
+                ));
+                self.error = None;
+                self.clip = Some(block);
+            }
+            CellCommand::Paste(sel, text) => {
+                let block = match mapops::parse_block(&text) {
+                    Ok(b) => b,
+                    Err(e) => match &self.clip {
+                        Some(b) if text.trim().is_empty() => b.clone(),
+                        _ => {
+                            self.error = Some(format!("Not pasted: {e}"));
+                            return;
+                        }
+                    },
+                };
+                let (rows, cols) = shape(m);
+                match mapops::paste(&block, cols, rows, sel) {
+                    Ok(t) => self.apply_targets(m, "Paste", t),
+                    Err(e) => self.error = Some(format!("Not pasted: {e}")),
+                }
+            }
+        }
+    }
+
+    /// Run a range operation on the selected map's selection.
+    fn run_op(&mut self, defs: &[EcuDef], op: Op) {
+        let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) else {
+            return;
+        };
+        let Some(img) = self.image.as_ref() else {
+            return;
+        };
+        let Some(sel) = self.cursor.range() else {
+            self.error = Some(format!("{}: select cells first.", op.label()));
+            return;
+        };
+        let Some(vals) = map_values(&img.bytes, m) else {
+            return;
+        };
+        let (rows, cols) = shape(m);
+        match mapops::apply(op, &vals, cols, rows, sel) {
+            Ok(t) => self.apply_targets(m, op.label(), t),
+            Err(e) => self.error = Some(format!("{}: {e}", op.label())),
+        }
+    }
+
+    /// Store physical values in cells of `m`: all or nothing, one undo step.
+    fn apply_targets(
+        &mut self,
+        m: &opentune_core::ecudef::MapDef,
+        label: &str,
+        t: Vec<(usize, f64)>,
+    ) {
+        let edits = t.into_iter().map(|(i, v)| (i, CellEdit::Set(v))).collect();
+        self.apply_cells(m, label, edits);
+    }
+
+    fn apply_cells(
+        &mut self,
+        m: &opentune_core::ecudef::MapDef,
+        label: &str,
+        edits: Vec<(usize, CellEdit)>,
+    ) {
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        match img.edit_cells(m, &edits) {
+            Ok(n) => {
+                self.error = None;
+                self.note = Some(if n == 0 {
+                    format!("{label}: no cell changed (the values are already stored).")
+                } else {
+                    format!("{label}: {n} cell(s) changed, one undo step (Ctrl+Z).")
+                });
+                self.reverify();
+            }
+            Err(r) => self.error = Some(refusal_text(label, m, edits.len(), &r)),
+        }
+    }
+
+    /// Undo (`redo == false`) or redo the last operation; the cursor goes
+    /// to the first cell it touched.
+    fn undo(&mut self, defs: &[EcuDef], redo: bool) {
+        let Some(img) = self.image.as_mut() else {
+            return;
+        };
+        let off = if redo { img.redo() } else { img.undo() };
+        if let Some(off) = off {
+            if let Some(m) = self.def_idx.and_then(|d| defs[d].maps.get(self.map_idx)) {
+                let w = m.data_type.byte_len() as usize;
+                let a = m.address as usize;
+                if (a..a + data_len(m) as usize).contains(&off) {
+                    self.cursor.select((off - a) / w, shape(m).1);
+                }
+            }
+            self.hex.jump(off);
+            self.reverify();
+        }
+    }
+
+    /// Is the shown checksum result a recognised family for this algorithm?
+    fn checksum_recognised(&self) -> bool {
+        matches!(&self.checksum, Some(Ok(r)) if r.recognised && r.algo == self.algo)
+    }
+
+    /// The bytes a save writes: the edited image with its checksums corrected
+    /// when the selected algorithm recognises it (and verified afterwards).
+    fn prepared(&self) -> Result<(Vec<u8>, String), String> {
+        let img = self.image.as_ref().ok_or("no dump open")?;
+        let mut out = img.bytes.clone();
+        if !self.checksum_recognised() {
+            return Ok((
+                out,
+                "checksums NOT corrected: do not flash this file until they are".into(),
+            ));
+        }
+        let algo = crate::host::resolve_checksum(&self.checksums, &self.algo)
+            .ok_or_else(|| format!("unknown checksum '{}'", self.algo))?;
+        let fixes = algo
+            .correct(&mut out)
+            .map_err(|e| format!("checksum correction refused ({e}); nothing was saved"))?;
+        let ok = algo
+            .verify_report(&out, Representation::RawFullImage)
+            .map(|v| !v.is_empty() && v.iter().all(|r| r.status.ok))
+            .unwrap_or(false);
+        if !ok {
+            return Err(format!(
+                "{} checksums still fail after correction; nothing was saved",
+                self.algo
+            ));
+        }
+        Ok((
+            out,
+            format!("{} {} block(s) corrected", fixes.len(), self.algo),
+        ))
+    }
+
+    /// Write the edited image to `target` (the vault gets the old contents).
+    fn save_to(&mut self, ack: crate::host::Ack, target: PathBuf) {
+        let (out, cks) = match self.prepared() {
+            Ok(p) => p,
+            Err(e) => {
+                self.error = Some(e);
+                return;
+            }
+        };
+        match crate::host::guarded_write(ack, &target, &out) {
+            Ok(r) => {
+                let vault = r
+                    .backup
+                    .as_ref()
+                    .map(|b| format!("; the previous file is in the vault ({})", b.path.display()))
+                    .unwrap_or_default();
+                self.note = Some(format!("Saved {} ({cks}){vault}.", target.display()));
+                self.error = None;
+                if let Some(img) = self.image.as_mut() {
+                    img.mark_saved(target, out);
+                }
+                self.reverify();
+            }
+            Err(e) => self.error = Some(format!("Not saved: {e}")),
+        }
+    }
+
+    /// Save as: a new file is written directly; replacing one is confirmed.
+    fn save_as(&mut self) {
+        let Some(img) = &self.image else { return };
+        let stem = img
+            .path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "image".into());
+        let dir = img.path.parent().map(Path::to_path_buf).unwrap_or_default();
+        let Some(out) = rfd::FileDialog::new()
+            .set_directory(dir)
+            .set_file_name(format!("{stem}_mod.bin"))
+            .save_file()
+        else {
+            return;
+        };
+        if out == img.path {
+            self.pending = Some(Pending::Save);
+        } else if out.exists() {
+            self.pending = Some(Pending::SaveAs(out));
+        } else {
+            let (bytes, cks) = match self.prepared() {
+                Ok(p) => p,
+                Err(e) => {
+                    self.error = Some(e);
+                    return;
+                }
+            };
+            match crate::host::atomic_write(&out, &bytes) {
+                Ok(()) => {
+                    self.note = Some(format!("Saved {} ({cks}).", out.display()));
+                    self.error = None;
+                    if let Some(img) = self.image.as_mut() {
+                        img.mark_saved(out, bytes);
+                    }
+                    self.reverify();
+                }
+                Err(e) => self.error = Some(format!("Not saved: {e}")),
+            }
+        }
+    }
+
+    /// Ask for (and act on) the confirmation of a pending operation.
+    fn pending_ui(&mut self, defs: &[EcuDef], settings: &mut Settings, confirms: &mut Confirms) {
+        let Some(op) = self.pending.clone() else {
+            return;
+        };
+        let (name, n) = match &self.image {
+            Some(i) => (i.name(), i.changed_bytes()),
+            None => {
+                self.pending = None;
+                return;
+            }
+        };
+        let cks = if self.checksum_recognised() {
+            format!("Checksums are corrected with {} first.", self.algo)
+        } else {
+            "No checksum algorithm recognises this image, so checksums are NOT corrected: \
+             do not flash the file until they are."
+                .to_string()
+        };
+        let file = |p: &Path| {
+            p.file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        };
+        let req = match &op {
+            Pending::Save => ConfirmRequest {
+                key: "flash-save".into(),
+                title: format!("Save {n} changed byte(s) to {name}?"),
+                body: format!(
+                    "The current {name} is archived in the vault first, then replaced. {cks}"
+                ),
+                typed: None,
+                confirm_label: "Back up & save".into(),
+            },
+            Pending::SaveAs(p) => ConfirmRequest {
+                key: "flash-save-as".into(),
+                title: format!("Replace {}?", file(p)),
+                body: format!(
+                    "{} already exists. It is archived in the vault first, then replaced \
+                     with the edited image. {cks}",
+                    p.display()
+                ),
+                typed: None,
+                confirm_label: "Back up & replace".into(),
+            },
+            Pending::Open(p) => ConfirmRequest {
+                key: "flash-discard-open".into(),
+                title: "Discard unsaved edits?".into(),
+                body: format!(
+                    "{n} edited byte(s) in {name} are not saved. Opening {} discards them.",
+                    file(p)
+                ),
+                typed: None,
+                confirm_label: "Discard & open".into(),
+            },
+            Pending::Revert => ConfirmRequest {
+                key: "flash-revert".into(),
+                title: "Revert all edits?".into(),
+                body: format!("{n} edited byte(s) in {name} go back to what the file holds."),
+                typed: None,
+                confirm_label: "Revert".into(),
+            },
+        };
+        match confirms.ask(req) {
+            ConfirmResult::Pending => {}
+            ConfirmResult::Declined => self.pending = None,
+            ConfirmResult::Accepted(ack) => {
+                self.pending = None;
+                match op {
+                    Pending::Save => {
+                        let p = self.image.as_ref().map(|i| i.path.clone());
+                        if let Some(p) = p {
+                            self.save_to(ack, p);
+                        }
+                    }
+                    Pending::SaveAs(p) => self.save_to(ack, p),
+                    Pending::Open(p) => self.open_now(defs, p, settings),
+                    Pending::Revert => {
+                        if let Some(i) = self.image.as_mut() {
+                            i.revert();
+                        }
+                        self.cursor.text = None;
+                        self.reverify();
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn status(&self) -> Status {
+        Status {
+            path: self.image.as_ref().map(|i| i.path.display().to_string()),
+            offset: self
+                .image
+                .as_ref()
+                .map(|_| (self.hex_offset / self.hex.row_height.max(1.0)) as usize * BYTES_PER_ROW),
+            family: self.identity.as_ref().map(|i| i.family.clone()),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        t: &Tokens,
+        defs: &[EcuDef],
+        settings: &mut Settings,
+        confirms: &mut Confirms,
+    ) {
+        self.ctx = Some(ui.ctx().clone());
+        self.pending_ui(defs, settings, confirms);
+        self.take_apply_request(ui.ctx(), defs);
+        if self.pending.is_none() && !ui.ctx().egui_wants_keyboard_input() {
+            // Redo first: the undo shortcut also matches with Shift held.
+            let redo = ui.input_mut(|i| {
+                i.consume_key(
+                    egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                    egui::Key::Z,
+                ) || i.consume_key(egui::Modifiers::COMMAND, egui::Key::Y)
+            });
+            if redo && self.image.as_ref().is_some_and(Image::can_redo) {
+                self.undo(defs, true);
+            } else if !redo
+                && self.image.as_ref().is_some_and(Image::can_undo)
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z))
+            {
+                self.undo(defs, false);
+            }
+        }
+        self.ui_body(ui, t, defs, settings);
+        self.publish(defs);
+    }
+
+    fn ui_body(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef], settings: &mut Settings) {
+        egui::Frame::new()
+            .fill(t.surface)
+            .inner_margin(Margin::symmetric(18, 11))
+            .show(ui, |ui| {
+                self.dump_bar(ui, t, defs, settings);
+            });
+        theme::hline(ui, t.border);
+        if let Some(msg) = self.error.clone().or_else(|| self.note.clone()) {
+            let crit = self.error.is_some();
+            egui::Frame::new()
+                .fill(if crit { t.crit_soft } else { t.accent_soft })
+                .inner_margin(Margin::symmetric(18, 6))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(if crit { icons::WARNING } else { icons::INFO })
+                                .color(if crit { t.crit } else { t.accent }),
+                        );
+                        ui.label(RichText::new(msg).color(t.fg));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button(icons::X).clicked() {
+                                self.error = None;
+                                self.note = None;
+                            }
+                        });
+                    });
+                });
+        }
+        let Some(_) = &self.image else {
+            theme::empty_state(
+                ui,
+                t,
+                icons::FOLDER_OPEN,
+                "Open a flash dump",
+                "Open a .bin read of an ECU to see its hex, maps and checksums.",
+            );
+            return;
+        };
+
+        let outer = ui.available_rect_before_wrap().shrink(theme::GAP);
+        ui.allocate_rect(ui.available_rect_before_wrap(), Sense::hover());
+        let mut panes = settings.panes.clamp();
+        let left_w = ((outer.width() - SPLIT) * panes.hex).round();
+        let hex_rect = Rect::from_min_size(outer.min, Vec2::new(left_w, outer.height()));
+        let vsplit = Rect::from_min_size(
+            egui::pos2(hex_rect.right(), outer.top()),
+            Vec2::new(SPLIT, outer.height()),
+        );
+        let right = Rect::from_min_max(egui::pos2(vsplit.right(), outer.top()), outer.max);
+        let map_h = ((right.height() - SPLIT) * panes.map).round();
+        let map_rect = Rect::from_min_size(right.min, Vec2::new(right.width(), map_h));
+        let hsplit = Rect::from_min_size(
+            egui::pos2(right.left(), map_rect.bottom()),
+            Vec2::new(right.width(), SPLIT),
+        );
+        let cks_rect = Rect::from_min_max(egui::pos2(right.left(), hsplit.bottom()), right.max);
+
+        splitter(ui, t, vsplit, true, &mut panes.hex, outer.width() - SPLIT);
+        splitter(ui, t, hsplit, false, &mut panes.map, right.height() - SPLIT);
+        settings.panes = panes.clamp();
+
+        ui.scope_builder(UiBuilder::new().max_rect(hex_rect), |ui| {
+            self.hex_pane(ui, t, defs)
+        });
+        ui.scope_builder(UiBuilder::new().max_rect(map_rect), |ui| {
+            self.map_pane(ui, t, defs)
+        });
+        ui.scope_builder(UiBuilder::new().max_rect(cks_rect), |ui| {
+            self.checksum_pane(ui, t)
+        });
+    }
+
+    fn dump_bar(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef], settings: &mut Settings) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 11.0;
+            // Chip icon tile.
+            let (r, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
+            ui.painter().rect(r, CornerRadius::same(theme::RADIUS_SM), t.surface3, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, icons::CPU, egui::FontId::proportional(19.0), t.accent);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                match &self.image {
+                    Some(img) => {
+                        ui.label(RichText::new(img.name()).font(font(UI_STRONG, 14.0)).color(t.fg));
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 12.0;
+                            if let Some(id) = &self.identity {
+                                ui.label(RichText::new(&id.family).font(font(theme::MONO_STRONG, 12.0)).color(t.fg))
+                                    .on_hover_text(format!("identified in-process in {:.1} ms", id.took_ms));
+                                if let Some(hw) = &id.hw {
+                                    ui.label(RichText::new(format!("HW {hw}")).font(font(MONO_MEDIUM, 12.0)).color(t.fg_dim));
+                                }
+                                if let Some(sw) = &id.sw {
+                                    ui.label(RichText::new(format!("SW {sw}")).font(font(MONO_MEDIUM, 12.0)).color(t.fg_dim));
+                                }
+                            }
+                            ui.label(RichText::new(size_text(img.bytes.len())).font(font(MONO_MEDIUM, 12.0)).color(t.fg_dim));
+                        });
+                    }
+                    None => {
+                        ui.label(RichText::new("No dump open").font(font(UI_STRONG, 14.0)).color(t.fg));
+                        ui.label(RichText::new("Open a read of your ECU to start").color(t.fg_dim));
+                    }
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let dirty = self.is_dirty();
+                if dirty {
+                    let n = self.image.as_ref().map_or(0, Image::changed_bytes);
+                    if theme::primary_button(ui, t, Some(icons::CHECK), "Save").on_hover_text("Archive the opened file in the vault, then write the edits (checksums corrected when the algorithm recognises the image)").clicked() {
+                        self.pending = Some(Pending::Save);
+                    }
+                    if theme::button(ui, t, None, "Save as…").on_hover_text("Write the edited image to another file").clicked() {
+                        self.save_as();
+                    }
+                    if theme::button(ui, t, None, "Revert").clicked() {
+                        self.pending = Some(Pending::Revert);
+                    }
+                    theme::pill(ui, t, &format!("{n} byte(s) edited"), Tone::Warn, true).on_hover_text("Ctrl+Z undoes the last edit");
+                } else {
+                    let can_fix = matches!(&self.checksum, Some(Ok(r)) if r.blocks.iter().any(|b| !b.ok));
+                    if ui.add_enabled_ui(can_fix, |ui| theme::primary_button(ui, t, Some(icons::CHECK), "Fix & save")).inner.on_hover_text("Write a copy with corrected checksums (the opened dump is never overwritten)").clicked() {
+                        self.fix_and_save();
+                    }
+                }
+                if theme::button(ui, t, Some(icons::FOLDER_OPEN), "Open dump").clicked() {
+                    if let Some(p) = rfd::FileDialog::new().add_filter("flash image", &["bin", "ori", "mod", "hex", "BIN"]).pick_file() {
+                        self.open(defs, p, settings);
+                    }
+                }
+                let current = self.def_idx.map(|i| defs[i].name.clone()).unwrap_or_else(|| "No definition".into());
+                let mut pick = None;
+                egui::ComboBox::from_id_salt("def").selected_text(current).width(210.0).show_ui(ui, |ui| {
+                    for (i, d) in defs.iter().enumerate() {
+                        if ui.selectable_label(self.def_idx == Some(i), &d.name).clicked() {
+                            pick = Some(i);
+                        }
+                    }
+                });
+                if pick.is_some() {
+                    self.select_def(defs, pick);
+                    settings.last_def = pick.map(|i| defs[i].id.clone());
+                    if self.image.is_some() && !self.algo.is_empty() {
+                        self.verify();
+                    }
+                }
+            });
+        });
+    }
+
+    fn hex_pane(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef]) {
+        let sel = self.def_idx.and_then(|i| defs[i].maps.get(self.map_idx));
+        if std::mem::take(&mut self.pending_jump_to_map) {
+            if let Some(m) = sel {
+                self.hex.jump(m.address as usize);
+            }
+        }
+        let hl = sel.map(|m| m.address as usize..m.address as usize + data_len(m) as usize);
+        let top = (self.hex_offset / self.hex.row_height.max(1.0)) as usize * BYTES_PER_ROW;
+        let mut jump = None;
+        let mut jump_text = std::mem::take(&mut self.hex.jump_text);
+        theme::panel(
+            ui,
+            t,
+            "Hex view",
+            |ui| {
+                let r = ui.add(
+                    egui::TextEdit::singleline(&mut jump_text)
+                        .desired_width(86.0)
+                        .font(egui::FontId::monospace(12.0))
+                        .hint_text("go to 0x…"),
+                );
+                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    jump = parse_addr(&jump_text);
+                }
+                theme::pill(ui, t, &format!("0x{top:08X}"), Tone::Muted, true);
+            },
+            |ui| {
+                if let Some(b) = &self.bench {
+                    if b.cfg.scene == Scene::Hex {
+                        self.hex.scroll_to = Some(wrap(b.offset(), self.hex_max));
+                    }
+                }
+                let img = self.image.as_ref().expect("checked by ui()");
+                let legend_h = 32.0;
+                let body = ui.available_rect_before_wrap();
+                let rows_rect = Rect::from_min_max(
+                    body.min + Vec2::new(14.0, 6.0),
+                    egui::pos2(body.right() - 6.0, body.bottom() - legend_h),
+                );
+                ui.scope_builder(UiBuilder::new().max_rect(rows_rect), |ui| {
+                    self.hex_offset = self.hex.show(ui, t, &img.bytes, hl.clone());
+                });
+                let rows = img.bytes.len().div_ceil(BYTES_PER_ROW) as f32;
+                self.hex_max = (rows * self.hex.row_height - rows_rect.height()).max(1.0);
+                let legend =
+                    Rect::from_min_max(egui::pos2(body.left(), body.bottom() - legend_h), body.max);
+                ui.scope_builder(UiBuilder::new().max_rect(legend), |ui| {
+                    theme::hline(ui, t.border_soft);
+                    egui::Frame::new()
+                        .inner_margin(Margin::symmetric(14, 7))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let (r, _) =
+                                    ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
+                                ui.painter().rect(
+                                    r,
+                                    CornerRadius::same(3),
+                                    t.sel,
+                                    Stroke::new(1.0, t.accent_line),
+                                    egui::StrokeKind::Inside,
+                                );
+                                match sel {
+                                    Some(m) => {
+                                        ui.label(RichText::new("bytes of").small().color(t.fg_dim));
+                                        ui.label(
+                                            RichText::new(&m.name).small().strong().color(t.fg),
+                                        );
+                                        ui.label(
+                                            RichText::new("highlighted").small().color(t.fg_dim),
+                                        );
+                                    }
+                                    None => {
+                                        ui.label(
+                                            RichText::new("select a map to highlight its bytes")
+                                                .small()
+                                                .color(t.fg_dim),
+                                        );
+                                    }
+                                }
+                            });
+                        });
+                });
+            },
+        );
+        self.after_hex_header(jump_text, jump);
+    }
+
+    fn after_hex_header(&mut self, jump_text: String, jump: Option<usize>) {
+        self.hex.jump_text = jump_text;
+        if let Some(a) = jump {
+            self.hex.jump(a);
+        }
+    }
+
+    fn map_pane(&mut self, ui: &mut Ui, t: &Tokens, defs: &[EcuDef]) {
+        let def = self.def_idx.map(|i| &defs[i]);
+        let maps = def.map(|d| d.maps.as_slice()).unwrap_or(&[]);
+        let bench_maps = self
+            .bench
+            .as_ref()
+            .is_some_and(|b| b.cfg.scene == Scene::Maps);
+        let show_all = self.show_all_maps || bench_maps;
+        let sel = maps.get(self.map_idx);
+        let title = if show_all {
+            "All maps".to_string()
+        } else {
+            sel.map(|m| m.name.clone()).unwrap_or_else(|| "Map".into())
+        };
+        let mut map_idx = self.map_idx;
+        let mut all = self.show_all_maps;
+        let mut jump_to = None;
+        let mut cell_cmd = None;
+        let mut tool = None;
+        let editable = !show_all && self.pending.is_none();
+        if let Some(m) = sel {
+            self.cursor.follow(m);
+        }
+        let (can_undo, can_redo) = self
+            .image
+            .as_ref()
+            .map_or((false, false), |i| (i.can_undo(), i.can_redo()));
+        let has_clip = self.clip.is_some();
+        let op_value = &mut self.op_value;
+        let cursor = &mut self.cursor;
+        theme::panel(
+            ui,
+            t,
+            &title,
+            |ui| {
+                if !maps.is_empty() {
+                    egui::ComboBox::from_id_salt("mapsel")
+                        .selected_text(format!("{} maps", maps.len()))
+                        .width(120.0)
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(all, "All maps").clicked() {
+                                all = true;
+                            }
+                            ui.separator();
+                            for (i, m) in maps.iter().enumerate() {
+                                if ui.selectable_label(!all && i == map_idx, &m.name).clicked() {
+                                    map_idx = i;
+                                    all = false;
+                                    jump_to = Some(m.address as usize);
+                                }
+                            }
+                        });
+                }
+                if let (Some(m), false) = (sel, show_all) {
+                    if !m.unit.is_empty() {
+                        theme::pill(ui, t, &m.unit, Tone::Muted, true);
+                    }
+                    theme::pill(
+                        ui,
+                        t,
+                        &format!("{} × {}", m.cols, m.rows),
+                        Tone::Muted,
+                        true,
+                    );
+                }
+            },
+            |ui| {
+                let Some(img) = &self.image else { return };
+                if maps.is_empty() {
+                    theme::empty_state(
+                        ui,
+                        t,
+                        icons::STACK,
+                        "No maps",
+                        "Pick an ECU definition with a map library.",
+                    );
+                    return;
+                }
+                if editable && sel.is_some() {
+                    egui::Frame::new()
+                        .inner_margin(Margin {
+                            left: 14,
+                            right: 14,
+                            top: 8,
+                            bottom: 0,
+                        })
+                        .show(ui, |ui| {
+                            tool = edit_toolbar(
+                                ui,
+                                t,
+                                op_value,
+                                cursor.range(),
+                                (can_undo, can_redo, has_clip),
+                            );
+                        });
+                }
+                let mut area = egui::ScrollArea::both()
+                    .id_salt("mappane")
+                    .auto_shrink([false, false]);
+                if let Some(b) = &self.bench {
+                    if bench_maps {
+                        area = area.vertical_scroll_offset(wrap(b.offset(), self.maps_max));
+                    }
+                }
+                let out = area.show(ui, |ui| {
+                    egui::Frame::new()
+                        .inner_margin(Margin::symmetric(14, 12))
+                        .show(ui, |ui| {
+                            let list: Vec<&opentune_core::ecudef::MapDef> = if show_all {
+                                maps.iter().collect()
+                            } else {
+                                sel.into_iter().collect()
+                            };
+                            for m in list {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 14.0;
+                                    if show_all {
+                                        ui.label(
+                                            RichText::new(&m.name)
+                                                .font(font(DISPLAY, 13.0))
+                                                .color(t.fg),
+                                        );
+                                    }
+                                    let ax =
+                                        |a: Option<&opentune_core::ecudef::AxisDef>, n: &str| {
+                                            a.map(|a| {
+                                                if a.name.is_empty() {
+                                                    n.to_string()
+                                                } else {
+                                                    a.name.clone()
+                                                }
+                                            })
+                                            .unwrap_or_else(|| n.to_string())
+                                        };
+                                    meta(ui, t, "X", &ax(m.x_axis.as_ref(), "x"));
+                                    meta(ui, t, "Y", &ax(m.y_axis.as_ref(), "y"));
+                                    meta(ui, t, "@", &format!("0x{:06X}", m.address));
+                                });
+                                ui.add_space(6.0);
+                                let w = m.data_type.byte_len() as usize;
+                                let out = mapview::draw_map_edit(
+                                    ui,
+                                    t,
+                                    &img.bytes,
+                                    m,
+                                    editable.then_some(&mut *cursor),
+                                    &|i| img.cell_changed(m, i),
+                                    &|i| {
+                                        if !img.cell_changed(m, i) {
+                                            return None;
+                                        }
+                                        let off = m.address as usize + i * w;
+                                        read_elem(img.saved_bytes(), off, m.data_type, m.endian)
+                                            .map(|r| m.scaling.to_physical(r))
+                                    },
+                                );
+                                ui.add_space(8.0);
+                                if let Some(o) = out {
+                                    if o.cmd.is_some() {
+                                        cell_cmd = o.cmd;
+                                    }
+                                    ui.horizontal(|ui| {
+                                        mapview::legend(
+                                            ui,
+                                            t,
+                                            160.0,
+                                            &fmt_val(o.lo),
+                                            &fmt_val(o.hi),
+                                        );
+                                        ui.label(
+                                            RichText::new(if editable {
+                                                "click a cell, type a value + Enter · shift-click / drag to select · +/− step · Ctrl+C / Ctrl+V · Ctrl+Z undo, Ctrl+Y redo"
+                                            } else {
+                                                "hover a cell for its value"
+                                            })
+                                            .small()
+                                            .color(t.fg_faint),
+                                        );
+                                    });
+                                }
+                                ui.add_space(if show_all { 18.0 } else { 0.0 });
+                            }
+                        });
+                });
+                self.maps_max = (out.content_size.y - out.inner_rect.height()).max(1.0);
+            },
+        );
+        self.show_all_maps = all;
+        if map_idx != self.map_idx {
+            self.map_idx = map_idx;
+        }
+        if let Some(c) = cell_cmd {
+            self.run_cell_command(defs, c);
+        }
+        match tool {
+            None => {}
+            Some(Tool::Op(op)) => self.run_op(defs, op),
+            Some(Tool::NoValue) => {
+                self.error = Some(format!("'{}' is not a number.", self.op_value.trim()))
+            }
+            Some(Tool::Copy) => {
+                if let Some(r) = self.cursor.range() {
+                    self.run_cell_command(defs, CellCommand::Copy(r));
+                }
+            }
+            Some(Tool::Paste) => match (self.cursor.range(), self.clip.clone()) {
+                (Some(r), Some(b)) => {
+                    self.run_cell_command(defs, CellCommand::Paste(r, mapops::to_tsv(&b)))
+                }
+                _ => self.error = Some("Copy cells first (or paste text with Ctrl+V).".into()),
+            },
+            Some(Tool::All) => {
+                if let Some(m) = maps.get(self.map_idx) {
+                    let (rows, cols) = shape(m);
+                    self.cursor.select_range(Sel::all(cols, rows));
+                }
+            }
+            Some(Tool::Undo) => self.undo(defs, false),
+            Some(Tool::Redo) => self.undo(defs, true),
+        }
+        if let Some(a) = jump_to {
+            self.hex.jump(a);
+        }
+    }
+
+    fn checksum_pane(&mut self, ui: &mut Ui, t: &Tokens) {
+        let mut algo = self.algo.clone();
+        let mut run = false;
+        let recognised = matches!(&self.checksum, Some(Ok(r)) if r.recognised);
+        let has = matches!(&self.checksum, Some(Ok(_)));
+        theme::panel(
+            ui,
+            t,
+            "Checksum",
+            |ui| {
+                egui::ComboBox::from_id_salt("algo")
+                    .selected_text(if algo.is_empty() {
+                        "algorithm".to_string()
+                    } else {
+                        algo.clone()
+                    })
+                    .width(110.0)
+                    .show_ui(ui, |ui| {
+                        for a in opentune_checksum::algorithms() {
+                            if ui
+                                .selectable_value(&mut algo, a.id.to_string(), a.id)
+                                .on_hover_text(a.name)
+                                .clicked()
+                            {
+                                run = true;
+                            }
+                        }
+                    });
+                if has {
+                    if recognised {
+                        theme::pill(
+                            ui,
+                            t,
+                            &format!("{} Recognised", icons::CHECK),
+                            Tone::Ok,
+                            false,
+                        );
+                    } else {
+                        theme::pill(ui, t, "Consistent only", Tone::Warn, false).on_hover_text(
+                            "The blocks verify, but the image was not recognised as this family.",
+                        );
+                    }
+                }
+            },
+            |ui| {
+                egui::Frame::new()
+                    .inner_margin(Margin::symmetric(14, 12))
+                    .show(ui, |ui| match &self.checksum {
+                        None => {
+                            ui.label(
+                                RichText::new("Pick an algorithm to verify this dump.")
+                                    .color(t.fg_dim),
+                            );
+                        }
+                        Some(Err(e)) => {
+                            ui.colored_label(t.crit, e);
+                        }
+                        Some(Ok(r)) => checksum_body(ui, t, r),
+                    });
+            },
+        );
+        if algo != self.algo || run {
+            self.algo = algo;
+            self.verify();
+        }
+    }
+}
+
+/// A map editor toolbar action.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Tool {
+    Op(Op),
+    /// A value operation with no number typed.
+    NoValue,
+    Copy,
+    Paste,
+    All,
+    Undo,
+    Redo,
+}
+
+/// The map editor toolbar: the selection, an operand, the range operations,
+/// clipboard and undo / redo.
+fn edit_toolbar(
+    ui: &mut Ui,
+    t: &Tokens,
+    value: &mut String,
+    range: Option<Sel>,
+    (can_undo, can_redo, has_clip): (bool, bool, bool),
+) -> Option<Tool> {
+    let mut tool = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        let sel_text = match range {
+            Some(r) if r.count() > 1 => {
+                format!("{} × {} · {} cells", r.width(), r.height(), r.count())
+            }
+            Some(_) => "1 cell".to_string(),
+            None => "no selection".to_string(),
+        };
+        theme::pill(ui, t, &sel_text, Tone::Muted, true).on_hover_text(
+            "Shift-click, drag or Shift+arrows select a range. An operation is all or \
+             nothing: if any cell does not fit the data type or the map's limits, nothing \
+             changes (values are refused, never clamped). One undo step per operation.",
+        );
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(64.0)
+                .font(font(MONO_MEDIUM, 12.0))
+                .hint_text("value"),
+        );
+        let v = mapview::parse_value(value);
+        let has = range.is_some();
+        let multi = range.is_some_and(|r| r.count() > 1);
+        let mut b = |ui: &mut Ui, on: bool, label: &str, tip: &str, act: Tool| {
+            if ui
+                .add_enabled(
+                    on,
+                    egui::Button::new(RichText::new(label).font(font(UI_STRONG, 12.0))),
+                )
+                .on_hover_text(tip)
+                .clicked()
+            {
+                tool = Some(act);
+            }
+        };
+        let val = |f: fn(f64) -> Op| v.map_or(Tool::NoValue, |x| Tool::Op(f(x)));
+        b(
+            ui,
+            has,
+            "=",
+            "Set every selected cell to the value",
+            val(Op::Set),
+        );
+        b(
+            ui,
+            has,
+            "+",
+            "Add the value to every selected cell",
+            val(Op::Add),
+        );
+        b(
+            ui,
+            has,
+            "−",
+            "Subtract the value from every selected cell",
+            val(Op::Sub),
+        );
+        b(
+            ui,
+            has,
+            "×%",
+            "Multiply every selected cell by value % (110 = +10 %)",
+            val(Op::MulPct),
+        );
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            multi,
+            "Interpolate",
+            "Bilinear between the selection's four corners",
+            Tool::Op(Op::Bilinear),
+        );
+        b(
+            ui,
+            multi,
+            icons::ARROWS_HORIZONTAL,
+            "Interpolate each row between its first and last selected cell",
+            Tool::Op(Op::InterpRows),
+        );
+        b(
+            ui,
+            multi,
+            icons::ARROWS_VERTICAL,
+            "Interpolate each column between its top and bottom selected cell",
+            Tool::Op(Op::InterpCols),
+        );
+        b(
+            ui,
+            has,
+            "Smooth",
+            "Average every selected cell with its neighbours (3 × 3)",
+            Tool::Op(Op::Smooth),
+        );
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            has,
+            icons::COPY,
+            "Copy the selection (Ctrl+C)",
+            Tool::Copy,
+        );
+        b(
+            ui,
+            has && has_clip,
+            icons::CLIPBOARD,
+            "Paste at the selection (Ctrl+V pastes text from other apps)",
+            Tool::Paste,
+        );
+        b(ui, true, "All", "Select the whole map (Ctrl+A)", Tool::All);
+        theme::vsep(ui, t, 18.0);
+        b(
+            ui,
+            can_undo,
+            icons::ARROW_COUNTER_CLOCKWISE,
+            "Undo the last operation (Ctrl+Z)",
+            Tool::Undo,
+        );
+        b(
+            ui,
+            can_redo,
+            icons::ARROW_CLOCKWISE,
+            "Redo (Ctrl+Y / Ctrl+Shift+Z)",
+            Tool::Redo,
+        );
+    });
+    tool
+}
+
+/// "Set refused: 2 of 12 cell(s) … nothing changed. row 0 col 1: …".
+fn refusal_text(
+    label: &str,
+    m: &opentune_core::ecudef::MapDef,
+    total: usize,
+    r: &[Refusal],
+) -> String {
+    let cols = shape(m).1;
+    let list: Vec<String> = r
+        .iter()
+        .take(3)
+        .map(|x| format!("row {} col {}: {}", x.idx / cols, x.idx % cols, x.reason))
+        .collect();
+    let more = r.len().saturating_sub(3);
+    format!(
+        "{label} refused: {} of {total} cell(s) cannot be stored, so nothing changed. {}{}",
+        r.len(),
+        list.join("; "),
+        if more > 0 {
+            format!("; and {more} more")
+        } else {
+            String::new()
+        }
+    )
+}
+
+fn checksum_body(ui: &mut Ui, t: &Tokens, r: &ChecksumResult) {
+    let bad = r.blocks.iter().filter(|b| !b.ok).count();
+    let n = r.blocks.len();
+    let (col, soft, icon, big, sub) = if n == 0 {
+        (
+            t.crit,
+            t.crit_soft,
+            icons::WARNING,
+            "No protected blocks".to_string(),
+            format!("{} found nothing to check in this image", r.algo),
+        )
+    } else if bad == 0 {
+        (
+            t.ok,
+            t.ok_soft,
+            icons::CHECK_CIRCLE,
+            format!("{n} / {n} blocks OK"),
+            format!(
+                "stored == computed · {} · {:.1} ms in-process",
+                r.algo, r.took_ms
+            ),
+        )
+    } else {
+        (
+            t.crit,
+            t.crit_soft,
+            icons::X_CIRCLE,
+            format!("{bad} of {n} blocks BAD"),
+            "Fix & save writes a corrected copy".to_string(),
+        )
+    };
+    egui::Frame::new()
+        .fill(soft)
+        .stroke(Stroke::new(1.0, col.gamma_multiply(0.4)))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin::same(12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon).size(30.0).color(col));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(RichText::new(big).font(font(DISPLAY, 17.0)).color(t.fg));
+                    ui.label(RichText::new(sub).small().color(t.fg_dim));
+                });
+            });
+        });
+    ui.add_space(10.0);
+    egui::ScrollArea::vertical()
+        .id_salt("cks")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            egui::Grid::new("cks-table")
+                .striped(true)
+                .num_columns(5)
+                .spacing(Vec2::new(18.0, 6.0))
+                .show(ui, |ui| {
+                    for h in ["#", "Address", "Stored", "Computed", "Status"] {
+                        ui.label(
+                            RichText::new(h.to_uppercase())
+                                .font(font(UI_STRONG, 10.5))
+                                .color(t.fg_faint),
+                        );
+                    }
+                    ui.end_row();
+                    let m = |s: String, c| RichText::new(s).font(font(MONO_MEDIUM, 11.5)).color(c);
+                    for (i, b) in r.blocks.iter().enumerate() {
+                        ui.label(m(format!("{}", i + 1), t.fg_faint));
+                        ui.label(m(format!("0x{:06X}", b.start), t.fg))
+                            .on_hover_text(&b.name);
+                        ui.label(m(format!("0x{:08X}", b.stored), t.fg_dim));
+                        ui.label(m(
+                            format!("0x{:08X}", b.computed),
+                            if b.ok { t.fg_dim } else { t.crit },
+                        ));
+                        if b.ok {
+                            ui.label(
+                                RichText::new(format!("{} OK", icons::CHECK))
+                                    .font(font(UI_STRONG, 11.5))
+                                    .color(t.ok),
+                            );
+                        } else {
+                            ui.label(
+                                RichText::new(format!("{} BAD", icons::X))
+                                    .font(font(UI_STRONG, 11.5))
+                                    .color(t.crit),
+                            );
+                        }
+                        ui.end_row();
+                    }
+                });
+        });
+}
+
+/// The definition for a scanned image. The scanner's structural variant
+/// (e.g. `EDC15C6`, from the checksum layout) wins over its identify-key
+/// match, whose keys can be as broad as a Bosch `1037` software prefix; an
+/// identify match is only taken when its family agrees with the structure.
+fn pick_def(
+    defs: &[EcuDef],
+    family: &str,
+    variant: Option<&str>,
+    matched: Option<&str>,
+) -> Option<usize> {
+    let norm = |s: &str| s.to_ascii_lowercase().replace([' ', '-', '_'], "");
+    if let Some(v) = variant.map(norm).filter(|v| !v.is_empty()) {
+        if let Some(i) = defs
+            .iter()
+            .position(|d| norm(&d.name).contains(&v) || norm(&d.id).contains(&v))
+        {
+            return Some(i);
+        }
+    }
+    let i = defs.iter().position(|d| Some(d.id.as_str()) == matched)?;
+    let fam = norm(family);
+    (fam.is_empty() || fam == "unknown" || norm(&defs[i].family) == fam).then_some(i)
+}
+
+fn meta(ui: &mut Ui, t: &Tokens, k: &str, v: &str) {
+    ui.label(
+        RichText::new(format!("{k} "))
+            .font(font(MONO_MEDIUM, 11.5))
+            .color(t.fg_faint),
+    );
+    ui.add_space(-12.0);
+    ui.label(
+        RichText::new(v)
+            .font(font(theme::MONO_STRONG, 11.5))
+            .color(t.fg),
+    );
+}
+
+fn size_text(n: usize) -> String {
+    if n >= 1 << 20 && n.is_multiple_of(1 << 20) {
+        format!("{} MiB", n >> 20)
+    } else if n >= 1024 {
+        format!("{} KiB", n / 1024)
+    } else {
+        format!("{n} B")
+    }
+}
+
+/// Scripted scroll position, wrapping back to the top at the end.
+fn wrap(y: f32, max: f32) -> f32 {
+    if max <= 1.0 {
+        0.0
+    } else {
+        y % max
+    }
+}
+
+/// A draggable splitter: `vertical` = a vertical bar moved left/right.
+fn splitter(ui: &mut Ui, t: &Tokens, rect: Rect, vertical: bool, frac: &mut f32, total: f32) {
+    let id = ui.make_persistent_id(("split", vertical));
+    let resp = ui.interact(rect, id, Sense::drag());
+    let active = resp.hovered() || resp.dragged();
+    if active {
+        ui.ctx().set_cursor_icon(if vertical {
+            egui::CursorIcon::ResizeHorizontal
+        } else {
+            egui::CursorIcon::ResizeVertical
+        });
+    }
+    if resp.dragged() && total > 1.0 {
+        let d = if vertical {
+            resp.drag_delta().x
+        } else {
+            resp.drag_delta().y
+        };
+        *frac += d / total;
+    }
+    let grip = if vertical {
+        Vec2::new(4.0, 36.0)
+    } else {
+        Vec2::new(36.0, 4.0)
+    };
+    ui.painter().rect_filled(
+        Rect::from_center_size(rect.center(), grip),
+        CornerRadius::same(3),
+        if active { t.accent } else { t.border },
+    );
+}
+
+pub fn size_label(n: usize) -> String {
+    size_text(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Edit → Save: nothing is written until the user confirms; then the old
+    /// file goes to the vault and the edited bytes replace it. Declining
+    /// leaves the file alone; a refused value changes nothing.
+    #[test]
+    fn save_is_confirmed_and_backs_up_first() {
+        let dir = std::env::temp_dir().join(format!("ot-native-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("synthetic.bin");
+        let orig: Vec<u8> = (0u8..64).collect();
+        std::fs::write(&path, &orig).unwrap();
+
+        let mut d = def("t", "Test", "test");
+        d.maps.push(opentune_core::ecudef::MapDef {
+            name: "m".into(),
+            address: 8,
+            rows: 2,
+            cols: 2,
+            max: Some(100.0),
+            ..Default::default()
+        });
+        let defs = vec![d];
+        let mut fv = FlashView {
+            image: Some(Image::open(path.clone()).unwrap()),
+            def_idx: Some(0),
+            ..Default::default()
+        };
+
+        assert!(fv.apply_edits(&defs, 0, &[(1, 200.0)]).is_err(), "over max");
+        assert!(!fv.is_dirty());
+        assert_eq!(fv.apply_edits(&defs, 0, &[(0, 99.0), (3, 7.0)]), Ok(2));
+        assert!(fv.is_dirty());
+
+        let mut settings = Settings::default();
+        let mut confirms = Confirms::default();
+        // Declined: nothing written, edits kept.
+        fv.pending = Some(Pending::Save);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        confirms.answer("flash-save", false);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(fv.pending, None);
+        assert_eq!(std::fs::read(&path).unwrap(), orig);
+        assert!(fv.is_dirty());
+
+        // Opening another file while dirty waits for the user too.
+        fv.open(&defs, dir.join("other.bin"), &mut settings);
+        assert!(matches!(fv.pending, Some(Pending::Open(_))));
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        confirms.answer("flash-discard-open", false);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert!(fv.is_dirty() && fv.image.as_ref().unwrap().path == path);
+
+        // Accepted: the vault gets the old file, then the edits land.
+        fv.pending = Some(Pending::Save);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(std::fs::read(&path).unwrap(), orig, "not before the OK");
+        confirms.answer("flash-save", true);
+        fv.pending_ui(&defs, &mut settings, &mut confirms);
+        assert_eq!(fv.error, None);
+        let saved = std::fs::read(&path).unwrap();
+        let mut want = orig.clone();
+        want[8] = 99;
+        want[11] = 7;
+        assert_eq!(saved, want);
+        assert!(!fv.is_dirty());
+        let vault = crate::views::vault::vault_dir_for(&path);
+        let backups: Vec<_> = std::fs::read_dir(&vault)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|x| x == "bin"))
+            .map(|e| std::fs::read(e.path()).unwrap())
+            .collect();
+        assert!(backups.contains(&orig), "the original is in the vault");
+        assert!(fv.note.as_deref().unwrap_or("").contains("NOT corrected"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Range operations through the Flash view: all or nothing, one undo
+    /// step each, redo; a project's apply request lands only on its own,
+    /// clean dump.
+    #[test]
+    fn range_ops_undo_redo_and_project_apply() {
+        let mut d = def("t", "Test", "test");
+        d.maps.push(opentune_core::ecudef::MapDef {
+            name: "m".into(),
+            address: 4,
+            rows: 2,
+            cols: 3,
+            max: Some(100.0),
+            ..Default::default()
+        });
+        let defs = vec![d];
+        let path = PathBuf::from("synthetic-ops.bin");
+        let mut fv = FlashView {
+            image: Some(Image::from_bytes(path.clone(), vec![10u8; 16])),
+            def_idx: Some(0),
+            ..Default::default()
+        };
+        fv.cursor.follow(&defs[0].maps[0]);
+        // No selection: refused with a message.
+        fv.run_op(&defs, Op::Add(1.0));
+        assert!(fv.error.as_deref().unwrap_or("").contains("select cells"));
+        fv.cursor.select_range(Sel::span((0, 0), (2, 0)));
+        fv.run_op(&defs, Op::MulPct(150.0));
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        // One cell over max: the whole operation is refused, nothing clamped.
+        fv.cursor.select_range(Sel::all(3, 2));
+        fv.run_op(&defs, Op::Add(86.0));
+        let e = fv.error.clone().unwrap();
+        assert!(e.contains("refused") && e.contains("3 of 6"), "{e}");
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        // Paste a 2 × 1 block at (1,1); undo / redo walk whole operations.
+        fv.cursor.select_range(Sel::cell(1, 1));
+        fv.run_cell_command(&defs, CellCommand::Paste(Sel::cell(1, 1), "1\t2".into()));
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 1, 2]
+        );
+        fv.undo(&defs, false);
+        assert_eq!(
+            &fv.image.as_ref().unwrap().bytes[4..10],
+            &[15, 15, 15, 10, 10, 10]
+        );
+        fv.undo(&defs, true);
+        assert_eq!(&fv.image.as_ref().unwrap().bytes[7..10], &[10, 1, 2]);
+
+        // The snapshot the Project view reads, then an apply request.
+        let ctx = egui::Context::default();
+        fv.ctx = Some(ctx.clone());
+        fv.publish(&defs);
+        let snap = project::snapshot(&ctx).unwrap();
+        assert_eq!(snap.image, path);
+        assert_eq!(snap.edits.len(), 1);
+        let edits: Vec<serde_json::Value> = snap
+            .edits
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .collect();
+        let req = |image: &Path| project::ApplyRequest {
+            image: image.to_path_buf(),
+            project: "p".into(),
+            edits: edits.clone(),
+        };
+        // Refused while the dump has unsaved edits (the request is consumed).
+        project::request_apply(&ctx, req(&path));
+        fv.take_apply_request(&ctx, &defs);
+        assert!(fv.error.as_deref().unwrap_or("").contains("unsaved edits"));
+        assert!(project::pending_apply(&ctx).is_none());
+        // Another dump: refused.
+        fv.image.as_mut().unwrap().revert();
+        project::request_apply(&ctx, req(Path::new("other.bin")));
+        fv.take_apply_request(&ctx, &defs);
+        assert!(fv
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("not the dump open"));
+        // Waits while a confirmation is open, then applies as one step.
+        project::request_apply(&ctx, req(&path));
+        fv.pending = Some(Pending::Revert);
+        fv.take_apply_request(&ctx, &defs);
+        assert!(project::pending_apply(&ctx).is_some());
+        fv.pending = None;
+        fv.take_apply_request(&ctx, &defs);
+        let img = fv.image.as_mut().unwrap();
+        assert_eq!(&img.bytes[4..10], &[15, 15, 15, 10, 1, 2]);
+        assert!(fv.note.as_deref().unwrap_or("").contains("one undo step"));
+        img.undo();
+        assert!(!img.is_dirty() && !img.can_undo());
+    }
+
+    fn def(id: &str, name: &str, family: &str) -> EcuDef {
+        let mut d = EcuDef::from_json(&format!(
+            r#"{{"id":"{id}","name":"{name}","maker":"Bosch","family":"{family}","protocol":"iso14230_kline","diag_layer":"kwp2000","bitrate":10400,"tx_id":1,"rx_id":0,"flash_size":1048576,"regions":[],"full_read":"obd"}}"#
+        ))
+        .expect("minimal def");
+        d.maps.clear();
+        d
+    }
+
+    #[test]
+    fn structural_variant_beats_a_broad_identify_match() {
+        let defs = [
+            def("bosch-edc16u34", "Bosch EDC16U34", "EDC16"),
+            def("bosch-edc15c6", "Bosch EDC15C6", "EDC15"),
+        ];
+        // The real case: an EDC15C6 dump whose SW 1037… hit EDC16U34's key.
+        assert_eq!(
+            pick_def(&defs, "EDC15", Some("EDC15C6"), Some("bosch-edc16u34")),
+            Some(1)
+        );
+        // No variant: an identify match from another family is not taken.
+        assert_eq!(pick_def(&defs, "EDC15", None, Some("bosch-edc16u34")), None);
+        // Same family: taken.
+        assert_eq!(
+            pick_def(&defs, "EDC16", None, Some("bosch-edc16u34")),
+            Some(0)
+        );
+        // Unknown structure: the identify match stands.
+        assert_eq!(
+            pick_def(&defs, "Unknown", None, Some("bosch-edc16u34")),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn sizes_and_wrap() {
+        assert_eq!(size_text(1 << 20), "1 MiB");
+        assert_eq!(size_text(512 * 1024), "512 KiB");
+        assert_eq!(size_text(10), "10 B");
+        assert_eq!(wrap(250.0, 100.0), 50.0);
+        assert_eq!(wrap(5.0, 0.0), 0.0);
+    }
+}

@@ -1,0 +1,89 @@
+[package]
+name = "opentune-native"
+# The native frontend has its own version line until it replaces the webview
+# app (planned as 1.0.0-beta); do not tie it to the Tauri app's version yet.
+version = "0.1.0"
+description = "OpenTune native desktop frontend (egui/eframe on wgpu) - prototype"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+# Not part of the root workspace (like desktop/src-tauri): its GUI dependency
+# tree and lockfile stay out of the core workspace and its CI.
+[workspace]
+
+# Library (embeddable: `opentune_native::run(NativeConfig)`) + thin binary.
+[lib]
+name = "opentune_native"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opentune-native"
+path = "src/main.rs"
+
+[dependencies]
+# The OpenTune core, called in-process (no IPC bridge).
+opentune-core = { path = "../crates/opentune-core" }
+opentune-checksum = { path = "../crates/opentune-checksum" }
+opentune-scan = { path = "../crates/opentune-scan" }
+opentune-db = { path = "../crates/opentune-db" }
+# The flash backup vault (Host::backup / guarded writes).
+opentune-flash = { path = "../crates/opentune-flash" }
+# Log viewer: CSV parsing (OpenTune Live log + generic wide CSV) and stats.
+opentune-logview = { path = "../crates/opentune-logview" }
+# Controllers view: drivetrain controller definitions (ctrldefs/).
+opentune-ctrldef = { path = "../crates/opentune-ctrldef" }
+# The shared adapter session (driver registry, one owner of the hardware).
+opentune-hub = { path = "../crates/opentune-hub" }
+# The local diagnostics log (masked records, rotation, panic hook).
+opentune-diaglog = { path = "../crates/opentune-diaglog" }
+# The Guide view's Markdown (MIT OR Apache-2.0; pinned: the egui-0.37 release).
+egui_commonmark = { version = "=0.26.0", default-features = false, features = ["pulldown_cmark"] }
+# Engines the ported panels use (added once by the scaffold batch so the
+# feature batches never touch this file).
+opentune-packs = { path = "../crates/opentune-packs" }
+opentune-coding = { path = "../crates/opentune-coding" }
+opentune-adaptation = { path = "../crates/opentune-adaptation" }
+opentune-autoscan = { path = "../crates/opentune-autoscan" }
+opentune-servicefn = { path = "../crates/opentune-servicefn" }
+opentune-logdef = { path = "../crates/opentune-logdef" }
+opentune-gps = { path = "../crates/opentune-gps" }
+opentune-candump = { path = "../crates/opentune-candump" }
+opentune-haldex = { path = "../crates/opentune-haldex" }
+opentune-tsini = { path = "../crates/opentune-tsini" }
+opentune-tsproto = { path = "../crates/opentune-tsproto" }
+opentune-sa2 = { path = "../crates/opentune-sa2" }
+opentune-container = { path = "../crates/opentune-container" }
+opentune-vin = { path = "../crates/opentune-vin" }
+opentune-dtc = { path = "../crates/opentune-dtc" }
+opentune-xdf = { path = "../crates/opentune-xdf" }
+opentune-a2l = { path = "../crates/opentune-a2l" }
+opentune-recipe = { path = "../crates/opentune-recipe" }
+opentune-seedkey-loader = { path = "../crates/opentune-seedkey-loader" }
+# The offline UDS simulator (Debug panel, demo sessions; also the tests' bus).
+opentune-udssim = { path = "../crates/opentune-udssim" }
+
+# GUI: egui on wgpu (Vulkan / Metal / DX12 / GL), no webview on any OS.
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "persistence"] }
+rfd = "0.18"
+# Log viewer time plot; 0.38 is the release built on egui 0.37.
+egui_plot = "0.38"
+serde = { version = "1", features = ["derive"] }
+# .otproj tuning projects (same JSON format as the Tauri app).
+serde_json = "1"
+# --screenshot mode (review / docs): writes the captured frame as PNG.
+png = "0.18"
+# Adapter discovery + the ELM327 AT link (top bar); same major as the core drivers.
+serialport = "4"
+
+[features]
+# Alpha channel: the hub registers its Bench-tier drivers and
+# `BuildChannel::compiled()` reports `alpha`, which registers the Bench views.
+alpha = ["opentune-hub/alpha"]
+
+[build-dependencies]
+# build.rs: the Windows exe icon + version info (no-op on other targets).
+embed-resource = "3"
+
+[dev-dependencies]
+# Simulated multi-module CAN bus for the hub adapter tests.
+opentune-hub = { path = "../crates/opentune-hub", features = ["testkit"] }
