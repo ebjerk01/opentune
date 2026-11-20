@@ -11,6 +11,23 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Changed
+- **Checksums: an algorithm not yet validated on a real dump is never reported
+  as "supported", and only writes against a proven stored value.** One rule
+  for every algorithm, old and new:
+  - `haldex` (Haldex Gen5), `dq250` (DQ250-MQB) and `zf8hp` (ZF 8HP CAL) now
+    report *consistent* instead of *supported*, even when a stored value
+    matches.
+  - `haldex` corrects match-first, like `dq250`: standalone correction writes
+    only when at least one located block's stored checksum already matches in
+    that image. An image whose every block was edited (for example a single
+    extracted block) is refused; correct it against your own untouched stock
+    dump (correct with a reference), whose blocks must all validate.
+  - `tcu-ccitt` no longer rewrites the last two bytes of any image: standalone
+    correction refuses a mismatch, and correcting needs a same-length stock
+    dump whose trailer validates.
+  Each is promoted back once a real dump validates it.
+
 ## [1.0.0-beta.1] - 2026-11-20
 
 The first beta of the **native desktop app**: every panel of the desktop app

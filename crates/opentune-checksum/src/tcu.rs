@@ -50,7 +50,7 @@
 //! | `dq250`      | JAMCRC      | `!crc32`, LE, per-block trailer | algorithm vectors + synthetic (no 0D9 bench dump on hand — validation pending) |
 //! | `tcu-ccitt`  | CRC-CCITT   | CCITT `0x1021`, BE trailer      | CCITT vectors (no CCITT-protected dump on hand — validation pending) |
 //! | `zf8hp`      | ZF 8HP CAL  | zlib CRC-32 over CAL_DATA, BE @`0x180244` | CRC-32 vectors + synthetic **only** (no real ZF 8HP dump on hand — refuses to self-correct, see below) |
-//! | `haldex`     | Haldex Gen5 | 16-bit LE word-sum `0xFFFF - sum`, per block | synthetic + algorithm-vector **only** (no real Haldex Gen5 dump on hand — validation pending) |
+//! | `haldex`     | Haldex Gen5 | 16-bit LE word-sum `0xFFFF - sum`, per block | synthetic + algorithm-vector **only** (no real Haldex Gen5 dump on hand — validation pending; reported Consistent, match-first correct) |
 //!
 //! The ZF 8HP and Haldex Gen5 entries are **algorithm-vector + synthetic
 //! validated only**: no real dump of either was available, so neither has been
@@ -76,9 +76,16 @@
 //!   [`correct_with_reference`](ChecksumAlgo::correct_with_reference): the
 //!   reference must itself validate at the fixed layout (proving the offsets for
 //!   that firmware) before any write is made.
-//! * **`haldex`** identifies a block by its *data-independent* embedded length
-//!   field (`cs_loc+0x4`, which an edited calibration never changes), so it can
-//!   self-correct exactly like `dq381`: it only writes the 2 checksum bytes of a
+//! * **`haldex`** locates a block by its *data-independent* embedded length
+//!   field (`cs_loc+0x4`, which an edited calibration never changes). Locating
+//!   proves the layout, not the algorithm, and no real Haldex Gen5 dump has
+//!   validated the word-sum, so it reports [`Recognition::Consistent`] (never
+//!   "supported") and corrects **match-first** like `dq250`: standalone
+//!   `correct` writes only when at least one located block's stored checksum
+//!   already matches in that image (an image whose every block was edited is
+//!   refused); otherwise [`correct_with_reference`](ChecksumAlgo::correct_with_reference)
+//!   corrects against the owner's untouched stock dump, every block of which
+//!   must validate first. It only ever writes the 2 checksum bytes of a
 //!   structurally-located block and refuses an image where no block is located.
 //!
 //! A value that cannot be computed is never guessed.
@@ -218,20 +225,16 @@ impl ChecksumAlgo for Dq250Jamcrc {
         Ok(out)
     }
 
-    /// A DQ250-MQB image is only *recognised* once at least one block's stored
-    /// JAMCRC proves the algorithm against a real value (see [`Self::recognised`]).
-    /// Until then the per-block results are merely mathematically consistent, so
-    /// they are reported [`Recognition::Consistent`] and never "supported".
+    /// Always [`Recognition::Consistent`], never "supported": no real 0D9 dump
+    /// has validated the algorithm for the project yet. (A block whose stored
+    /// JAMCRC matches in this image still gates [`correct`](ChecksumAlgo::correct),
+    /// see [`Self::recognised`].) Promote once a real dump validates it.
     fn verify_report(
         &self,
         image: &[u8],
         representation: Representation,
     ) -> Result<Vec<BlockReport>> {
-        let recognition = if Self::recognised(image) {
-            Recognition::Recognised
-        } else {
-            Recognition::Consistent
-        };
+        let recognition = Recognition::Consistent;
         Ok(self
             .verify(image)?
             .into_iter()
@@ -509,6 +512,20 @@ pub struct CcittTrailer;
 /// Init value used by [`CcittTrailer`] (CCITT-FALSE).
 const CCITT_INIT: u16 = 0xFFFF;
 
+/// `(stored, computed)` of a CCITT trailer image.
+fn ccitt_eval(image: &[u8]) -> Result<(u16, u16)> {
+    if image.len() < 3 {
+        return Err(Error::Unsupported(
+            "image too small for a CRC-CCITT trailer".into(),
+        ));
+    }
+    let split = image.len() - 2;
+    Ok((
+        u16::from_be_bytes([image[split], image[split + 1]]),
+        crc_ccitt(&image[..split], CCITT_INIT),
+    ))
+}
+
 impl ChecksumAlgo for CcittTrailer {
     fn id(&self) -> &str {
         "tcu-ccitt"
@@ -530,15 +547,40 @@ impl ChecksumAlgo for CcittTrailer {
         }])
     }
 
+    /// Match-first: the trailer is layout-agnostic and unvalidated on a real
+    /// dump, so a mismatch is ambiguous (an edited image, or not a CCITT
+    /// trailer at all) and standalone `correct` REFUSES it; an image that
+    /// already validates needs nothing. Correct an edited image with
+    /// [`correct_with_reference`](ChecksumAlgo::correct_with_reference).
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
-        if image.len() < 3 {
+        let (stored, computed) = ccitt_eval(image)?;
+        if stored != computed {
             return Err(Error::Unsupported(
-                "image too small for a CRC-CCITT trailer".into(),
+                "the CRC-CCITT trailer does not match and the scheme is not validated on a \
+                 real dump, so a mismatch cannot be told from a non-CCITT image; refusing to \
+                 write. Correct against your own untouched stock dump instead (see \
+                 crate::tcu docs)"
+                    .into(),
             ));
         }
+        Ok(Vec::new())
+    }
+
+    /// Correct against the owner's untouched stock dump: the reference must be
+    /// the same length and its own CCITT trailer must validate, proving the
+    /// trailer layout for this firmware before anything is written.
+    fn correct_with_reference(&self, image: &mut [u8], reference: &[u8]) -> Result<Vec<Fix>> {
+        let ok_ref =
+            reference.len() == image.len() && ccitt_eval(reference).is_ok_and(|(s, c)| s == c);
+        if !ok_ref {
+            return Err(Error::Unsupported(
+                "the reference is not a same-length image whose CRC-CCITT trailer validates; \
+                 it cannot prove the layout, refusing to correct (see crate::tcu docs)"
+                    .into(),
+            ));
+        }
+        let (stored, computed) = ccitt_eval(image)?;
         let split = image.len() - 2;
-        let computed = crc_ccitt(&image[..split], CCITT_INIT);
-        let stored = u16::from_be_bytes([image[split], image[split + 1]]);
         let mut fixes = Vec::new();
         if computed != stored {
             image[split..split + 2].copy_from_slice(&computed.to_be_bytes());
@@ -642,20 +684,16 @@ impl ChecksumAlgo for Zf8hpCal {
 
     /// Representation-aware report. The ZF 8HP CAL CRC is an [embedded](ChecksumKind::Embedded)
     /// checksum over a [`Representation::RawFullImage`] (the CAL block lives at its
-    /// absolute flash base inside a full decrypted read). Recognition is
-    /// [`Recognition::Recognised`] only when the stored CRC validates (proving the
-    /// fixed layout against a real value); otherwise the arithmetic result is
-    /// merely [`Recognition::Consistent`] and never surfaced as supported.
+    /// absolute flash base inside a full decrypted read). Recognition is always
+    /// [`Recognition::Consistent`], never "supported": no real ZF 8HP dump has
+    /// validated the fixed layout for the project yet (a validating stored CRC
+    /// still gates [`correct_with_reference`](ChecksumAlgo::correct_with_reference)).
     fn verify_report(
         &self,
         image: &[u8],
         _representation: Representation,
     ) -> Result<Vec<BlockReport>> {
-        let recognition = if Self::recognised(image) {
-            Recognition::Recognised
-        } else {
-            Recognition::Consistent
-        };
+        let recognition = Recognition::Consistent;
         Ok(zf8hp_status(image)
             .into_iter()
             .map(|status| {
@@ -941,10 +979,12 @@ impl ChecksumAlgo for HaldexGen5 {
 
     /// Representation-aware report. Each located block carries the detected
     /// representation (full bin-file vs extracted block),
-    /// [`ChecksumKind::Embedded`], and [`Recognition::Recognised`] — a block is
-    /// only located when its embedded length field is structurally sound, so a
-    /// match is a confirmed-family result, not a coincidence. When nothing is
-    /// located, the declared `representation` is echoed over the (empty) list.
+    /// [`ChecksumKind::Embedded`], and [`Recognition::Consistent`]: locating a
+    /// block by its embedded length field proves the *layout*, not that the
+    /// word-sum reproduces a real ECU's value, and no real Haldex Gen5 dump has
+    /// validated the algorithm yet — so a match is never reported as
+    /// "supported". When nothing is located, the declared `representation` is
+    /// echoed over the (empty) list.
     fn verify_report(
         &self,
         image: &[u8],
@@ -960,41 +1000,88 @@ impl ChecksumAlgo for HaldexGen5 {
             .iter()
             .filter_map(|b| b.status(image))
             .map(|status| {
-                BlockReport::new(status, rep, ChecksumKind::Embedded, Recognition::Recognised)
+                BlockReport::new(status, rep, ChecksumKind::Embedded, Recognition::Consistent)
             })
             .collect())
     }
 
+    /// Match-first: the algorithm is unvalidated on real dumps, so it only
+    /// writes when at least one located block's stored checksum already equals
+    /// the computed one in THIS image (the word-sum proven against a real
+    /// stored value first). Otherwise use [`correct_with_reference`].
+    ///
+    /// [`correct_with_reference`]: ChecksumAlgo::correct_with_reference
     fn correct(&self, image: &mut [u8]) -> Result<Vec<Fix>> {
         let (_, blocks) = find_haldex_blocks(image);
-        if blocks.is_empty() {
+        if !blocks.is_empty()
+            && !blocks
+                .iter()
+                .any(|b| b.eval(image).is_some_and(|(s, c)| s == c))
+        {
             return Err(Error::Unsupported(
-                "not a recognised Haldex Gen5 image (no block whose embedded length field \
-                 identifies a CAL/ASW/VERSION block, as a full bin-file or an extracted block); \
-                 refusing to guess (see crate::tcu docs)"
+                "no located Haldex Gen5 block's stored checksum matches the computed one, \
+                 so the (not yet real-dump-validated) word-sum is unproven on this image; \
+                 refusing to write. Correct against your own untouched stock dump instead \
+                 (correct with a reference; see crate::tcu docs)"
                     .into(),
             ));
         }
-        let mut fixes = Vec::new();
-        for b in &blocks {
-            // Anti-brick: only correct a structurally-located block whose checksum
-            // both computes and reads; never guess an out-of-range one.
-            let Some((stored, computed)) = b.eval(image) else {
-                continue;
-            };
-            if stored != computed {
-                let off = b.cksum_file_off();
-                image[off..off + 2].copy_from_slice(&computed.to_le_bytes());
-                fixes.push(Fix {
-                    name: format!("haldex-{}", b.name),
-                    offset: off as u32,
-                    old: stored as u64,
-                    new: computed as u64,
-                });
-            }
-        }
-        Ok(fixes)
+        haldex_fix(image)
     }
+
+    /// Correct `image` against the owner's untouched stock dump: every block
+    /// located in `reference` must already validate (proving the word-sum
+    /// against real stored values for this firmware) before anything is
+    /// written.
+    fn correct_with_reference(&self, image: &mut [u8], reference: &[u8]) -> Result<Vec<Fix>> {
+        let (_, refs) = find_haldex_blocks(reference);
+        let all_ok = !refs.is_empty()
+            && refs
+                .iter()
+                .all(|b| b.eval(reference).is_some_and(|(s, c)| s == c));
+        if !all_ok {
+            return Err(Error::Unsupported(
+                "the Haldex Gen5 reference image does not validate (no located block, or a \
+                 block whose stored checksum differs); it cannot prove the algorithm, \
+                 refusing to correct (see crate::tcu docs)"
+                    .into(),
+            ));
+        }
+        haldex_fix(image)
+    }
+}
+
+/// Rewrite the stale checksum of every structurally-located Haldex block
+/// (refusing an image where no block is located).
+fn haldex_fix(image: &mut [u8]) -> Result<Vec<Fix>> {
+    let (_, blocks) = find_haldex_blocks(image);
+    if blocks.is_empty() {
+        return Err(Error::Unsupported(
+            "not a recognised Haldex Gen5 image (no block whose embedded length field \
+                 identifies a CAL/ASW/VERSION block, as a full bin-file or an extracted block); \
+                 refusing to guess (see crate::tcu docs)"
+                .into(),
+        ));
+    }
+    let mut fixes = Vec::new();
+    for b in &blocks {
+        // Anti-brick: only correct a structurally-located block whose checksum
+        // both computes and reads; never guess an out-of-range one.
+        let Some((stored, computed)) = b.eval(image) else {
+            continue;
+        };
+        if stored != computed {
+            let off = b.cksum_file_off();
+            image[off..off + 2].copy_from_slice(&computed.to_le_bytes());
+            fixes.push(Fix {
+                name: format!("haldex-{}", b.name),
+                offset: off as u32,
+                old: stored as u64,
+                new: computed as u64,
+            });
+        }
+    }
+    Ok(fixes)
 }
 
 #[cfg(test)]
@@ -1243,12 +1330,30 @@ mod tests {
             *b = (i as u8) ^ 0x3C;
         }
         let algo = CcittTrailer;
-        // initially the trailer is wrong
+        // A stock image with a valid trailer (the reference).
+        let split = img.len() - 2;
+        let c = crc_ccitt(&img[..split], CCITT_INIT);
+        img[split..].copy_from_slice(&c.to_be_bytes());
+        let stock = img.clone();
+        assert!(algo.verify(&stock).unwrap().iter().all(|s| s.ok));
+        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+        // Edited: standalone correct refuses (match-first) and writes nothing.
+        img[0x40] ^= 0xFF;
         assert!(algo.verify(&img).unwrap().iter().any(|s| !s.ok));
-        let fixes = algo.correct(&mut img).unwrap();
+        let before = img.clone();
+        assert!(matches!(
+            algo.correct(&mut img).unwrap_err(),
+            Error::Unsupported(_)
+        ));
+        assert_eq!(img, before);
+        // Against the validating stock dump it is corrected.
+        let fixes = algo.correct_with_reference(&mut img, &stock).unwrap();
         assert_eq!(fixes.len(), 1);
         assert!(algo.verify(&img).unwrap().iter().all(|s| s.ok));
-        assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
+        // A reference that does not validate, or another length, is refused.
+        let mut e = before.clone();
+        assert!(algo.correct_with_reference(&mut e, &before).is_err());
+        assert!(algo.correct_with_reference(&mut e, &stock[..100]).is_err());
     }
 
     /// Fixture regression against the real `DQ381 full.bin`. CI has no access, so
@@ -1333,13 +1438,14 @@ mod tests {
         assert!(algo.verify(&img).unwrap().iter().all(|s| s.ok));
         assert!(algo.correct(&mut img.clone()).unwrap().is_empty());
 
-        // Recognised + supported in the detailed report.
+        // Not real-dump validated: consistent, never "supported", even when
+        // the stored CRC matches.
         let rep = algo.verify_report(&img, Representation::Unknown).unwrap();
         assert_eq!(rep.len(), 1);
         assert_eq!(rep[0].representation, Representation::RawFullImage);
-        assert_eq!(rep[0].recognition, Recognition::Recognised);
+        assert_eq!(rep[0].recognition, Recognition::Consistent);
         assert_eq!(rep[0].checksum_kind, ChecksumKind::Embedded);
-        assert!(rep[0].is_supported());
+        assert!(!rep[0].is_supported());
     }
 
     #[test]
@@ -1466,15 +1572,23 @@ mod tests {
         let rep = algo.verify_report(&img, Representation::Unknown).unwrap();
         assert_eq!(rep.len(), 1);
         assert_eq!(rep[0].representation, Representation::ProgrammingBlock);
-        assert_eq!(rep[0].recognition, Recognition::Recognised);
-        assert!(rep[0].is_supported());
+        // Unvalidated on real dumps: consistent, never "supported".
+        assert_eq!(rep[0].recognition, Recognition::Consistent);
+        assert!(!rep[0].is_supported());
 
-        // Edit the calibration: checksum goes stale and is re-derived; the
-        // embedded length field is untouched so the block stays recognised.
+        // Edit the calibration: the only block goes stale, so nothing proves
+        // the algorithm in this image — standalone correct refuses …
         let mut m = img.clone();
         m[0x500] ^= 0xFF;
         assert!(algo.verify(&m).unwrap().iter().any(|s| !s.ok));
-        let fixes = algo.correct(&mut m).unwrap();
+        let before = m.clone();
+        assert!(matches!(
+            algo.correct(&mut m).unwrap_err(),
+            Error::Unsupported(_)
+        ));
+        assert_eq!(m, before, "a refusal writes nothing");
+        // … and the untouched stock block as the reference corrects it.
+        let fixes = algo.correct_with_reference(&mut m, &img).unwrap();
         assert_eq!(fixes.len(), 1);
         assert_eq!(fixes[0].name, "haldex-CAL");
         assert!(algo.verify(&m).unwrap().iter().all(|s| s.ok));
@@ -1530,10 +1644,25 @@ mod tests {
         assert!(st[0].ok);
         let mut m = img.clone();
         m[0x9000] ^= 0xFF;
-        let fixes = algo.correct(&mut m).unwrap();
+        assert!(algo.correct(&mut m.clone()).is_err(), "match-first");
+        let fixes = algo.correct_with_reference(&mut m, &img).unwrap();
         assert_eq!(fixes.len(), 1);
         assert_eq!(fixes[0].name, "haldex-ASW");
         assert!(algo.verify(&m).unwrap().iter().all(|s| s.ok));
+        // A reference that does not validate proves nothing: refused.
+        let mut bad_ref = img.clone();
+        bad_ref[0x9000] ^= 0x01;
+        let mut m2 = img.clone();
+        m2[0x9000] ^= 0xFF;
+        assert!(matches!(
+            algo.correct_with_reference(&mut m2, &bad_ref).unwrap_err(),
+            Error::Unsupported(_)
+        ));
+        assert!(matches!(
+            algo.correct_with_reference(&mut m2, &[0u8; 0x100])
+                .unwrap_err(),
+            Error::Unsupported(_)
+        ));
     }
 
     /// Build a synthetic full Haldex bin-file (`0x50000`) with CAL/ASW/VERSION at
@@ -1580,10 +1709,12 @@ mod tests {
         assert!(rep
             .iter()
             .all(|r| r.representation == Representation::RawFullImage
-                && r.recognition == Recognition::Recognised
-                && r.is_supported()));
+                && r.recognition == Recognition::Consistent
+                && !r.is_supported()));
 
-        // Edit the ASW region: only ASW goes stale; CAL/VERSION stay untouched.
+        // Edit the ASW region: only ASW goes stale; CAL/VERSION still match,
+        // which proves the word-sum in this image (match-first), so standalone
+        // correct fixes ASW.
         let mut m = img.clone();
         m[haldex_def("ASW").binfile_off + 0x1000] ^= 0xFF;
         let bad = algo.verify(&m).unwrap();
