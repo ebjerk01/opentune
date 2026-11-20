@@ -6,7 +6,9 @@
 #
 #   OUT_DIR/OpenTune-native-<ver>-windows-x86_64/
 #     opentune-native.exe   (statically linked C++ runtime/unwinder; imports
-#                            only Windows system DLLs + the Universal CRT)
+#                            only Windows system DLLs + the Universal CRT;
+#                            icon + version info embedded by build.rs via
+#                            llvm-mingw's windres)
 #     ecudefs/ database/ ctrldefs/   (read from beside the .exe)
 #     LICENSE  README.txt
 #   OUT_DIR/OpenTune-native-<ver>-windows-x86_64.zip
@@ -38,6 +40,11 @@ if [ -n "$extra" ]; then
     echo "non-system DLL imports, not bundled: $extra" >&2
     exit 1
 fi
+# Refuse to ship without the icon + version info that build.rs embeds.
+res="$(llvm-readobj --coff-resources "$exe")"
+for t in 'GROUP_ICON (ID 14)' 'VERSIONINFO (ID 16)'; do
+    grep -qF "Type: $t" <<<"$res" || { echo "exe lacks resource $t" >&2; exit 1; }
+done
 
 name="OpenTune-native-$version-windows-x86_64"
 dir="$out/$name"

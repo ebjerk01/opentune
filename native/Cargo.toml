@@ -48,6 +48,10 @@ png = "0.18"
 # Adapter discovery + the ELM327 AT link (top bar); same major as the core drivers.
 serialport = "4"
 
+[build-dependencies]
+# build.rs: the Windows exe icon + version info (no-op on other targets).
+embed-resource = "3"
+
 [dev-dependencies]
 # Simulated multi-module CAN bus for the hub adapter tests.
 opentune-hub = { path = "../crates/opentune-hub", features = ["testkit"] }
