@@ -50,6 +50,9 @@ Thin shells that wire drivers into a `Registry` and drive core operations.
   plugin seed/key lookup with the built-in SA2 interpreter, the build
   channel, map cell codecs and vault listing. The desktop re-exports it under
   its old paths (`opentune_desktop::adapter`, `seedkeys`, `BuildChannel`, …).
+  Its local diagnostics log lives in the workspace crate
+  **`opentune-diaglog`** (re-exported as `opentune_desktop::diaglog`; the
+  desktop adds only its Tauri `init` and `diag_log*` commands).
 - **`android/`** — a Kotlin/Compose app over the same core via UniFFI
   (`opentune-ffi`); the APK builds in CI and has been run on a real device
   (see [`android.md`](android.md)).
@@ -225,6 +228,7 @@ apps that need it.
 | `opentune-tsproto` | Serial protocol for those ECUs from the INI's command strings: msEnvelope CRC32 or plain framing, chunked page read/write, burn, CRC32 check, realtime block; verified-write orchestration and a simulated ECU |
 | `opentune-c167bsl` | C167/ST10 bootstrap-loader (BSL) client, read only: autobaud + ID byte, 32-byte loader, user-supplied monitor kernel, register setup with read-back, checksummed block reads; EDC15 and EGS52 presets as data, dry-run plan, simulated BSL responder ([`C167-BSL.md`](C167-BSL.md)) |
 | `opentune-ffi` | UniFFI binding used by the Android app |
+| `opentune-diaglog` | Front-end-neutral local diagnostics log: size-capped, rotating JSON-lines records (`opentune.log` + 5 rotated), write-time masking of SecurityAccess seeds/keys and long hex payloads, a process-wide log with a pre-open buffer, a chained panic hook, rate-limited frontend reports and read-back (tail, latest session, sessions); local only, sends nothing |
 
 ### Drivers — `crates/drivers/*`
 Each implements `Interface`. CAN drivers typically implement the lighter

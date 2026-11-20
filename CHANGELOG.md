@@ -184,6 +184,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   is set (everything is CPU-painted, scrolling will be slow).
 
 ### Changed
+- Internal: the desktop's local diagnostics log (records, write-time masking
+  of SecurityAccess seeds/keys and long hex payloads, size caps and rotation,
+  the process-wide log, the chained panic hook, rate-limited frontend reports
+  and read-back) moved into the new workspace crate `opentune-diaglog`, so a
+  second front end can share it. No behaviour change; the desktop keeps its
+  `init` and `diag_log*` commands and re-exports the rest under the same
+  `opentune_desktop::diaglog` paths.
 - Internal: the desktop's adapter/session layer (adapter hub, sessions,
   module addressing, driver registry and probe, seed/key lookup, build
   channel, SA2 script decoding, map cell codecs, vault listing) moved into
