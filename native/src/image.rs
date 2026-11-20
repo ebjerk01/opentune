@@ -1,9 +1,10 @@
 //! A loaded flash image and the thin map-decoding helpers the prototype needs.
 //!
-//! These mirror what the Tauri backend does in `desktop/src-tauri/src/maps.rs`
-//! (raw element read by data type + byte order, then `Scaling::to_physical`).
-//! They are deliberately small and local so the webview app stays untouched;
-//! the plan is to move the shared logic into a core crate both frontends use.
+//! These mirror what the Tauri backend does (raw element read by data type +
+//! byte order, then `Scaling::to_physical`). The shared codec now exists as
+//! `opentune_hub::maps` (the Tauri app uses it); this local copy predates it
+//! and is still what the native app runs. Switching to `opentune_hub::maps`
+//! is planned (batch N2).
 
 use opentune_core::ecudef::{AxisDef, DataType, Endian, MapDef, Scaling};
 use std::collections::BTreeSet;

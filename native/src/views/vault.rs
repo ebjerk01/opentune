@@ -5,8 +5,8 @@
 //! one `<label>_<ADDR>_<unix time>.bin` per backup plus a human-readable
 //! `.meta` sidecar of `key = value` lines (ecu_name, sw_number, hw_number,
 //! vin, address, length, crc32, unix_time). The listing is a local
-//! equivalent of the Tauri app's `vault_list` (that helper lives only in the
-//! desktop crate); it also parses the sidecar and re-checks the CRC-32.
+//! equivalent of `opentune_hub::vault::list` (what the Tauri app's
+//! `vault_list` uses); it also parses the sidecar and re-checks the CRC-32.
 //!
 //! This view never changes a backup: it opens one in the Flash view (which
 //! only reads it), reveals it in the file manager, or writes a copy to a new
