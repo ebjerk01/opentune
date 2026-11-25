@@ -11,6 +11,21 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Added
+- **Checksums: Subaru / Mitsubishi TCU balance-word sums** —
+  `subaru-tcu-m32r` (Hitachi M32R), `subaru-tcu-sh7055` (Denso SH7055) and
+  `subaru-tcu-mh8104` (Mitsubishi MH8104 CVT), reimplemented from FastECU
+  (GPL-3.0). Synthetic-tested only: reported *consistent*, and an edited image
+  is corrected only against your own validating stock dump.
+- **Checksums: VAG Simos ECM3 calibration-monitor sum** (`ecm3`, alias
+  `simos-ecm3`), reimplemented from VW_Flash (BSD-2-Clause) for extracted
+  Simos 8/10/12/16/18 CAL blocks. Verify-first: reported *consistent*,
+  correction only against a validating stock CAL block of the same software;
+  full reads are refused.
+- Checksum vectors: the public DQ250-MQB trailer vector (`"123456789"` +
+  `D9 C6 0B 34`) and the Haldex Gen5 header-window exclusion, per published
+  block offset.
+
 ### Changed
 - **Checksums: an algorithm not yet validated on a real dump is never reported
   as "supported", and only writes against a proven stored value.** One rule

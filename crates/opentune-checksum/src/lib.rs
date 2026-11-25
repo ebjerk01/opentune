@@ -10,6 +10,7 @@
 use opentune_core::{MemoryRegion, Result};
 
 pub mod dsg;
+pub mod ecm3;
 pub mod edc15;
 pub mod edc16;
 pub mod edc17;
@@ -262,6 +263,7 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "subaru-tcu-m32r" => Some(Box::new(subaru_tcu::SubaruTcuM32r)),
         "subaru-tcu-sh7055" => Some(Box::new(subaru_tcu::SubaruTcuSh7055)),
         "subaru-tcu-mh8104" => Some(Box::new(subaru_tcu::SubaruTcuMh8104)),
+        "ecm3" | "simos-ecm3" => Some(Box::new(ecm3::Ecm3)),
         _ => None,
     }
 }
@@ -473,6 +475,19 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     @0x81FC. Synthetic-tested only (FastECU port): standalone \
                     correct refuses an edited image; pass a validating stock dump.",
         },
+        AlgoInfo {
+            id: "ecm3",
+            name: "VAG Simos ECM3 calibration-monitor sum",
+            family: "simos",
+            needs_reference: true,
+            notes: "Alias: simos-ecm3. VW_Flash-documented 64-bit additive monitor sum \
+                    (init words + LE u32 words over an address list in CAL +0x418 or ASW1 \
+                    0x520/0x540) on an extracted Simos 8/10/12/16/18 CAL block, stored \
+                    high word first at CAL +0x400 (or +0x438). Synthetic only (no real \
+                    Simos image): always Consistent; standalone correct refuses a mismatch \
+                    — correct_with_reference with a verifying stock CAL block of the same \
+                    software is required; full reads refused.",
+        },
     ]
 }
 
@@ -665,6 +680,8 @@ mod tests {
             "subaru-tcu-m32r",
             "subaru-tcu-sh7055",
             "subaru-tcu-mh8104",
+            "ecm3",
+            "simos-ecm3",
         ];
         let infos = algorithms();
         for id in resolvable {
