@@ -289,8 +289,10 @@ pub struct KLineSettings {
     pub init: KInit,
     /// Address byte of a five-baud init (defaults to `target`).
     pub init_addr: u8,
-    /// `true`: `ISO9141_NO_CHECKSUM`, the host appends and checks the
-    /// checksum. `false`: the cable does (J2534 default).
+    /// `true` (the default): `ISO9141_NO_CHECKSUM`, the host appends and
+    /// checks the checksum; on a real cable the sum byte was seen on the
+    /// wire in this mode. `false` (`checksum=cable`): the cable does (the
+    /// J2534 default), not yet confirmed on hardware.
     pub host_checksum: bool,
     pub tx_timeout_ms: u32,
     pub layer: DiagLayer,
@@ -437,9 +439,11 @@ impl KLineSettings {
             ));
         }
 
+        // Host framing by default: proven on a cable (the echo carries the
+        // appended sum); cable-checksum mode is not yet confirmed there.
         let host_checksum = match o.get("checksum").map(|s| s.trim()) {
-            None | Some("cable") => false,
-            Some("host") => true,
+            None | Some("host") => true,
+            Some("cable") => false,
             Some(other) => {
                 return Err(Error::Config(format!(
                     "openport2: checksum '{other}' (expected cable or host)"
@@ -1313,14 +1317,42 @@ impl Session {
                     k.obd_source = Some(src);
                 }
             }
+            log::debug!(target: "openport2", "K-line ISO 9141-2 OBD: answer from {src:02X}");
             if is_response_pending(req, &payload) {
                 continue;
             }
+            self.log_more_obd_responders();
             return Ok(payload);
         }
         Err(Error::Timeout(timeout_ms))
     }
+
+    /// After the first OBD answer (the one used), log the source address of
+    /// every other ECU that answers the same request within a short window
+    /// (ISO 9141-2 responders answer within P2), so a multi-ECU bus is
+    /// visible in the trace. Their answers are discarded.
+    fn log_more_obd_responders(&mut self) {
+        for _ in 0..8 {
+            let Ok(msg) = self.kline_next_msg(OBD_EXTRA_RESPONDER_MS) else {
+                return;
+            };
+            let host = self
+                .kline
+                .as_ref()
+                .is_some_and(|k| k.settings.host_checksum);
+            match split_iso9141_answer(&msg, host) {
+                Ok(Some((src, _))) => log::debug!(
+                    target: "openport2",
+                    "K-line ISO 9141-2 OBD: another responder {src:02X} (answer not used)"
+                ),
+                _ => self.stats.foreign_frames += 1,
+            }
+        }
+    }
 }
+
+/// How long to listen for further ISO 9141-2 responders after the first.
+const OBD_EXTRA_RESPONDER_MS: u64 = 60;
 
 /// One ISO 9141-2 OBD answer `48 6B <src> <data…> [cs]`: `Ok(None)` for a
 /// message with another header (skipped), the source address and data
@@ -1499,8 +1531,11 @@ mod tests {
                 s.init_addr,
                 s.host_checksum
             ),
-            (0x01, 0x01, 0xF1, KInit::Fast, 0x01, false)
+            (0x01, 0x01, 0xF1, KInit::Fast, 0x01, true),
+            "host checksum is the default (proven on a cable)"
         );
+        let s = KLineSettings::from_cfg(&cfg(&[("checksum", "cable")]), 4).unwrap();
+        assert!(!s.host_checksum, "checksum=cable still selectable");
         assert_eq!(
             (s.addressing, s.header_explicit, s.session),
             (Addressing::Physical, false, None)

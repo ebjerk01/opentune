@@ -868,7 +868,7 @@ is refused.
 | Step | Host sends | Device answers |
 |---|---|---|
 | resync, identify, reset | as on CAN | as on CAN |
-| open | `ato4 <flags> 10400 0 <seq>`: flags `0` (the cable appends/checks the checksum: J2534 default and the DLL trace) or `512` (`ISO9141_NO_CHECKSUM`, `checksum=host`) | `aro <seq>` |
+| open | `ato4 <flags> 10400 0 <seq>`: flags `512` (`ISO9141_NO_CHECKSUM`, the host appends/checks the checksum: the default, `checksum=host`; on a real cable the echo shows the appended sum on the wire) or `0` (`checksum=cable`: the cable appends/checks it, the J2534 default and the DLL trace; not yet confirmed on hardware) | `aro <seq>` |
 | timing | `ats4 <param> <value> <seq>`, only for options given | `aro <seq>` (`are 1`: not supported) |
 | filter | `atf4 1 0 1 <seq>` + `00` + `00`: pass-all PASS (the shape measured on a cable, [B] §7.9); addressing is checked by the driver | `arf4 <id> <seq>` |
 | fast init | `aty4 <n> 0 <seq>` + StartCommunication `81 <ecu> <tester> 81` (+ checksum in host mode) | `ary4 <n> <seq>\r\n` + the ECU's answer (`C1 kb1 kb2`), or `are 7` (no ECU) |
@@ -994,7 +994,7 @@ Options (same names as `kkl` where `kkl` has them):
 | `session` | off | startDiagnosticSession `10 <xx>` sent right after the init, hex; `85`/`02` refused |
 | `tester` | `F1` | tester address, hex |
 | `baud` (`--baud`) | 10400 | only 10400: [M]/[R] report ISO 14230 at 10400 only, [B] §5 an ISO 9141 open at another rate reading back 10400 |
-| `checksum` | `cable` | `cable` (flags 0) or `host` (`ISO9141_NO_CHECKSUM`) |
+| `checksum` | `host` | `host` (`ISO9141_NO_CHECKSUM`, flags 512; proven on a cable) or `cable` (flags 0; not yet confirmed on hardware) |
 | `layer` | `kwp2000` | `kwp2000` or `uds`; an ECU definition's layer is used when its protocol selected K-line |
 | `tx_timeout_ms` | 1000 | per-message transmit budget, 1..=5000 |
 | `p1_max_ms` 1..=50, `p3_min_ms` 0..=5000, `p4_min_ms` 0..=20 | cable (20/55/5) | sent as `ats` P1_MAX/P3_MIN/P4_MIN in 0.5 ms units ([J]) |
@@ -1147,8 +1147,8 @@ results here with dates; do not commit serial numbers or VINs.
    c. `opentune identify` with the same flags: capture the raw stream
       (`strace -e read,write -x`) and record the receive records: START/END
       markers with 4-byte bodies? data in one record or several? checksum
-      byte present? `0x10` records? If identify fails, retry with
-      `--opt checksum=host` (flags 512) and compare.
+      byte present? `0x10` records? Then retry with `--opt checksum=cable`
+      (flags 0) and compare: cable-checksum mode is the one still to confirm.
    d. With nothing on pin 7, `are 7` on both inits must surface as "no answer
       from the ECU", and the cable must be released (`ata`).
    e. Optional: `atg4 7 <seq>` by hand to learn the P1_MAX unit (expect 40 =

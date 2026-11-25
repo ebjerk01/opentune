@@ -12,6 +12,11 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **OpenPort 2.0 K-line defaults to host checksums** (`checksum=host`,
+  `ISO9141_NO_CHECKSUM`): on a real cable the echo showed the appended sum on
+  the wire, while cable-checksum mode (`checksum=cable`) is not yet confirmed
+  there. In ISO 9141-2 OBD mode every responder's source address is logged
+  (the first answer is used).
 - **OpenPort 2.0 K-line request addressing and keyword decoding
   (offline-tested):** after the init the key bytes decide what the link
   speaks. KB2 `8F` is KWP2000: requests go to the `target` option, else the
