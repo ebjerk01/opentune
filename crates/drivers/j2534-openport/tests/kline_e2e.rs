@@ -177,7 +177,11 @@ fn five_baud_init_reports_the_key_bytes() {
         Some("OTKLINEFAKE000001")
     );
     let log = h.log();
-    assert_eq!(log.opened, vec![(3, 0, 10_400)]);
+    assert_eq!(
+        log.opened,
+        vec![(3, 512, 10_400)],
+        "host checksum by default"
+    );
     assert!(
         log.lines.contains(&"atw3 51 5".to_string()),
         "{:?}",
@@ -199,7 +203,11 @@ fn an_ecu_definition_selects_k_line_without_the_bus_option() {
     let (d, h) = open(&cfg, FakeConfig::default());
     let mut d = d.unwrap();
     assert!(d.read_ecu_id().unwrap().vin.is_some());
-    assert_eq!(h.log().opened, vec![(4, 0, 10_400)]);
+    assert_eq!(
+        h.log().opened,
+        vec![(4, 512, 10_400)],
+        "host checksum by default"
+    );
 }
 
 #[test]
