@@ -738,7 +738,7 @@ transport. `ssmsim` is handled by the `log` command and the desktop's
 adapter opener (Live log, SSM transports), not the registry, like `obdsim`
 for `opentune obd`; `SsmSim` implements `Interface` for that.
 
-## 3l. `openport2`: Tactrix OpenPort 2.0 (hardware validation pending)
+## 3l. `openport2`: Tactrix OpenPort 2.0 (capture validated; K-line and transmit pending)
 
 `crates/drivers/j2534-openport` (crate `opentune-driver-openport2`, id
 `openport2`) talks to an OpenPort 2.0 (OP2) or clone through its USB CDC-ACM
@@ -752,11 +752,21 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
 --driver openport2` captures raw CAN **receive-only** (see
 [Capture](#receive-only-capture-candump)).
 
-**Validation state: hardware validation pending.** The serial path was
-audited on 2026-11-19 against the public protocol notes below and is tested
-against an offline fake only. No OP2 or clone has been connected yet; until
-the checklist at the end of this section has been worked through on a cable,
-treat every byte of it as unproven.
+**Validation state (2026-11-25, a genuine OP2, firmware 1.17.4877):**
+
+- **Receive-only CAN capture: validated on hardware.** `opentune candump
+  --driver openport2` at 500 kbit/s on a live ECU captured every frame with
+  none dropped, matching an independent wire-level reference capture.
+- **K-line: K-line init not yet answered by a real ECU.** On a bench ECU the
+  cable ran both the five-baud and the fast init and reported that the ECU
+  did not answer (`are 7`), with the cable itself healthy. The cause (ECU
+  address, wiring, or the cable protocol) is not known yet, so every K-line
+  record shape below is still unproven.
+- **CAN transmit, ISO-TP and UDS over the cable: hardware validation
+  pending.** Tested against the offline fake only.
+
+Until the checklist at the end of this section has been worked through on a
+cable, treat every unvalidated byte of it as unproven.
 
 ### The session as implemented
 
