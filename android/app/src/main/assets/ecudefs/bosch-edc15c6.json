@@ -12,7 +12,7 @@
     "evidence": "real-image-tested"
   },
   "family": "EDC15",
-  "notes": "Older common-rail/CDI diesels. Diagnostics over K-line (ISO 14230-4 KWP2000) with a 5-baud or fast init handled by the driver. tx_id holds the K-line ECU address. flash_size is the 1 MiB read the EDC15C6 checksum and the bootstrap preset use (own reads); the calibration region is a family placeholder and must be confirmed per software variant before any write.",
+  "notes": "Older common-rail/CDI diesels. Diagnostics over K-line (ISO 14230-4 KWP2000) with a 5-baud or fast init handled by the driver. tx_id holds the K-line ECU address; its value 0x01 is an UNSOURCED placeholder (no public source names the EDC15C6 K-line address, and a bench ECU did not answer an init at 0x01), so confirm the address for your unit before relying on it. flash_size is the 1 MiB read the EDC15C6 checksum and the bootstrap preset use (own reads); the calibration region is a family placeholder and must be confirmed per software variant before any write.",
   "protocol": "iso14230_kline",
   "diag_layer": "kwp2000",
   "bitrate": 10400,
