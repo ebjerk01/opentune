@@ -106,7 +106,8 @@ pub(crate) fn init() {
     if max == LevelFilter::Off {
         return;
     }
-    if log::set_boxed_logger(Box::new(StderrLog(spec))).is_ok() {
+    // Installed once for the process lifetime (leaked on purpose).
+    if log::set_logger(Box::leak(Box::new(StderrLog(spec)))).is_ok() {
         log::set_max_level(max);
     }
 }
