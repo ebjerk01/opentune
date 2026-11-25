@@ -22,10 +22,25 @@
 //! [`FakePort`] plugs the fake straight into the driver
 //! ([`crate::OpenPort2Driver::open_with_port`]) with configurable read
 //! chunking; [`serve`] runs it on the far end of a real byte stream (a pty in
-//! the CLI end-to-end test). No K-line: the driver does not open K-line
-//! channels, so `ato3`/`ato4` are accepted but nothing answers on them.
+//! the CLI end-to-end test).
+//!
+//! K-line (channels 3 and 4): `ats` configuration, `aty` fast init (answered
+//! `ary<ch> <n> <seq>` + the StartCommunication response), `atw` five-baud
+//! init (answered `arw<ch> <kb1> <kb2> <seq>`), and `att` messages without a
+//! CAN id, answered by a **synthetic** KWP2000 ECU ([`synthetic_kwp_ecu`]:
+//! made-up identity strings, no real ECU data) only after a successful init.
+//! Answers arrive as K-line records: data without timestamp between 4-byte
+//! START/END markers ([`KLineRxLayout`] varies that), checksum appended by
+//! the host (`ISO9141_NO_CHECKSUM`) or by the cable. These K-line replies are
+//! modelled from the public notes; no cable capture of one exists.
+//!
+//! [`FakeConfig::bus_traffic`] puts frames from other nodes on the CAN bus
+//! as soon as a raw-CAN filter is installed, for receive-only capture tests.
 use crate::port::Op2Port;
-use crate::proto::{filter, status, CAN_29BIT_ID, PROTO_CAN};
+use crate::proto::{
+    filter, param, status, CAN_29BIT_ID, ISO9141_NO_CHECKSUM, PROTO_CAN, PROTO_ISO14230,
+    PROTO_ISO9141,
+};
 use opentune_core::Result;
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{Read, Write};
@@ -61,6 +76,25 @@ pub struct FakeFaults {
     pub garbage_on_open: Vec<u8>,
     /// Echo every transmit as a `0x20` loopback record (as `LOOPBACK` = 1).
     pub loopback_echo: bool,
+    /// The K-line ECU never answers: inits fail `are 7`, requests time out.
+    pub kline_silent_ecu: bool,
+    /// Answer `aty`/`atw` without the sequence number (the one `arw` seen
+    /// on a cable was unnumbered, bisak §3).
+    pub kline_unnumbered_init: bool,
+    /// Before every K-line answer, a frame for another tester address.
+    pub kline_foreign_frame: bool,
+}
+
+/// How the fake delivers a K-line message to the host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KLineRxLayout {
+    /// START marker, one data record, END marker (the vendor DLL's reading).
+    #[default]
+    StartDataEnd,
+    /// One data record, no markers.
+    DataOnly,
+    /// START, the data split over several 3-byte records, END.
+    Fragmented,
 }
 
 /// Static behaviour of the fake.
@@ -78,6 +112,18 @@ pub struct FakeConfig {
     /// Byte the ECU pads its frames with.
     pub ecu_pad: u8,
     pub faults: FakeFaults,
+    /// K-line ECU address (KWP2000 header and five-baud address).
+    pub kline_ecu_addr: u8,
+    /// Key bytes the K-line ECU reports at init.
+    pub kline_key_bytes: (u8, u8),
+    /// With the cable doing the checksum (flags 0): whether received K-line
+    /// data still carries it (the sources do not say).
+    pub kline_rx_checksum: bool,
+    pub kline_rx_layout: KLineRxLayout,
+    /// Frames other nodes put on the CAN bus once a raw-CAN filter is set
+    /// (id, data); delivered through the filters, after one transmit
+    /// indication and one bare START record that a receiver must drop.
+    pub bus_traffic: Vec<(u32, Vec<u8>)>,
 }
 
 impl Default for FakeConfig {
@@ -90,6 +136,11 @@ impl Default for FakeConfig {
             ecu_block_size: 0,
             ecu_pad: 0x55,
             faults: FakeFaults::default(),
+            kline_ecu_addr: 0x01,
+            kline_key_bytes: (0xEF, 0x8F),
+            kline_rx_checksum: true,
+            kline_rx_layout: KLineRxLayout::default(),
+            bus_traffic: Vec::new(),
         }
     }
 }
@@ -131,6 +182,10 @@ pub struct FakeLog {
     pub open_channels: Vec<u8>,
     /// Set if the bootloader command `atx` was ever received.
     pub saw_bootloader: bool,
+    /// `(proto, param, value)` of every accepted `ats`.
+    pub config: Vec<(u8, u32, u32)>,
+    /// K-line inits that woke the ECU: `fast <ch> <addr>` / `5baud <ch> <addr>`.
+    pub inits: Vec<String>,
 }
 
 /// Test-side view of a fake that has been moved into a driver or thread.
@@ -146,6 +201,61 @@ impl FakeHandle {
 #[derive(Debug)]
 struct Channel {
     flags: u32,
+    loopback: bool,
+}
+
+fn is_kline(proto: u8) -> bool {
+    proto == PROTO_ISO14230 || proto == PROTO_ISO9141
+}
+
+fn kchecksum(bytes: &[u8]) -> u8 {
+    bytes.iter().fold(0u8, |a, &b| a.wrapping_add(b))
+}
+
+/// A synthetic KWP2000 ECU for the fake K-line: made-up identity strings and
+/// a made-up memory pattern, nothing from a real unit. Answers
+/// readEcuIdentification (0x1A 0x90/0x91/0x94/0x97), readDataByLocalId
+/// (0x21), readMemoryByAddress (0x23, `addr ^ (addr >> 8)` bytes),
+/// startDiagnosticSession (0x10), testerPresent (0x3E) and
+/// StopCommunication (0x82); every other service gets NRC 0x11.
+pub fn synthetic_kwp_ecu() -> EcuHandler {
+    Box::new(|req: &[u8]| {
+        let pos = |sid: u8, data: &[u8]| {
+            let mut r = vec![sid + 0x40];
+            r.extend_from_slice(data);
+            vec![r]
+        };
+        match req {
+            [0x1A, opt] => {
+                let text: &[u8] = match opt {
+                    0x90 => b"OTKLINEFAKE000001",
+                    0x91 => b"OT-HW-KL01",
+                    0x94 => b"OT-SW-KL01",
+                    0x97 => b"SYNTH KWP ECU",
+                    _ => return vec![vec![0x7F, 0x1A, 0x12]],
+                };
+                let mut d = vec![*opt];
+                d.extend_from_slice(text);
+                pos(0x1A, &d)
+            }
+            [0x21, id] => pos(0x21, &[*id, 0x12, 0x34, *id ^ 0xFF]),
+            [0x23, a, b, c, n] => {
+                let base = u32::from_be_bytes([0, *a, *b, *c]);
+                let data: Vec<u8> = (0..*n as u32)
+                    .map(|i| {
+                        let x = base + i;
+                        (x ^ (x >> 8)) as u8
+                    })
+                    .collect();
+                pos(0x23, &data)
+            }
+            [0x10, s] => pos(0x10, &[*s]),
+            [0x3E, ..] => pos(0x3E, &[]),
+            [0x82] => pos(0x82, &[]),
+            [sid, ..] => vec![vec![0x7F, *sid, 0x11]],
+            [] => Vec::new(),
+        }
+    })
 }
 
 /// The ECU's half of ISO-TP.
@@ -173,9 +283,18 @@ pub struct FakeOp2 {
     clock_us: u32,
     garbage_sent: bool,
     stale_left: usize,
+    kline_ecu: EcuHandler,
+    /// The K-line ECU answers only after an init woke it.
+    kline_awake: bool,
 }
 
 impl FakeOp2 {
+    /// Replace the K-line ECU (default: [`synthetic_kwp_ecu`]). The handler
+    /// sees service id + data and returns the payloads to answer with.
+    pub fn set_kline_ecu(&mut self, ecu: EcuHandler) {
+        self.kline_ecu = ecu;
+    }
+
     pub fn new(cfg: FakeConfig, ecu: EcuHandler) -> (Self, FakeHandle) {
         let log = Arc::new(Mutex::new(FakeLog::default()));
         let stale_left = cfg.faults.stale_replies;
@@ -193,6 +312,8 @@ impl FakeOp2 {
                 clock_us: 0x1000,
                 garbage_sent: false,
                 stale_left,
+                kline_ecu: synthetic_kwp_ecu(),
+                kline_awake: false,
             },
             FakeHandle(log),
         )
@@ -303,7 +424,7 @@ impl FakeOp2 {
         // Channel verbs carry the protocol digit glued to the verb.
         let channel_verb = matches!(
             verb,
-            'o' | 'c' | 't' | 'f' | 'g' | 's' | 'k' | 'm' | 'n' | 'l'
+            'o' | 'c' | 't' | 'f' | 'g' | 's' | 'k' | 'm' | 'n' | 'l' | 'y' | 'w'
         );
         let (proto, args_text) = if channel_verb {
             let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -343,7 +464,8 @@ impl FakeOp2 {
         }
         let expected = match verb {
             'a' | 'z' | 'c' => 0,
-            'r' => 1,
+            'r' | 'w' => 1,
+            's' | 'y' => 2,
             'o' | 't' | 'f' => 3,
             _ => return, // undocumented here: no reply, like an unknown verb
         };
@@ -382,6 +504,7 @@ impl FakeOp2 {
         }
         match verb {
             'a' | 'z' => {
+                self.kline_awake = false;
                 self.channels.clear();
                 self.with_log(|l| {
                     l.filters.clear();
@@ -393,6 +516,9 @@ impl FakeOp2 {
                 self.reply("aro", seq);
             }
             'c' => {
+                if is_kline(proto) {
+                    self.kline_awake = false;
+                }
                 self.channels.remove(&proto);
                 self.with_log(|l| {
                     l.filters.retain(|f| f.proto != proto);
@@ -419,7 +545,10 @@ impl FakeOp2 {
                     return;
                 }
                 if let std::collections::btree_map::Entry::Vacant(e) = self.channels.entry(proto) {
-                    e.insert(Channel { flags });
+                    e.insert(Channel {
+                        flags,
+                        loopback: false,
+                    });
                     self.with_log(|l| {
                         l.opened.push((proto, flags, baud));
                         l.open_channels.push(proto);
@@ -429,7 +558,236 @@ impl FakeOp2 {
                     self.reply("are 20", seq);
                 }
             }
+            's' => self.set_config_cmd(proto, args[0] as u32, args[1] as u32, seq),
+            'w' => self.five_baud_cmd(proto, args[0], seq),
             _ => {}
+        }
+    }
+
+    fn set_config_cmd(&mut self, proto: u8, p: u32, value: u32, seq: Option<i64>) {
+        let Some(ch) = self.channels.get_mut(&proto) else {
+            self.reply("are 2", seq);
+            return;
+        };
+        // What the cable accepted in the sweep (bisak §8.1).
+        let ok = if is_kline(proto) {
+            p != param::DATA_RATE && param::KLINE.contains(&p)
+        } else {
+            matches!(p, 3 | 23 | 24 | 30 | 31 | 34 | 35 | 37)
+        };
+        if !ok {
+            self.reply("are 1", seq);
+            return;
+        }
+        if p == param::LOOPBACK {
+            ch.loopback = value != 0;
+        }
+        self.with_log(|l| l.config.push((proto, p, value)));
+        self.reply("aro", seq);
+    }
+
+    /// The init reply's trailing number, unless the fault drops it.
+    fn init_seq(&self, seq: Option<i64>) -> Option<i64> {
+        if self.cfg.faults.kline_unnumbered_init {
+            None
+        } else {
+            seq
+        }
+    }
+
+    fn five_baud_cmd(&mut self, proto: u8, addr: i64, seq: Option<i64>) {
+        if !is_kline(proto) || !self.channels.contains_key(&proto) {
+            self.reply("are 2", seq);
+            return;
+        }
+        if self.cfg.faults.kline_silent_ecu || addr != self.cfg.kline_ecu_addr as i64 {
+            self.reply("are 7", seq);
+            return;
+        }
+        self.kline_awake = true;
+        self.with_log(|l| l.inits.push(format!("5baud {proto} {addr}")));
+        let (kb1, kb2) = self.cfg.kline_key_bytes;
+        let s = self.init_seq(seq);
+        self.reply(&format!("arw{proto} {kb1} {kb2}"), s);
+    }
+
+    fn host_checksum(&self, proto: u8) -> bool {
+        self.channels
+            .get(&proto)
+            .is_some_and(|c| c.flags & ISO9141_NO_CHECKSUM != 0)
+    }
+
+    /// A host K-line message: (target, source, service + data), checksum
+    /// checked when the host frames it. `None` for a malformed message.
+    fn kline_parse(&self, proto: u8, msg: &[u8]) -> Option<(u8, u8, Vec<u8>)> {
+        let core = if self.host_checksum(proto) {
+            let (cs, core) = msg.split_last()?;
+            (kchecksum(core) == *cs).then_some(core)?
+        } else {
+            msg
+        };
+        let fmt = *core.first()?;
+        if fmt & 0xC0 == 0 || core.len() < 4 {
+            return None;
+        }
+        let (len, hdr) = match (fmt & 0x3F) as usize {
+            0 => (*core.get(3)? as usize, 4),
+            n => (n, 3),
+        };
+        (core.len() == hdr + len).then(|| (core[1], core[2], core[hdr..].to_vec()))
+    }
+
+    /// An ECU answer framed for `tester`, checksum per channel mode.
+    fn kline_frame(&self, proto: u8, tester: u8, data: &[u8]) -> Vec<u8> {
+        let ecu = self.cfg.kline_ecu_addr;
+        let mut f = if data.len() <= 0x3F {
+            vec![0x80 | data.len() as u8, tester, ecu]
+        } else {
+            vec![0x80, tester, ecu, data.len() as u8]
+        };
+        f.extend_from_slice(data);
+        if self.host_checksum(proto) || self.cfg.kline_rx_checksum {
+            f.push(kchecksum(&f));
+        }
+        f
+    }
+
+    fn raw_record(&mut self, proto: u8, st: u8, body: &[u8]) {
+        let mut rec = vec![b'a', b'r', b'0' + proto, (body.len() + 1) as u8, st];
+        rec.extend_from_slice(body);
+        self.emit(&rec);
+    }
+
+    /// Deliver one K-line message through the channel's filters, in the
+    /// configured record layout (`lb` = the loopback bit for an echo).
+    fn kline_deliver(&mut self, proto: u8, msg: &[u8], lb: u8) {
+        let filters = self
+            .log
+            .lock()
+            .map(|l| l.filters.clone())
+            .unwrap_or_default();
+        let hit = |f: &FilterRec| {
+            f.proto == proto
+                && msg.len() >= f.mask.len()
+                && (0..f.mask.len()).all(|i| msg[i] & f.mask[i] == f.pattern[i] & f.mask[i])
+        };
+        let passed = filters
+            .iter()
+            .any(|f| f.filter_type == filter::PASS && hit(f));
+        let blocked = filters
+            .iter()
+            .any(|f| f.filter_type == filter::BLOCK && hit(f));
+        if !passed || blocked {
+            return;
+        }
+        let ts = self.tick().to_be_bytes();
+        match self.cfg.kline_rx_layout {
+            KLineRxLayout::DataOnly => self.raw_record(proto, lb, msg),
+            layout => {
+                self.raw_record(proto, status::START | lb, &ts);
+                let chunk = if layout == KLineRxLayout::Fragmented {
+                    3
+                } else {
+                    250
+                };
+                for c in msg.chunks(chunk) {
+                    self.raw_record(proto, lb, c);
+                }
+                let ts = self.tick().to_be_bytes();
+                self.raw_record(proto, status::END | lb, &ts);
+            }
+        }
+    }
+
+    /// `aty<ch> <len> 0` + request: wake-up pattern, then StartCommunication.
+    fn fast_init_cmd(&mut self, proto: u8, seq: Option<i64>, payload: &[u8]) {
+        if !is_kline(proto) || !self.channels.contains_key(&proto) {
+            self.reply("are 2", seq);
+            return;
+        }
+        let parsed = self.kline_parse(proto, payload);
+        let ecu = self.cfg.kline_ecu_addr;
+        let ok = matches!(&parsed, Some((t, _, d)) if *t == ecu && d.as_slice() == [0x81]);
+        // `aty<ch> 0 0` is the wake-up alone: no answer to wait for.
+        if payload.is_empty() || !ok || self.cfg.faults.kline_silent_ecu {
+            self.reply("are 7", seq);
+            return;
+        }
+        let tester = parsed.map(|p| p.1).unwrap_or(0xF1);
+        self.kline_awake = true;
+        self.with_log(|l| l.inits.push(format!("fast {proto} {ecu}")));
+        let (kb1, kb2) = self.cfg.kline_key_bytes;
+        let resp = self.kline_frame(proto, tester, &[0xC1, kb1, kb2]);
+        let s = self.init_seq(seq);
+        self.reply(&format!("ary{proto} {}", resp.len()), s);
+        self.emit(&resp);
+    }
+
+    /// `att<ch>` on K-line: the message itself, no CAN id, no transmit
+    /// indication (bisak §7.9).
+    fn kline_transmit_cmd(&mut self, proto: u8, txflags: u32, budget: u32, seq: i64, msg: &[u8]) {
+        let parsed = self.kline_parse(proto, msg);
+        self.with_log(|l| {
+            l.transmits.push((proto, txflags, budget));
+            l.bus.push(BusFrame {
+                from_host: true,
+                id: parsed.as_ref().map_or(0, |p| p.0 as u32),
+                data: msg.to_vec(),
+            });
+        });
+        let mut answers = Vec::new();
+        let ecu = self.cfg.kline_ecu_addr;
+        let mut tester = 0xF1;
+        if let Some((target, source, data)) = parsed {
+            tester = source;
+            if self.kline_awake && !self.cfg.faults.kline_silent_ecu && target == ecu {
+                answers = (self.kline_ecu)(&data);
+            }
+        }
+        let frames: Vec<Vec<u8>> = answers
+            .iter()
+            .map(|a| self.kline_frame(proto, tester, a))
+            .collect();
+        if self.channels.get(&proto).is_some_and(|c| c.loopback) {
+            let echo = msg.to_vec();
+            self.kline_deliver(proto, &echo, status::LOOPBACK);
+        }
+        let deliver_all = |me: &mut Self| {
+            for f in &frames {
+                if me.cfg.faults.kline_foreign_frame {
+                    let other = me.kline_frame(proto, tester ^ 0x01, &[0x7F, 0x3E, 0x11]);
+                    me.kline_deliver(proto, &other, 0);
+                }
+                me.with_log(|l| {
+                    l.bus.push(BusFrame {
+                        from_host: false,
+                        id: ecu as u32,
+                        data: f.clone(),
+                    })
+                });
+                me.kline_deliver(proto, f, 0);
+            }
+        };
+        if self.cfg.faults.frames_before_ack {
+            deliver_all(self);
+            self.reply("aro", Some(seq));
+        } else {
+            self.reply("aro", Some(seq));
+            deliver_all(self);
+        }
+    }
+
+    /// Other nodes' traffic, once a raw-CAN filter exists: first a transmit
+    /// indication and a bare START (both must be dropped by a receiver).
+    fn emit_bus_traffic(&mut self) {
+        let traffic = std::mem::take(&mut self.cfg.bus_traffic);
+        if traffic.is_empty() {
+            return;
+        }
+        self.record(PROTO_CAN, status::TX_INDICATION, 0x7DF, &[]);
+        self.record(PROTO_CAN, status::START, 0x7DF, &[]);
+        for (id, data) in &traffic {
+            self.deliver(*id, data, true);
         }
     }
 
@@ -453,6 +811,8 @@ impl FakeOp2 {
         }
         if name.starts_with("atf") {
             self.filter_cmd(proto, args, seq, payload);
+        } else if name.starts_with("aty") {
+            self.fast_init_cmd(proto, seq, payload);
         } else if name.starts_with("att") {
             self.transmit_cmd(proto, args, seq, payload);
         }
@@ -480,6 +840,9 @@ impl FakeOp2 {
         };
         self.with_log(|l| l.filters.push(rec));
         self.reply(&format!("arf{proto} {id}"), seq);
+        if proto == PROTO_CAN {
+            self.emit_bus_traffic();
+        }
     }
 
     fn transmit_cmd(&mut self, proto: u8, args: &[i64], seq: Option<i64>, payload: &[u8]) {
@@ -493,6 +856,10 @@ impl FakeOp2 {
         }
         if budget == 0 || self.cfg.faults.bus_no_ack {
             self.reply("are 9", Some(seq));
+            return;
+        }
+        if is_kline(proto) {
+            self.kline_transmit_cmd(proto, txflags, budget, seq, payload);
             return;
         }
         if payload.len() < 4 || (proto == PROTO_CAN && payload.len() > 12) {
@@ -700,6 +1067,14 @@ fn payload_len(verb: char, args: &[i64]) -> Option<usize> {
         't' => {
             let n = args[0];
             Some(if (1..=4128).contains(&n) {
+                n as usize
+            } else {
+                usize::MAX
+            })
+        }
+        'y' => {
+            let n = args[0];
+            Some(if (0..=255).contains(&n) {
                 n as usize
             } else {
                 usize::MAX

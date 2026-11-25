@@ -113,7 +113,7 @@ The driver's USB access uses [kevinmehall/nusb](https://github.com/kevinmehall/n
 ## OpenPort 2.0 and J2534 interface protocol
 
 The `openport2` driver's wire protocol comes from these public notes, audited
-2026-11-19 ([DRIVERS.md §3l](DRIVERS.md#3l-openport2-tactrix-openport-20-hardware-validation-pending)).
+2026-11-19 ([DRIVERS.md §3l](DRIVERS.md#3l-openport2-tactrix-openport-20-capture-validated-k-line-and-transmit-pending)).
 Facts only: no code was copied, and the Tactrix DLL, EcuFlash and the vendor
 firmware were never opened or unpacked by OpenTune. Licences checked 2026-11-19
 (`LICENSE` files).

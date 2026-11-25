@@ -9,6 +9,7 @@ name = "opentune"
 path = "src/main.rs"
 
 [dependencies]
+log = "0.4"
 opentune-core = { path = "../opentune-core" }
 opentune-checksum = { path = "../opentune-checksum" }
 opentune-flash = { path = "../opentune-flash" }

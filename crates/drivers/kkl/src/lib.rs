@@ -39,8 +39,12 @@
 //! * `options["baud"]` or `bitrate`: K-line baud (default `10400`).
 //! * `tx_id` (low byte): ECU target address (KWP physical addressing). The
 //!   tester source address is `0xF1`.
-//! * `diag_layer`: `Kwp2000` (service 0x1A / 0x23 / 0x34…) or `Uds` (RDBI /
-//!   upload / download), run on top of the same K-line transport.
+//! * Diagnostic layer: `options["layer"]` = `kwp2000` (service 0x1A / 0x23 /
+//!   0x34…) or `uds` (RDBI / upload / download), run on top of the same
+//!   K-line transport. Without the option, an ECU definition's `diag_layer`
+//!   is kept when its protocol is a K-line one; otherwise the driver uses
+//!   **KWP2000** (a K-line ECU almost always speaks it, and a caller's generic
+//!   default — the CLI's is UDS — must not send UDS down a K-line).
 //!
 //! ## BREAK support
 //!
@@ -60,7 +64,7 @@ use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
     Capabilities, ConnectConfig, DiagLayer, EcuId, Error, Interface, InterfaceInfo, MemoryRegion,
-    Phase, Progress, Result,
+    Phase, Progress, Protocol, Result,
 };
 use std::io::{Read, Write};
 use std::thread::sleep;
@@ -526,6 +530,8 @@ impl Interface for KklDriver {
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
+        // Decided (and a bad `layer` refused) before the port is touched.
+        let layer = diag_layer_for(cfg)?;
         let port = cfg
             .options
             .get("port")
@@ -552,7 +558,7 @@ impl Interface for KklDriver {
         }
 
         self.transport = Some(transport);
-        self.diag_layer = cfg.diag_layer;
+        self.diag_layer = layer;
         self.cfg = Some(cfg.clone());
         Ok(())
     }
@@ -760,6 +766,27 @@ fn uds_write_memory(
 }
 
 // --- KWP2000 flows (K-line) -------------------------------------------------
+
+/// The diagnostic layer for a K-line session: `options["layer"]`, else the
+/// ECU definition's when its protocol is a K-line one, else KWP2000 (never a
+/// caller's generic UDS default).
+fn diag_layer_for(cfg: &ConnectConfig) -> Result<DiagLayer> {
+    match cfg
+        .options
+        .get("layer")
+        .map(|s| s.trim().to_ascii_lowercase())
+    {
+        Some(l) if l == "kwp2000" || l == "kwp" => Ok(DiagLayer::Kwp2000),
+        Some(l) if l == "uds" => Ok(DiagLayer::Uds),
+        Some(l) => Err(Error::Config(format!(
+            "kkl: layer '{l}' (expected kwp2000 or uds)"
+        ))),
+        None if matches!(cfg.protocol, Protocol::Iso14230Kline | Protocol::Iso9141) => {
+            Ok(cfg.diag_layer)
+        }
+        None => Ok(DiagLayer::Kwp2000),
+    }
+}
 
 fn read_kwp_ecu_id(transport: &mut dyn DiagTransport) -> Result<EcuId> {
     let mut id = EcuId::default();
@@ -978,6 +1005,81 @@ fn kwp_security_access(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Without a `layer` option the K-line driver speaks KWP2000, even when the
+    /// caller left the generic UDS default (the CLI does); `layer` overrides,
+    /// and an ECU definition naming a K-line protocol keeps its own layer.
+    #[test]
+    fn layer_defaults_to_kwp2000_on_kline() {
+        let mut c = ConnectConfig::default();
+        assert_eq!(c.diag_layer, DiagLayer::Uds, "the generic default");
+        assert_eq!(diag_layer_for(&c).unwrap(), DiagLayer::Kwp2000);
+        c.options.insert("layer".into(), "uds".into());
+        assert_eq!(diag_layer_for(&c).unwrap(), DiagLayer::Uds);
+        c.options.insert("layer".into(), "KWP2000".into());
+        assert_eq!(diag_layer_for(&c).unwrap(), DiagLayer::Kwp2000);
+        c.options.insert("layer".into(), "j1850".into());
+        assert!(diag_layer_for(&c).is_err());
+        let mut def = ConnectConfig {
+            protocol: Protocol::Iso14230Kline,
+            diag_layer: DiagLayer::Uds,
+            ..ConnectConfig::default()
+        };
+        assert_eq!(
+            diag_layer_for(&def).unwrap(),
+            DiagLayer::Uds,
+            "definition kept"
+        );
+        def.diag_layer = DiagLayer::Kwp2000;
+        assert_eq!(diag_layer_for(&def).unwrap(), DiagLayer::Kwp2000);
+        // A bad layer is refused before any port is opened.
+        let mut d = KklDriver::new();
+        let mut bad = ConnectConfig::default();
+        bad.options.insert("layer".into(), "nope".into());
+        bad.options.insert("port".into(), "/nonexistent/tty".into());
+        let e = d.open(&bad).unwrap_err().to_string();
+        assert!(e.contains("layer"), "{e}");
+    }
+
+    /// `identify` with the CLI's generic config (UDS default) sends KWP2000
+    /// readEcuIdentification (0x1A) down the K-line, never UDS RDBI (0x22).
+    #[cfg(unix)]
+    #[test]
+    fn identify_sends_kwp_not_uds_by_default() {
+        use std::io::Read;
+        let (host, mut adapter) = serialport::TTYPort::pair().expect("pty pair");
+        let mut d = KklDriver::new();
+        d.diag_layer = diag_layer_for(&ConnectConfig::default()).unwrap();
+        d.transport = Some(KklTransport {
+            port: Box::new(host),
+            target: 0x01,
+            source: TESTER_ADDR,
+            key_bytes: None,
+        });
+        let reader = std::thread::spawn(move || {
+            use serialport::SerialPort;
+            adapter
+                .set_timeout(std::time::Duration::from_millis(1500))
+                .unwrap();
+            let mut got = Vec::new();
+            let mut buf = [0u8; 64];
+            while got.len() < 4 {
+                match adapter.read(&mut buf) {
+                    Ok(n) if n > 0 => got.extend_from_slice(&buf[..n]),
+                    _ => break,
+                }
+            }
+            got // the adapter end drops here: the driver's read then fails
+        });
+        let _ = d.read_ecu_id(); // no ECU answers; only the request matters
+        let req = reader.join().unwrap();
+        assert!(req.len() >= 4, "a request went out: {req:02X?}");
+        let fmt = req[0];
+        assert_eq!(fmt & 0xC0, 0x80, "KWP physical addressing: {req:02X?}");
+        assert_eq!((req[1], req[2]), (0x01, TESTER_ADDR), "{req:02X?}");
+        let sid = if fmt & 0x3F != 0 { req[3] } else { req[4] };
+        assert_eq!(sid, 0x1A, "readEcuIdentification, not UDS 0x22: {req:02X?}");
+    }
 
     #[cfg(unix)]
     #[test]

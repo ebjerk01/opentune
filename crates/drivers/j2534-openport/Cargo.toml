@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+log = "0.4"
 opentune-core = { path = "../../opentune-core" }
 serialport.workspace = true
 

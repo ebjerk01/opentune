@@ -18,7 +18,19 @@
 //! - Device → host: ASCII replies `ar<verb> <fields…> <seq>\r\n` (the trailing
 //!   number echoes the command's sequence number; `ari` has none), interleaved
 //!   with binary records `'a' 'r' <proto digit> <len> <status> <body…>` where
-//!   `len` counts every byte after it (status + body).
+//!   `len` counts every byte after it (status + body). One reply carries raw
+//!   bytes after its line: the fast-init result `ary<ch> <n> [<seq>]\r\n` + `n`
+//!   bytes (bisak §3).
+//!
+//! K-line (channels 3 and 4), from the same sources: `aty<ch> <len> 0` + the
+//! request is a fast init answered `ary`; `atw<ch> <address>` (decimal, no
+//! payload) is a five-baud init answered `arw<ch> <kb1> <kb2> [<seq>]` with the
+//! key bytes in decimal (bisak §3–4, the vendor DLL trace `aty4 4 0 4` + 4 bytes
+//! and `atw3 51 8`); `ats<ch> <param> <value>` writes a J2534 configuration
+//! parameter (bisak §8.1). K-line receive records carry the message bytes with
+//! **no** timestamp; only a START/END record whose body is exactly four bytes is
+//! a timestamp-only marker (bisak §7.9, read from the vendor DLL there; the
+//! received-frame layout is unconfirmed on a cable even upstream).
 
 /// J2534 protocol id of the K-line ISO 9141 channel.
 pub const PROTO_ISO9141: u8 = 3;
@@ -33,6 +45,57 @@ pub const PROTO_ISO15765: u8 = 6;
 pub const CAN_29BIT_ID: u32 = 0x0000_0100;
 /// J2534 `ISO15765_FRAME_PAD` TxFlags bit (pad CAN frames to 8 bytes).
 pub const ISO15765_FRAME_PAD: u32 = 0x0000_0040;
+/// J2534 `ISO9141_NO_CHECKSUM` connect flag: the cable neither appends nor
+/// verifies the K-line checksum; the host frames it (SAE J2534-1; bisak §7.9
+/// shows `ato3 4608` = this plus `ISO9141_K_LINE_ONLY`).
+pub const ISO9141_NO_CHECKSUM: u32 = 0x0000_0200;
+/// J2534 `ISO9141_K_LINE_ONLY` connect flag: initialise on K only, never L.
+pub const ISO9141_K_LINE_ONLY: u32 = 0x0000_1000;
+
+/// J2534-1 configuration parameter ids (`ats<ch> <param> <value>`). The
+/// K-line channel accepts exactly these (swept on a cable, bisak §8.1);
+/// `DATA_RATE` is read-only there. P-times count 0.5 ms, W-times and the
+/// wake-up times 1 ms (SAE J2534-1).
+pub mod param {
+    pub const DATA_RATE: u32 = 1;
+    pub const LOOPBACK: u32 = 3;
+    pub const P1_MAX: u32 = 7;
+    pub const P3_MIN: u32 = 10;
+    pub const P4_MIN: u32 = 12;
+    pub const W1: u32 = 14;
+    pub const W2: u32 = 15;
+    pub const W3: u32 = 16;
+    pub const W4: u32 = 17;
+    pub const W5: u32 = 18;
+    pub const TIDLE: u32 = 19;
+    pub const TINIL: u32 = 20;
+    pub const TWUP: u32 = 21;
+    pub const PARITY: u32 = 22;
+    pub const W0: u32 = 25;
+    pub const DATA_BITS: u32 = 32;
+    pub const FIVE_BAUD_MOD: u32 = 33;
+
+    /// Every parameter the K-line channel was found to accept.
+    pub const KLINE: &[u32] = &[
+        DATA_RATE,
+        LOOPBACK,
+        P1_MAX,
+        P3_MIN,
+        P4_MIN,
+        W1,
+        W2,
+        W3,
+        W4,
+        W5,
+        TIDLE,
+        TINIL,
+        TWUP,
+        PARITY,
+        W0,
+        DATA_BITS,
+        FIVE_BAUD_MOD,
+    ];
+}
 
 /// Analog input carrying the vehicle battery (OBD pin 16), read with `atr`.
 pub const PIN_VBAT: u8 = 16;
@@ -184,6 +247,25 @@ pub fn read_pin(pin: u8) -> String {
     format!("atr {pin}")
 }
 
+/// `ats<proto> <param> <value>`: write a J2534 configuration parameter
+/// (reply `aro <seq>`, `are 1` for one the channel does not support).
+pub fn set_config(proto: u8, param: u32, value: u32) -> String {
+    format!("ats{proto} {param} {value}")
+}
+
+/// `aty<proto> <len> 0` + `len` request bytes: K-line fast init (wake-up
+/// pattern, then the request; answered `ary<proto> <n> [<seq>]` + `n` bytes,
+/// or `are 7` when the ECU stays silent). `len` 0 makes the wake-up alone.
+pub fn fast_init(proto: u8, len: usize) -> String {
+    format!("aty{proto} {len} 0")
+}
+
+/// `atw<proto> <address>`: K-line five-baud init to `address` (decimal, no
+/// payload); answered `arw<proto> <kb1> <kb2> [<seq>]` after ~2.5 s.
+pub fn five_baud_init(proto: u8, address: u8) -> String {
+    format!("atw{proto} {address}")
+}
+
 /// One message decoded from the device stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
@@ -200,6 +282,9 @@ pub struct Reply {
     pub text: String,
     /// `text` split on whitespace.
     pub fields: Vec<String>,
+    /// Raw bytes that followed the line: only `ary` (fast-init result)
+    /// carries any.
+    pub data: Vec<u8>,
 }
 
 impl Reply {
@@ -237,6 +322,13 @@ pub struct CanRecord {
 }
 
 impl RawFrame {
+    /// A K-line START or END marker: the flag set and a body of exactly the
+    /// 4-byte timestamp. Every other K-line record is message data (the rule
+    /// bisak §7.9 reads from the vendor DLL).
+    pub fn is_kline_marker(&self) -> bool {
+        self.status & (status::START | status::END) != 0 && self.body.len() == 4
+    }
+
     /// Decode the CAN / ISO 15765 layout (timestamp, id, data). `None` when the
     /// body is too short to hold the timestamp and id. K-line records use a
     /// different layout (bisak §7.9) and must not be decoded with this.
@@ -337,14 +429,31 @@ impl Parser {
                     }
                     return None;
                 };
-                let line: Vec<u8> = self.buf.drain(..3 + nl + 1).collect();
-                let rest = &line[3..3 + nl];
-                let text = String::from_utf8_lossy(rest).trim().to_string();
-                let fields = text.split_whitespace().map(str::to_string).collect();
+                let line_end = 3 + nl + 1;
+                let text = String::from_utf8_lossy(&self.buf[3..3 + nl])
+                    .trim()
+                    .to_string();
+                let fields: Vec<String> = text.split_whitespace().map(str::to_string).collect();
+                // `ary<ch> <n> [<seq>]` is followed by `n` raw response bytes,
+                // which belong to this reply, not the stream (bisak §3).
+                let extra = if kind == b'y' {
+                    fields
+                        .get(1)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .filter(|&n| n <= 255)
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                if self.buf.len() < line_end + extra {
+                    return None;
+                }
+                let rec: Vec<u8> = self.buf.drain(..line_end + extra).collect();
                 return Some(Msg::Reply(Reply {
                     verb: kind,
                     text,
                     fields,
+                    data: rec[line_end..].to_vec(),
                 }));
             }
             // "ar" followed by something that is neither a digit nor a reply
@@ -536,6 +645,53 @@ mod tests {
             panic!()
         };
         assert_eq!(r.seq(), Some(9));
+    }
+
+    #[test]
+    fn k_line_commands_and_init_replies() {
+        assert_eq!(set_config(4, param::P1_MAX, 40), "ats4 7 40");
+        assert_eq!(fast_init(4, 4), "aty4 4 0");
+        assert_eq!(five_baud_init(3, 0x33), "atw3 51");
+        assert_eq!(
+            open_channel(4, ISO9141_NO_CHECKSUM, 10_400),
+            "ato4 512 10400 0"
+        );
+        // `ary` carries raw bytes after its line, which may spell "ar" or
+        // CR/LF; under every split they belong to the reply.
+        let mut stream = b"ary4 6 9\r\n".to_vec();
+        stream.extend([0x83, 0x61, 0x72, 0x0d, 0x0a, 0x8f]);
+        stream.extend(b"arw4 239 143 10\r\naro 11\r\n");
+        for chunk in 1..stream.len() {
+            let mut p = Parser::new();
+            let mut got = Vec::new();
+            for c in stream.chunks(chunk) {
+                p.push(c);
+                while let Some(m) = p.next() {
+                    got.push(m);
+                }
+            }
+            assert_eq!(got.len(), 3, "chunk {chunk}");
+            let Msg::Reply(y) = &got[0] else { panic!() };
+            assert_eq!((y.verb, y.seq()), (b'y', Some(9)));
+            assert_eq!(y.data, vec![0x83, 0x61, 0x72, 0x0d, 0x0a, 0x8f]);
+            let Msg::Reply(w) = &got[1] else { panic!() };
+            assert_eq!(w.fields, vec!["4", "239", "143", "10"]);
+            assert!(w.data.is_empty());
+            assert_eq!(p.garbage, 0);
+        }
+        // K-line markers: START/END with exactly a timestamp.
+        let marker = RawFrame {
+            proto: 4,
+            status: status::START,
+            body: vec![0, 0, 1, 2],
+        };
+        assert!(marker.is_kline_marker());
+        let data = RawFrame {
+            proto: 4,
+            status: status::END,
+            body: vec![0x83, 0xF1, 0x01, 0x7E, 0x00],
+        };
+        assert!(!data.is_kline_marker());
     }
 
     #[test]

@@ -12,6 +12,23 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **CLI diagnostic logging** (off by default): `OPENTUNE_LOG` (or `RUST_LOG`)
+  turns on stderr logging, e.g. `OPENTUNE_LOG=openport2=trace`. The OpenPort
+  2.0 driver logs every command line it sends and every reply and record it
+  receives at `trace`, for bringing up a new ECU or cable.
+- **OpenPort 2.0 K-line (read-only, offline-tested):** `--driver openport2
+  --bus kline` (or `iso9141`, or an ECU definition with a K-line protocol)
+  opens the cable's ISO 14230 / ISO 9141 channel, wakes the ECU with the
+  cable's fast or five-baud init (`init=fast|5baud|none`, key bytes
+  reported), sets P1/P3/P4, W0–W5, TIdle, TiniL, TWUP and FIVE_BAUD_MOD on
+  request (range-checked), and runs KWP2000 framing as a `DiagTransport`, so
+  `identify` and the core KWP2000 client work over it as over `kkl`. A
+  read-only allow-list refuses every non-read service before it is sent;
+  writes are refused. Tested against a synthetic KWP2000 ECU in the offline
+  fake cable; hardware validation pending (docs/DRIVERS.md §3l).
+- **`opentune candump --driver openport2`:** receive-only raw-CAN capture
+  (pass-all filter, 11- and 29-bit ids); the monitor has no transmit path and
+  its session refuses every bus-writing command unsent.
 - **Checksums: Subaru / Mitsubishi TCU balance-word sums** —
   `subaru-tcu-m32r` (Hitachi M32R), `subaru-tcu-sh7055` (Denso SH7055) and
   `subaru-tcu-mh8104` (Mitsubishi MH8104 CVT), reimplemented from FastECU
@@ -27,6 +44,19 @@ section (alpha/bench builds) until they are vehicle-tested.
   block offset.
 
 ### Changed
+- **One read-only allow-list for every read path.** The list of services a
+  read-only path may send now lives in `opentune_core::protocol::readonly`;
+  the desktop/native `ReadOnlyDiag` uses it directly and the OpenPort 2.0
+  K-line guard derives its narrower K-line set from it (no upload, nothing in
+  the KWP2000 manufacturer range, plus Start/StopCommunication). Tests pin
+  both sets, so the safety rule cannot drift between them. No behaviour
+  change.
+- **`kkl` speaks KWP2000 by default.** Without `--opt layer=uds|kwp2000`
+  the K-line driver now uses KWP2000 (as `openport2` on K-line does) unless an
+  ECU definition with a K-line protocol names its own layer. Before,
+  `opentune identify --driver kkl` inherited the CLI's generic UDS default and
+  sent UDS requests down the K-line, which a KWP2000 ECU (EDC15, ME7, …) does
+  not answer.
 - **Checksums: an algorithm not yet validated on a real dump is never reported
   as "supported", and only writes against a proven stored value.** One rule
   for every algorithm, old and new:
