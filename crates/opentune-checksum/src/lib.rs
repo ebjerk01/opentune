@@ -10,6 +10,7 @@
 use opentune_core::{MemoryRegion, Result};
 
 pub mod dsg;
+pub mod ecm3;
 pub mod edc15;
 pub mod edc16;
 pub mod edc17;
@@ -17,6 +18,7 @@ pub mod generic;
 pub mod me7;
 pub mod pcr21;
 pub mod simos;
+pub mod subaru_tcu;
 pub mod tcu;
 
 /// Status of one checksum-protected block.
@@ -244,6 +246,8 @@ pub fn report_detailed(
 pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
     match id {
         "crc32-tail" => Some(Box::new(generic::Crc32Tail)),
+        #[cfg(any(test, feature = "test-algos"))]
+        "test-crc32-tail" => Some(Box::new(generic::TestCrc32Tail)),
         "edc16" => Some(Box::new(edc16::Edc16)),
         "edc17" => Some(Box::new(edc17::Edc17)),
         "pcr21" => Some(Box::new(pcr21::Pcr21)),
@@ -256,6 +260,10 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "zf8hp" | "zf-8hp" => Some(Box::new(tcu::Zf8hpCal)),
         "haldex" | "haldex-gen5" => Some(Box::new(tcu::HaldexGen5)),
         "simos-crc" | "conti-crc" => Some(Box::new(simos::SimosCrc)),
+        "subaru-tcu-m32r" => Some(Box::new(subaru_tcu::SubaruTcuM32r)),
+        "subaru-tcu-sh7055" => Some(Box::new(subaru_tcu::SubaruTcuSh7055)),
+        "subaru-tcu-mh8104" => Some(Box::new(subaru_tcu::SubaruTcuMh8104)),
+        "ecm3" | "simos-ecm3" => Some(Box::new(ecm3::Ecm3)),
         _ => None,
     }
 }
@@ -434,6 +442,52 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     Ford/EMS3120 reads: pass the stock read as reference) and refuses \
                     an image whose startup-boot header fails (BMW MSD8x).",
         },
+        AlgoInfo {
+            id: "subaru-tcu-m32r",
+            name: "Subaru Hitachi M32R TCU (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 32-bit word sums over a 0x80000-byte read: sum of \
+                    0x8020.. must equal 0x5AA5A55A (balance @0x8020), and the two's \
+                    complement of the sum of every word except 0x8000..0x8007 is \
+                    stored @0x8000 (copy @0x8004). Synthetic-tested only (FastECU \
+                    port): standalone correct refuses an edited image; pass a \
+                    validating stock dump. A sum-2 low byte of zero is ambiguous \
+                    upstream and never written.",
+        },
+        AlgoInfo {
+            id: "subaru-tcu-sh7055",
+            name: "Subaru Denso SH7055 TCU (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 16-bit word sum over 12 fixed regions \
+                    (0x1000..0x80000 minus four gaps) must equal 0x5AA5; balance \
+                    @0x7FFF4. Synthetic-tested only (FastECU port): standalone \
+                    correct refuses an edited image; pass a validating stock dump.",
+        },
+        AlgoInfo {
+            id: "subaru-tcu-mh8104",
+            name: "Subaru CVT TCU, Mitsubishi MH8104 (512 KiB)",
+            family: "subaru-tcu",
+            needs_reference: true,
+            notes: "Big-endian 32-bit word sum over 0x8000..0x80000 minus 0xFFFA \
+                    (FastECU's fixed adjustments) must equal 0x5AA45AAB; balance \
+                    @0x81FC. Synthetic-tested only (FastECU port): standalone \
+                    correct refuses an edited image; pass a validating stock dump.",
+        },
+        AlgoInfo {
+            id: "ecm3",
+            name: "VAG Simos ECM3 calibration-monitor sum",
+            family: "simos",
+            needs_reference: true,
+            notes: "Alias: simos-ecm3. VW_Flash-documented 64-bit additive monitor sum \
+                    (init words + LE u32 words over an address list in CAL +0x418 or ASW1 \
+                    0x520/0x540) on an extracted Simos 8/10/12/16/18 CAL block, stored \
+                    high word first at CAL +0x400 (or +0x438). Synthetic only (no real \
+                    Simos image): always Consistent; standalone correct refuses a mismatch \
+                    — correct_with_reference with a verifying stock CAL block of the same \
+                    software is required; full reads refused.",
+        },
     ]
 }
 
@@ -588,7 +642,7 @@ mod tests {
     #[test]
     fn correct_bad_only_matches_generic_crc32_tail() {
         // The default hook (= correct) must behave identically via the free fn.
-        let algo = generic::Crc32Tail;
+        let algo = generic::TestCrc32Tail;
         let mut img = vec![0u8; 16]; // tail CRC wrong (all zero)
         let fixes = correct_bad_only(&algo, &mut img).unwrap();
         assert_eq!(fixes.len(), 1);
@@ -623,6 +677,11 @@ mod tests {
             "haldex-gen5",
             "simos-crc",
             "conti-crc",
+            "subaru-tcu-m32r",
+            "subaru-tcu-sh7055",
+            "subaru-tcu-mh8104",
+            "ecm3",
+            "simos-ecm3",
         ];
         let infos = algorithms();
         for id in resolvable {

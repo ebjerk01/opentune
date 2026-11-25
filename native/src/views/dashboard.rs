@@ -62,6 +62,52 @@ pub struct DashboardView {
     sessions: HashMap<String, Arc<Mutex<Option<ObdSession>>>>,
     note: Option<(Tone, String)>,
     show_picker: bool,
+    /// The preferences last loaded / saved (None until the first frame).
+    prefs_seen: Option<DashPrefs>,
+}
+
+/// What the Dashboard remembers between runs (egui's persisted memory,
+/// saved with the app's state).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct DashPrefs {
+    preset: Preset,
+    custom: Vec<String>,
+    punit: PressureUnit,
+    interval_ms: u64,
+}
+
+impl DashboardView {
+    fn prefs(&self) -> DashPrefs {
+        DashPrefs {
+            preset: self.preset,
+            custom: self.custom.clone(),
+            punit: self.punit,
+            interval_ms: self.interval_ms,
+        }
+    }
+
+    /// Load the remembered preferences on the first frame, save them when
+    /// they change.
+    fn sync_prefs(&mut self, ui: &Ui) {
+        let id = egui::Id::unique("opentune-dashboard-prefs");
+        if self.prefs_seen.is_none() {
+            if let Some(p) = ui.data_mut(|d| d.get_persisted::<DashPrefs>(id)) {
+                self.preset = p.preset;
+                self.custom = p.custom;
+                self.punit = p.punit;
+                if [250, 500, 1000].contains(&p.interval_ms) {
+                    self.interval_ms = p.interval_ms;
+                }
+            }
+            self.prefs_seen = Some(self.prefs());
+            return;
+        }
+        let now = self.prefs();
+        if self.prefs_seen.as_ref() != Some(&now) {
+            ui.data_mut(|d| d.insert_persisted(id, now.clone()));
+            self.prefs_seen = Some(now);
+        }
+    }
 }
 
 impl Default for DashboardView {
@@ -78,6 +124,7 @@ impl Default for DashboardView {
             sessions: HashMap::new(),
             note: None,
             show_picker: false,
+            prefs_seen: None,
         }
     }
 }
@@ -437,6 +484,7 @@ impl NativeView for DashboardView {
         self.ctl.as_ref().map(|_| "live".into())
     }
     fn ui(&mut self, ui: &mut egui::Ui, host: &mut Host<'_>) {
+        self.sync_prefs(ui);
         self.poll_job();
         let running = self.running();
         if let Some(c) = &self.ctl {

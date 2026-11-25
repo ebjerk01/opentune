@@ -43,5 +43,7 @@ opentune-flash = { path = "../opentune-flash" }
 opentune-driver-mock = { path = "../drivers/mock" }
 
 [dev-dependencies]
+# The test-only `test-crc32-tail` algorithm.
+opentune-checksum = { path = "../opentune-checksum", features = ["test-algos"] }
 # Used by the crate's own tests to synthesise a throw-away flash image.
 tempfile = "3"

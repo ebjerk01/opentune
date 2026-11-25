@@ -59,7 +59,7 @@ pub const RPM: &str = "rpm";
 pub const BOOST: &str = "boost_kpa";
 
 /// Which values the tiles show.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Preset {
     #[default]
     Diesel,
@@ -170,7 +170,7 @@ pub fn level(ch: Option<&Channel>, v: Option<f64>) -> Level {
 }
 
 /// Pressure display unit.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PressureUnit {
     #[default]
     Bar,

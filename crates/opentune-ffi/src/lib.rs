@@ -729,13 +729,13 @@ mod tests {
         // crc32-tail is self-contained: a zeroed image has a bad tail; fixing it
         // must then verify clean.
         let (_d, path) = tmp_image(&[0u8; 1024]);
-        let before = checksum_verify(path.clone(), "crc32-tail".into()).unwrap();
+        let before = checksum_verify(path.clone(), "test-crc32-tail".into()).unwrap();
         assert!(!before.is_empty());
 
-        let fixes = checksum_fix(path.clone(), "crc32-tail".into(), None).unwrap();
+        let fixes = checksum_fix(path.clone(), "test-crc32-tail".into(), None).unwrap();
         assert!(!fixes.is_empty(), "a zeroed tail should need correction");
 
-        let after = checksum_verify(path, "crc32-tail".into()).unwrap();
+        let after = checksum_verify(path, "test-crc32-tail".into()).unwrap();
         assert!(after.iter().all(|b| b.ok), "all blocks OK after fix");
     }
 

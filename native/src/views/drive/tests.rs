@@ -356,3 +356,27 @@ fn replay_loads_a_log_in_a_job_and_plays() {
 fn fx_missing() -> std::path::PathBuf {
     std::env::temp_dir().join("ot-drive-no-such-log.csv")
 }
+
+/// The tile choices and the pressure unit are remembered in egui's
+/// persisted memory between runs.
+#[test]
+fn tile_choices_are_remembered_between_runs() {
+    use eframe::egui;
+    let ctx = egui::Context::default();
+    let frame = |ctx: &egui::Context, v: &mut DriveView| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| v.sync_prefs(ui));
+        // Headless: nothing uploads the font atlas.
+        out.textures_delta.clear();
+    };
+    let mut a = DriveView::default();
+    frame(&ctx, &mut a);
+    a.sel_replay = vec!["rpm".into(), "boost".into()];
+    a.sel_live = vec!["speed".into()];
+    a.punit = PUnit::KPa;
+    frame(&ctx, &mut a);
+    let mut b = DriveView::default();
+    frame(&ctx, &mut b);
+    assert_eq!(b.sel_replay, ["rpm", "boost"]);
+    assert_eq!(b.sel_live, ["speed"]);
+    assert_eq!(b.punit, PUnit::KPa);
+}

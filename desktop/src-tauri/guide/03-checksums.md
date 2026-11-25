@@ -34,6 +34,12 @@ out of scope.
 A plain CRC-32 (IEEE 802.3, reflected) stored at the tail of the image. A simple,
 well-defined scheme useful as a reference and for custom layouts.
 
+It checks no layout, so **Fix** only writes when it can prove the scheme: an
+image whose tail already matches needs nothing, and an edited image is fixed
+against your own untouched stock image (the reference), whose tail must
+validate. Without one it refuses rather than overwrite the last four bytes of
+an image that may not use this scheme at all.
+
 ## Using the panel
 
 1. Pick the family that matches the ECU (Identify shows a definition's `checksum` id).

@@ -649,6 +649,12 @@ impl LogView {
         std::mem::take(&mut self.show_drive)
     }
 
+    /// The map of the app's definition to show in the Maps view, once after
+    /// the overlay's "Open in Maps" was pressed.
+    pub fn take_open_map(&mut self) -> Option<String> {
+        self.overlay.open_maps.take()
+    }
+
     /// Queue the open log for the Drive view's replay.
     fn send_to_drive(&mut self) {
         if let Some(d) = &self.data {

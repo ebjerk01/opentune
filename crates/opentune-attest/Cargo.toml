@@ -8,3 +8,7 @@ license.workspace = true
 opentune-core = { path = "../opentune-core" }
 opentune-checksum = { path = "../opentune-checksum" }
 opentune-flash = { path = "../opentune-flash" }
+
+[dev-dependencies]
+# The test-only `test-crc32-tail` algorithm.
+opentune-checksum = { path = "../opentune-checksum", features = ["test-algos"] }

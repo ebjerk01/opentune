@@ -47,7 +47,7 @@ const TEMP_UNITS: &[&str] = &["degc", "degf", "k"];
 const PRESSURE_UNITS: &[&str] = &["kpa", "bar", "hpa", "psi"];
 
 /// Pressure preference: kPa values shown in bar or the other way round.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PUnit {
     #[default]
     Bar,
