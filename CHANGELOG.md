@@ -40,6 +40,13 @@ section (alpha/bench builds) until they are vehicle-tested.
   block offset.
 
 ### Changed
+- **One read-only allow-list for every read path.** The list of services a
+  read-only path may send now lives in `opentune_core::protocol::readonly`;
+  the desktop/native `ReadOnlyDiag` uses it directly and the OpenPort 2.0
+  K-line guard derives its narrower K-line set from it (no upload, nothing in
+  the KWP2000 manufacturer range, plus Start/StopCommunication). Tests pin
+  both sets, so the safety rule cannot drift between them. No behaviour
+  change.
 - **`kkl` speaks KWP2000 by default.** Without `--opt layer=uds|kwp2000`
   the K-line driver now uses KWP2000 (as `openport2` on K-line does) unless an
   ECU definition with a K-line protocol names its own layer. Before,

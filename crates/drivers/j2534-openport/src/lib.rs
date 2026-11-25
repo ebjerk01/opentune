@@ -19,7 +19,8 @@
 //! the core `Kwp2000Client` and `identify` run on it as over the `kkl`
 //! driver. See [`kline`] for the options and the wire use. Writes are refused
 //! on K-line, and every request is checked against a read-only allow-list
-//! ([`kline::READ_SERVICES`]) before anything is sent.
+//! ([`kline::refuse_non_read`], over the shared
+//! `opentune_core::protocol::readonly` list) before anything is sent.
 //!
 //! **Capture**: [`Interface::can_monitor`] opens raw CAN receive-only (a
 //! pass-all filter; the monitor has no transmit path), see [`monitor`].

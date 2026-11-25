@@ -24,14 +24,16 @@
 //!    answers arrive as K-line records (data without timestamp, optional
 //!    START/END markers).
 //!
-//! Read path only: [`KLineLink::request`] refuses every service outside
-//! [`READ_SERVICES`] before anything is sent, and the driver's
-//! `write_memory` refuses on K-line.
+//! Read path only: [`KLineLink::request`] refuses every service outside the
+//! shared read-only list (`opentune_core::protocol::readonly`, narrowed for
+//! K-line; see [`refuse_non_read`]) before anything is sent, and the
+//! driver's `write_memory` refuses on K-line.
 
 use crate::proto::{self, param, status, RawFrame, ISO9141_NO_CHECKSUM};
 use crate::proto::{PROTO_ISO14230, PROTO_ISO9141};
 use crate::{device_error, Session, CMD_TIMEOUT_MS, SETUP_TIMEOUT_MS, TX_REPLY_GRACE_MS};
 use opentune_core::protocol::diag::{is_response_pending, DiagTransport};
+use opentune_core::protocol::readonly;
 use opentune_core::{ConnectConfig, DiagLayer, Error, Protocol, Result};
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -55,32 +57,20 @@ const FIVE_BAUD_TIMEOUT_MS: u64 = 8000;
 /// ResponsePending (0x78) answers waited through per request, as in `kkl`.
 const MAX_PENDING: usize = 40;
 
-/// Services the K-line link sends: reads only. An allow-list, so an unknown
-/// service is refused too. It mirrors the desktop's read-only list
-/// (`READ_SERVICES` in `native/src/ops.rs`) minus the upload/transfer
-/// services (0x35–0x37), which the K-line read path does not use, plus
-/// Start/StopCommunication (0x81/0x82, link management).
-pub const READ_SERVICES: &[u8] = &[
-    // OBD-II read modes (ISO 15031-5 over ISO 14230-4)
-    0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x0A, // KWP2000 / UDS reads
-    0x10, 0x12, 0x17, 0x18, 0x19, 0x1A, 0x21, 0x22, 0x23, 0x27, 0x3E,
-    // ISO 14230-2 link management
-    0x81, 0x82,
-];
-
-/// `startDiagnosticSession` sessions that are refused even though 0x10 is on
-/// the list: programming (KWP2000 0x85, UDS 0x02) is not a read.
-const PROGRAMMING_SESSIONS: &[u8] = &[0x85, 0x02];
-
-/// `Err` (nothing sent) unless `req` is a read-path service.
+/// `Err` (nothing sent) unless `req` is a K-line read-path service: the
+/// shared read-only list ([`opentune_core::protocol::readonly`]) narrowed for
+/// KWP2000 K-line (no upload trio, nothing in the manufacturer range) plus
+/// Start/StopCommunication, and never a programming session.
 pub fn refuse_non_read(req: &[u8]) -> Result<()> {
     match req {
         [] => Err(Error::Protocol("empty K-line request".into())),
-        [0x10, s, ..] if PROGRAMMING_SESSIONS.contains(s) => Err(Error::Unsupported(format!(
-            "openport2 K-line is read-only: startDiagnosticSession 0x{s:02X} (programming) \
-             was refused; nothing was sent"
-        ))),
-        [sid, ..] if READ_SERVICES.contains(sid) => Ok(()),
+        [0x10, s, ..] if readonly::KLINE_REFUSED_SESSIONS.contains(s) => {
+            Err(Error::Unsupported(format!(
+                "openport2 K-line is read-only: startDiagnosticSession 0x{s:02X} (programming) \
+                 was refused; nothing was sent"
+            )))
+        }
+        [sid, ..] if readonly::kline_read_allowed(*sid) => Ok(()),
         [sid, ..] => Err(Error::Unsupported(format!(
             "openport2 K-line is read-only: service 0x{sid:02X} is not a read service and \
              was refused; nothing was sent"

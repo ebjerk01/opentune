@@ -880,12 +880,14 @@ to another tester are skipped; responsePending (`7F xx 78`) is waited
 through (up to 40). Before each request stale messages are cleared.
 
 Read-only: the K-line `DiagTransport` refuses, **before anything is sent**,
-every service outside an allow-list (`kline::READ_SERVICES`: OBD read modes
-01/02/03/06/07/09/0A; 10 (not 0x85/0x02 programming sessions), 12, 17, 18, 19,
-1A, 21, 22, 23, 27, 3E; 81/82). It mirrors the desktop's `READ_SERVICES`
-(`native/src/ops.rs`, which also wraps every read path's `diag()` in
-`ReadOnlyDiag`); the K-line link is reached only through `diag()`, so both
-apply. `write_memory` is refused on K-line and `capabilities().write_memory`
+every service outside an allow-list: OBD read modes 01/02/03/06/07/09/0A;
+10 (not 0x85/0x02 programming sessions), 12, 17, 18, 19, 1A, 21, 22, 23, 27,
+3E; 81/82. It is derived from the one shared read-only list in
+`opentune_core::protocol::readonly` (which the desktop's `ReadOnlyDiag` also
+uses for every read path's `diag()`): that list minus the upload trio
+(35–37) and the manufacturer-range SSM services (A0/A8/BF), plus
+Start/StopCommunication. A test pins both sets, so they cannot drift. The
+K-line link is reached only through `diag()`, so both checks apply. `write_memory` is refused on K-line and `capabilities().write_memory`
 is false while K-line is open. `read_memory` uses KWP2000
 `readMemoryByAddress` (0x23) in 250-byte chunks, after a KWP security access
 only when a seed/key handler is set or required.

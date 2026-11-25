@@ -29,6 +29,7 @@ pub mod faultlink;
 pub mod isotp;
 pub mod kline;
 pub mod kwp2000;
+pub mod readonly;
 pub mod seedkey;
 pub mod ssm;
 pub mod ssmsim;

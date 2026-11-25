@@ -57,26 +57,16 @@ pub const UNSUPPORTED: &str = "unsupported by this adapter";
 /// routines, `14` / OBD `04` clear DTCs, `2F` / KWP `30` I/O control, `11`
 /// reset, `28` communication control, `85` DTC setting, `2C` dynamic DID
 /// definition, SSM `B0` / `B8` writes.
-pub const READ_SERVICES: &[u8] = &[
-    // UDS / KWP2000
-    0x10, 0x27, 0x22, 0x23, 0x19, 0x3E, 0x35, 0x36, 0x37, // KWP2000 reads
-    0x1A, 0x21, 0x17, 0x18, 0x12, // OBD-II read modes
-    0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x0A, // SSM reads
-    0xA0, 0xA8, 0xBF,
-];
+///
+/// The list itself lives in `opentune_core::protocol::readonly` (shared with
+/// the drivers' own read-only guards, so it cannot drift).
+pub const READ_SERVICES: &[u8] = opentune_core::protocol::readonly::READ_SERVICES;
 
 /// `Err` (nothing to send) unless `req` is a read-path service; see
 /// [`READ_SERVICES`]. Public so an embedder's own adapter can apply the same
 /// rule on its read-only paths.
 pub fn refuse_ecu_changing(req: &[u8]) -> Result<(), String> {
-    match req {
-        [] => Err("empty request".into()),
-        [sid, ..] if READ_SERVICES.contains(sid) => Ok(()),
-        [sid, ..] => Err(format!(
-            "read-only operation: service 0x{sid:02X} is not a read service and was refused; \
-             nothing was sent (ECU changes go through confirm_ecu + mutate or actuate)"
-        )),
-    }
+    opentune_core::protocol::readonly::refuse_ecu_changing(req)
 }
 
 /// A [`RawDiag`] that admits only [`READ_SERVICES`]: what every read-only
@@ -554,6 +544,18 @@ mod tests {
             assert_eq!(ro.request(&[0x22, 0xF1, 0x90]).unwrap(), vec![0x62]);
         }
         assert_eq!(sent, vec![vec![0x22, 0xF1, 0x90]]);
+    }
+
+    /// The native read paths use the one shared list from opentune-core
+    /// (the same one the drivers' K-line guards derive from), never a copy.
+    #[test]
+    fn read_services_are_the_shared_core_list() {
+        assert!(std::ptr::eq(
+            READ_SERVICES,
+            opentune_core::protocol::readonly::READ_SERVICES
+        ));
+        assert!(refuse_ecu_changing(&[0x2E, 0xF1, 0x90]).is_err());
+        assert!(refuse_ecu_changing(&[0x22, 0xF1, 0x90]).is_ok());
     }
 
     #[test]
