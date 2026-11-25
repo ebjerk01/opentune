@@ -605,6 +605,19 @@ impl OpenPort2Driver {
         s.kline.as_ref().and_then(|k| k.key_bytes)
     }
 
+    /// What the K-line link speaks, decided after the init (`None` on CAN).
+    pub fn kline_mode(&self) -> Option<kline::LinkMode> {
+        let s = self.session.as_ref()?.borrow();
+        s.kline.as_ref().and_then(|k| k.mode)
+    }
+
+    /// ISO 9141-2 OBD mode: the ECU address from the first `48 6B <src>`
+    /// answer (`None` before one, and in every other mode).
+    pub fn kline_obd_source(&self) -> Option<u8> {
+        let s = self.session.as_ref()?.borrow();
+        s.kline.as_ref().and_then(|k| k.obd_source)
+    }
+
     /// Use `port` instead of the serial device the next time the capture
     /// monitor starts (the offline fake in tests).
     pub fn inject_monitor_port(&mut self, port: Box<dyn Op2Port>) {
@@ -649,9 +662,15 @@ impl Interface for OpenPort2Driver {
     }
 
     fn info(&self) -> InterfaceInfo {
-        let firmware = match (self.firmware.clone(), self.kline_key_bytes()) {
-            (Some(f), Some((a, b))) => Some(format!("{f} (K-line keybytes {a:02X} {b:02X})")),
-            (f, _) => f,
+        let header = self
+            .kline_mode()
+            .map(|m| m.describe(self.kline_obd_source()));
+        let firmware = match (self.firmware.clone(), self.kline_key_bytes(), header) {
+            (Some(f), Some((a, b)), Some(h)) => {
+                Some(format!("{f} (K-line keybytes {a:02X} {b:02X}; {h})"))
+            }
+            (Some(f), None, Some(h)) => Some(format!("{f} (K-line, no key bytes; {h})")),
+            (f, _, _) => f,
         };
         InterfaceInfo {
             id: "openport2".into(),

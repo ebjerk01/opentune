@@ -32,7 +32,11 @@
 //! Answers arrive as K-line records: data without timestamp between 4-byte
 //! START/END markers ([`KLineRxLayout`] varies that), checksum appended by
 //! the host (`ISO9141_NO_CHECKSUM`) or by the cable. These K-line replies are
-//! modelled from the public notes; no cable capture of one exists.
+//! modelled from the public notes; no cable capture of one exists. Which
+//! request headers the ECU answers is configurable ([`KLineEcuHeader`]:
+//! any addressed header, an OBD-style ECU that answers functional requests
+//! to 0x33 only after a five-baud init at 0x33, or the 1-byte header without
+//! address), as is a length-byte-only ECU.
 //!
 //! [`FakeConfig::bus_traffic`] puts frames from other nodes on the CAN bus
 //! as soon as a raw-CAN filter is installed, for receive-only capture tests.
@@ -97,6 +101,41 @@ pub enum KLineRxLayout {
     Fragmented,
 }
 
+/// Which request headers the fake's K-line ECU answers (ISO 14230-2 format
+/// byte address mode A1A0); every other request is ignored, as a real ECU
+/// ignores a header it does not expect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KLineEcuHeader {
+    /// Any header with address information (physical or functional) to
+    /// `kline_ecu_addr`; answered physically. The fake's original behaviour.
+    #[default]
+    AnyAddressed,
+    /// An OBD-style ECU: a five-baud init at this functional address wakes
+    /// it for functional requests (`0xC0 | len`) to that address only; an
+    /// init at `kline_ecu_addr` (five-baud or fast) for physical requests
+    /// (`0x80 | len`) to `kline_ecu_addr` only. Answers are physical, to the
+    /// request's source (ISO 14230-4:2000 §4.2).
+    Obd(u8),
+    /// Only the 1-byte header without address information (`0x00 | len`),
+    /// answered the same way.
+    NoAddress,
+    /// An ECU that wakes as a legislated ISO 9141-2 OBD participant: only a
+    /// five-baud init at 0x33 wakes it (set `kline_key_bytes` to 08 08 or
+    /// 94 94), no fast init; afterwards it answers only ISO 9141-2 OBD
+    /// requests `68 6A <tester> <mode> …` ([`synthetic_obd_ecu`]) with
+    /// `48 6B <source> …`, and stays silent to every KWP2000 header.
+    Iso9141Obd { source: u8 },
+}
+
+/// The fake's synthetic ISO 9141-2 OBD answers: mode 01 PID 00 (supported
+/// PIDs 01–20, a made-up bitmap) only; anything else gets no answer.
+pub fn synthetic_obd_ecu(req: &[u8]) -> Vec<Vec<u8>> {
+    match req {
+        [0x01, 0x00] => vec![vec![0x41, 0x00, 0xBE, 0x1F, 0xA8, 0x13]],
+        _ => Vec::new(),
+    }
+}
+
 /// Static behaviour of the fake.
 #[derive(Debug, Clone)]
 pub struct FakeConfig {
@@ -120,6 +159,11 @@ pub struct FakeConfig {
     /// data still carries it (the sources do not say).
     pub kline_rx_checksum: bool,
     pub kline_rx_layout: KLineRxLayout,
+    /// Which request headers the K-line ECU answers.
+    pub kline_ecu_header: KLineEcuHeader,
+    /// The K-line ECU ignores requests with the length in the format byte
+    /// and answers with a separate length byte (a KB1 with AL1 only).
+    pub kline_len_byte_only: bool,
     /// Frames other nodes put on the CAN bus once a raw-CAN filter is set
     /// (id, data); delivered through the filters, after one transmit
     /// indication and one bare START record that a receiver must drop.
@@ -140,6 +184,8 @@ impl Default for FakeConfig {
             kline_key_bytes: (0xEF, 0x8F),
             kline_rx_checksum: true,
             kline_rx_layout: KLineRxLayout::default(),
+            kline_ecu_header: KLineEcuHeader::default(),
+            kline_len_byte_only: false,
             bus_traffic: Vec::new(),
         }
     }
@@ -210,6 +256,17 @@ fn is_kline(proto: u8) -> bool {
 
 fn kchecksum(bytes: &[u8]) -> u8 {
     bytes.iter().fold(0u8, |a, &b| a.wrapping_add(b))
+}
+
+/// A host K-line message as the fake ECU sees it.
+struct KMsg {
+    /// Format byte bits A1A0 in place (`0x00`, `0x40`, `0x80`, `0xC0`).
+    mode: u8,
+    target: Option<u8>,
+    source: Option<u8>,
+    /// The length came in a separate byte.
+    len_byte: bool,
+    data: Vec<u8>,
 }
 
 /// A synthetic KWP2000 ECU for the fake K-line: made-up identity strings and
@@ -286,6 +343,8 @@ pub struct FakeOp2 {
     kline_ecu: EcuHandler,
     /// The K-line ECU answers only after an init woke it.
     kline_awake: bool,
+    /// [`KLineEcuHeader::Obd`]: woken at the functional address.
+    kline_functional: bool,
 }
 
 impl FakeOp2 {
@@ -314,6 +373,7 @@ impl FakeOp2 {
                 stale_left,
                 kline_ecu: synthetic_kwp_ecu(),
                 kline_awake: false,
+                kline_functional: false,
             },
             FakeHandle(log),
         )
@@ -600,11 +660,18 @@ impl FakeOp2 {
             self.reply("are 2", seq);
             return;
         }
-        if self.cfg.faults.kline_silent_ecu || addr != self.cfg.kline_ecu_addr as i64 {
+        let physical = addr == self.cfg.kline_ecu_addr as i64;
+        let (wakes, functional) = match self.cfg.kline_ecu_header {
+            KLineEcuHeader::Obd(fa) => (physical || addr == fa as i64, addr == fa as i64),
+            KLineEcuHeader::Iso9141Obd { .. } => (addr == 0x33, true),
+            _ => (physical, false),
+        };
+        if self.cfg.faults.kline_silent_ecu || !wakes {
             self.reply("are 7", seq);
             return;
         }
         self.kline_awake = true;
+        self.kline_functional = functional;
         self.with_log(|l| l.inits.push(format!("5baud {proto} {addr}")));
         let (kb1, kb2) = self.cfg.kline_key_bytes;
         let s = self.init_seq(seq);
@@ -617,9 +684,9 @@ impl FakeOp2 {
             .is_some_and(|c| c.flags & ISO9141_NO_CHECKSUM != 0)
     }
 
-    /// A host K-line message: (target, source, service + data), checksum
+    /// A host K-line message in any ISO 14230-2 header form, checksum
     /// checked when the host frames it. `None` for a malformed message.
-    fn kline_parse(&self, proto: u8, msg: &[u8]) -> Option<(u8, u8, Vec<u8>)> {
+    fn kline_parse(&self, proto: u8, msg: &[u8]) -> Option<KMsg> {
         let core = if self.host_checksum(proto) {
             let (cs, core) = msg.split_last()?;
             (kchecksum(core) == *cs).then_some(core)?
@@ -627,24 +694,81 @@ impl FakeOp2 {
             msg
         };
         let fmt = *core.first()?;
-        if fmt & 0xC0 == 0 || core.len() < 4 {
-            return None;
-        }
-        let (len, hdr) = match (fmt & 0x3F) as usize {
-            0 => (*core.get(3)? as usize, 4),
-            n => (n, 3),
+        let mode = fmt & 0xC0;
+        let mut hdr = if mode == 0 { 1 } else { 3 };
+        let (len, len_byte) = match (fmt & 0x3F) as usize {
+            0 => {
+                let l = *core.get(hdr)? as usize;
+                hdr += 1;
+                (l, true)
+            }
+            n => (n, false),
         };
-        (core.len() == hdr + len).then(|| (core[1], core[2], core[hdr..].to_vec()))
+        (len > 0 && core.len() == hdr + len).then(|| KMsg {
+            mode,
+            target: (mode != 0).then(|| core[1]),
+            source: (mode != 0).then(|| core[2]),
+            len_byte,
+            data: core[hdr..].to_vec(),
+        })
     }
 
-    /// An ECU answer framed for `tester`, checksum per channel mode.
-    fn kline_frame(&self, proto: u8, tester: u8, data: &[u8]) -> Vec<u8> {
+    /// Whether the ECU, as woken, answers a request in this header form.
+    fn kline_accepts(&self, m: &KMsg) -> bool {
+        if self.cfg.kline_len_byte_only && !m.len_byte {
+            return false;
+        }
         let ecu = self.cfg.kline_ecu_addr;
-        let mut f = if data.len() <= 0x3F {
-            vec![0x80 | data.len() as u8, tester, ecu]
+        match self.cfg.kline_ecu_header {
+            KLineEcuHeader::AnyAddressed => m.mode != 0 && m.target == Some(ecu),
+            KLineEcuHeader::Obd(fa) if self.kline_functional => {
+                m.mode == 0xC0 && m.target == Some(fa)
+            }
+            KLineEcuHeader::Obd(_) => m.mode == 0x80 && m.target == Some(ecu),
+            KLineEcuHeader::NoAddress => m.mode == 0,
+            KLineEcuHeader::Iso9141Obd { .. } => false,
+        }
+    }
+
+    /// [`KLineEcuHeader::Iso9141Obd`]: an ISO 9141-2 OBD request
+    /// `68 6A <tester> <data…>` (checksum checked in host mode) as (tester,
+    /// data); `None` otherwise.
+    fn iso9141_parse(&self, proto: u8, msg: &[u8]) -> Option<(u8, Vec<u8>)> {
+        if !matches!(self.cfg.kline_ecu_header, KLineEcuHeader::Iso9141Obd { .. }) {
+            return None;
+        }
+        let core = if self.host_checksum(proto) {
+            let (cs, core) = msg.split_last()?;
+            (kchecksum(core) == *cs).then_some(core)?
         } else {
-            vec![0x80, tester, ecu, data.len() as u8]
+            msg
         };
+        (core.len() >= 4 && core[..2] == [0x68, 0x6A]).then(|| (core[2], core[3..].to_vec()))
+    }
+
+    /// An ECU answer framed for `tester` (physical, or without address in
+    /// [`KLineEcuHeader::NoAddress`]), checksum per channel mode.
+    fn kline_frame(&self, proto: u8, tester: u8, data: &[u8]) -> Vec<u8> {
+        let cs = self.host_checksum(proto) || self.cfg.kline_rx_checksum;
+        if let KLineEcuHeader::Iso9141Obd { source } = self.cfg.kline_ecu_header {
+            let mut f = vec![0x48, 0x6B, source];
+            f.extend_from_slice(data);
+            if cs {
+                f.push(kchecksum(&f));
+            }
+            return f;
+        }
+        let ecu = self.cfg.kline_ecu_addr;
+        let n = data.len();
+        let addr = self.cfg.kline_ecu_header != KLineEcuHeader::NoAddress;
+        let len_byte = n > 0x3F || self.cfg.kline_len_byte_only;
+        let mut f = vec![if addr { 0x80 } else { 0x00 } | if len_byte { 0 } else { n as u8 }];
+        if addr {
+            f.extend_from_slice(&[tester, ecu]);
+        }
+        if len_byte {
+            f.push(n as u8);
+        }
         f.extend_from_slice(data);
         if self.host_checksum(proto) || self.cfg.kline_rx_checksum {
             f.push(kchecksum(&f));
@@ -707,14 +831,18 @@ impl FakeOp2 {
         }
         let parsed = self.kline_parse(proto, payload);
         let ecu = self.cfg.kline_ecu_addr;
-        let ok = matches!(&parsed, Some((t, _, d)) if *t == ecu && d.as_slice() == [0x81]);
+        // StartCommunication: physical, to the ECU's own address.
+        let ok = matches!(&parsed, Some(m) if m.mode == 0x80 && m.target == Some(ecu)
+            && m.data.as_slice() == [0x81]);
+        let iso9141 = matches!(self.cfg.kline_ecu_header, KLineEcuHeader::Iso9141Obd { .. });
         // `aty<ch> 0 0` is the wake-up alone: no answer to wait for.
-        if payload.is_empty() || !ok || self.cfg.faults.kline_silent_ecu {
+        if payload.is_empty() || !ok || iso9141 || self.cfg.faults.kline_silent_ecu {
             self.reply("are 7", seq);
             return;
         }
-        let tester = parsed.map(|p| p.1).unwrap_or(0xF1);
+        let tester = parsed.and_then(|m| m.source).unwrap_or(0xF1);
         self.kline_awake = true;
+        self.kline_functional = false;
         self.with_log(|l| l.inits.push(format!("fast {proto} {ecu}")));
         let (kb1, kb2) = self.cfg.kline_key_bytes;
         let resp = self.kline_frame(proto, tester, &[0xC1, kb1, kb2]);
@@ -726,22 +854,37 @@ impl FakeOp2 {
     /// `att<ch>` on K-line: the message itself, no CAN id, no transmit
     /// indication (bisak §7.9).
     fn kline_transmit_cmd(&mut self, proto: u8, txflags: u32, budget: u32, seq: i64, msg: &[u8]) {
-        let parsed = self.kline_parse(proto, msg);
+        let iso = self.iso9141_parse(proto, msg);
+        let parsed = if iso.is_some() {
+            None
+        } else {
+            self.kline_parse(proto, msg)
+        };
+        let id = match (&iso, &parsed) {
+            (Some(_), _) => 0x6A,
+            (_, Some(m)) => m.target.map_or(0, u32::from),
+            _ => 0,
+        };
         self.with_log(|l| {
             l.transmits.push((proto, txflags, budget));
             l.bus.push(BusFrame {
                 from_host: true,
-                id: parsed.as_ref().map_or(0, |p| p.0 as u32),
+                id,
                 data: msg.to_vec(),
             });
         });
         let mut answers = Vec::new();
         let ecu = self.cfg.kline_ecu_addr;
         let mut tester = 0xF1;
-        if let Some((target, source, data)) = parsed {
-            tester = source;
-            if self.kline_awake && !self.cfg.faults.kline_silent_ecu && target == ecu {
-                answers = (self.kline_ecu)(&data);
+        if let Some((t, data)) = iso {
+            tester = t;
+            if self.kline_awake && !self.cfg.faults.kline_silent_ecu {
+                answers = synthetic_obd_ecu(&data);
+            }
+        } else if let Some(m) = parsed {
+            tester = m.source.unwrap_or(0xF1);
+            if self.kline_awake && !self.cfg.faults.kline_silent_ecu && self.kline_accepts(&m) {
+                answers = (self.kline_ecu)(&m.data);
             }
         }
         let frames: Vec<Vec<u8>> = answers

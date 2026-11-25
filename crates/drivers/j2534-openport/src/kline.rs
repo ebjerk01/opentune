@@ -24,6 +24,21 @@
 //!    answers arrive as K-line records (data without timestamp, optional
 //!    START/END markers).
 //!
+//! Request header (ISO 14230-2 format byte, address mode bits A1A0): the
+//! target is the `target` option, else the five-baud address after a
+//! five-baud init, else `tx_id`; the mode is functional (A1A0 = 11, `0xC0 |
+//! len`) when that target is the OBD functional address 0x33 and physical
+//! (A1A0 = 10, `0x80 | len`) otherwise, unless `addressing=` says otherwise
+//! (ISO 14230-4:2000 §4.2: functional requests to 33H, physical responses
+//! to the request's source). The key bytes the init returns then decide the
+//! link ([`decide_link`]): KB2 0x8F is KWP2000 and KB1 picks the header
+//! form, a form KB1 rules out is refused, not guessed; key bytes 08 08 /
+//! 94 94 mean the ECU woke as an ISO 9141-2 OBD participant, which gets OBD
+//! requests (`68 6A F1 …`) only and refuses KWP2000; other key bytes are
+//! refused unless `target`/`addressing` force a form. The fast-init
+//! StartCommunication itself stays physical to `tx_id`. An optional `session=<hex>` sends startDiagnosticSession right
+//! after the init, through the same read-only guard.
+//!
 //! Read path only: [`KLineLink::request`] refuses every service outside the
 //! shared read-only list (`opentune_core::protocol::readonly`, narrowed for
 //! K-line; see [`refuse_non_read`]) before anything is sent, and the
@@ -56,6 +71,18 @@ const FAST_INIT_TIMEOUT_MS: u64 = 3000;
 const FIVE_BAUD_TIMEOUT_MS: u64 = 8000;
 /// ResponsePending (0x78) answers waited through per request, as in `kkl`.
 const MAX_PENDING: usize = 40;
+/// Reply wait for the `session=` startDiagnosticSession: the core KWP2000
+/// client's default (≥ P2max).
+const SESSION_TIMEOUT_MS: u64 = 2000;
+/// ISO 14230-4 OBD functional target address (ISO 14230-4:2000 §4.2: "Functional
+/// address 33H shall be used as target address for messages sent to the
+/// vehicle"; §4.4: the five-baud address is 33H).
+pub const OBD_FUNCTIONAL_ADDR: u8 = 0x33;
+/// KB2 of every ISO 14230 keyword (2000–2031 = KB2 0x8F with KB1 0x50..0x6F,
+/// parity aside): freediag `diag_l2_iso14230.c` ("ISO14230 uses KB2 of
+/// 0x8F"); the EU tachograph rules' StartCommunication response (Reg. (EU)
+/// 2016/799 Annex IC App. 8, Table 6: KB1 EA, KB2 8F).
+pub const KB2_ISO14230: u8 = 0x8F;
 
 /// `Err` (nothing sent) unless `req` is a K-line read-path service: the
 /// shared read-only list ([`opentune_core::protocol::readonly`]) narrowed for
@@ -208,13 +235,55 @@ pub fn timing_keys() -> impl Iterator<Item = &'static str> {
     TIMINGS.iter().map(|t| t.key)
 }
 
+/// Address mode of a request header: ISO 14230-2 format byte bits A1A0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Addressing {
+    /// A1A0 = 10: with address information, physical addressing (`0x80`).
+    Physical,
+    /// A1A0 = 11: with address information, functional addressing (`0xC0`).
+    Functional,
+    /// A1A0 = 00: no address information, the 1-byte header (`0x00`).
+    NoAddress,
+}
+
+impl Addressing {
+    /// The A1A0 bits in place in the format byte.
+    pub fn bits(self) -> u8 {
+        match self {
+            Addressing::Physical => 0x80,
+            Addressing::Functional => 0xC0,
+            Addressing::NoAddress => 0x00,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Addressing::Physical => "physical",
+            Addressing::Functional => "functional",
+            Addressing::NoAddress => "no address",
+        }
+    }
+}
+
 /// K-line settings resolved from a [`ConnectConfig`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KLineSettings {
     /// Channel / J2534 protocol id: 4 (ISO 14230) or 3 (ISO 9141).
     pub proto: u8,
-    /// ECU address in the KWP2000 header.
+    /// The ECU's physical address (`tx_id`): the fast-init
+    /// StartCommunication goes to it.
+    pub ecu: u8,
+    /// Target address of every request header after the init: `target`,
+    /// else the five-baud address after a five-baud init, else `ecu`.
     pub target: u8,
+    /// Requested address mode: `addressing`, else functional for target
+    /// 0x33 and physical otherwise. The key bytes may still refuse it.
+    pub addressing: Addressing,
+    /// Whether `target` or `addressing` was given explicitly (then the key
+    /// bytes may refuse the form but never replace it).
+    pub header_explicit: bool,
+    /// startDiagnosticSession sent right after the init (`session`).
+    pub session: Option<u8>,
     /// Tester address in the KWP2000 header.
     pub tester: u8,
     pub init: KInit,
@@ -291,14 +360,46 @@ impl KLineSettings {
                 cfg.tx_id
             )));
         }
-        let target = cfg.tx_id as u8;
+        let ecu = cfg.tx_id as u8;
         let tester = match o.get("tester") {
             Some(s) => parse_hex_byte("tester", s)?,
             None => DEFAULT_TESTER,
         };
         let init_addr = match o.get("init_addr") {
             Some(s) => parse_hex_byte("init_addr", s)?,
-            None => target,
+            None => ecu,
+        };
+        let target_opt = o
+            .get("target")
+            .map(|s| parse_hex_byte("target", s))
+            .transpose()?;
+        let addressing_opt = match o.get("addressing").map(|s| s.trim().to_ascii_lowercase()) {
+            None => None,
+            Some(a) if a == "physical" || a == "phys" => Some(Addressing::Physical),
+            Some(a) if a == "functional" || a == "func" => Some(Addressing::Functional),
+            Some(a) if a == "none" => Some(Addressing::NoAddress),
+            Some(a) => {
+                return Err(Error::Config(format!(
+                    "openport2: addressing '{a}' (expected physical, functional or none)"
+                )))
+            }
+        };
+        if addressing_opt == Some(Addressing::NoAddress) && target_opt.is_some() {
+            return Err(Error::Config(
+                "openport2: target= contradicts addressing=none (a header without address \
+                 information has no target byte)"
+                    .into(),
+            ));
+        }
+        let session = match o.get("session") {
+            None => None,
+            Some(s) => {
+                let v = parse_hex_byte("session", s)?;
+                // The shared read-only guard decides, before the port is
+                // touched: programming sessions are refused.
+                refuse_non_read(&[0x10, v])?;
+                Some(v)
+            }
         };
 
         // Baud: `baud`, else a K-line-range `bitrate`, else 10400 (as kkl).
@@ -421,9 +522,27 @@ impl KLineSettings {
             config.push((param::FIVE_BAUD_MOD, v));
         }
 
+        // Request target: explicit, else the five-baud address after a
+        // five-baud init (an ECU woken at the OBD functional address 0x33
+        // expects functional requests to 0x33), else the physical address.
+        let target = match (target_opt, init) {
+            (Some(t), _) => t,
+            (None, KInit::FiveBaud) => init_addr,
+            (None, _) => ecu,
+        };
+        let addressing = addressing_opt.unwrap_or(if target == OBD_FUNCTIONAL_ADDR {
+            Addressing::Functional
+        } else {
+            Addressing::Physical
+        });
+
         Ok(Self {
             proto,
+            ecu,
             target,
+            addressing,
+            header_explicit: target_opt.is_some() || addressing_opt.is_some(),
+            session,
             tester,
             init,
             init_addr,
@@ -454,25 +573,249 @@ pub fn checksum(bytes: &[u8]) -> u8 {
 /// A KWP2000 request with physical addressing: `[fmt][target][source]
 /// [len?][data…]`, plus the checksum when `with_checksum`. Payloads up to 63
 /// bytes carry their length in the format byte, longer ones (to 255) in a
-/// separate length byte.
+/// separate length byte. (The fast-init StartCommunication uses this.)
 pub fn build_frame(target: u8, source: u8, data: &[u8], with_checksum: bool) -> Result<Vec<u8>> {
-    if data.is_empty() || data.len() > 255 {
-        return Err(Error::Protocol(format!(
-            "K-line message of {} bytes (1..=255)",
-            data.len()
+    HeaderForm::unchecked(Addressing::Physical, target, source).build(data, with_checksum)
+}
+
+/// The request header form used after the init (ISO 14230-2 format byte:
+/// A1A0 address mode, L5..L0 length; optional target/source and length
+/// bytes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HeaderForm {
+    pub addressing: Addressing,
+    /// Target and source bytes (unused without address information).
+    pub target: u8,
+    pub source: u8,
+    /// The length may go in the format byte (KB1 AL0).
+    pub len_in_fmt: bool,
+    /// A separate length byte may follow the header (KB1 AL1).
+    pub len_byte: bool,
+    /// KB1 bits TP1 TP0 as received (`None` without key bytes); reported
+    /// only, the P-times are not changed from them.
+    pub timing_bits: Option<u8>,
+    /// Forced by `target`/`addressing` over key bytes that are not ISO
+    /// 14230 ones (unchecked).
+    pub forced: bool,
+}
+
+impl HeaderForm {
+    /// A form not checked against key bytes (no init, or the fast-init
+    /// StartCommunication): length in the format byte up to 63, a length
+    /// byte above, as before.
+    pub fn unchecked(addressing: Addressing, target: u8, source: u8) -> Self {
+        Self {
+            addressing,
+            target,
+            source,
+            len_in_fmt: true,
+            len_byte: true,
+            timing_bits: None,
+            forced: false,
+        }
+    }
+
+    /// Frame `data` (service id + data), plus the checksum when
+    /// `with_checksum`. The length goes in the format byte when it fits (1 to
+    /// 63) and KB1 allows it, else in a length byte when KB1 allows that;
+    /// otherwise the message is refused unsent.
+    pub fn build(&self, data: &[u8], with_checksum: bool) -> Result<Vec<u8>> {
+        let n = data.len();
+        if n == 0 || n > 255 {
+            return Err(Error::Protocol(format!(
+                "K-line message of {n} bytes (1..=255)"
+            )));
+        }
+        let in_fmt = n <= 0x3F && self.len_in_fmt;
+        if !in_fmt && !self.len_byte {
+            return Err(Error::Unsupported(format!(
+                "K-line: a {n}-byte message needs the additional length byte, which the \
+                 ECU's key byte KB1 does not announce (AL1 = 0); nothing was sent"
+            )));
+        }
+        let a = self.addressing.bits();
+        let mut f = Vec::with_capacity(n + 5);
+        f.push(if in_fmt { a | n as u8 } else { a });
+        if self.addressing != Addressing::NoAddress {
+            f.extend_from_slice(&[self.target, self.source]);
+        }
+        if !in_fmt {
+            f.push(n as u8);
+        }
+        f.extend_from_slice(data);
+        if with_checksum {
+            f.push(checksum(&f));
+        }
+        Ok(f)
+    }
+
+    /// One line for `info()`: e.g. `header C0 33 F1 (functional), length in
+    /// format byte, normal timing`.
+    pub fn describe(&self) -> String {
+        let a = self.addressing.bits();
+        let fmt = if self.len_in_fmt {
+            format!("{:X}n", a >> 4)
+        } else {
+            format!("{a:02X}")
+        };
+        let head = match self.addressing {
+            Addressing::NoAddress => fmt,
+            _ => format!("{fmt} {:02X} {:02X}", self.target, self.source),
+        };
+        let len = match (self.len_in_fmt, self.len_byte) {
+            (true, true) => "length in format byte (length byte above 63)",
+            (true, false) => "length in format byte",
+            _ => "length byte",
+        };
+        let timing = match self.timing_bits {
+            None => String::new(),
+            Some(0b10) => ", normal timing".into(),
+            Some(t) => format!(", KB1 TP1 TP0 = {t:02b} (not the normal set; P-times unchanged)"),
+        };
+        let forced = if self.forced {
+            ", forced by target/addressing (key bytes not ISO 14230: unchecked)"
+        } else {
+            ""
+        };
+        format!(
+            "header {head} ({}), {len}{timing}{forced}",
+            self.addressing.name()
+        )
+    }
+}
+
+/// What the link speaks after the init, decided from the key bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkMode {
+    /// KWP2000 (ISO 14230) in this request header form.
+    Kwp(HeaderForm),
+    /// The ECU woke as a legislated ISO 9141-2 OBD participant (key bytes
+    /// 08 08 or 94 94): OBD requests `68 6A <tester> <mode> … <cs>`, answers
+    /// `48 6B <ecu> <mode + 40> … <cs>`; every KWP2000 service is refused.
+    Iso9141Obd { tester: u8 },
+}
+
+impl LinkMode {
+    /// One line for `info()`; `obd_source` is the ECU address learned from
+    /// the first ISO 9141-2 answer.
+    pub fn describe(&self, obd_source: Option<u8>) -> String {
+        match self {
+            LinkMode::Kwp(h) => h.describe(),
+            LinkMode::Iso9141Obd { tester } => format!(
+                "ISO 9141-2 OBD: header 68 6A {tester:02X}, KWP2000 refused{}",
+                obd_source
+                    .map(|s| format!(", ECU source address {s:02X}"))
+                    .unwrap_or_default()
+            ),
+        }
+    }
+}
+
+/// ISO 9141-2 / SAE J1979 OBD request header bytes 1–2 and response header
+/// bytes 1–2 (freediag `diag_l2_iso9141.c`: `0x68`, `0x6A` "defined by spec",
+/// then the tester address; answers checked for `0x48 0x6B`, `data[2]` =
+/// "Originating ECU").
+pub const ISO9141_REQ_HEADER: [u8; 2] = [0x68, 0x6A];
+pub const ISO9141_RESP_HEADER: [u8; 2] = [0x48, 0x6B];
+/// ISO 9141-2 / J1979 limits a message to 7 data bytes.
+const ISO9141_MAX_DATA: usize = 7;
+
+/// The two ISO 9141-2 key byte pairs (freediag `diag_l2_iso9141.c`: "these
+/// can be 0x08 0x08 or 0x94 0x94").
+pub fn is_iso9141_2_keywords(kb1: u8, kb2: u8) -> bool {
+    kb1 == kb2 && (kb1 == 0x08 || kb1 == 0x94)
+}
+
+/// Decide what the link speaks from the settings and the key bytes the init
+/// returned (`None` with `init=none`: the requested KWP2000 form, unchecked).
+///
+/// Keyword decoding first:
+/// - KB2 0x8F: ISO 14230 (KWP2000); KB1 decides the header form (below).
+///   KB2 is 0x8F for every ISO 14230 keyword (freediag `diag_l2_iso14230.c`;
+///   Reg. (EU) 2016/799 Annex IC App. 8 Table 6).
+/// - 08 08 or 94 94: ISO 9141-2 (freediag `diag_l2_iso9141.c`): the ECU woke
+///   as a legislated OBD participant, [`LinkMode::Iso9141Obd`].
+/// - Anything else (e.g. KW1281's 01 8A): no header is guessed; refused.
+///
+/// An explicit `target`/`addressing` still wins over the last two: the
+/// forced KWP2000 form is used unchecked (KB1 is not an ISO 14230 KB1 then).
+///
+/// ISO 14230-2 KB1, as public sources give it:
+/// - KB1, parity bit 7 dropped (freediag reads 7O1 key bytes "and ignore[s]
+///   parity"): bit 0 AL0 = length in the format byte supported, bit 1 AL1 =
+///   additional length byte supported, bit 2 HB0 = 1-byte header (no address
+///   information) supported, bit 3 HB1 = header with target/source address
+///   supported (freediag `dl2p_14230_startcomms`, "iso14230 5.2.4.1 & Table
+///   8"; cross-checked by ISO 14230-4:2000 §4.4: keyword 2025 = KB1 0x69 =
+///   "3 byte header, no additional length byte, normal timing").
+/// - KB1 bits 5..4 (TP1 TP0) = `10` is the normal timing set (keyword 2025,
+///   same clause). Other values are reported, not acted on.
+///
+/// The requested address mode is kept when KB1 allows it. A *defaulted*
+/// address header becomes the 1-byte header when KB1 announces only that
+/// (HB1 = 0, HB0 = 1); an *explicit* `target`/`addressing` is never replaced.
+/// Everything KB1 rules out is refused.
+pub fn decide_link(s: &KLineSettings, key_bytes: Option<(u8, u8)>) -> Result<LinkMode> {
+    let mut form = HeaderForm::unchecked(s.addressing, s.target, s.tester);
+    let Some((kb1, kb2)) = key_bytes else {
+        return Ok(LinkMode::Kwp(form));
+    };
+    if kb2 != KB2_ISO14230 {
+        if s.header_explicit {
+            form.forced = true;
+            return Ok(LinkMode::Kwp(form));
+        }
+        if is_iso9141_2_keywords(kb1, kb2) {
+            return Ok(LinkMode::Iso9141Obd { tester: s.tester });
+        }
+        return Err(Error::Unsupported(format!(
+            "K-line keybytes {kb1:02X} {kb2:02X} are neither ISO 14230 (KWP2000: KB2 8F) nor \
+             ISO 9141-2 (08 08 / 94 94) key bytes, so no header form is guessed; force one with \
+             target=/addressing= if you know it; nothing was sent after the init"
         )));
     }
-    let mut f = Vec::with_capacity(data.len() + 5);
-    if data.len() <= 0x3F {
-        f.extend_from_slice(&[0x80 | data.len() as u8, target, source]);
-    } else {
-        f.extend_from_slice(&[0x80, target, source, data.len() as u8]);
+    let kb = kb1 & 0x7F;
+    let bit = |n: u8| kb & (1 << n) != 0;
+    let (al0, al1, hb0, hb1) = (bit(0), bit(1), bit(2), bit(3));
+    form.len_in_fmt = al0;
+    form.len_byte = al1;
+    form.timing_bits = Some((kb >> 4) & 0x03);
+    let refuse = |why: String| {
+        Err(Error::Unsupported(format!(
+            "K-line keybytes {kb1:02X} {kb2:02X}: {why}; nothing was sent after the init"
+        )))
+    };
+    if !al0 && !al1 {
+        return refuse(
+            "KB1 announces no length form (AL0 = AL1 = 0), so no request can be framed".into(),
+        );
     }
-    f.extend_from_slice(data);
-    if with_checksum {
-        f.push(checksum(&f));
+    match s.addressing {
+        Addressing::NoAddress if !hb0 => {
+            return refuse(
+                "addressing=none needs the 1-byte header, which KB1 does not announce \
+                 (HB0 = 0)"
+                    .into(),
+            )
+        }
+        Addressing::NoAddress => {}
+        a if hb1 => form.addressing = a,
+        _ if hb0 && !s.header_explicit => form.addressing = Addressing::NoAddress,
+        a => {
+            return refuse(format!(
+                "KB1 announces no header with address information (HB1 = 0), so the {} \
+                 header to {:02X} is refused{}",
+                a.name(),
+                s.target,
+                if hb0 {
+                    " (KB1 allows the 1-byte header: addressing=none)"
+                } else {
+                    ""
+                }
+            ))
+        }
     }
-    Ok(f)
+    Ok(LinkMode::Kwp(form))
 }
 
 /// A decoded KWP2000 frame.
@@ -565,6 +908,10 @@ pub(crate) struct KLineState {
     msgs: VecDeque<Vec<u8>>,
     /// Key bytes from the init (fast: StartCommunication; five-baud: KB1/KB2).
     pub key_bytes: Option<(u8, u8)>,
+    /// What the link speaks, decided after the init ([`decide_link`]).
+    pub mode: Option<LinkMode>,
+    /// ISO 9141-2 mode: the ECU address from the first `48 6B <src>` answer.
+    pub obd_source: Option<u8>,
 }
 
 impl KLineState {
@@ -574,6 +921,8 @@ impl KLineState {
             cur: None,
             msgs: VecDeque::new(),
             key_bytes: None,
+            mode: None,
+            obd_source: None,
         }
     }
 
@@ -646,12 +995,45 @@ impl Session {
             KInit::FiveBaud => Some(self.kline_five_baud(&k)?),
             KInit::None => None,
         };
+        let mode = decide_link(&k, keys)?;
+        log::debug!(
+            target: "openport2",
+            "K-line {}",
+            mode.describe(None)
+        );
         if let Some(st) = self.kline.as_mut() {
             st.key_bytes = keys;
+            st.mode = Some(mode);
+            st.obd_source = None;
             st.cur = None;
             st.msgs.clear();
         }
+        if let Some(sess) = k.session {
+            self.kline_start_session(sess)?;
+        }
         Ok(())
+    }
+
+    /// `session=`: startDiagnosticSession right after the init, before any
+    /// other request, through the same read-only guard as every request.
+    fn kline_start_session(&mut self, sess: u8) -> Result<()> {
+        let resp = self
+            .kline_request(&[0x10, sess], SESSION_TIMEOUT_MS)
+            .map_err(|e| match e {
+                Error::Timeout(ms) => Error::Protocol(format!(
+                    "K-line startDiagnosticSession 0x{sess:02X}: no answer within {ms} ms"
+                )),
+                other => other,
+            })?;
+        match resp.as_slice() {
+            [0x50, ..] => Ok(()),
+            [0x7F, 0x10, nrc, ..] => Err(Error::Protocol(format!(
+                "ECU refused startDiagnosticSession 0x{sess:02X} (NRC 0x{nrc:02X})"
+            ))),
+            other => Err(Error::Protocol(format!(
+                "unexpected startDiagnosticSession answer {other:02X?}"
+            ))),
+        }
     }
 
     /// Send an init command and wait for its result: `ary`/`arw` with or
@@ -709,7 +1091,8 @@ impl Session {
     /// ISO 14230 fast init: the cable sends the wake-up pattern and our
     /// StartCommunication and returns the ECU's answer.
     fn kline_fast_init(&mut self, k: &KLineSettings) -> Result<(u8, u8)> {
-        let req = build_frame(k.target, k.tester, &[0x81], k.host_checksum)?;
+        // Physical, to the ECU's own address, whatever `target` says.
+        let req = build_frame(k.ecu, k.tester, &[0x81], k.host_checksum)?;
         let r = self.init_command(
             &proto::fast_init(k.proto, req.len()),
             &req,
@@ -819,6 +1202,152 @@ impl Session {
             }
         }
     }
+
+    /// One KWP2000 request/answer: the read-only guard first (nothing sent
+    /// on refusal), then the decided header form. Answers in any header form
+    /// are accepted (address mode 10 or 11 with target/source, 00 without,
+    /// length in the format byte or a length byte: [`split_frame`]); frames
+    /// for another tester are skipped; responsePending is waited through.
+    fn kline_request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        refuse_non_read(req)?;
+        let (mode, tester, host_cs) = {
+            let k = self.kline()?;
+            let s = &k.settings;
+            let mode = k.mode.unwrap_or_else(|| {
+                LinkMode::Kwp(HeaderForm::unchecked(s.addressing, s.target, s.tester))
+            });
+            (mode, s.tester, s.host_checksum)
+        };
+        let form = match mode {
+            LinkMode::Kwp(form) => form,
+            LinkMode::Iso9141Obd { .. } => return self.iso9141_request(req, timeout_ms),
+        };
+        let frame = form.build(req, host_cs)?;
+        self.kline_clear_rx();
+        self.kline_transmit(&frame)?;
+        for _ in 0..MAX_PENDING {
+            let f = self.kline_next_frame(timeout_ms)?;
+            if f.target.is_some_and(|t| t != tester) {
+                self.stats.foreign_frames += 1;
+                continue;
+            }
+            if is_response_pending(req, &f.payload) {
+                continue;
+            }
+            return Ok(f.payload);
+        }
+        Err(Error::Timeout(timeout_ms))
+    }
+
+    /// The next message as the cable delimited it, or [`Error::Timeout`].
+    /// ISO 9141-2 frames carry no length: the bus timing (P1 inter-byte,
+    /// P2 between frames) delimits them, which the cable does.
+    fn kline_next_msg(&mut self, timeout_ms: u64) -> Result<Vec<u8>> {
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        loop {
+            if let Some(m) = self.kline.as_mut().and_then(|k| k.msgs.pop_front()) {
+                return Ok(m);
+            }
+            match self.read_msg(deadline)? {
+                None => return Err(Error::Timeout(timeout_ms)),
+                Some(proto::Msg::Frame(f)) => self.accept_frame(f),
+                Some(proto::Msg::Reply(_)) => self.stats.stale_replies += 1,
+            }
+        }
+    }
+
+    /// An ISO 9141-2 OBD request (the ECU woke with key bytes 08 08 or
+    /// 94 94): only OBD modes 0x01..=0x0A that passed the shared read-only
+    /// guard go out, as `68 6A <tester> <mode> …` (+ the checksum in host
+    /// mode). Every KWP2000 service is refused unsent. The answer is
+    /// `48 6B <ecu> <data> <cs>`; the first one's ECU address is kept.
+    fn iso9141_request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        let (tester, host_cs, keys, src) = {
+            let k = self.kline()?;
+            (
+                k.settings.tester,
+                k.settings.host_checksum,
+                k.key_bytes.unwrap_or((0x08, 0x08)),
+                k.obd_source,
+            )
+        };
+        let sid = req.first().copied().unwrap_or_default();
+        if !(0x01..=0x0A).contains(&sid) {
+            let ecu = src.map_or_else(
+                || "<ecu>; an OBD request (mode 01 PID 00) reports the ECU's address".into(),
+                |s| format!("{s:02X}"),
+            );
+            return Err(Error::Unsupported(format!(
+                "ECU woke as ISO 9141-2 OBD (key bytes {:02X} {:02X}); KWP2000 needs its \
+                 physical init address (init_addr={ecu}). Service 0x{sid:02X} was refused; \
+                 nothing was sent",
+                keys.0, keys.1
+            )));
+        }
+        if req.len() > ISO9141_MAX_DATA {
+            return Err(Error::Protocol(format!(
+                "ISO 9141-2 OBD request of {} bytes (at most {ISO9141_MAX_DATA}); nothing was \
+                 sent",
+                req.len()
+            )));
+        }
+        let mut frame = vec![ISO9141_REQ_HEADER[0], ISO9141_REQ_HEADER[1], tester];
+        frame.extend_from_slice(req);
+        if host_cs {
+            frame.push(checksum(&frame));
+        }
+        self.kline_clear_rx();
+        self.kline_transmit(&frame)?;
+        for _ in 0..MAX_PENDING {
+            let msg = self.kline_next_msg(timeout_ms)?;
+            let Some((src, payload)) = split_iso9141_answer(&msg, host_cs)? else {
+                self.stats.foreign_frames += 1;
+                continue;
+            };
+            if let Some(k) = self.kline.as_mut() {
+                if k.obd_source.is_none() {
+                    log::debug!(
+                        target: "openport2",
+                        "K-line ISO 9141-2 OBD: ECU source address {src:02X}"
+                    );
+                    k.obd_source = Some(src);
+                }
+            }
+            if is_response_pending(req, &payload) {
+                continue;
+            }
+            return Ok(payload);
+        }
+        Err(Error::Timeout(timeout_ms))
+    }
+}
+
+/// One ISO 9141-2 OBD answer `48 6B <src> <data…> [cs]`: `Ok(None)` for a
+/// message with another header (skipped), the source address and data
+/// otherwise. With `checksum_required` the last byte must be the 8-bit sum
+/// of the rest; without it (the cable checks), a last byte is dropped only
+/// when it matches, as for KWP2000 frames.
+pub fn split_iso9141_answer(msg: &[u8], checksum_required: bool) -> Result<Option<(u8, Vec<u8>)>> {
+    if msg.len() < 4 || msg[..2] != ISO9141_RESP_HEADER {
+        return Ok(None);
+    }
+    let (body, last) = msg.split_at(msg.len() - 1);
+    let cs = checksum(body);
+    let end = if checksum_required {
+        if last[0] != cs {
+            return Err(Error::Protocol(format!(
+                "ISO 9141-2 checksum mismatch: computed 0x{cs:02X}, frame carries 0x{:02X}",
+                last[0]
+            )));
+        }
+        body.len()
+    } else if last[0] == cs {
+        body.len()
+    } else {
+        msg.len()
+    };
+    let data = msg[3..end].to_vec();
+    Ok((!data.is_empty()).then_some((msg[2], data)))
 }
 
 /// [`DiagTransport`] over the OP2's K-line channel: KWP2000 framing, the
@@ -829,26 +1358,9 @@ pub(crate) struct KLineLink {
 
 impl DiagTransport for KLineLink {
     fn request(&mut self, req: &[u8], timeout_ms: u64) -> Result<Vec<u8>> {
+        // The guard runs before the session is even borrowed.
         refuse_non_read(req)?;
-        let mut s = self.session.borrow_mut();
-        let k = s.kline()?.settings.clone();
-        let frame = build_frame(k.target, k.tester, req, k.host_checksum)?;
-        s.kline_clear_rx();
-        s.kline_transmit(&frame)?;
-        // Frames for another tester (a second tool on the bus) are skipped;
-        // responsePending for this request is waited through, bounded.
-        for _ in 0..MAX_PENDING {
-            let f = s.kline_next_frame(timeout_ms)?;
-            if f.target.is_some_and(|t| t != k.tester) {
-                s.stats.foreign_frames += 1;
-                continue;
-            }
-            if is_response_pending(req, &f.payload) {
-                continue;
-            }
-            return Ok(f.payload);
-        }
-        Err(Error::Timeout(timeout_ms))
+        self.session.borrow_mut().kline_request(req, timeout_ms)
     }
 }
 
@@ -979,8 +1491,19 @@ mod tests {
     fn settings_defaults_and_validation() {
         let s = KLineSettings::from_cfg(&cfg(&[]), 4).unwrap();
         assert_eq!(
-            (s.target, s.tester, s.init, s.init_addr, s.host_checksum),
-            (0x01, 0xF1, KInit::Fast, 0x01, false)
+            (
+                s.ecu,
+                s.target,
+                s.tester,
+                s.init,
+                s.init_addr,
+                s.host_checksum
+            ),
+            (0x01, 0x01, 0xF1, KInit::Fast, 0x01, false)
+        );
+        assert_eq!(
+            (s.addressing, s.header_explicit, s.session),
+            (Addressing::Physical, false, None)
         );
         assert_eq!(
             (s.tx_timeout_ms, s.layer, s.flags()),
@@ -1058,6 +1581,9 @@ mod tests {
             ("tinil_ms", "abc"),
             ("five_baud_mod", "4"),
             ("layer", "j1850"),
+            ("target", "133"),
+            ("addressing", "broadcast"),
+            ("session", "x"),
         ] {
             let e = KLineSettings::from_cfg(&cfg(&[bad]), 4).unwrap_err();
             assert!(matches!(e, Error::Config(_)), "{bad:?}: {e}");
@@ -1069,5 +1595,240 @@ mod tests {
         let e = KLineSettings::from_cfg(&c, 4).unwrap_err().to_string();
         assert!(e.contains("--tx-id"), "{e}");
         assert_eq!(timing_keys().count(), TIMINGS.len());
+    }
+
+    #[test]
+    fn the_request_target_and_address_mode_follow_the_init() {
+        let s = |o: &[(&str, &str)]| KLineSettings::from_cfg(&cfg(o), 4).unwrap();
+        // Five-baud at the OBD functional address: functional to 0x33.
+        let k = s(&[("init", "5baud"), ("init_addr", "33")]);
+        assert_eq!(
+            (k.ecu, k.target, k.addressing, k.header_explicit),
+            (0x01, 0x33, Addressing::Functional, false)
+        );
+        // Five-baud at the physical address: physical to it.
+        let k = s(&[("init", "5baud")]);
+        assert_eq!((k.target, k.addressing), (0x01, Addressing::Physical));
+        // Fast init: tx_id, whatever init_addr says.
+        let k = s(&[("init_addr", "33")]);
+        assert_eq!((k.target, k.addressing), (0x01, Addressing::Physical));
+        // tx_id 0x33 is functional by default.
+        let mut c = cfg(&[]);
+        c.tx_id = 0x33;
+        let k = KLineSettings::from_cfg(&c, 4).unwrap();
+        assert_eq!((k.target, k.addressing), (0x33, Addressing::Functional));
+        // Explicit options win.
+        let k = s(&[("init", "5baud"), ("init_addr", "33"), ("target", "01")]);
+        assert_eq!(
+            (k.target, k.addressing, k.header_explicit),
+            (0x01, Addressing::Physical, true)
+        );
+        let k = s(&[
+            ("init", "5baud"),
+            ("init_addr", "33"),
+            ("addressing", "physical"),
+        ]);
+        assert_eq!((k.target, k.addressing), (0x33, Addressing::Physical));
+        let k = s(&[("target", "0x10"), ("addressing", "functional")]);
+        assert_eq!((k.target, k.addressing), (0x10, Addressing::Functional));
+        let k = s(&[("addressing", "none")]);
+        assert_eq!(k.addressing, Addressing::NoAddress);
+        let e = KLineSettings::from_cfg(&cfg(&[("addressing", "none"), ("target", "33")]), 4);
+        assert!(matches!(e, Err(Error::Config(_))));
+    }
+
+    #[test]
+    fn the_session_option_passes_the_read_only_guard() {
+        let s = KLineSettings::from_cfg(&cfg(&[("session", "81")]), 4).unwrap();
+        assert_eq!(s.session, Some(0x81));
+        let s = KLineSettings::from_cfg(&cfg(&[("session", "0x89")]), 4).unwrap();
+        assert_eq!(s.session, Some(0x89));
+        for prog in ["85", "02"] {
+            let e = KLineSettings::from_cfg(&cfg(&[("session", prog)]), 4).unwrap_err();
+            assert!(matches!(e, Error::Unsupported(_)), "{prog}: {e}");
+            assert!(e.to_string().contains("programming"), "{e}");
+        }
+    }
+
+    #[test]
+    fn header_forms_frame_as_iso_14230_2_says() {
+        let f = |a, len_in_fmt, len_byte| HeaderForm {
+            len_in_fmt,
+            len_byte,
+            ..HeaderForm::unchecked(a, 0x33, 0xF1)
+        };
+        // Functional, length in the format byte: C2 33 F1 1A 80 + cs.
+        let fr = f(Addressing::Functional, true, true)
+            .build(&[0x1A, 0x80], true)
+            .unwrap();
+        // 0xC2 + 0x33 + 0xF1 + 0x1A + 0x80 = 0x280.
+        assert_eq!(fr, vec![0xC2, 0x33, 0xF1, 0x1A, 0x80, 0x80]);
+        // Physical.
+        let fr = f(Addressing::Physical, true, false)
+            .build(&[0x1A, 0x80], false)
+            .unwrap();
+        assert_eq!(fr, vec![0x82, 0x33, 0xF1, 0x1A, 0x80]);
+        // No address information: format byte + data only.
+        let fr = f(Addressing::NoAddress, true, false)
+            .build(&[0x1A, 0x80], false)
+            .unwrap();
+        assert_eq!(fr, vec![0x02, 0x1A, 0x80]);
+        // Length byte only (AL0 = 0): format byte length 0, then the length.
+        let fr = f(Addressing::Physical, false, true)
+            .build(&[0x1A, 0x80], false)
+            .unwrap();
+        assert_eq!(fr, vec![0x80, 0x33, 0xF1, 0x02, 0x1A, 0x80]);
+        let fr = f(Addressing::NoAddress, false, true)
+            .build(&[0x3E], false)
+            .unwrap();
+        assert_eq!(fr, vec![0x00, 0x01, 0x3E]);
+        // 64+ bytes without AL1: refused unsent.
+        let e = f(Addressing::Functional, true, false)
+            .build(&[0x21; 64], false)
+            .unwrap_err();
+        assert!(matches!(e, Error::Unsupported(_)), "{e}");
+        // Every form reads back through the tolerant splitter.
+        for form in [
+            f(Addressing::Functional, true, true),
+            f(Addressing::Physical, false, true),
+            f(Addressing::NoAddress, true, false),
+            f(Addressing::NoAddress, false, true),
+        ] {
+            let fr = form.build(&[0x5A, 0x80, 0x41], true).unwrap();
+            let Split::Frame(k, used) = split_frame(&fr, true) else {
+                panic!("{form:?}")
+            };
+            assert_eq!((k.payload, used), (vec![0x5A, 0x80, 0x41], fr.len()));
+            let addr = form.addressing != Addressing::NoAddress;
+            assert_eq!(k.target, addr.then_some(0x33), "{form:?}");
+        }
+        assert_eq!(
+            f(Addressing::Functional, true, false).describe(),
+            "header Cn 33 F1 (functional), length in format byte"
+        );
+    }
+
+    /// [`decide_link`] for KWP2000 outcomes.
+    fn decide_header(s: &KLineSettings, kb: Option<(u8, u8)>) -> Result<HeaderForm> {
+        decide_link(s, kb).map(|m| match m {
+            LinkMode::Kwp(h) => h,
+            other => panic!("not KWP2000: {other:?}"),
+        })
+    }
+
+    #[test]
+    fn keywords_decide_the_link_before_the_header() {
+        let s = |o: &[(&str, &str)]| KLineSettings::from_cfg(&cfg(o), 4).unwrap();
+        let obd = s(&[("init", "5baud"), ("init_addr", "33")]);
+        // ISO 9141-2 key bytes: OBD mode, whatever the defaulted header.
+        for kb in [(0x08, 0x08), (0x94, 0x94)] {
+            let m = decide_link(&obd, Some(kb)).unwrap();
+            assert_eq!(m, LinkMode::Iso9141Obd { tester: 0xF1 });
+            assert_eq!(
+                m.describe(Some(0x10)),
+                "ISO 9141-2 OBD: header 68 6A F1, KWP2000 refused, ECU source address 10"
+            );
+            assert!(decide_link(&s(&[]), Some(kb)).is_ok());
+        }
+        // Not ISO 9141-2: the pair must match and be 08 or 94.
+        for kb in [(0x08, 0x94), (0x94, 0x08), (0x01, 0x8A), (0x55, 0x55)] {
+            let e = decide_link(&obd, Some(kb)).unwrap_err().to_string();
+            assert!(e.contains("neither ISO 14230"), "{kb:02X?}: {e}");
+            assert!(e.contains(&format!("{:02X} {:02X}", kb.0, kb.1)), "{e}");
+            assert!(e.contains("nothing was sent"), "{e}");
+        }
+        // Explicit target/addressing still win, unchecked.
+        for kb in [(0x08, 0x08), (0x01, 0x8A)] {
+            for o in [&[("target", "01")][..], &[("addressing", "physical")]] {
+                let h = decide_header(&s(o), Some(kb)).unwrap();
+                assert!(h.forced && h.len_in_fmt && h.len_byte, "{o:?}");
+                assert_eq!(h.addressing, Addressing::Physical);
+                assert!(h.describe().contains("forced"), "{}", h.describe());
+            }
+        }
+        // KB2 8F is never forced: KB1 still rules.
+        let h = decide_header(&s(&[("target", "01")]), Some((0xEF, 0x8F))).unwrap();
+        assert!(!h.forced);
+    }
+
+    #[test]
+    fn iso9141_answers_split_with_and_without_the_checksum() {
+        let body = [0x48, 0x6B, 0x10, 0x41, 0x00, 0xBE, 0x1F, 0xA8, 0x13];
+        let mut with_cs = body.to_vec();
+        with_cs.push(checksum(&body));
+        let want = Some((0x10, vec![0x41, 0x00, 0xBE, 0x1F, 0xA8, 0x13]));
+        assert_eq!(split_iso9141_answer(&with_cs, true).unwrap(), want);
+        assert_eq!(split_iso9141_answer(&with_cs, false).unwrap(), want);
+        // Cable mode, checksum stripped: the last byte is data.
+        assert_eq!(split_iso9141_answer(&body, false).unwrap(), want);
+        let mut bad = with_cs.clone();
+        *bad.last_mut().unwrap() ^= 1;
+        assert!(split_iso9141_answer(&bad, true).is_err());
+        // Another header (a KWP2000 frame, an echo): skipped.
+        assert_eq!(
+            split_iso9141_answer(&[0x83, 0xF1, 0x10, 0xC1, 0xEF, 0x8F], false).unwrap(),
+            None
+        );
+        assert_eq!(
+            split_iso9141_answer(&[0x48, 0x6B, 0x10], false).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn key_byte_1_decides_or_refuses_the_header_form() {
+        let s = |o: &[(&str, &str)]| KLineSettings::from_cfg(&cfg(o), 4).unwrap();
+        let obd = s(&[("init", "5baud"), ("init_addr", "33")]);
+        // No key bytes (init=none): the requested form, unchecked.
+        let h = decide_header(&obd, None).unwrap();
+        assert_eq!(h, HeaderForm::unchecked(Addressing::Functional, 0x33, 0xF1));
+
+        // Keywords 2025/2027/2029/2031 (KB1 E9/6B/6D/EF, KB2 8F): all have
+        // HB1 and AL0, the normal timing set; AL1 and HB0 vary.
+        for (kb1, al1, hb0) in [
+            (0xE9, false, false),
+            (0x6B, true, false),
+            (0x6D, false, true),
+            (0xEF, true, true),
+        ] {
+            let h = decide_header(&obd, Some((kb1, 0x8F))).unwrap();
+            assert_eq!(h.addressing, Addressing::Functional, "{kb1:02X}");
+            assert_eq!((h.len_in_fmt, h.len_byte), (true, al1), "{kb1:02X}");
+            assert_eq!(h.timing_bits, Some(0b10));
+            assert!(h.describe().ends_with("normal timing"), "{}", h.describe());
+            let none = s(&[("addressing", "none")]);
+            assert_eq!(decide_header(&none, Some((kb1, 0x8F))).is_ok(), hb0);
+        }
+        // KB1 EA (2026: HB1 + AL1 only): length byte, address header.
+        let h = decide_header(&obd, Some((0xEA, 0x8F))).unwrap();
+        assert_eq!(
+            (h.addressing, h.len_in_fmt, h.len_byte),
+            (Addressing::Functional, false, true)
+        );
+        // KB1 E5 (2021: HB0 + AL0 only): a defaulted address header becomes
+        // the 1-byte header; an explicit one is refused.
+        let h = decide_header(&obd, Some((0xE5, 0x8F))).unwrap();
+        assert_eq!(h.addressing, Addressing::NoAddress);
+        for explicit in [
+            s(&[("target", "01")]),
+            s(&[("addressing", "functional"), ("init", "5baud")]),
+        ] {
+            let e = decide_header(&explicit, Some((0xE5, 0x8F))).unwrap_err();
+            assert!(matches!(e, Error::Unsupported(_)), "{e}");
+            assert!(e.to_string().contains("HB1 = 0"), "{e}");
+            assert!(e.to_string().contains("addressing=none"), "{e}");
+        }
+        // Neither header form, neither length form.
+        for (kb1, kb2, why) in [(0x61, 0x8F, "HB1 = 0"), (0x6C, 0x8F, "AL0 = AL1 = 0")] {
+            let e = decide_header(&obd, Some((kb1, kb2)))
+                .unwrap_err()
+                .to_string();
+            assert!(e.contains(why), "{kb1:02X} {kb2:02X}: {e}");
+            assert!(e.contains("nothing was sent"), "{e}");
+        }
+        // An unusual timing set is reported, not acted on.
+        let h = decide_header(&obd, Some((0x5F, 0x8F))).unwrap();
+        assert_eq!(h.timing_bits, Some(0b01));
+        assert!(h.describe().contains("not the normal set"));
     }
 }

@@ -12,6 +12,21 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **OpenPort 2.0 K-line request addressing and keyword decoding
+  (offline-tested):** after the init the key bytes decide what the link
+  speaks. KB2 `8F` is KWP2000: requests go to the `target` option, else the
+  five-baud address after a five-baud init, else `--tx-id`, functional
+  (`0xC0|len`) for the OBD address `33` and physical otherwise
+  (`addressing=physical|functional|none` overrides), and KB1's header bits
+  (length in format byte / length byte, with / without address) pick the
+  header form or refuse one it rules out. Key bytes `08 08` / `94 94` mean
+  the ECU woke as ISO 9141-2 OBD: only OBD read modes go out, with the
+  `68 6A F1` header, KWP2000 (identify's `1A`) is refused unsent, and the
+  ECU address from the first `48 6B` answer is reported. Other key bytes are
+  refused unless a header is forced. New `session=<hex>` option sends
+  startDiagnosticSession right after the init (programming sessions
+  refused); `opentune obd` takes `--tx-id` and `--opt` for K-line. The
+  forms are listed on the firmware line (docs/DRIVERS.md §3l).
 - **CLI diagnostic logging** (off by default): `OPENTUNE_LOG` (or `RUST_LOG`)
   turns on stderr logging, e.g. `OPENTUNE_LOG=openport2=trace`. The OpenPort
   2.0 driver logs every command line it sends and every reply and record it

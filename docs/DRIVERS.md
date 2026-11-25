@@ -867,7 +867,7 @@ is refused.
 | filter | `atf4 1 0 1 <seq>` + `00` + `00`: pass-all PASS (the shape measured on a cable, [B] §7.9); addressing is checked by the driver | `arf4 <id> <seq>` |
 | fast init | `aty4 <n> 0 <seq>` + StartCommunication `81 <ecu> <tester> 81` (+ checksum in host mode) | `ary4 <n> <seq>\r\n` + the ECU's answer (`C1 kb1 kb2`), or `are 7` (no ECU) |
 | five-baud | `atw4 <addr, decimal> <seq>`; the cable does sync, KB1/KB2, inverted KB2 and inverted address | `arw4 <kb1> <kb2> [<seq>]` (number optional: [B] saw one unnumbered) |
-| request | `att4 <n> 0 <budget µs> <seq>` + the KWP2000 frame (no CAN id; budget 1 s default) | `aro <seq>`; no transmit indication |
+| request | `att4 <n> 0 <budget µs> <seq>` + the KWP2000 frame in the decided header form (below; no CAN id; budget 1 s default) | `aro <seq>`; no transmit indication |
 | answer | — | `ar4 <len> <status> <bytes>`: data **without** timestamp; a START/END record whose body is exactly 4 bytes is a timestamp-only marker |
 | close | `atc4 <seq>`, `ata <seq>` | `aro <seq>` |
 
@@ -877,7 +877,86 @@ own; a frame split over two messages is joined; two frames in one are split.
 In cable-checksum mode a trailing byte is taken as the checksum only if it
 matches (whether the cable passes it through is unobserved). Frames addressed
 to another tester are skipped; responsePending (`7F xx 78`) is waited
-through (up to 40). Before each request stale messages are cleared.
+through (up to 40). Before each request stale messages are cleared. Answers
+are accepted in every ISO 14230-2 header form: address mode 10 (physical) or
+11 (functional) with target and source, 00 without address information, the
+length in the format byte or in a separate length byte.
+
+**Request header addressing.** The ISO 14230-2 format byte carries the
+address mode in bits A1A0 (`10` physical `0x80|len`, `11` functional
+`0xC0|len`, `00` no address information, `0x00|len` with no target/source
+bytes). ISO 14230-4:2000 §4.2/§4.4 (OBD): requests go functional to target
+`33H` from the tester, responses come back physical to the request's source,
+and the five-baud address is `33H`. The driver therefore picks, after the
+init:
+
+1. **Target**: the `target` option; else, after a five-baud init, the
+   five-baud address (`init_addr`); else `tx_id`. `tx_id` stays the ECU's
+   physical address: the fast-init StartCommunication is always
+   `81 <tx_id> <tester> 81`, physical.
+2. **Address mode**: the `addressing` option; else functional when the
+   target is `33` (the OBD functional address), physical otherwise.
+3. **Keyword decoding** comes first, from the key bytes the init returned:
+   - KB2 `8F`: ISO 14230 (KWP2000; every keyword 2000–2031 has KB2 `8F`).
+     KB1 then decides the header form (step 4).
+   - `08 08` or `94 94`: ISO 9141-2 (freediag `diag_l2_iso9141.c`: "these
+     can be 0x08 0x08 or 0x94 0x94"). The ECU woke as a legislated ISO
+     9141-2 OBD participant, not as a KWP2000 ECU: see **ISO 9141-2 OBD
+     mode** below.
+   - Anything else (e.g. KW1281's `01 8A`): no header form is guessed; the
+     open is refused with the key bytes in the message.
+
+   An explicit `target`/`addressing` still wins over the last two: that
+   KWP2000 form is used unchecked and the firmware line says `forced`.
+4. **Key byte 1** (KB2 `8F`) confirms or refuses the form. In KB1 (parity
+   bit 7 dropped) bit 0
+   AL0 = length in the format byte supported, bit 1 AL1 = additional length
+   byte supported, bit 2 HB0 = 1-byte header (no address) supported, bit 3
+   HB1 = header with target/source supported; bits 5..4 TP1 TP0 = `10` is
+   the normal timing set. Sources: freediag `diag_l2_iso14230.c` (GPL,
+   "iso14230 5.2.4.1 & Table 8"), cross-checked by ISO 14230-4:2000 §4.4
+   (keyword 2025 = KB1 `0x69` = "3 byte header, no additional length byte,
+   normal timing"; the OBD keywords 2025/2027/2029/2031 = KB1
+   `E9`/`6B`/`6D`/`EF`). The rules: the length goes in the format byte when
+   it fits and AL0 is set, else in a length byte when AL1 is set (a message
+   neither allows is refused unsent; AL0 = AL1 = 0 refuses the open); an
+   address header needs HB1; with HB1 = 0 and HB0 = 1 a *defaulted* address
+   header becomes the 1-byte header, an explicit `target`/`addressing` is
+   refused; `addressing=none` needs HB0. TP bits other than `10` are
+   reported, not acted on (the P-times are the options'). Every refusal
+   happens after the init and before any request, and names the key bytes.
+   With `init=none` there are no key bytes and the form is used unchecked.
+
+The decided form is shown next to the key bytes, e.g. `firmware … (K-line
+keybytes EF 8F; header Cn 33 F1 (functional), length in format byte (length
+byte above 63), normal timing)`, and logged at `debug`.
+
+**ISO 9141-2 OBD mode** (key bytes `08 08` / `94 94`, no explicit
+`target`/`addressing`). Requests use the legislated OBD header
+`68 6A <tester> <mode> <data…>` (+ the 8-bit sum checksum in `checksum=host`
+mode), at most 7 data bytes; answers are `48 6B <ecu> <mode+40> … <cs>`,
+one per message as the cable delimits them by bus timing (ISO 9141-2 frames
+carry no length), the checksum checked in host mode and dropped when it
+matches in cable mode; other headers are skipped (sources: freediag
+`diag_l2_iso9141.c`, after ISO 9141-2 / SAE J1979: `0x68 0x6A` "defined by
+spec", answers checked for `0x48 0x6B`, `data[2]` = "Originating ECU"). Only
+OBD modes `01`–`0A` that pass the shared read-only guard are sent (so `04`
+clear-DTCs stays refused); every KWP2000 service, `identify`'s `1A`, the
+block read's `23` and `session=`, is refused unsent: `ECU woke as ISO 9141-2
+OBD (key bytes 08 08); KWP2000 needs its physical init address
+(init_addr=<ecu>)`. The ECU address from the first `48 6B <src>` answer is
+kept, shown on the firmware line (`… ISO 9141-2 OBD: header 68 6A F1,
+KWP2000 refused, ECU source address 10`), named in that refusal and logged
+at `debug`: it is the candidate physical address for a KWP2000 five-baud
+init. `opentune obd` takes `--tx-id` and `--opt` for this, e.g.
+`opentune obd supported --driver openport2 --port /dev/ttyACM0 --bus kline
+--tx-id 01 --opt init=5baud --opt init_addr=33`.
+
+**Session (`session=<hex>`, off by default).** When set, the link sends
+startDiagnosticSession `10 <xx>` right after the init, before any other
+request (so `identify`'s `1A` follows it), and fails the open on a negative
+answer or none. The value passes the same read-only guard as every request,
+before the port is opened: `85` and `02` (programming) are refused.
 
 Read-only: the K-line `DiagTransport` refuses, **before anything is sent**,
 every service outside an allow-list: OBD read modes 01/02/03/06/07/09/0A;
@@ -901,9 +980,12 @@ Options (same names as `kkl` where `kkl` has them):
 
 | Option | Default | Meaning |
 |---|---|---|
-| `tx_id` (`--tx-id`) | — | ECU address, one byte (required: a CAN-sized id is refused). `--rx-id` is ignored on K-line (pass `F1`) |
+| `tx_id` (`--tx-id`) | — | the ECU's physical address, one byte (required: a CAN-sized id is refused); the fast-init StartCommunication goes to it. `--rx-id` is ignored on K-line (pass `F1`) |
 | `init` | `fast` (ISO 9141: `5baud`) | `fast`, `5baud`/`slow`, `none`; ISO 9141 has no fast init |
 | `init_addr` | `tx_id` | five-baud address byte, hex |
+| `target` | five-baud: `init_addr`; else `tx_id` | request header target address, hex |
+| `addressing` | `functional` for target `33`, else `physical` | `physical`, `functional` or `none` (1-byte header without address; contradicts `target`) |
+| `session` | off | startDiagnosticSession `10 <xx>` sent right after the init, hex; `85`/`02` refused |
 | `tester` | `F1` | tester address, hex |
 | `baud` (`--baud`) | 10400 | only 10400: [M]/[R] report ISO 14230 at 10400 only, [B] §5 an ISO 9141 open at another rate reading back 10400 |
 | `checksum` | `cable` | `cable` (flags 0) or `host` (`ISO9141_NO_CHECKSUM`) |
@@ -917,11 +999,21 @@ Options (same names as `kkl` where `kkl` has them):
 Out-of-range or malformed values are refused before the port is opened.
 
 Bench identify of a K-line-only ECU (read-only; the EDC15C6 profile and
-definition give address `01`):
+definition give address `01`). An ECU that completes the five-baud init only
+at the OBD functional address `33` gets functional KWP2000 requests to `33`
+by default (`C2 33 F1 1A 80`) when its key bytes say KWP2000 (KB2 `8F`); with
+ISO 9141-2 key bytes (`08 08`) identify is refused unsent and the OBD read
+below finds the ECU's address:
 
 ```sh
 opentune identify --driver openport2 --port /dev/ttyACM0 --bus kline \
-    --tx-id 01 --rx-id F1 --opt init=5baud    # or --opt init=fast
+    --tx-id 01 --rx-id F1 --opt init=5baud --opt init_addr=33
+# with a session first:      ... --opt session=81
+# physical after all:        ... --opt target=01   (or --opt addressing=physical)
+# a physical five-baud init: ... --opt init=5baud  (or --opt init=fast)
+# ISO 9141-2 wake (08 08): OBD mode 01 PID 00, ECU address at debug level
+OPENTUNE_LOG=openport2=debug opentune obd supported --driver openport2 \
+    --port /dev/ttyACM0 --bus kline --tx-id 01 --opt init=5baud --opt init_addr=33
 ```
 
 **Raw K-line (design note, not implemented).** The C167 bootstrap-loader
