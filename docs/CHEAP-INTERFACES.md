@@ -64,7 +64,7 @@ pre-CAN-FD CAN ECUs — a cheap, well-supported kit under ~$50 is:
 1. **Tactrix OpenPort 2.0 clone (~$15)** — the flashing workhorse.
    - Works with the **existing `openport2` driver** (CAN only; audited against
      the public protocol notes, **hardware validation pending** — checklist in
-     [DRIVERS.md §3l](DRIVERS.md#3l-openport2-tactrix-openport-20-hardware-validation-pending)).
+     [DRIVERS.md §3l](DRIVERS.md#3l-openport2-tactrix-openport-20-capture-validated-k-line-and-transmit-pending)).
    - It is the cheapest interface that can actually *reprogram* a CAN ECU, and
      the driver handles its `at…` protocol and the seed/key flow.
    - Caveat: **never run a firmware "update"** on a clone — a serial-number
