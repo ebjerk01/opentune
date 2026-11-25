@@ -74,7 +74,7 @@ Rules that trip people up:
 - **Numbers are decimal.** JSON carries no hex; write `524288`, not `0x80000`.
 - **`checksum`** must be an id `opentune-checksum` knows: `crc32-tail`, `edc15c6`,
   `edc16`, `edc17`, `pcr21`, `me7`, `dq250`, `dq250-02e`, `dq381`, `tcu-ccitt`, `zf8hp`, `haldex`,
-  `simos-crc` (run
+  `simos-crc`, `subaru-tcu-m32r`, `subaru-tcu-sh7055`, `subaru-tcu-mh8104` (run
   `opentune checksum algos` for the current list). Unknown-checksum ECUs use `null`.
 - **Addresses are byte offsets into the image the apps load** (the full read),
   not CPU addresses. If your family is normally read as a 2 MiB image, your map
