@@ -746,7 +746,11 @@ interface (`/dev/ttyACM*` on Linux, a COM port on Windows): no vendor DLL, no
 kernel driver. It opens the cable's **raw CAN channel** (J2534 protocol 5) and
 implements `CanLink`, so ISO-TP, UDS, identify and the block read/write come
 from `opentune-core` like every raw-CAN driver. It does **not** use the
-cable's own ISO-TP channel (6) or its K-line channels (3, 4).
+cable's own ISO-TP channel (6). On request it opens the **K-line** channels
+instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
+[K-line](#k-line-iso-14230--iso-9141-read-only) below), and `opentune candump
+--driver openport2` captures raw CAN **receive-only** (see
+[Capture](#receive-only-capture-candump)).
 
 **Validation state: hardware validation pending.** The serial path was
 audited on 2026-11-19 against the public protocol notes below and is tested
@@ -826,11 +830,124 @@ projects work. [M]'s PROTOCOL.md table also lists `ato` as `<baud> <flags>`,
 contradicted by its own code and the other two sources. Both are on the
 checklist.
 
-Not done here (each needs owner approval first, see the audit report): the
-K-line channels (`ato3`/`ato4`, `aty` fast init, `atw` five-baud; the K-line
-record layout is unverified even upstream, [B] §7.9), the cable's own ISO-TP
-channel 6 with flow-control filters, `ats`/`atg` configuration, `atv`
-programming voltage, periodic messages, and VW TP2.0 over this raw-CAN link.
+Not done here: the cable's own ISO-TP channel 6 with flow-control filters,
+`atg` read-back, `atv` programming voltage, periodic messages, VW TP2.0 over
+this raw-CAN link, and any K-line write path. (K-line itself was added on
+2026-11-25, below.)
+
+### K-line (ISO 14230 / ISO 9141), read-only
+
+**Validation state: offline only.** Built from [B] §3–5, §7.9, §8.1 (with
+its vendor-DLL traces), [M], [R] and [J]; tested against the offline fake's
+*synthetic* KWP2000 ECU. Upstream itself has no cable capture of a received
+K-line frame or of a successful `ary`/`arw` ([B] §7.9, §12), so the receive
+path is written to accept every reading the sources allow (below).
+
+Selected by the `bus` option (`--bus kline`, `k` or `iso14230` → channel 4;
+`--bus iso9141` → channel 3) or by a connection whose protocol is
+`iso14230_kline` / `iso9141` (an ECU definition). Any other `bus` value, or
+none, keeps the CAN path exactly as before; `bus=can` with a K-line protocol
+is refused.
+
+| Step | Host sends | Device answers |
+|---|---|---|
+| resync, identify, reset | as on CAN | as on CAN |
+| open | `ato4 <flags> 10400 0 <seq>`: flags `0` (the cable appends/checks the checksum: J2534 default and the DLL trace) or `512` (`ISO9141_NO_CHECKSUM`, `checksum=host`) | `aro <seq>` |
+| timing | `ats4 <param> <value> <seq>`, only for options given | `aro <seq>` (`are 1`: not supported) |
+| filter | `atf4 1 0 1 <seq>` + `00` + `00`: pass-all PASS (the shape measured on a cable, [B] §7.9); addressing is checked by the driver | `arf4 <id> <seq>` |
+| fast init | `aty4 <n> 0 <seq>` + StartCommunication `81 <ecu> <tester> 81` (+ checksum in host mode) | `ary4 <n> <seq>\r\n` + the ECU's answer (`C1 kb1 kb2`), or `are 7` (no ECU) |
+| five-baud | `atw4 <addr, decimal> <seq>`; the cable does sync, KB1/KB2, inverted KB2 and inverted address | `arw4 <kb1> <kb2> [<seq>]` (number optional: [B] saw one unnumbered) |
+| request | `att4 <n> 0 <budget µs> <seq>` + the KWP2000 frame (no CAN id; budget 1 s default) | `aro <seq>`; no transmit indication |
+| answer | — | `ar4 <len> <status> <bytes>`: data **without** timestamp; a START/END record whose body is exactly 4 bytes is a timestamp-only marker |
+| close | `atc4 <seq>`, `ata <seq>` | `aro <seq>` |
+
+Receive: records with `0x20` (loopback) or `0x10` are dropped; START/END
+markers delimit a message; a data record outside START…END is a message on its
+own; a frame split over two messages is joined; two frames in one are split.
+In cable-checksum mode a trailing byte is taken as the checksum only if it
+matches (whether the cable passes it through is unobserved). Frames addressed
+to another tester are skipped; responsePending (`7F xx 78`) is waited
+through (up to 40). Before each request stale messages are cleared.
+
+Read-only: the K-line `DiagTransport` refuses, **before anything is sent**,
+every service outside an allow-list (`kline::READ_SERVICES`: OBD read modes
+01/02/03/06/07/09/0A; 10 (not 0x85/0x02 programming sessions), 12, 17, 18, 19,
+1A, 21, 22, 23, 27, 3E; 81/82). It mirrors the desktop's `READ_SERVICES`
+(`native/src/ops.rs`, which also wraps every read path's `diag()` in
+`ReadOnlyDiag`); the K-line link is reached only through `diag()`, so both
+apply. `write_memory` is refused on K-line and `capabilities().write_memory`
+is false while K-line is open. `read_memory` uses KWP2000
+`readMemoryByAddress` (0x23) in 250-byte chunks, after a KWP security access
+only when a seed/key handler is set or required.
+
+Identify (`read_ecu_id`, KWP2000 layer): `1A` options 80 (identification
+table; ECU name when 97 is absent), 90 (VIN), 91 (hardware number), 94
+(software number), 97 (system name), 9B (VAG record; software number when 94
+is absent). Options the ECU refuses are skipped.
+
+Options (same names as `kkl` where `kkl` has them):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `tx_id` (`--tx-id`) | — | ECU address, one byte (required: a CAN-sized id is refused). `--rx-id` is ignored on K-line (pass `F1`) |
+| `init` | `fast` (ISO 9141: `5baud`) | `fast`, `5baud`/`slow`, `none`; ISO 9141 has no fast init |
+| `init_addr` | `tx_id` | five-baud address byte, hex |
+| `tester` | `F1` | tester address, hex |
+| `baud` (`--baud`) | 10400 | only 10400: [M]/[R] report ISO 14230 at 10400 only, [B] §5 an ISO 9141 open at another rate reading back 10400 |
+| `checksum` | `cable` | `cable` (flags 0) or `host` (`ISO9141_NO_CHECKSUM`) |
+| `layer` | `kwp2000` | `kwp2000` or `uds`; an ECU definition's layer is used when its protocol selected K-line |
+| `tx_timeout_ms` | 1000 | per-message transmit budget, 1..=5000 |
+| `p1_max_ms` 1..=50, `p3_min_ms` 0..=5000, `p4_min_ms` 0..=20 | cable (20/55/5) | sent as `ats` P1_MAX/P3_MIN/P4_MIN in 0.5 ms units ([J]) |
+| `w0_ms` 2..=1000, `w1_ms` 20..=1000, `w2_ms` 1..=1000, `w3_ms` 0..=1000, `w4_ms` 1..=1000, `w5_ms` 0..=10000 | cable (300/300/20/20/50/300) | W0–W5, 1 ms units |
+| `tidle_ms` 0..=10000, `tinil_ms` 1..=100, `twup_ms` 2..=200 | cable (300/25/50) | TIDLE/TINIL/TWUP; `twup_ms` must exceed `tinil_ms` |
+| `five_baud_mod` | cable (0) | J2534 `FIVE_BAUD_MOD` 0..=3 |
+
+Out-of-range or malformed values are refused before the port is opened.
+
+Bench identify of a K-line-only ECU (read-only; the EDC15C6 profile and
+definition give address `01`):
+
+```sh
+opentune identify --driver openport2 --port /dev/ttyACM0 --bus kline \
+    --tx-id 01 --rx-id F1 --opt init=5baud    # or --opt init=fast
+```
+
+**Raw K-line (design note, not implemented).** The C167 bootstrap-loader
+route (`opentune bsl --preset edc15c6`, a serial port at 38400 today) needs
+unframed bytes, no init and no checksum. On the OP2 that would be channel 3
+opened `ISO9141_NO_CHECKSUM | ISO9141_K_LINE_ONLY` (`ato3 4608 …`, the form
+[B] §7.9 measured), `init=none`, a pass-all filter, each `att3` carrying
+arbitrary bytes and every data record read back as bytes (a `KLineRaw` whose
+`echoes()` is false unless `LOOPBACK` is set). The blockers: the rate is fixed
+at 10400 (`DATA_RATE` is read-only on the K channels and no source shows
+another rate working), so the BSL would have to autobaud at 10400 and every
+later stage stay there (a 1 MiB read at ~1 KB/s, ~17 min); the cable delimits
+received bytes into messages by its own P1/P4 timing, which a byte-stream
+reader must tolerate; and the `bsl` command takes a serial path, not an
+`Interface`. Feasible, but not trivial and not verified, so not built.
+
+### Receive-only capture (`candump`)
+
+`Interface::can_monitor` returns a receive-only monitor: the session above up
+to `ato5 <flags> <rate> 0`, then a **pass-all** filter (`atf5 1 <txflags> 4` +
+zero mask + zero pattern) instead of the response-id filter, then only reads.
+It has no send method, and its session refuses `att`, `atm`, `aty`, `atw`,
+`atv`, `atx` and `atp` before writing a byte (tested: no `att*` ever reaches
+the fake). Transmit indications, loopback echoes and bare START records are
+dropped; status bit `0x02` (or an id above 0x7FF) marks a 29-bit frame. The
+cable still acknowledges frames on the bus (no listen-only mode, [B] §10), so
+the listen-only level is reported `not-guaranteed` and `listen_only=require`
+is refused. Options: `--port`, the rate (`--bitrate`, else `--bus hs|ms`;
+one of the CAN rates above), `--opt can_ids=11|29|both` (connect flags 0,
+`CAN_29BIT_ID`, or J2534 `CAN_ID_BOTH`; `both` is unverified on a cable).
+The cable's wire-level CAN receive at 500 kbit/s has been checked on the
+bench (integrator's check, 2026-11); whether a flags-0 channel also delivers
+29-bit frames is open (use `can_ids=29` for a 29-bit bus).
+
+```sh
+opentune candump --driver openport2 --port /dev/ttyACM0 --bitrate 500000 \
+    --out bus.log --duration 60
+```
 
 ### The offline fake
 
@@ -892,9 +1009,27 @@ results here with dates; do not commit serial numbers or VINs.
 8. **ISO 15765 identify on a car.** `opentune identify --driver openport2
    --port /dev/ttyACM0` against the engine ECU (7E0/7E8), ignition on; compare
    the VIN / part numbers with another adapter's result.
-9. **K-line.** Not implemented in OpenTune. Check the clone's K-line with a
-   reference J2534 tool only to decide whether the K-line plan is worth it
-   (clone K-line paths are reported unreliable).
+9. **K-line (bench, read-only).** ECU on a current-limited supply, K-line to
+   OBD pin 7 of the cable, ground shared, terminal 15 on. Nothing here writes;
+   the driver refuses non-read services before sending.
+   a. `opentune info --driver openport2 --port /dev/ttyACM0 --bus kline
+      --tx-id 01 --rx-id F1 --opt init=5baud`: expect `atw4 1` to answer
+      `arw4 <kb1> <kb2>` after ~2.5 s; note whether the reply carried the
+      sequence number and the key bytes (shown in the firmware line).
+   b. The same with `--opt init=fast`: `aty4 4 0` + `81 01 F1 81` should
+      answer `ary4 <n>` + bytes; record whether those bytes end in a
+      checksum (cable-checksum mode).
+   c. `opentune identify` with the same flags: capture the raw stream
+      (`strace -e read,write -x`) and record the receive records: START/END
+      markers with 4-byte bodies? data in one record or several? checksum
+      byte present? `0x10` records? If identify fails, retry with
+      `--opt checksum=host` (flags 512) and compare.
+   d. With nothing on pin 7, `are 7` on both inits must surface as "no answer
+      from the ECU", and the cable must be released (`ata`).
+   e. Optional: `atg4 7 <seq>` by hand to learn the P1_MAX unit (expect 40 =
+      20 ms in 0.5 ms units per [J]; 20 would mean ms) before setting any
+      `p*_ms` option.
+   Record results here with dates (no serials, no VINs).
 10. **Error paths.** Unplug USB mid-read (clean I/O error, no hang); a second
     program holding the cable (`ERR_CHANNEL_IN_USE`); a refused bit rate.
     If the cable stops answering after a wrong-rate close, remove USB **and**

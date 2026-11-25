@@ -33,6 +33,10 @@ struct Fake {
 
 impl Fake {
     fn start() -> Self {
+        Self::start_with(FakeConfig::default())
+    }
+
+    fn start_with(cfg: FakeConfig) -> Self {
         let (mut master, slave) = TTYPort::pair().expect("pty pair");
         master
             .set_timeout(Duration::from_millis(5))
@@ -44,7 +48,7 @@ impl Fake {
         ecu.set_did(0xF194, b"SW-0001".to_vec());
         ecu.set_memory(BASE as u64, image());
         let (dev, handle) = FakeOp2::new(
-            FakeConfig::default(),
+            cfg,
             Box::new(move |req: &[u8]| ecu.respond(req).into_iter().collect()),
         );
         let stop = Arc::new(AtomicBool::new(false));
@@ -116,4 +120,76 @@ fn info_identify_and_read_over_a_fake_openport() {
     assert_eq!((opens, closes), (3, 3), "{:?}", log.lines);
     assert!(log.lines.iter().all(|l| !l.starts_with("atx")));
     assert!(log.open_channels.is_empty(), "the cable is released");
+}
+
+/// `identify` over the K-line channel, with the same options as `--driver
+/// kkl`, against the fake's synthetic KWP2000 ECU (made-up identity).
+#[test]
+fn identify_over_k_line_through_the_cli() {
+    let mut fake = Fake::start();
+    for init in ["fast", "5baud"] {
+        let out = fake.run(&[
+            "identify",
+            "--ecudefs",
+            "/nonexistent-ecudefs",
+            "--bus",
+            "kline",
+            "--tx-id",
+            "01",
+            "--rx-id",
+            "F1",
+            "--opt",
+            &format!("init={init}"),
+        ]);
+        assert!(out.contains("ECU name : SYNTH KWP ECU"), "{init}: {out}");
+        assert!(out.contains("HW/part  : OT-HW-KL01"), "{init}: {out}");
+        assert!(out.contains("SW number: OT-SW-KL01"), "{init}: {out}");
+        assert!(
+            out.contains("VIN      : OTKLINEFAKE000001"),
+            "{init}: {out}"
+        );
+    }
+    let log = fake.handle.log();
+    assert_eq!(log.inits, vec!["fast 4 1", "5baud 4 1"]);
+    assert!(log.lines.iter().all(|l| !l.starts_with("ato5")));
+    assert!(log.open_channels.is_empty(), "the cable is released");
+}
+
+/// `candump --driver openport2`: receive-only capture of both id widths;
+/// nothing is ever transmitted.
+#[test]
+fn candump_is_receive_only() {
+    let mut fake = Fake::start_with(FakeConfig {
+        bus_traffic: vec![
+            (0x7E8, vec![0x02, 0x50, 0x03]),
+            (0x18DA_F110, vec![0x03, 0x7F, 0x22, 0x31]),
+        ],
+        ..FakeConfig::default()
+    });
+    let dir = std::env::temp_dir().join(format!("opentune-op2-dump-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let log_path = dir.join("bus.log");
+    let log_s = log_path.to_string_lossy().into_owned();
+    fake.run(&[
+        "candump",
+        "--bitrate",
+        "500000",
+        "--out",
+        &log_s,
+        "--duration",
+        "1",
+        "--quiet",
+    ]);
+    let text = std::fs::read_to_string(&log_path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(text.contains("7E8#025003"), "{text}");
+    assert!(text.contains("18DAF110#037F2231"), "{text}");
+    let log = fake.handle.log();
+    assert!(
+        log.lines.iter().all(|l| !l.starts_with("att")),
+        "nothing transmitted: {:?}",
+        log.lines
+    );
+    assert!(log.lines.contains(&"atf5 1 0 4 4".to_string()));
+    assert_eq!(log.opened, vec![(5, 0, 500_000)]);
 }

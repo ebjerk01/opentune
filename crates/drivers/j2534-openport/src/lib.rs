@@ -10,7 +10,19 @@
 //! This driver opens the OP2's **raw CAN** channel (J2534 protocol 5) and
 //! implements [`CanLink`]; ISO-TP segmentation, UDS and the read/write flows
 //! come from `opentune-core` ([`IsoTp`] + [`UdsClient`]). The cable's own
-//! ISO 15765 channel (6) and its K-line channels (3, 4) are not used.
+//! ISO 15765 channel (6) is not used.
+//!
+//! **K-line** (read path only): with `bus=kline` (or `iso9141`), or a
+//! connection whose protocol is ISO 14230 / ISO 9141, it opens the cable's
+//! K-line channel 4 (or 3) instead, wakes the ECU (fast or five-baud init,
+//! done by the cable) and exposes KWP2000 framing as a [`DiagTransport`], so
+//! the core `Kwp2000Client` and `identify` run on it as over the `kkl`
+//! driver. See [`kline`] for the options and the wire use. Writes are refused
+//! on K-line, and every request is checked against a read-only allow-list
+//! ([`kline::READ_SERVICES`]) before anything is sent.
+//!
+//! **Capture**: [`Interface::can_monitor`] opens raw CAN receive-only (a
+//! pass-all filter; the monitor has no transmit path), see [`monitor`].
 //!
 //! Session, per the public notes:
 //! 1. `\r\n\r\n` (ends any half line a previous session left), `ati`
@@ -38,16 +50,20 @@
 //! [`fake`]. See `docs/DRIVERS.md` §3l for the audit and the checklist.
 
 pub mod fake;
+pub mod kline;
+pub mod monitor;
 pub mod port;
 pub mod proto;
 
+use kline::{KLineLink, KLineSettings, KLineState};
 use opentune_core::protocol::diag::DiagTransport;
 use opentune_core::protocol::isotp::{CanLink, IsoTp};
+use opentune_core::protocol::kwp2000::Kwp2000Client;
 use opentune_core::protocol::seedkey::SeedKey;
 use opentune_core::protocol::uds::UdsClient;
 use opentune_core::{
-    Capabilities, ConnectConfig, EcuId, Error, Interface, InterfaceInfo, MemoryRegion, Phase,
-    Progress, Protocol, Result,
+    Capabilities, ConnectConfig, DiagLayer, EcuId, Error, Interface, InterfaceInfo, MemoryRegion,
+    Phase, Progress, Protocol, Result,
 };
 use port::{Op2Port, SerialOp2Port};
 use proto::{Msg, RawFrame, Reply, CAN_29BIT_ID, PIN_VBAT, PROTO_CAN};
@@ -156,7 +172,17 @@ struct Session {
     settings: Settings,
     rx: VecDeque<(u32, Vec<u8>)>,
     stats: SessionStats,
+    /// Set when the session runs a K-line channel instead of raw CAN.
+    kline: Option<KLineState>,
+    /// A capture session: every command that could put anything on a bus
+    /// is refused before it is written (see [`Session::command`]).
+    receive_only: bool,
 }
+
+/// Command verbs that transmit on a vehicle bus or drive a pin: transmit,
+/// periodic message, fast and five-baud init, programming voltage, and the
+/// bootloader. A receive-only session refuses them unsent.
+const BUS_WRITING_VERBS: &[&str] = &["att", "atm", "aty", "atw", "atv", "atx", "atp"];
 
 impl Session {
     fn new(port: Box<dyn Op2Port>, settings: Settings) -> Self {
@@ -167,6 +193,8 @@ impl Session {
             settings,
             rx: VecDeque::new(),
             stats: SessionStats::default(),
+            kline: None,
+            receive_only: false,
         }
     }
 
@@ -209,6 +237,14 @@ impl Session {
     /// File a binary record: CAN data for our channel goes to the rx queue,
     /// everything else is counted and dropped.
     fn accept_frame(&mut self, f: RawFrame) {
+        if let Some(k) = self.kline.as_ref() {
+            if f.proto == k.settings.proto {
+                self.accept_kline(f);
+            } else {
+                self.stats.foreign_frames += 1;
+            }
+            return;
+        }
         if f.proto != PROTO_CAN {
             self.stats.foreign_frames += 1;
             return;
@@ -235,6 +271,12 @@ impl Session {
     /// carrying that sequence number. `are` becomes an error; frames that
     /// arrive meanwhile are queued; replies for other numbers are dropped.
     fn command(&mut self, body: &str, payload: &[u8], timeout_ms: u64) -> Result<Reply> {
+        if self.receive_only && BUS_WRITING_VERBS.iter().any(|v| body.starts_with(v)) {
+            return Err(Error::Unsupported(format!(
+                "OpenPort 2.0 capture is receive-only: `{}` refused, nothing was sent",
+                cmd_name(body)
+            )));
+        }
         let seq = self.next_seq();
         self.port.write_all(&proto::numbered(body, seq, payload))?;
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
@@ -356,7 +398,8 @@ impl Session {
     }
 
     fn close(&mut self) {
-        let _ = self.command(&proto::close_channel(PROTO_CAN), &[], CMD_TIMEOUT_MS);
+        let channel = self.kline.as_ref().map_or(PROTO_CAN, |k| k.settings.proto);
+        let _ = self.command(&proto::close_channel(channel), &[], CMD_TIMEOUT_MS);
         // Close everything and switch outputs off, as the reference drivers do.
         let _ = self.command("ata", &[], CMD_TIMEOUT_MS);
     }
@@ -379,6 +422,11 @@ fn device_error(body: &str, r: &Reply) -> Error {
         }
         (20, _) => ": channel already open (another program using the cable?)",
         (3, Some(b'o')) => ": protocol not supported by this cable/firmware",
+        (7, Some(b'y' | b'w')) => {
+            ": no answer from the ECU to the K-line init (K-line wired to OBD pin 7? \
+             ignition / terminal 15 on? right address and init type?)"
+        }
+        (1, Some(b's')) => ": parameter not supported on this channel",
         _ => "",
     };
     Error::Protocol(format!(
@@ -405,6 +453,12 @@ impl CanLink for Op2Link {
 pub struct OpenPort2Driver {
     session: Option<Rc<RefCell<Session>>>,
     transport: Option<IsoTp>,
+    /// The K-line link, when the session runs K-line instead of CAN.
+    kline: Option<KLineLink>,
+    /// Diagnostic layer spoken over the K-line link.
+    kline_layer: Option<DiagLayer>,
+    /// Receive-only raw-CAN capture ([`Interface::can_monitor`]).
+    monitor: monitor::Op2Monitor,
     firmware: Option<String>,
     cfg: Option<ConnectConfig>,
     /// Optional seed/key handler for UDS security access (service 0x27). No OEM
@@ -428,6 +482,9 @@ impl OpenPort2Driver {
     /// or any transport that carries the OP2 protocol) instead of the serial
     /// device named by the `port` option.
     pub fn open_with_port(&mut self, port: Box<dyn Op2Port>, cfg: &ConnectConfig) -> Result<()> {
+        if let Some(k) = kline_settings(cfg)? {
+            return self.open_kline_with_port(port, cfg, k);
+        }
         let settings = Settings::from_cfg(cfg)?;
         if self.session.is_some() {
             self.close()?;
@@ -460,6 +517,61 @@ impl OpenPort2Driver {
         self.transport = Some(isotp);
         self.cfg = Some(cfg.clone());
         Ok(())
+    }
+
+    /// The K-line session: open the cable, configure and filter channel 4
+    /// (or 3), wake the ECU, and expose the KWP2000 link.
+    fn open_kline_with_port(
+        &mut self,
+        port: Box<dyn Op2Port>,
+        cfg: &ConnectConfig,
+        k: KLineSettings,
+    ) -> Result<()> {
+        if self.session.is_some() {
+            self.close()?;
+        }
+        let layer = k.layer;
+        // The CAN settings are unused on K-line; the budget is the K-line one.
+        let placeholder = Settings {
+            bitrate: 0,
+            tx_timeout_ms: k.tx_timeout_ms,
+            extended: false,
+        };
+        let mut s = Session::new(port, placeholder);
+        s.kline = Some(KLineState::new(k));
+        s.port.write_all(b"\r\n\r\n")?;
+        let firmware = s.identify(1500)?;
+        let setup = (|| -> Result<()> {
+            s.command("atz", &[], SETUP_TIMEOUT_MS)?;
+            s.command("ata", &[], CMD_TIMEOUT_MS)?;
+            s.open_kline()
+        })();
+        if let Err(e) = setup {
+            let _ = s.command("ata", &[], CMD_TIMEOUT_MS);
+            return Err(e);
+        }
+        let shared = Rc::new(RefCell::new(s));
+        self.kline = Some(KLineLink {
+            session: Rc::clone(&shared),
+        });
+        self.kline_layer = Some(layer);
+        self.firmware = Some(firmware);
+        self.session = Some(shared);
+        self.cfg = Some(cfg.clone());
+        Ok(())
+    }
+
+    /// Key bytes the ECU sent during the K-line init (`None` on CAN, or with
+    /// `init=none`).
+    pub fn kline_key_bytes(&self) -> Option<(u8, u8)> {
+        let s = self.session.as_ref()?.borrow();
+        s.kline.as_ref().and_then(|k| k.key_bytes)
+    }
+
+    /// Use `port` instead of the serial device the next time the capture
+    /// monitor starts (the offline fake in tests).
+    pub fn inject_monitor_port(&mut self, port: Box<dyn Op2Port>) {
+        self.monitor.inject_port(port);
     }
 
     /// What the session dropped so far (stale replies, indications, …).
@@ -500,10 +612,14 @@ impl Interface for OpenPort2Driver {
     }
 
     fn info(&self) -> InterfaceInfo {
+        let firmware = match (self.firmware.clone(), self.kline_key_bytes()) {
+            (Some(f), Some((a, b))) => Some(format!("{f} (K-line keybytes {a:02X} {b:02X})")),
+            (f, _) => f,
+        };
         InterfaceInfo {
             id: "openport2".into(),
             display_name: "Tactrix OpenPort 2.0 (J2534/CDC-ACM)".into(),
-            firmware: self.firmware.clone(),
+            firmware,
             serial: None,
         }
     }
@@ -511,8 +627,10 @@ impl Interface for OpenPort2Driver {
     fn capabilities(&self) -> Capabilities {
         Capabilities {
             can: true,
+            kline: true,
             read_memory: true,
-            write_memory: true,
+            // K-line is read-only; CAN keeps its write path.
+            write_memory: self.kline.is_none(),
             battery_voltage: true,
             // The cable can drive a pin (`atv`), but the Interface has no
             // programming-voltage call and this driver sends no `atv`.
@@ -525,11 +643,23 @@ impl Interface for OpenPort2Driver {
     /// auto-scan/service/logging engines (and the raw-request console) can
     /// drive this adapter. `None` until `open()` succeeds.
     fn diag(&mut self) -> Option<&mut dyn DiagTransport> {
-        self.transport.as_mut().map(|t| t as &mut dyn DiagTransport)
+        if let Some(t) = self.transport.as_mut() {
+            return Some(t as &mut dyn DiagTransport);
+        }
+        // On K-line: the KWP2000 link, which admits read services only.
+        self.kline.as_mut().map(|k| k as &mut dyn DiagTransport)
+    }
+
+    /// Receive-only raw-CAN capture: pass-all filter, no transmit path.
+    fn can_monitor(&mut self) -> Option<&mut dyn opentune_core::CanMonitor> {
+        Some(&mut self.monitor)
     }
 
     fn open(&mut self, cfg: &ConnectConfig) -> Result<()> {
-        Settings::from_cfg(cfg)?;
+        // Refuse bad settings before the serial device is touched.
+        if kline_settings(cfg)?.is_none() {
+            Settings::from_cfg(cfg)?;
+        }
         let path = cfg
             .options
             .get("port")
@@ -540,8 +670,10 @@ impl Interface for OpenPort2Driver {
     }
 
     fn close(&mut self) -> Result<()> {
-        // Drop the ISO-TP (and its link) before touching the shared session.
+        // Drop the ISO-TP / K-line link before touching the shared session.
         self.transport = None;
+        self.kline = None;
+        self.kline_layer = None;
         if let Some(session) = self.session.take() {
             if let Ok(mut s) = Rc::try_unwrap(session).map(RefCell::into_inner) {
                 s.close();
@@ -558,6 +690,12 @@ impl Interface for OpenPort2Driver {
     }
 
     fn read_ecu_id(&mut self) -> Result<EcuId> {
+        if let Some(k) = self.kline.as_mut() {
+            return match self.kline_layer.unwrap_or(DiagLayer::Kwp2000) {
+                DiagLayer::Kwp2000 => read_kwp_ecu_id(k),
+                DiagLayer::Uds => read_uds_ecu_id(k),
+            };
+        }
         if self.transport.is_none() {
             return Err(Error::NotConnected);
         }
@@ -569,6 +707,9 @@ impl Interface for OpenPort2Driver {
         region: MemoryRegion,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<Vec<u8>> {
+        if self.kline.is_some() {
+            return self.kline_read_memory(region, progress);
+        }
         if self.transport.is_none() {
             return Err(Error::NotConnected);
         }
@@ -585,6 +726,11 @@ impl Interface for OpenPort2Driver {
         data: &[u8],
         progress: &mut dyn FnMut(Progress),
     ) -> Result<()> {
+        if self.kline.is_some() {
+            return Err(Error::Unsupported(
+                "openport2 K-line is read-only: no write path (nothing was sent)".into(),
+            ));
+        }
         if self.transport.is_none() {
             return Err(Error::NotConnected);
         }
@@ -596,6 +742,146 @@ impl Interface for OpenPort2Driver {
         self.security_access()?;
         uds_write_memory(self.transport()?, region, data, progress)
     }
+}
+
+/// The K-line settings when the config selects K-line, `None` for CAN.
+fn kline_settings(cfg: &ConnectConfig) -> Result<Option<KLineSettings>> {
+    match kline::selected_channel(cfg)? {
+        Some(proto) => KLineSettings::from_cfg(cfg, proto).map(Some),
+        None => Ok(None),
+    }
+}
+
+impl OpenPort2Driver {
+    /// K-line read: KWP2000 `readMemoryByAddress` (0x23) in chunks, after a
+    /// KWP security access when a seed/key handler is set or the config
+    /// requires one. UDS over K-line has no read path here.
+    fn kline_read_memory(
+        &mut self,
+        region: MemoryRegion,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<Vec<u8>> {
+        if self.kline_layer != Some(DiagLayer::Kwp2000) {
+            return Err(Error::Unsupported(
+                "openport2 K-line reads memory with KWP2000 only (layer=kwp2000)".into(),
+            ));
+        }
+        let required = security_required(self.cfg.as_ref());
+        let level = seedkey_level(self.cfg.as_ref(), 0x01);
+        let sk = self.seed_key.as_deref();
+        let link = self.kline.as_mut().ok_or(Error::NotConnected)?;
+        kwp_security_access(link, sk, level, required)?;
+        kwp_read_memory(link, region, progress)
+    }
+}
+
+/// KWP2000 security access (0x27) if a handler is set; otherwise an error
+/// only when security is required. Reads only: nothing is written.
+fn kwp_security_access(
+    transport: &mut dyn DiagTransport,
+    seed_key: Option<&dyn SeedKey>,
+    request_level: u8,
+    required: bool,
+) -> Result<()> {
+    let Some(sk) = seed_key else {
+        if required {
+            return Err(Error::Config(
+                "ECU requires security access but no seed/key handler is set \
+                 (call set_seed_key with an algorithm for this ECU)"
+                    .into(),
+            ));
+        }
+        return Ok(());
+    };
+    let mut kwp = Kwp2000Client::new(transport);
+    let seed = kwp.request_seed(request_level)?;
+    if !seed.is_empty() && seed.iter().all(|&b| b == 0) {
+        return Ok(());
+    }
+    let key = sk.compute(&seed, request_level)?;
+    kwp.send_key(request_level.wrapping_add(1), &key)
+}
+
+/// KWP2000 `readEcuIdentification` (0x1A) options → [`EcuId`]: the ISO
+/// 14230-3 records (0x90 VIN, 0x91 hardware number, 0x94 software number,
+/// 0x97 system name), the ECU identification table (0x80) and the VAG record
+/// (0x9B). Options the ECU does not implement are skipped.
+fn read_kwp_ecu_id(transport: &mut dyn DiagTransport) -> Result<EcuId> {
+    let mut id = EcuId::default();
+    let mut kwp = Kwp2000Client::new(transport);
+    let options: &[(u8, &str)] = &[
+        (0x80, "ecu_id"),
+        (0x90, "vin"),
+        (0x91, "hw_number"),
+        (0x94, "sw_number"),
+        (0x97, "ecu_name"),
+        (0x9B, "vag_record"),
+    ];
+    let mut got_any = false;
+    for (opt, name) in options {
+        match kwp.read_ecu_id(*opt) {
+            Ok(resp) => {
+                got_any = true;
+                // resp = [option echo, data...]
+                let value = decode_text(resp.get(1..).unwrap_or_default());
+                match *name {
+                    "vin" => id.vin = Some(value.clone()),
+                    "hw_number" => id.hw_number = Some(value.clone()),
+                    "sw_number" => id.sw_number = Some(value.clone()),
+                    "ecu_name" => id.ecu_name = Some(value.clone()),
+                    "vag_record" if id.sw_number.is_none() => id.sw_number = Some(value.clone()),
+                    _ => {}
+                }
+                id.raw.insert(name.to_string(), value);
+            }
+            Err(Error::NegativeResponse { .. }) => continue,
+            Err(e) => {
+                if got_any {
+                    break;
+                }
+                return Err(e);
+            }
+        }
+    }
+    // The identification table names the ECU when no system name came.
+    if id.ecu_name.is_none() {
+        id.ecu_name = id.raw.get("ecu_id").cloned();
+    }
+    Ok(id)
+}
+
+/// KWP2000 `readMemoryByAddress` read loop, chunked to fit one K-line
+/// message (the length is a single byte).
+fn kwp_read_memory(
+    transport: &mut dyn DiagTransport,
+    region: MemoryRegion,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<Vec<u8>> {
+    const MAX_CHUNK: u32 = 250;
+    let total = region.length as u64;
+    let mut kwp = Kwp2000Client::new(transport);
+    progress(Progress {
+        phase: Phase::Read,
+        done: 0,
+        total,
+    });
+    let mut out = Vec::with_capacity(region.length as usize);
+    let mut addr = region.address;
+    let mut remaining = region.length;
+    while remaining > 0 {
+        let block = kwp.read_memory(addr, remaining.min(MAX_CHUNK) as u8)?;
+        // Never empty (the client refuses that), so every pass progresses.
+        out.extend_from_slice(&block);
+        addr = addr.wrapping_add(block.len() as u32);
+        remaining = remaining.saturating_sub(block.len() as u32);
+        progress(Progress {
+            phase: Phase::Read,
+            done: out.len().min(region.length as usize) as u64,
+            total,
+        });
+    }
+    out.truncate(region.length as usize);
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -682,7 +968,7 @@ fn uds_security_access(
 // ---------------------------------------------------------------------------
 
 /// Common identification DIDs → [`EcuId`] fields.
-pub(crate) fn read_uds_ecu_id(transport: &mut IsoTp) -> Result<EcuId> {
+pub(crate) fn read_uds_ecu_id(transport: &mut dyn DiagTransport) -> Result<EcuId> {
     let mut id = EcuId::default();
     let mut uds = UdsClient::new(transport);
     let dids: &[(u16, &str)] = &[

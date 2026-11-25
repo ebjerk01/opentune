@@ -11,6 +11,21 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Added
+- **OpenPort 2.0 K-line (read-only, offline-tested):** `--driver openport2
+  --bus kline` (or `iso9141`, or an ECU definition with a K-line protocol)
+  opens the cable's ISO 14230 / ISO 9141 channel, wakes the ECU with the
+  cable's fast or five-baud init (`init=fast|5baud|none`, key bytes
+  reported), sets P1/P3/P4, W0–W5, TIdle, TiniL, TWUP and FIVE_BAUD_MOD on
+  request (range-checked), and runs KWP2000 framing as a `DiagTransport`, so
+  `identify` and the core KWP2000 client work over it as over `kkl`. A
+  read-only allow-list refuses every non-read service before it is sent;
+  writes are refused. Tested against a synthetic KWP2000 ECU in the offline
+  fake cable; hardware validation pending (docs/DRIVERS.md §3l).
+- **`opentune candump --driver openport2`:** receive-only raw-CAN capture
+  (pass-all filter, 11- and 29-bit ids); the monitor has no transmit path and
+  its session refuses every bus-writing command unsent.
+
 ## [1.0.0-beta.1] - 2026-11-20
 
 The first beta of the **native desktop app**: every panel of the desktop app
