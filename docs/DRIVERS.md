@@ -757,11 +757,17 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
 - **Receive-only CAN capture: validated on hardware.** `opentune candump
   --driver openport2` at 500 kbit/s on a live ECU captured every frame with
   none dropped, matching an independent wire-level reference capture.
-- **K-line: K-line init not yet answered by a real ECU.** On a bench ECU the
-  cable ran both the five-baud and the fast init and reported that the ECU
-  did not answer (`are 7`), with the cable itself healthy. The cause (ECU
-  address, wiring, or the cable protocol) is not known yet, so every K-line
-  record shape below is still unproven.
+- **K-line: init and receive path proven on hardware; no ECU data reply
+  yet.** On a bench ECU the five-baud init at the OBD functional address 0x33
+  completed (the cable did the 55 / inverted-KB2 / inverted-address exchange)
+  and returned key bytes `08 08`, i.e. the ECU woke as an ISO 9141-2 OBD
+  participant (it then answered no OBD request: not a legislated-OBD ECU).
+  Inits at an address the ECU does not own fail `are 7`. With `LOOPBACK` on,
+  the cable's K-line receive records were captured: START (`0x80`) + a
+  4-byte timestamp, the data record with the message bytes, END (`0x40`) + a
+  4-byte timestamp (plus `0x20` on echoes), exactly what the reassembler
+  expects (pinned by a test with the captured bytes). An ECU KWP2000 reply
+  over this driver is still to come.
 - **CAN transmit, ISO-TP and UDS over the cable: hardware validation
   pending.** Tested against the offline fake only.
 

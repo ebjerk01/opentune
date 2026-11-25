@@ -467,6 +467,58 @@ impl Parser {
 mod tests {
     use super::*;
 
+    /// The K-line record shapes captured on a real OpenPort 2.0 (firmware
+    /// 1.17.4877, LOOPBACK on, ISO 9141 channel 3): a transmitted message
+    /// echoes as START|LOOPBACK + a 4-byte timestamp, LOOPBACK + the frame
+    /// bytes, END|LOOPBACK + a 4-byte timestamp. A received message has the
+    /// same shape without the LOOPBACK bit. Markers are the START/END records
+    /// with a 4-byte body; the data record is not a marker.
+    #[test]
+    fn kline_records_as_captured_on_a_cable() {
+        let rec = |st: u8, body: &[u8]| {
+            let mut r = vec![b'a', b'r', b'3', (body.len() + 1) as u8, st];
+            r.extend_from_slice(body);
+            r
+        };
+        let mut wire = Vec::new();
+        wire.extend(rec(0xA0, &[0x15, 0xC2, 0x89, 0xFE]));
+        wire.extend(rec(0x20, &[0x68, 0x6A, 0xF1, 0x01, 0x00]));
+        wire.extend(rec(0x60, &[0x15, 0xC2, 0xFE, 0x97]));
+        // The same shape for an ECU answer (no LOOPBACK bit).
+        wire.extend(rec(0x80, &[0x15, 0xC3, 0x00, 0x01]));
+        wire.extend(rec(0x00, &[0x48, 0x6B, 0x10, 0x41, 0x00]));
+        wire.extend(rec(0x40, &[0x15, 0xC3, 0x10, 0x02]));
+        let mut p = Parser::new();
+        p.push(&wire);
+        let mut got = Vec::new();
+        while let Some(m) = p.next() {
+            match m {
+                Msg::Frame(f) => got.push(f),
+                Msg::Reply(r) => panic!("unexpected reply {r:?}"),
+            }
+        }
+        let shape: Vec<(u8, u8, bool, usize)> = got
+            .iter()
+            .map(|f| (f.proto, f.status, f.is_kline_marker(), f.body.len()))
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                (3, 0xA0, true, 4),
+                (3, 0x20, false, 5),
+                (3, 0x60, true, 4),
+                (3, 0x80, true, 4),
+                (3, 0x00, false, 5),
+                (3, 0x40, true, 4),
+            ]
+        );
+        assert_eq!(got[1].body, [0x68, 0x6A, 0xF1, 0x01, 0x00]);
+        assert_eq!(got[4].body, [0x48, 0x6B, 0x10, 0x41, 0x00]);
+        // Echo records carry LOOPBACK (dropped by the K-line receiver).
+        assert!(got[..3].iter().all(|f| f.status & status::LOOPBACK != 0));
+        assert!(got[3..].iter().all(|f| f.status & status::LOOPBACK == 0));
+    }
+
     fn frame(proto: u8, status: u8, ts: u32, id: u32, data: &[u8]) -> Vec<u8> {
         let mut body = vec![status];
         body.extend_from_slice(&ts.to_be_bytes());
