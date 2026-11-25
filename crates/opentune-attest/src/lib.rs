@@ -333,15 +333,15 @@ mod tests {
 
     #[test]
     fn other_algorithms_ignore_the_reference() {
-        let algo = opentune_checksum::get("crc32-tail").unwrap();
+        let algo = opentune_checksum::get("test-crc32-tail").unwrap();
         let mut img: Vec<u8> = (0..256u32).map(|i| i as u8).collect();
         algo.correct(&mut img).unwrap();
         let junk = vec![0xFFu8; 7];
-        let r = attest_image_with_reference(&*algo, "crc32-tail", &img, &junk).unwrap();
+        let r = attest_image_with_reference(&*algo, "test-crc32-tail", &img, &junk).unwrap();
         assert!(r.attestation.satisfied);
         assert!(r.blocks.iter().all(|b| b.basis == Basis::Algorithm));
         img[3] ^= 1;
-        let r = attest_image_with_reference(&*algo, "crc32-tail", &img, &junk).unwrap();
+        let r = attest_image_with_reference(&*algo, "test-crc32-tail", &img, &junk).unwrap();
         assert!(!r.attestation.satisfied);
         assert_eq!(r.failed().len(), 1);
     }

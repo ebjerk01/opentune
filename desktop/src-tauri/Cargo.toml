@@ -99,6 +99,8 @@ custom-protocol = ["tauri/custom-protocol"]
 alpha = ["opentune-hub/alpha"]
 
 [dev-dependencies]
+# The test-only `test-crc32-tail` algorithm.
+opentune-checksum = { path = "../../crates/opentune-checksum", features = ["test-algos"] }
 # The simulated multi-module bus and test-only seed/key resolvers.
 opentune-hub = { path = "../../crates/opentune-hub", features = ["testkit"] }
 # The Haldex panel's tests drive OpenHaldex over a simulated SLCAN port.

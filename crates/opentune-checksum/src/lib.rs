@@ -244,6 +244,8 @@ pub fn report_detailed(
 pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
     match id {
         "crc32-tail" => Some(Box::new(generic::Crc32Tail)),
+        #[cfg(any(test, feature = "test-algos"))]
+        "test-crc32-tail" => Some(Box::new(generic::TestCrc32Tail)),
         "edc16" => Some(Box::new(edc16::Edc16)),
         "edc17" => Some(Box::new(edc17::Edc17)),
         "pcr21" => Some(Box::new(pcr21::Pcr21)),
@@ -588,7 +590,7 @@ mod tests {
     #[test]
     fn correct_bad_only_matches_generic_crc32_tail() {
         // The default hook (= correct) must behave identically via the free fn.
-        let algo = generic::Crc32Tail;
+        let algo = generic::TestCrc32Tail;
         let mut img = vec![0u8; 16]; // tail CRC wrong (all zero)
         let fixes = correct_bad_only(&algo, &mut img).unwrap();
         assert_eq!(fixes.len(), 1);

@@ -23,9 +23,14 @@ section (alpha/bench builds) until they are vehicle-tested.
     that image. An image whose every block was edited (for example a single
     extracted block) is refused; correct it against your own untouched stock
     dump (correct with a reference), whose blocks must all validate.
-  - `tcu-ccitt` no longer rewrites the last two bytes of any image: standalone
-    correction refuses a mismatch, and correcting needs a same-length stock
-    dump whose trailer validates.
+  - `tcu-ccitt` no longer rewrites the last two bytes of any image, and
+    `crc32-tail` no longer rewrites the last four: standalone correction
+    refuses a mismatch, and correcting needs a same-length stock dump whose
+    trailer validates. A genuine crc32-tail image that still matches keeps
+    working; a normal ECU read is left untouched.
+  - No user-selectable algorithm can now overwrite an image blindly: each is
+    either validated on real dumps or gated as above. (Tests use a separate,
+    test-only algorithm.)
   Each is promoted back once a real dump validates it.
 
 ## [1.0.0-beta.1] - 2026-11-20

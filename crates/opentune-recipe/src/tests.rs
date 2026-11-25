@@ -1,7 +1,7 @@
 use super::*;
 
 const N: usize = 8192;
-const ALGO: &str = "crc32-tail";
+const ALGO: &str = "test-crc32-tail";
 
 fn noise(len: usize, seed: u32) -> Vec<u8> {
     let mut s = seed;

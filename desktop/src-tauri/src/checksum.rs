@@ -175,8 +175,14 @@ mod tests {
         std::fs::write(&img, &original).unwrap();
         let p = img.to_string_lossy().into_owned();
 
-        let r = fix_checksums(p.clone(), "crc32-tail", None, &Checksums::default(), true)
-            .expect("fix ok");
+        let r = fix_checksums(
+            p.clone(),
+            "test-crc32-tail",
+            None,
+            &Checksums::default(),
+            true,
+        )
+        .expect("fix ok");
         assert!(!r["fixes"].as_array().unwrap().is_empty(), "{r}");
         assert_eq!(r["in_place"], true);
         let backup = PathBuf::from(r["backup"].as_str().expect("backup path reported"));
@@ -195,7 +201,7 @@ mod tests {
 
         let r = fix_checksums(
             img.to_string_lossy().into_owned(),
-            "crc32-tail",
+            "test-crc32-tail",
             Some(out.to_string_lossy().into_owned()),
             &Checksums::default(),
             true,
@@ -211,7 +217,7 @@ mod tests {
         std::fs::write(&out, b"old contents").unwrap();
         let r2 = fix_checksums(
             img.to_string_lossy().into_owned(),
-            "crc32-tail",
+            "test-crc32-tail",
             Some(out.to_string_lossy().into_owned()),
             &Checksums::default(),
             true,
