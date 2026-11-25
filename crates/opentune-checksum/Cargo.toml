@@ -6,3 +6,8 @@ license.workspace = true
 
 [dependencies]
 opentune-core = { path = "../opentune-core" }
+
+[features]
+# Test fixtures for other crates' tests (dev-dependencies only): the
+# `test-crc32-tail` algorithm, never listed in `algorithms()`.
+test-algos = []

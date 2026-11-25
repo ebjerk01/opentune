@@ -269,3 +269,47 @@ fn the_view_polls_the_app_target_until_stopped() {
     assert_eq!(lock(&v.board).phase, Phase::Stopped);
     assert!(bus.wire().iter().all(|(tx, _)| *tx == 0x7E0));
 }
+
+/// The preset, selection, unit and interval are remembered in egui's
+/// persisted memory: loaded on the first frame, saved when they change.
+#[test]
+fn preferences_are_remembered_between_runs() {
+    use eframe::egui;
+    let ctx = egui::Context::default();
+    let frame = |ctx: &egui::Context, v: &mut DashboardView| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| v.sync_prefs(ui));
+        // Headless: nothing uploads the font atlas.
+        out.textures_delta.clear();
+    };
+    // First run: defaults, then the user changes them.
+    let mut a = DashboardView::default();
+    frame(&ctx, &mut a);
+    a.preset = Preset::Custom;
+    a.custom = vec!["rpm".into(), "speed".into()];
+    a.punit = PressureUnit::KPa;
+    a.interval_ms = 1000;
+    frame(&ctx, &mut a);
+    // Next run (a new view over the same memory) starts with them.
+    let mut b = DashboardView::default();
+    frame(&ctx, &mut b);
+    assert_eq!(b.preset, Preset::Custom);
+    assert_eq!(b.custom, ["rpm", "speed"]);
+    assert_eq!(b.punit, PressureUnit::KPa);
+    assert_eq!(b.interval_ms, 1000);
+    // An interval the panel does not offer is not taken over.
+    ctx.data_mut(|d| {
+        d.insert_persisted(
+            egui::Id::unique("opentune-dashboard-prefs"),
+            super::DashPrefs {
+                preset: Preset::Petrol,
+                custom: Vec::new(),
+                punit: PressureUnit::Bar,
+                interval_ms: 7,
+            },
+        )
+    });
+    let mut c = DashboardView::default();
+    frame(&ctx, &mut c);
+    assert_eq!(c.preset, Preset::Petrol);
+    assert_eq!(c.interval_ms, 500);
+}

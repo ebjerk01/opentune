@@ -139,6 +139,17 @@ pub struct DriveView {
     note: Option<(Tone, String)>,
     /// Asked for during `ui` (switch to the Dashboard).
     pending_action: Option<HostAction>,
+    /// The preferences last loaded / saved (None until the first frame).
+    prefs_seen: Option<DrivePrefs>,
+}
+
+/// What the Drive view remembers between runs (egui's persisted memory,
+/// saved with the app's state): the tile choices and the pressure unit.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct DrivePrefs {
+    punit: PUnit,
+    sel_replay: Vec<String>,
+    sel_live: Vec<String>,
 }
 
 impl Default for DriveView {
@@ -157,11 +168,40 @@ impl Default for DriveView {
             sel_live: Vec::new(),
             note: None,
             pending_action: None,
+            prefs_seen: None,
         }
     }
 }
 
 impl DriveView {
+    fn prefs(&self) -> DrivePrefs {
+        DrivePrefs {
+            punit: self.punit,
+            sel_replay: self.sel_replay.clone(),
+            sel_live: self.sel_live.clone(),
+        }
+    }
+
+    /// Load the remembered preferences on the first frame, save them when
+    /// they change (a selection is re-fitted to each log's channels).
+    fn sync_prefs(&mut self, ui: &Ui) {
+        let id = egui::Id::unique("opentune-drive-prefs");
+        if self.prefs_seen.is_none() {
+            if let Some(p) = ui.data_mut(|d| d.get_persisted::<DrivePrefs>(id)) {
+                self.punit = p.punit;
+                self.sel_replay = p.sel_replay;
+                self.sel_live = p.sel_live;
+            }
+            self.prefs_seen = Some(self.prefs());
+            return;
+        }
+        let now = self.prefs();
+        if self.prefs_seen.as_ref() != Some(&now) {
+            ui.data_mut(|d| d.insert_persisted(id, now.clone()));
+            self.prefs_seen = Some(now);
+        }
+    }
+
     fn wall(&self) -> f64 {
         self.epoch.elapsed().as_secs_f64() * 1000.0
     }
@@ -629,6 +669,7 @@ impl NativeView for DriveView {
         }
     }
     fn ui(&mut self, ui: &mut egui::Ui, host: &mut Host<'_>) {
+        self.sync_prefs(ui);
         if let Some(p) = take_queued() {
             self.open(host, p);
         }

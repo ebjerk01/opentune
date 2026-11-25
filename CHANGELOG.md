@@ -11,6 +11,43 @@ section (alpha/bench builds) until they are vehicle-tested.
 
 ## [Unreleased]
 
+### Added
+- **Checksums: Subaru / Mitsubishi TCU balance-word sums** —
+  `subaru-tcu-m32r` (Hitachi M32R), `subaru-tcu-sh7055` (Denso SH7055) and
+  `subaru-tcu-mh8104` (Mitsubishi MH8104 CVT), reimplemented from FastECU
+  (GPL-3.0). Synthetic-tested only: reported *consistent*, and an edited image
+  is corrected only against your own validating stock dump.
+- **Checksums: VAG Simos ECM3 calibration-monitor sum** (`ecm3`, alias
+  `simos-ecm3`), reimplemented from VW_Flash (BSD-2-Clause) for extracted
+  Simos 8/10/12/16/18 CAL blocks. Verify-first: reported *consistent*,
+  correction only against a validating stock CAL block of the same software;
+  full reads are refused.
+- Checksum vectors: the public DQ250-MQB trailer vector (`"123456789"` +
+  `D9 C6 0B 34`) and the Haldex Gen5 header-window exclusion, per published
+  block offset.
+
+### Changed
+- **Checksums: an algorithm not yet validated on a real dump is never reported
+  as "supported", and only writes against a proven stored value.** One rule
+  for every algorithm, old and new:
+  - `haldex` (Haldex Gen5), `dq250` (DQ250-MQB) and `zf8hp` (ZF 8HP CAL) now
+    report *consistent* instead of *supported*, even when a stored value
+    matches.
+  - `haldex` corrects match-first, like `dq250`: standalone correction writes
+    only when at least one located block's stored checksum already matches in
+    that image. An image whose every block was edited (for example a single
+    extracted block) is refused; correct it against your own untouched stock
+    dump (correct with a reference), whose blocks must all validate.
+  - `tcu-ccitt` no longer rewrites the last two bytes of any image, and
+    `crc32-tail` no longer rewrites the last four: standalone correction
+    refuses a mismatch, and correcting needs a same-length stock dump whose
+    trailer validates. A genuine crc32-tail image that still matches keeps
+    working; a normal ECU read is left untouched.
+  - No user-selectable algorithm can now overwrite an image blindly: each is
+    either validated on real dumps or gated as above. (Tests use a separate,
+    test-only algorithm.)
+  Each is promoted back once a real dump validates it.
+
 ## [1.0.0-beta.1] - 2026-11-20
 
 The first beta of the **native desktop app**: every panel of the desktop app

@@ -16,3 +16,7 @@ opentune-flash = { path = "../opentune-flash" }
 opentune-scan = { path = "../opentune-scan" }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+# The test-only `test-crc32-tail` algorithm.
+opentune-checksum = { path = "../opentune-checksum", features = ["test-algos"] }
