@@ -68,6 +68,39 @@ use opentune_core::{
 };
 use port::{Op2Port, SerialOp2Port};
 use proto::{Msg, RawFrame, Reply, CAN_29BIT_ID, PIN_VBAT, PROTO_CAN};
+
+/// ` +AA BB …` for a trace line, or nothing for no bytes.
+fn hex_tail(b: &[u8]) -> String {
+    if b.is_empty() {
+        return String::new();
+    }
+    let h: Vec<String> = b.iter().map(|x| format!("{x:02X}")).collect();
+    format!(" +{}", h.join(" "))
+}
+
+/// Trace every reply and record the cable sends (target `openport2`, level
+/// `trace`; the CLI shows it with `OPENTUNE_LOG=openport2=trace`).
+fn trace_msg(m: &Msg) {
+    if !log::log_enabled!(target: "openport2", log::Level::Trace) {
+        return;
+    }
+    match m {
+        Msg::Reply(r) => log::trace!(
+            target: "openport2",
+            "< ar{} {}{}",
+            r.verb as char,
+            r.text,
+            hex_tail(&r.data)
+        ),
+        Msg::Frame(f) => log::trace!(
+            target: "openport2",
+            "< rec ch{} st{:02X}{}",
+            f.proto,
+            f.status,
+            hex_tail(&f.body)
+        ),
+    }
+}
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -223,6 +256,7 @@ impl Session {
         loop {
             if let Some(m) = self.parser.next() {
                 self.stats.garbage_bytes = self.parser.garbage;
+                trace_msg(&m);
                 return Ok(Some(m));
             }
             let now = Instant::now();
@@ -279,6 +313,7 @@ impl Session {
             )));
         }
         let seq = self.next_seq();
+        log::trace!(target: "openport2", "> {body} #{seq}{}", hex_tail(payload));
         self.port.write_all(&proto::numbered(body, seq, payload))?;
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         loop {
@@ -303,6 +338,7 @@ impl Session {
 
     /// `ati` (unnumbered, as the vendor DLL sends it) → the version text.
     fn identify(&mut self, timeout_ms: u64) -> Result<String> {
+        log::trace!(target: "openport2", "> ati");
         self.port.write_all(b"ati\r\n")?;
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         loop {

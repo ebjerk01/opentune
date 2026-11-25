@@ -12,6 +12,10 @@ section (alpha/bench builds) until they are vehicle-tested.
 ## [Unreleased]
 
 ### Added
+- **CLI diagnostic logging** (off by default): `OPENTUNE_LOG` (or `RUST_LOG`)
+  turns on stderr logging, e.g. `OPENTUNE_LOG=openport2=trace`. The OpenPort
+  2.0 driver logs every command line it sends and every reply and record it
+  receives at `trace`, for bringing up a new ECU or cable.
 - **OpenPort 2.0 K-line (read-only, offline-tested):** `--driver openport2
   --bus kline` (or `iso9141`, or an ECU definition with a K-line protocol)
   opens the cable's ISO 14230 / ISO 9141 channel, wakes the ECU with the

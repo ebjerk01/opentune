@@ -1148,6 +1148,7 @@ dependencies = [
  "anyhow",
  "clap",
  "ctrlc",
+ "log",
  "opentune-a2l",
  "opentune-adaptation",
  "opentune-attest",
@@ -1374,6 +1375,7 @@ dependencies = [
 name = "opentune-driver-openport2"
 version = "1.0.0-beta.1"
 dependencies = [
+ "log",
  "opentune-core",
  "opentune-udssim",
  "serialport",

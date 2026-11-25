@@ -938,6 +938,21 @@ received bytes into messages by its own P1/P4 timing, which a byte-stream
 reader must tolerate; and the `bsl` command takes a serial path, not an
 `Interface`. Feasible, but not trivial and not verified, so not built.
 
+### Tracing the cable
+
+The driver logs every command line it sends (`> atw4 51 #7`) and every reply
+and record it receives (`< arw 8 143`, `< rec ch4 st00 +83 F1 10 …`) at
+level `trace`, target `openport2`. The CLI shows them on stderr when asked
+(off by default):
+
+```sh
+OPENTUNE_LOG=openport2=trace opentune identify --driver openport2 ...
+```
+
+(`RUST_LOG` works too; `OPENTUNE_LOG=trace` shows every target.) This is
+what a K-line bring-up needs: the init the driver asked for, the key bytes
+the cable reports, and the raw records of each request and reply.
+
 ### Receive-only capture (`candump`)
 
 `Interface::can_monitor` returns a receive-only monitor: the session above up

@@ -52,6 +52,7 @@ mod dsg_cmd;
 mod gps_cmd;
 mod haldex_cmd;
 mod livelog;
+mod logging;
 mod mapfind_cmd;
 mod obd_cmd;
 mod recipe_cmd;
@@ -195,6 +196,8 @@ pub fn run() -> ExitCode {
 
 /// Run the CLI described by `cfg` on the process arguments.
 pub fn run_with(cfg: CliConfig) -> ExitCode {
+    // Stderr diagnostics when OPENTUNE_LOG / RUST_LOG asks (off otherwise).
+    logging::init();
     run_from(cfg, std::env::args_os())
 }
 
