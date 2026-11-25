@@ -40,6 +40,12 @@ section (alpha/bench builds) until they are vehicle-tested.
   block offset.
 
 ### Changed
+- **`kkl` speaks KWP2000 by default.** Without `--opt layer=uds|kwp2000`
+  the K-line driver now uses KWP2000 (as `openport2` on K-line does) unless an
+  ECU definition with a K-line protocol names its own layer. Before,
+  `opentune identify --driver kkl` inherited the CLI's generic UDS default and
+  sent UDS requests down the K-line, which a KWP2000 ECU (EDC15, ME7, …) does
+  not answer.
 - **Checksums: an algorithm not yet validated on a real dump is never reported
   as "supported", and only writes against a proven stored value.** One rule
   for every algorithm, old and new:
