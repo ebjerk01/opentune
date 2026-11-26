@@ -39,6 +39,16 @@ section (alpha/bench builds) until they are vehicle-tested.
   Simos 8/10/12/16/18 CAL blocks. Verify-first: reported *consistent*,
   correction only against a validating stock CAL block of the same software;
   full reads are refused.
+- **Checksums: Mercedes EGS52 / EGS53 (NAG 722.6 TCU)** (`egs52`, `egs53`):
+  per-module descriptor table (`(N << 16) | crc16`, N inclusive 24-bit
+  ranges, `0xFFFFFFFF` terminator, descriptor carved out of its ranges) with
+  a reflected CRC-16/ARC (poly `0x8005`) seeded `0x7878` (EGS52) or `0xFFFF`
+  (EGS53). Clean-room, derived from and validated on the owner's own images
+  (34/34 modules over 17 images). Only documented layouts are accepted, and
+  only when every descriptor validates structurally; a module is reported
+  *recognised* when at least one module in the image matches. Match-first:
+  `correct` writes only the low 16 bits (never N) while one module still
+  matches; otherwise correct against the untouched stock read.
 - Checksum vectors: the public DQ250-MQB trailer vector (`"123456789"` +
   `D9 C6 0B 34`) and the Haldex Gen5 header-window exclusion, per published
   block offset.
