@@ -95,6 +95,14 @@ pub struct ObdConn {
     /// Per-request timeout, milliseconds.
     #[arg(long, default_value_t = 1000)]
     timeout_ms: u64,
+    /// K-line: the ECU's one-byte address, hex (e.g. `01`), in place of the
+    /// OBD CAN request id (`--driver openport2 --bus kline`).
+    #[arg(long, value_name = "HEX")]
+    tx_id: Option<String>,
+    /// Extra driver option, e.g. `--opt init=5baud --opt init_addr=33`
+    /// (repeatable; see docs/DRIVERS.md).
+    #[arg(long = "opt", value_name = "KEY=VALUE")]
+    opts: Vec<String>,
 }
 
 fn with_diag<T>(
@@ -131,11 +139,36 @@ fn open_at(
     let mut drv = reg
         .make(&conn.driver)
         .ok_or_else(|| anyhow!("unknown driver '{}'", conn.driver))?;
+    let tx = match conn
+        .tx_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        Some(s) => {
+            let h = s
+                .strip_prefix("0x")
+                .or_else(|| s.strip_prefix("0X"))
+                .unwrap_or(s);
+            u32::from_str_radix(h, 16).map_err(|_| anyhow!("--tx-id '{s}': not hex"))?
+        }
+        None => tx,
+    };
     let mut cfg = ConnectConfig {
         tx_id: tx,
         rx_id: rx,
         ..ConnectConfig::default()
     };
+    for raw in &conn.opts {
+        let (k, v) = raw
+            .split_once('=')
+            .ok_or_else(|| anyhow!("--opt '{raw}': expected KEY=VALUE"))?;
+        let k = k.trim();
+        if k.is_empty() || ["port", "baud", "bus", "tx_id", "rx_id"].contains(&k) {
+            anyhow::bail!("--opt '{raw}': use the dedicated flag (or a non-empty name)");
+        }
+        cfg.options.insert(k.to_owned(), v.trim().to_owned());
+    }
     let env = |k: &str| std::env::var(k).ok();
     for (opt, val) in [
         ("port", conn.port.clone().or_else(|| env("OPENTUNE_PORT"))),
@@ -691,6 +724,8 @@ mod tests {
                 baud: None,
                 bus: None,
                 timeout_ms: 100,
+                tx_id: None,
+                opts: Vec::new(),
             },
             all_ecus: all,
             json: true,

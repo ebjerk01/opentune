@@ -13,7 +13,7 @@ use opentune_core::{
 };
 use opentune_driver_openport2::fake::{
     synthetic_kwp_ecu, Chunking, FakeConfig, FakeFaults, FakeHandle, FakeOp2, FakePort,
-    KLineRxLayout,
+    KLineEcuHeader, KLineRxLayout,
 };
 use opentune_driver_openport2::OpenPort2Driver;
 
@@ -155,7 +155,7 @@ fn five_baud_init_reports_the_key_bytes() {
         assert_eq!(id.vin.as_deref(), Some("OTKLINEFAKE000001"));
         let log = h.log();
         assert!(
-            log.lines.contains(&"atw4 1 5".to_string()),
+            log.lines.iter().any(|l| l.starts_with("atw4 1 ")),
             "{:?}",
             log.lines
         );
@@ -177,9 +177,13 @@ fn five_baud_init_reports_the_key_bytes() {
         Some("OTKLINEFAKE000001")
     );
     let log = h.log();
-    assert_eq!(log.opened, vec![(3, 0, 10_400)]);
+    assert_eq!(
+        log.opened,
+        vec![(3, 512, 10_400)],
+        "host checksum by default"
+    );
     assert!(
-        log.lines.contains(&"atw3 51 5".to_string()),
+        log.lines.iter().any(|l| l.starts_with("atw3 51 ")),
         "{:?}",
         log.lines
     );
@@ -199,7 +203,11 @@ fn an_ecu_definition_selects_k_line_without_the_bus_option() {
     let (d, h) = open(&cfg, FakeConfig::default());
     let mut d = d.unwrap();
     assert!(d.read_ecu_id().unwrap().vin.is_some());
-    assert_eq!(h.log().opened, vec![(4, 0, 10_400)]);
+    assert_eq!(
+        h.log().opened,
+        vec![(4, 512, 10_400)],
+        "host checksum by default"
+    );
 }
 
 #[test]
@@ -227,6 +235,8 @@ fn timing_options_are_written_before_the_init() {
             (4, 20, 25),
             (4, 21, 50),
             (4, 33, 0),
+            // Five-baud init without w4_ms: W4 = 40 ms.
+            (4, 17, 40),
         ]
     );
     let first_ats = log
@@ -430,6 +440,10 @@ fn bad_k_line_options_are_refused_before_anything_is_sent() {
         kcfg(&[("twup_ms", "20")]),
         kcfg(&[("five_baud_mod", "7")]),
         kcfg(&[("tester", "G1")]),
+        kcfg(&[("target", "zz")]),
+        kcfg(&[("addressing", "broadcast")]),
+        kcfg(&[("addressing", "none"), ("target", "33")]),
+        kcfg(&[("session", "1234")]),
         kcfg(&[("bus", "iso9141"), ("init", "fast")]),
         far,
     ];
@@ -465,6 +479,328 @@ fn the_can_path_is_unchanged_without_a_k_line_option() {
         );
         assert!(log.inits.is_empty() && log.config.is_empty());
     }
+}
+
+// --- request header addressing (ISO 14230-2 format byte, key byte 1) -------
+
+/// The host's K-line frames on the fake bus, in order.
+fn host_frames(h: &FakeHandle) -> Vec<Vec<u8>> {
+    h.log()
+        .bus
+        .iter()
+        .filter(|f| f.from_host)
+        .map(|f| f.data.clone())
+        .collect()
+}
+
+/// A fake ECU like the bench one: woken by a five-baud init at the OBD
+/// functional address 0x33 it answers functional requests to 0x33 only;
+/// woken at its physical address 0x01, physical requests to 0x01 only.
+fn obd_fake(kb1: u8) -> FakeConfig {
+    FakeConfig {
+        kline_ecu_header: KLineEcuHeader::Obd(0x33),
+        kline_key_bytes: (kb1, 0x8F),
+        ..FakeConfig::default()
+    }
+}
+
+#[test]
+fn after_a_five_baud_init_at_0x33_requests_go_functional_to_0x33() {
+    // The bench line: --tx-id 01 --opt init=5baud --opt init_addr=33.
+    let cfg = kcfg(&[("init", "5baud"), ("init_addr", "33")]);
+    for kb1 in [0xEF, 0xE9, 0x6B, 0x6D] {
+        let (d, h) = open(&cfg, obd_fake(kb1));
+        let mut d = d.unwrap_or_else(|e| panic!("{kb1:02X}: {e}"));
+        let id = d.read_ecu_id().unwrap();
+        assert_eq!(id.vin.as_deref(), Some("OTKLINEFAKE000001"));
+        let fw = d.info().firmware.unwrap();
+        assert!(
+            fw.contains(&format!(
+                "keybytes {kb1:02X} 8F; header Cn 33 F1 (functional)"
+            )),
+            "{fw}"
+        );
+        assert!(fw.contains("normal timing"), "{fw}");
+        let log = h.log();
+        assert_eq!(log.inits, vec!["5baud 4 51"]);
+        // identify's first request: 1A 80, functional, to 0x33, from F1.
+        assert_eq!(
+            host_frames(&h)[0][..5],
+            [0xC2, 0x33, 0xF1, 0x1A, 0x80],
+            "{kb1:02X}"
+        );
+        assert!(host_frames(&h).iter().all(|f| f[0] & 0xC0 == 0xC0));
+    }
+
+    // The same ECU woken at its physical address: physical to 0x01.
+    let (d, h) = open(&kcfg(&[("init", "5baud")]), obd_fake(0xEF));
+    let mut d = d.unwrap();
+    assert!(d.read_ecu_id().unwrap().vin.is_some());
+    assert_eq!(host_frames(&h)[0][..5], [0x82, 0x01, 0xF1, 0x1A, 0x80]);
+    assert!(d
+        .info()
+        .firmware
+        .unwrap()
+        .contains("header 8n 01 F1 (physical)"));
+    // And after a fast init (StartCommunication physical to tx_id, as before).
+    let (d, h) = open(&kcfg(&[]), obd_fake(0xEF));
+    let mut d = d.unwrap();
+    assert!(d.read_ecu_id().unwrap().vin.is_some());
+    assert_eq!(h.log().inits, vec!["fast 4 1"]);
+    assert_eq!(host_frames(&h)[0][..4], [0x82, 0x01, 0xF1, 0x1A]);
+}
+
+#[test]
+fn explicit_target_and_addressing_options_win() {
+    // Physical requests after a functional wake-up: what the bench saw
+    // before this change (no answer within P2).
+    for opts in [
+        &[("target", "01")][..],
+        &[("addressing", "physical")],
+        &[("target", "0x01"), ("addressing", "physical")],
+    ] {
+        let mut o = vec![("init", "5baud"), ("init_addr", "33")];
+        o.extend_from_slice(opts);
+        let (d, h) = open(&kcfg(&o), obd_fake(0xEF));
+        let mut d = d.unwrap();
+        let e = d.diag().unwrap().request(&[0x1A, 0x90], 200).unwrap_err();
+        assert!(matches!(e, Error::Timeout(_)), "{opts:?}: {e}");
+        let f = &host_frames(&h)[0];
+        assert_eq!(f[0], 0x82, "{opts:?}: physical");
+        assert_eq!(f[2], 0xF1);
+    }
+    // addressing=functional to the physical address, and a target of its
+    // own; the default fake answers any addressed header to its address.
+    let (d, h) = open(
+        &kcfg(&[("addressing", "functional")]),
+        FakeConfig::default(),
+    );
+    let mut d = d.unwrap();
+    assert!(d.read_ecu_id().unwrap().vin.is_some());
+    assert_eq!(host_frames(&h)[0][..3], [0xC2, 0x01, 0xF1]);
+    let (d, h) = open(&kcfg(&[("target", "10")]), FakeConfig::default());
+    let mut d = d.unwrap();
+    let _ = d.diag().unwrap().request(&[0x1A, 0x90], 200);
+    assert_eq!(host_frames(&h)[0][..3], [0x82, 0x10, 0xF1]);
+    // A five-baud address other than 0x33 stays physical.
+    let fake = FakeConfig {
+        kline_ecu_addr: 0x10,
+        ..FakeConfig::default()
+    };
+    let (d, h) = open(&kcfg(&[("init", "5baud"), ("init_addr", "10")]), fake);
+    d.unwrap().read_ecu_id().unwrap();
+    assert_eq!(host_frames(&h)[0][..3], [0x82, 0x10, 0xF1]);
+}
+
+#[test]
+fn key_byte_1_header_variants_end_to_end() {
+    // KB1 E5 (HB0 + AL0 only): the 1-byte header, both ways.
+    let fake = FakeConfig {
+        kline_ecu_header: KLineEcuHeader::NoAddress,
+        kline_key_bytes: (0xE5, 0x8F),
+        ..FakeConfig::default()
+    };
+    for checksum in ["cable", "host"] {
+        let (d, h) = open(&kcfg(&[("checksum", checksum)]), fake.clone());
+        let mut d = d.unwrap_or_else(|e| panic!("{checksum}: {e}"));
+        assert_eq!(
+            d.read_ecu_id().unwrap().sw_number.as_deref(),
+            Some("OT-SW-KL01")
+        );
+        assert!(d
+            .info()
+            .firmware
+            .unwrap()
+            .contains("header 0n (no address)"));
+        assert_eq!(host_frames(&h)[0][..3], [0x02, 0x1A, 0x80], "{checksum}");
+    }
+    // KB1 EA (HB1 + AL1 only): a separate length byte, both ways.
+    let fake = FakeConfig {
+        kline_len_byte_only: true,
+        kline_key_bytes: (0xEA, 0x8F),
+        ..FakeConfig::default()
+    };
+    let (d, h) = open(&kcfg(&[]), fake);
+    let mut d = d.unwrap();
+    assert!(d.read_ecu_id().unwrap().vin.is_some());
+    let t = d.diag().unwrap();
+    let mut kwp = Kwp2000Client::new(t);
+    assert_eq!(kwp.read_local_id(0x01).unwrap(), vec![0x12, 0x34, 0xFE]);
+    assert_eq!(
+        host_frames(&h)[0][..6],
+        [0x80, 0x01, 0xF1, 0x02, 0x1A, 0x80]
+    );
+    assert!(d
+        .info()
+        .firmware
+        .unwrap()
+        .contains("header 80 01 F1 (physical), length byte"));
+
+    // Refused at the open, after the init and before any request; the
+    // cable is released.
+    for (kb, opts, why) in [
+        ((0xE5, 0x8F), &[("target", "01")][..], "HB1 = 0"),
+        ((0xE9, 0x8F), &[("addressing", "none")][..], "HB0 = 0"),
+        ((0x61, 0x8F), &[][..], "HB1 = 0"),
+        ((0x6C, 0x8F), &[][..], "AL0 = AL1 = 0"),
+        ((0x01, 0x8A), &[][..], "neither ISO 14230"),
+    ] {
+        let fake = FakeConfig {
+            kline_key_bytes: kb,
+            ..FakeConfig::default()
+        };
+        let (d, h) = open(&kcfg(opts), fake);
+        let e = d.err().expect("refused");
+        assert!(matches!(e, Error::Unsupported(_)), "{kb:02X?}: {e}");
+        assert!(e.to_string().contains(why), "{kb:02X?}: {e}");
+        assert_eq!(att_count(&h), 0, "{kb:02X?}: no request sent");
+        assert!(h.log().lines.last().unwrap().starts_with("ata "));
+    }
+}
+
+/// A fake ECU that wakes as an ISO 9141-2 OBD participant at 0x33 (source
+/// address 0x10) and ignores every KWP2000 header.
+fn iso9141_fake(kb: (u8, u8)) -> FakeConfig {
+    FakeConfig {
+        kline_ecu_header: KLineEcuHeader::Iso9141Obd { source: 0x10 },
+        kline_key_bytes: kb,
+        ..FakeConfig::default()
+    }
+}
+
+#[test]
+fn an_ecu_that_wakes_as_iso_9141_2_gets_obd_requests_only() {
+    for (kb, checksum) in [
+        ((0x08, 0x08), "cable"),
+        ((0x08, 0x08), "host"),
+        ((0x94, 0x94), "cable"),
+    ] {
+        let what = format!("{kb:02X?} {checksum}");
+        let cfg = kcfg(&[
+            ("init", "5baud"),
+            ("init_addr", "33"),
+            ("checksum", checksum),
+        ]);
+        let (d, h) = open(&cfg, iso9141_fake(kb));
+        let mut d = d.unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(h.log().inits, vec!["5baud 4 51"]);
+        let fw = d.info().firmware.unwrap();
+        assert!(
+            fw.contains(&format!(
+                "keybytes {:02X} {:02X}; ISO 9141-2 OBD: header 68 6A F1, KWP2000 refused)",
+                kb.0, kb.1
+            )),
+            "{what}: {fw}"
+        );
+
+        // identify (KWP2000 1A) is refused before anything is sent.
+        let e = d.read_ecu_id().unwrap_err();
+        assert!(matches!(e, Error::Unsupported(_)), "{what}: {e}");
+        let want = format!(
+            "ECU woke as ISO 9141-2 OBD (key bytes {:02X} {:02X}); KWP2000 needs its physical \
+             init address (init_addr=<ecu>",
+            kb.0, kb.1
+        );
+        assert!(e.to_string().contains(&want), "{what}: {e}");
+        assert_eq!(att_count(&h), 0, "{what}: nothing sent");
+        let e = d
+            .read_memory(MemoryRegion::new(0, 4), &mut |_| {})
+            .unwrap_err();
+        assert!(matches!(e, Error::Unsupported(_)), "{what}: {e}");
+        assert_eq!(att_count(&h), 0, "{what}: no 0x23 either");
+
+        // OBD mode 01 PID 00 works, with the legislated header.
+        let t = d.diag().unwrap();
+        let r = t.request(&[0x01, 0x00], 500).unwrap();
+        assert_eq!(r, vec![0x41, 0x00, 0xBE, 0x1F, 0xA8, 0x13], "{what}");
+        let f = &host_frames(&h)[0];
+        assert_eq!(f[..5], [0x68, 0x6A, 0xF1, 0x01, 0x00], "{what}");
+        if checksum == "host" {
+            assert_eq!(f.len(), 6);
+            assert_eq!(
+                f[5],
+                0x68u8.wrapping_add(0x6A).wrapping_add(0xF1).wrapping_add(1)
+            );
+        } else {
+            assert_eq!(f.len(), 5);
+        }
+        // OBD modes the shared guard refuses stay unsent (04 clears DTCs).
+        let e = t.request(&[0x04], 500).unwrap_err();
+        assert!(matches!(e, Error::Unsupported(_)), "{what}: {e}");
+        assert_eq!(att_count(&h), 1);
+
+        // The ECU's source address is reported, and named in the refusal.
+        assert_eq!(d.kline_obd_source(), Some(0x10), "{what}");
+        let fw = d.info().firmware.unwrap();
+        assert!(
+            fw.contains("KWP2000 refused, ECU source address 10)"),
+            "{fw}"
+        );
+        let e = d.diag().unwrap().request(&[0x1A, 0x90], 500).unwrap_err();
+        assert!(e.to_string().contains("(init_addr=10)"), "{e}");
+        assert_eq!(att_count(&h), 1);
+    }
+
+    // session= is KWP2000: with an ISO 9141-2 wake the open fails, unsent.
+    let cfg = kcfg(&[("init", "5baud"), ("init_addr", "33"), ("session", "81")]);
+    let (d, h) = open(&cfg, iso9141_fake((0x08, 0x08)));
+    let e = d.err().unwrap().to_string();
+    assert!(e.contains("ECU woke as ISO 9141-2 OBD"), "{e}");
+    assert_eq!(att_count(&h), 0);
+
+    // An explicit header still wins: KWP2000 forced (what the bench sent
+    // before keyword decoding: functional, silent).
+    let cfg = kcfg(&[("init", "5baud"), ("init_addr", "33"), ("target", "33")]);
+    let (d, h) = open(&cfg, iso9141_fake((0x08, 0x08)));
+    let mut d = d.unwrap();
+    assert!(d.info().firmware.unwrap().contains("forced"));
+    let e = d.diag().unwrap().request(&[0x1A, 0x90], 200).unwrap_err();
+    assert!(matches!(e, Error::Timeout(_)), "{e}");
+    assert_eq!(host_frames(&h)[0][..3], [0xC2, 0x33, 0xF1]);
+
+    // The ISO 9141-2 ECU does not wake at its physical address or by fast
+    // init.
+    for o in [&[("init", "5baud")][..], &[("init", "fast")]] {
+        assert!(open(&kcfg(o), iso9141_fake((0x08, 0x08))).0.is_err());
+    }
+}
+
+#[test]
+fn the_session_option_goes_first_and_programming_sessions_are_refused() {
+    let cfg = kcfg(&[("init", "5baud"), ("init_addr", "33"), ("session", "81")]);
+    let (d, h) = open(&cfg, obd_fake(0xEF));
+    let mut d = d.unwrap();
+    assert!(d.read_ecu_id().unwrap().vin.is_some());
+    let frames = host_frames(&h);
+    assert_eq!(frames[0][..5], [0xC2, 0x33, 0xF1, 0x10, 0x81]);
+    assert_eq!(frames[1][..5], [0xC2, 0x33, 0xF1, 0x1A, 0x80]);
+
+    // An ECU refusing the session fails the open with its NRC.
+    let (d, _) = open_with(
+        &kcfg(&[("session", "89")]),
+        FakeConfig::default(),
+        Chunking::Whole,
+        |dev| {
+            dev.set_kline_ecu(Box::new(|req: &[u8]| match req {
+                [0x10, ..] => vec![vec![0x7F, 0x10, 0x12]],
+                _ => Vec::new(),
+            }));
+        },
+    );
+    let e = d.err().unwrap().to_string();
+    assert!(e.contains("NRC 0x12"), "{e}");
+
+    // Programming sessions: refused by the shared guard before the port.
+    for prog in ["85", "02"] {
+        let (d, h) = open(&kcfg(&[("session", prog)]), FakeConfig::default());
+        let e = d.err().expect("refused");
+        assert!(matches!(e, Error::Unsupported(_)), "{prog}: {e}");
+        assert!(h.log().lines.is_empty(), "{prog}: nothing sent");
+    }
+    // Without the option no session request is sent.
+    let (d, h) = open(&kcfg(&[]), FakeConfig::default());
+    d.unwrap().read_ecu_id().unwrap();
+    assert!(host_frames(&h).iter().all(|f| f[3] != 0x10));
 }
 
 // --- receive-only raw-CAN capture ------------------------------------------
