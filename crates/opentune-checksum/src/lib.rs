@@ -4,7 +4,8 @@
 //! Each ECU family is a [`ChecksumAlgo`]. A generic CRC32-tail example is
 //! included; real ECU algorithms (EDC15, EDC16, EDC17, PCR2.1, ME7, the
 //! Continental/Siemens Simos-family block CRC headers in [`simos`], and the
-//! TCU/AWD set in [`tcu`]: DQ250, DQ381, ZF 8HP, Haldex Gen5, CCITT trailer)
+//! TCU/AWD set in [`tcu`]: DQ250, DQ381, ZF 8HP, Haldex Gen5, CCITT trailer;
+//! the Mercedes EGS52/EGS53 NAG TCU descriptor CRC-16 in [`egs`])
 //! live in their own modules and must be validated against known-good
 //! reference files. [`get`] maps an id to its algorithm.
 use opentune_core::{MemoryRegion, Result};
@@ -14,6 +15,7 @@ pub mod ecm3;
 pub mod edc15;
 pub mod edc16;
 pub mod edc17;
+pub mod egs;
 pub mod generic;
 pub mod me7;
 pub mod pcr21;
@@ -264,6 +266,8 @@ pub fn get(id: &str) -> Option<Box<dyn ChecksumAlgo>> {
         "subaru-tcu-sh7055" => Some(Box::new(subaru_tcu::SubaruTcuSh7055)),
         "subaru-tcu-mh8104" => Some(Box::new(subaru_tcu::SubaruTcuMh8104)),
         "ecm3" | "simos-ecm3" => Some(Box::new(ecm3::Ecm3)),
+        "egs52" => Some(Box::new(egs::Egs52)),
+        "egs53" => Some(Box::new(egs::Egs53)),
         _ => None,
     }
 }
@@ -488,6 +492,33 @@ pub fn algorithms() -> Vec<AlgoInfo> {
                     — correct_with_reference with a verifying stock CAL block of the same \
                     software is required; full reads refused.",
         },
+        AlgoInfo {
+            id: "egs52",
+            name: "Mercedes EGS52 NAG TCU (SAK-C167)",
+            family: "mercedes-egs",
+            needs_reference: false,
+            notes: "Per-module descriptor ((N<<16)|crc16 + N inclusive 24-bit ranges + \
+                    0xFFFFFFFF; module A @0x90124, B @0xB0080), reflected CRC-16/ARC \
+                    (0x8005) with seed 0x7878. Clean-room, validated on the owner's own \
+                    images (34/34 EGS52+EGS53 modules). 1 MiB image (offset = CPU \
+                    address) or a read of just CPU 0x90000..0xFFFFF, accepted only when \
+                    every descriptor validates structurally. Match-first: correct writes the \
+                    low 16 bits only while one module still matches; otherwise pass the \
+                    stock read as reference.",
+        },
+        AlgoInfo {
+            id: "egs53",
+            name: "Mercedes EGS53 NAG TCU (ST10F276)",
+            family: "mercedes-egs",
+            needs_reference: false,
+            notes: "Same descriptor walk as egs52 (module A @0x202D4 or @0x20334, B \
+                    @0x8E0A4), reflected CRC-16/ARC (0x8005) with seed 0xFFFF. Clean-room, \
+                    validated on the owner's own images (34/34 EGS52+EGS53 modules). \
+                    768 KiB image (offset = CPU address) or a read of just CPU \
+                    0x20000..0xBFFFF. \
+                    Match-first: correct writes the low 16 bits only while one module \
+                    still matches; otherwise pass the stock read as reference.",
+        },
     ]
 }
 
@@ -682,6 +713,8 @@ mod tests {
             "subaru-tcu-mh8104",
             "ecm3",
             "simos-ecm3",
+            "egs52",
+            "egs53",
         ];
         let infos = algorithms();
         for id in resolvable {
@@ -713,7 +746,7 @@ mod tests {
         // Only EDC17 is flagged as reference-needing (the one algo that overrides
         // correct_with_reference for its firmware-specific constant).
         assert!(find("edc17").needs_reference);
-        for id in ["crc32-tail", "edc16", "pcr21", "edc15c6"] {
+        for id in ["crc32-tail", "edc16", "pcr21", "edc15c6", "egs52", "egs53"] {
             assert!(
                 !find(id).needs_reference,
                 "{id} should not need a reference"
