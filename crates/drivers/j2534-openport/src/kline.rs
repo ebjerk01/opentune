@@ -296,6 +296,11 @@ pub struct KLineSettings {
     pub host_checksum: bool,
     pub tx_timeout_ms: u32,
     pub layer: DiagLayer,
+    /// Request length form (`length`): `auto` follows KB1; `separate`
+    /// always uses the additional length byte (`80 tgt src len …`), for
+    /// ECUs that announce both forms in KB1 but only parse the length byte;
+    /// `format` keeps the length in the format byte up to 63 bytes.
+    pub length: LengthPref,
     /// `(param, value)` pairs written with `ats` before the init, in J2534
     /// units.
     pub config: Vec<(u32, u32)>,
@@ -526,6 +531,27 @@ impl KLineSettings {
             config.push((param::FIVE_BAUD_MOD, v));
         }
 
+        // W4 (KB2 received → the tester's inverted KB2) for a five-baud
+        // init: the J2534 default 50 ms sits on the late edge of the ISO
+        // 14230 25–50 ms window, and a real ECU that expects the answer
+        // inside that window stayed silent at 50 ms but woke at 20–40 ms
+        // (own-unit test). So 40 ms unless `w4_ms` is given.
+        if init == KInit::FiveBaud && !o.contains_key("w4_ms") {
+            config.push((param::W4, FIVE_BAUD_W4_MS));
+        }
+
+        let length = match o.get("length").map(|s| s.trim().to_ascii_lowercase()) {
+            None => LengthPref::Auto,
+            Some(l) if l == "auto" => LengthPref::Auto,
+            Some(l) if l == "separate" || l == "byte" => LengthPref::Separate,
+            Some(l) if l == "format" => LengthPref::Format,
+            Some(l) => {
+                return Err(Error::Config(format!(
+                    "openport2: length '{l}' (expected auto, separate or format)"
+                )))
+            }
+        };
+
         // Request target: explicit, else the five-baud address after a
         // five-baud init (an ECU woken at the OBD functional address 0x33
         // expects functional requests to 0x33), else the physical address.
@@ -553,6 +579,7 @@ impl KLineSettings {
             host_checksum,
             tx_timeout_ms,
             layer,
+            length,
             config,
         })
     }
@@ -568,6 +595,43 @@ impl KLineSettings {
 }
 
 // --- KWP2000 framing (ISO 14230-2) ------------------------------------------
+
+/// W4 written for a five-baud init when `w4_ms` is not given (see
+/// [`KLineSettings::from_cfg`]).
+pub const FIVE_BAUD_W4_MS: u32 = 40;
+
+/// Request length form preference (`length=`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LengthPref {
+    /// Follow KB1: the format byte up to 63 bytes when allowed.
+    #[default]
+    Auto,
+    /// Always the additional length byte (needs KB1 AL1).
+    Separate,
+    /// The format byte up to 63 bytes (needs KB1 AL0).
+    Format,
+}
+
+impl LengthPref {
+    /// Narrow a form's length options to the preference; `Err` names the
+    /// KB1 bit the preference needs when the form does not allow it.
+    fn apply(self, form: &mut HeaderForm) -> std::result::Result<(), &'static str> {
+        match self {
+            LengthPref::Auto => Ok(()),
+            LengthPref::Separate if form.len_byte => {
+                form.len_in_fmt = false;
+                Ok(())
+            }
+            LengthPref::Separate => {
+                Err("length=separate needs the additional length byte (KB1 AL1)")
+            }
+            LengthPref::Format if form.len_in_fmt => Ok(()),
+            LengthPref::Format => {
+                Err("length=format needs the length in the format byte (KB1 AL0)")
+            }
+        }
+    }
+}
 
 /// 8-bit additive checksum.
 pub fn checksum(bytes: &[u8]) -> u8 {
@@ -762,11 +826,14 @@ pub fn is_iso9141_2_keywords(kb1: u8, kb2: u8) -> bool {
 pub fn decide_link(s: &KLineSettings, key_bytes: Option<(u8, u8)>) -> Result<LinkMode> {
     let mut form = HeaderForm::unchecked(s.addressing, s.target, s.tester);
     let Some((kb1, kb2)) = key_bytes else {
+        // Unchecked forms allow both lengths, so a preference always fits.
+        let _ = s.length.apply(&mut form);
         return Ok(LinkMode::Kwp(form));
     };
     if kb2 != KB2_ISO14230 {
         if s.header_explicit {
             form.forced = true;
+            let _ = s.length.apply(&mut form);
             return Ok(LinkMode::Kwp(form));
         }
         if is_iso9141_2_keywords(kb1, kb2) {
@@ -793,6 +860,9 @@ pub fn decide_link(s: &KLineSettings, key_bytes: Option<(u8, u8)>) -> Result<Lin
         return refuse(
             "KB1 announces no length form (AL0 = AL1 = 0), so no request can be framed".into(),
         );
+    }
+    if let Err(why) = s.length.apply(&mut form) {
+        return refuse(why.into());
     }
     match s.addressing {
         Addressing::NoAddress if !hb0 => {
@@ -1583,6 +1653,8 @@ mod tests {
                 (param::TINIL, 25),
                 (param::TWUP, 50),
                 (param::FIVE_BAUD_MOD, 3),
+                // Five-baud init without w4_ms: the 40 ms default.
+                (param::W4, FIVE_BAUD_W4_MS),
             ]
         );
 
@@ -1865,5 +1937,61 @@ mod tests {
         let h = decide_header(&obd, Some((0x5F, 0x8F))).unwrap();
         assert_eq!(h.timing_bits, Some(0b01));
         assert!(h.describe().contains("not the normal set"));
+    }
+
+    /// The request form a real ECU needed (own-unit identify): woken by a
+    /// five-baud init at 0x12 with key bytes EF 8F (KB1 allows both length
+    /// forms), it parses only the additional length byte, so `length=separate`
+    /// frames `1A 86` as `80 12 F1 02 1A 86 25`.
+    #[test]
+    fn length_separate_frames_the_length_byte() {
+        let s = |o: &[(&str, &str)]| KLineSettings::from_cfg(&cfg(o), 4).unwrap();
+        let five = [("init", "5baud"), ("init_addr", "12")];
+        let auto = decide_header(&s(&five), Some((0xEF, 0x8F))).unwrap();
+        assert_eq!(
+            auto.build(&[0x1A, 0x86], true).unwrap(),
+            [0x82, 0x12, 0xF1, 0x1A, 0x86, 0x25],
+            "auto: length in the format byte"
+        );
+        let mut sep = five.to_vec();
+        sep.push(("length", "separate"));
+        let h = decide_header(&s(&sep), Some((0xEF, 0x8F))).unwrap();
+        assert_eq!(
+            h.build(&[0x1A, 0x86], true).unwrap(),
+            [0x80, 0x12, 0xF1, 0x02, 0x1A, 0x86, 0x25]
+        );
+        // KB1 without AL1 (E9): length=separate is refused, nothing guessed.
+        let e = decide_link(&s(&sep), Some((0xE9, 0x8F))).unwrap_err();
+        assert!(e.to_string().contains("AL1"), "{e}");
+        // length=format needs AL0 (KB1 EA has AL1 only).
+        let mut fmt = five.to_vec();
+        fmt.push(("length", "format"));
+        let e = decide_link(&s(&fmt), Some((0xEA, 0x8F))).unwrap_err();
+        assert!(e.to_string().contains("AL0"), "{e}");
+        // Without key bytes (no init) the preference still applies.
+        let mut none = vec![("init", "none"), ("length", "separate")];
+        none.push(("target", "12"));
+        let h = decide_header(&s(&none), None).unwrap();
+        assert!(!h.len_in_fmt && h.len_byte);
+        assert!(KLineSettings::from_cfg(&cfg(&[("length", "long")]), 4).is_err());
+    }
+
+    /// A five-baud init writes W4 = 40 ms unless `w4_ms` is given (the J2534
+    /// default 50 ms sits on the late edge of the 25-50 ms window); fast init
+    /// writes no W4.
+    #[test]
+    fn five_baud_w4_defaults_to_40_ms() {
+        let w4 = |o: &[(&str, &str)]| {
+            KLineSettings::from_cfg(&cfg(o), 4)
+                .unwrap()
+                .config
+                .iter()
+                .filter(|(p, _)| *p == param::W4)
+                .map(|(_, v)| *v)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(w4(&[("init", "5baud")]), [FIVE_BAUD_W4_MS]);
+        assert_eq!(w4(&[("init", "5baud"), ("w4_ms", "30")]), [30]);
+        assert!(w4(&[("init", "fast")]).is_empty());
     }
 }

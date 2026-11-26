@@ -155,7 +155,7 @@ fn five_baud_init_reports_the_key_bytes() {
         assert_eq!(id.vin.as_deref(), Some("OTKLINEFAKE000001"));
         let log = h.log();
         assert!(
-            log.lines.contains(&"atw4 1 5".to_string()),
+            log.lines.iter().any(|l| l.starts_with("atw4 1 ")),
             "{:?}",
             log.lines
         );
@@ -183,7 +183,7 @@ fn five_baud_init_reports_the_key_bytes() {
         "host checksum by default"
     );
     assert!(
-        log.lines.contains(&"atw3 51 5".to_string()),
+        log.lines.iter().any(|l| l.starts_with("atw3 51 ")),
         "{:?}",
         log.lines
     );
@@ -235,6 +235,8 @@ fn timing_options_are_written_before_the_init() {
             (4, 20, 25),
             (4, 21, 50),
             (4, 33, 0),
+            // Five-baud init without w4_ms: W4 = 40 ms.
+            (4, 17, 40),
         ]
     );
     let first_ats = log
