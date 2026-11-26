@@ -904,3 +904,34 @@ fn can_monitor_filter_is_pass_all_and_options_are_checked() {
     let (mut d, _) = monitor_fake(FakeConfig::default());
     assert!(d.can_monitor().unwrap().next_frame(10).is_err());
 }
+
+/// The EDC15C6 bench line (five-baud init at 0x12, key bytes EF 8F): the
+/// default frames identify with the length in the format byte, and
+/// `length=separate` really changes the bytes on the wire to the separate
+/// length byte; the ECU answers both.
+#[test]
+fn length_option_changes_the_wire_form() {
+    let fake = || FakeConfig {
+        kline_ecu_addr: 0x12,
+        kline_key_bytes: (0xEF, 0x8F),
+        ..FakeConfig::default()
+    };
+    for (opts, first) in [
+        (vec![("init", "5baud")], [0x82, 0x12, 0xF1, 0x1A, 0x80]),
+        (
+            vec![("init", "5baud"), ("length", "separate")],
+            [0x80, 0x12, 0xF1, 0x02, 0x1A],
+        ),
+    ] {
+        let mut cfg = kcfg(&opts);
+        cfg.tx_id = 0x12;
+        let (d, h) = open(&cfg, fake());
+        let mut d = d.unwrap_or_else(|e| panic!("{opts:?}: {e}"));
+        assert_eq!(
+            d.read_ecu_id().unwrap().vin.as_deref(),
+            Some("OTKLINEFAKE000001"),
+            "{opts:?}"
+        );
+        assert_eq!(host_frames(&h)[0][..5], first, "{opts:?}");
+    }
+}

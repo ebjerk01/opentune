@@ -992,7 +992,7 @@ Options (same names as `kkl` where `kkl` has them):
 | `target` | five-baud: `init_addr`; else `tx_id` | request header target address, hex |
 | `addressing` | `functional` for target `33`, else `physical` | `physical`, `functional` or `none` (1-byte header without address; contradicts `target`) |
 | `session` | off | startDiagnosticSession `10 <xx>` sent right after the init, hex; `85`/`02` refused |
-| `length` | `auto` | request length form: `auto` (KB1: in the format byte up to 63 bytes), `separate` (always the additional length byte, `80 tgt src len …`; needs KB1 AL1) or `format` (needs AL0). Some ECUs announce both forms in KB1 but parse only the length byte |
+| `length` | `auto` | request length form: `auto` (KB1: in the format byte up to 63 bytes), `separate` (always the additional length byte, `80 tgt src len …`; needs KB1 AL1) or `format` (needs AL0): an override for an ECU that wants one particular form |
 | `tester` | `F1` | tester address, hex |
 | `baud` (`--baud`) | 10400 | only 10400: [M]/[R] report ISO 14230 at 10400 only, [B] §5 an ISO 9141 open at another rate reading back 10400 |
 | `checksum` | `host` | `host` (`ISO9141_NO_CHECKSUM`, flags 512; proven on a cable) or `cable` (flags 0; not yet confirmed on hardware) |
@@ -1014,18 +1014,20 @@ Out-of-range or malformed values are refused before the port is opened.
   (`08 08`) but answers no legislated OBD request; `0x01` gets no answer.
 - The inverted KB2 must come inside the ECU's 25–50 ms window: W4 40 ms
   (the five-baud default here) works, the cable's 50 ms does not.
-- Requests need the **separate length byte** although KB1 `EF` announces
-  both forms: `80 12 F1 02 1A 86 <sum>` is answered, while `82 12 F1 1A 86
-  <sum>` is read as a length of `1A` and ignored (`length=separate`). The
-  ECU's own answers use the length in the format byte (`92 F1 12 5A 86 …`);
-  both forms are decoded. The source byte is not checked.
+- Requests are accepted in **both length forms** KB1 `EF` announces: the
+  length in the format byte (`82 12 F1 1A 86 <sum>`, the default here) and
+  the separate length byte (`80 12 F1 02 1A 86 <sum>`). What blocked the
+  link was the W4 timing, not the framing. The ECU's own answers use the
+  length in the format byte (`92 F1 12 5A 86 …`); both forms are decoded.
+  The source byte is not checked.
+- **Identify (`1A`) is keyless:** subfunctions `80`, `94` and `9B` answered
+  positively with no SecurityAccess (OpenPort 2.0, this driver, own unit).
 
-Read-only identify of that ECU:
+Read-only identify of that ECU (validated on hardware with this driver):
 
 ```sh
 OPENTUNE_LOG=openport2=trace opentune identify --driver openport2 \
-    --port /dev/ttyACM0 --bus kline --tx-id 12 --rx-id F1 \
-    --opt init=5baud --opt length=separate
+    --port /dev/ttyACM0 --bus kline --tx-id 12 --rx-id F1 --opt init=5baud
 ```
 
 In general: an ECU that completes the five-baud init only at the OBD

@@ -7,13 +7,13 @@
       "own reference stock/tuned reads (not committed): maps diff-derived and structure-checked - see docs/MAP-LIBRARY.md",
       "clean-room checksum derivation on own reads - see docs/BOSCH-CHECKSUM.md",
       "ISO 14230-4 (KWP2000 over K-line) public family facts",
-      "own-unit K-line identify (1A 86) + own-dump analysis: five-baud wake at 0x12 (key bytes EF 8F), W4 window, separate length byte - see docs/DRIVERS.md section 3l"
+      "own-unit K-line identify (1A 86) + own-dump analysis: five-baud wake at 0x12 (key bytes EF 8F), W4 window, keyless identify, both request length forms accepted - see docs/DRIVERS.md section 3l"
     ],
     "license": "GPL-3.0-or-later",
     "evidence": "real-image-tested"
   },
   "family": "EDC15",
-  "notes": "Older common-rail/CDI diesels. Diagnostics over K-line (ISO 14230-4 KWP2000) with a 5-baud or fast init handled by the driver. tx_id holds the K-line ECU address: 0x12 (own-unit identify 1A 86 + own-dump analysis). The KWP2000 wake is a five-baud init at 0x12 (key bytes EF 8F; the tester's inverted KB2 must come within the ECU's 25-50 ms window, W4 40 ms), and requests need the separate length byte (80 12 F1 <len> ...; the OpenPort 2.0 driver's length=separate) although KB1 announces both forms; see docs/DRIVERS.md section 3l. At 0x33 the ECU wakes as ISO 9141-2 but answers no legislated OBD request; 0x01 gets no answer. flash_size is the 1 MiB read the EDC15C6 checksum and the bootstrap preset use (own reads); the calibration region is a family placeholder and must be confirmed per software variant before any write.",
+  "notes": "Older common-rail/CDI diesels. Diagnostics over K-line (ISO 14230-4 KWP2000) with a 5-baud or fast init handled by the driver. tx_id holds the K-line ECU address: 0x12 (own-unit identify 1A 86 + own-dump analysis). The KWP2000 wake is a five-baud init at 0x12 (key bytes EF 8F; the tester's inverted KB2 must come within the ECU's 25-50 ms window, W4 40 ms), both request length forms KB1 announces are accepted (length in the format byte or a separate length byte), and identify (1A) is keyless; the init blocker was the W4 timing, not the framing; see docs/DRIVERS.md section 3l. At 0x33 the ECU wakes as ISO 9141-2 but answers no legislated OBD request; 0x01 gets no answer. flash_size is the 1 MiB read the EDC15C6 checksum and the bootstrap preset use (own reads); the calibration region is a family placeholder and must be confirmed per software variant before any write.",
   "protocol": "iso14230_kline",
   "diag_layer": "kwp2000",
   "bitrate": 10400,
