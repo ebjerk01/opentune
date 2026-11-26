@@ -738,7 +738,7 @@ transport. `ssmsim` is handled by the `log` command and the desktop's
 adapter opener (Live log, SSM transports), not the registry, like `obdsim`
 for `opentune obd`; `SsmSim` implements `Interface` for that.
 
-## 3l. `openport2`: Tactrix OpenPort 2.0 (capture validated; K-line and transmit pending)
+## 3l. `openport2`: Tactrix OpenPort 2.0 (CAN capture and K-line identify validated; CAN transmit pending)
 
 `crates/drivers/j2534-openport` (crate `opentune-driver-openport2`, id
 `openport2`) talks to an OpenPort 2.0 (OP2) or clone through its USB CDC-ACM
@@ -752,13 +752,18 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
 --driver openport2` captures raw CAN **receive-only** (see
 [Capture](#receive-only-capture-candump)).
 
-**Validation state (2026-11-25, a genuine OP2, firmware 1.17.4877):**
+**Validation state (2026-11-25/26, a genuine OP2, firmware 1.17.4877):**
 
 - **Receive-only CAN capture: validated on hardware.** `opentune candump
   --driver openport2` at 500 kbit/s on a live ECU captured every frame with
   none dropped, matching an independent wire-level reference capture.
-- **K-line: init and receive path proven on hardware; no ECU data reply
-  yet.** On a bench ECU the five-baud init at the OBD functional address 0x33
+- **K-line KWP2000 identify: validated on hardware with this driver.** On a
+  bench EDC15C6 a five-baud init at `0x12` (key bytes `EF 8F`, W4 40 ms)
+  followed by a keyless `identify` answered `1A 80`/`94`/`9B` positively;
+  the driver's default framing (length in the format byte) was used. See the
+  EDC15C6 facts below.
+- **K-line init and receive path.** On the same ECU the five-baud init at
+  the OBD functional address 0x33
   completed (the cable did the 55 / inverted-KB2 / inverted-address exchange)
   and returned key bytes `08 08`, i.e. the ECU woke as an ISO 9141-2 OBD
   participant (it then answered no OBD request: not a legislated-OBD ECU).
@@ -766,8 +771,8 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
   the cable's K-line receive records were captured: START (`0x80`) + a
   4-byte timestamp, the data record with the message bytes, END (`0x40`) + a
   4-byte timestamp (plus `0x20` on echoes), exactly what the reassembler
-  expects (pinned by a test with the captured bytes). An ECU KWP2000 reply
-  over this driver is still to come.
+  expects (pinned by a test with the captured bytes); real ECU answers
+  (START `0x80` / data / END `0x40`) arrive in the same shape.
 - **CAN transmit, ISO-TP and UDS over the cable: hardware validation
   pending.** Tested against the offline fake only.
 
@@ -992,7 +997,7 @@ Options (same names as `kkl` where `kkl` has them):
 | `target` | five-baud: `init_addr`; else `tx_id` | request header target address, hex |
 | `addressing` | `functional` for target `33`, else `physical` | `physical`, `functional` or `none` (1-byte header without address; contradicts `target`) |
 | `session` | off | startDiagnosticSession `10 <xx>` sent right after the init, hex; `85`/`02` refused |
-| `length` | `auto` | request length form: `auto` (KB1: in the format byte up to 63 bytes), `separate` (always the additional length byte, `80 tgt src len …`; needs KB1 AL1) or `format` (needs AL0). Some ECUs announce both forms in KB1 but parse only the length byte |
+| `length` | `auto` | request length form: `auto` (KB1: in the format byte up to 63 bytes), `separate` (always the additional length byte, `80 tgt src len …`; needs KB1 AL1) or `format` (needs AL0): an override for an ECU that wants one particular form |
 | `tester` | `F1` | tester address, hex |
 | `baud` (`--baud`) | 10400 | only 10400: [M]/[R] report ISO 14230 at 10400 only, [B] §5 an ISO 9141 open at another rate reading back 10400 |
 | `checksum` | `host` | `host` (`ISO9141_NO_CHECKSUM`, flags 512; proven on a cable) or `cable` (flags 0; not yet confirmed on hardware) |
@@ -1014,18 +1019,20 @@ Out-of-range or malformed values are refused before the port is opened.
   (`08 08`) but answers no legislated OBD request; `0x01` gets no answer.
 - The inverted KB2 must come inside the ECU's 25–50 ms window: W4 40 ms
   (the five-baud default here) works, the cable's 50 ms does not.
-- Requests need the **separate length byte** although KB1 `EF` announces
-  both forms: `80 12 F1 02 1A 86 <sum>` is answered, while `82 12 F1 1A 86
-  <sum>` is read as a length of `1A` and ignored (`length=separate`). The
-  ECU's own answers use the length in the format byte (`92 F1 12 5A 86 …`);
-  both forms are decoded. The source byte is not checked.
+- Requests are accepted in **both length forms** KB1 `EF` announces: the
+  length in the format byte (`82 12 F1 1A 86 <sum>`, the default here) and
+  the separate length byte (`80 12 F1 02 1A 86 <sum>`). What blocked the
+  link was the W4 timing, not the framing. The ECU's own answers use the
+  length in the format byte (`92 F1 12 5A 86 …`); both forms are decoded.
+  The source byte is not checked.
+- **Identify (`1A`) is keyless:** subfunctions `80`, `94` and `9B` answered
+  positively with no SecurityAccess (OpenPort 2.0, this driver, own unit).
 
-Read-only identify of that ECU:
+Read-only identify of that ECU (validated on hardware with this driver):
 
 ```sh
 OPENTUNE_LOG=openport2=trace opentune identify --driver openport2 \
-    --port /dev/ttyACM0 --bus kline --tx-id 12 --rx-id F1 \
-    --opt init=5baud --opt length=separate
+    --port /dev/ttyACM0 --bus kline --tx-id 12 --rx-id F1 --opt init=5baud
 ```
 
 In general: an ECU that completes the five-baud init only at the OBD

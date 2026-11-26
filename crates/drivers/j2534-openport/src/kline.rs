@@ -297,8 +297,8 @@ pub struct KLineSettings {
     pub tx_timeout_ms: u32,
     pub layer: DiagLayer,
     /// Request length form (`length`): `auto` follows KB1; `separate`
-    /// always uses the additional length byte (`80 tgt src len …`), for
-    /// ECUs that announce both forms in KB1 but only parse the length byte;
+    /// always uses the additional length byte (`80 tgt src len …`), an
+    /// override for an ECU that wants that form;
     /// `format` keeps the length in the format byte up to 63 bytes.
     pub length: LengthPref,
     /// `(param, value)` pairs written with `ats` before the init, in J2534
@@ -1939,10 +1939,10 @@ mod tests {
         assert!(h.describe().contains("not the normal set"));
     }
 
-    /// The request form a real ECU needed (own-unit identify): woken by a
-    /// five-baud init at 0x12 with key bytes EF 8F (KB1 allows both length
-    /// forms), it parses only the additional length byte, so `length=separate`
-    /// frames `1A 86` as `80 12 F1 02 1A 86 25`.
+    /// The two length forms after a five-baud init at 0x12 with key bytes
+    /// EF 8F (KB1 allows both; a real ECU answered both): `auto` frames `1A
+    /// 86` as `82 12 F1 1A 86 25`, `length=separate` as `80 12 F1 02 1A 86
+    /// 25`.
     #[test]
     fn length_separate_frames_the_length_byte() {
         let s = |o: &[(&str, &str)]| KLineSettings::from_cfg(&cfg(o), 4).unwrap();

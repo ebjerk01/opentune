@@ -51,8 +51,9 @@ test("EDC15C6: access card shows every part, open case and the unverified DQ4 po
   assert.match(h, /<tr class="pin-unv">[\s\S]*Flash DQ4 to CPU P0L\.4\/AD4[\s\S]*Board: flash DQ4 \(pin 24 of the SO-44 29F400\/29F800\)[\s\S]*pull to ground \(8000 Ω\)[\s\S]*>unverified<\/span> <span class="small">confirm by continuity/);
   assert.ok(h.includes("OpenTune ships no OEM key"));
   assert.ok(h.includes("Full read over diagnostics</div><div class=\"v\">required"));
-  // Confidence pills per part (obd/boot/security unverified, bench community).
-  assert.equal((h.match(/<span class="pill accent" title="Community — one source">community<\/span>/g) || []).length, 1);
+  // Confidence pills per part (boot unverified; bench, obd and security
+  // community since the own-unit K-line work).
+  assert.equal((h.match(/<span class="pill accent" title="Community — one source">community<\/span>/g) || []).length, 3);
   // Flash note and numbered sources the refs point at.
   assert.ok(h.includes("Flash note"));
   assert.match(h, /<ol class="db-src small"><li value="1">/);

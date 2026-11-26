@@ -1,0 +1,203 @@
+{
+  "id": "mercedes-egs53-7226",
+  "kind": "tcu",
+  "maker": "Siemens",
+  "family": "EGS5x",
+  "name": "Mercedes 722.6 TCU (EGS53, ST10F276)",
+  "aliases": [
+    "EGS53",
+    "722.6",
+    "NAG1"
+  ],
+  "cpu": "STMicroelectronics ST10F276 (C166S v2 / ST10 family, 16-bit) with on-chip flash",
+  "flash_kib": 832,
+  "flash_note": "ST10F276 on-chip flash (832 KiB total: a 512 KiB bank + a 320 KiB bank). Unlike the EGS52 (external AM29F400), the EGS53 has no separate parallel flash chip - the calibration/program flash is inside the ST10F276. Reconstructed EGS53 images seen by the OpenTune flash-checksum work map real data at CPU 0x20000-0xBFFFF (0x00000-0x1FFFF erased). Confirm the exact device (ST10F275/276 variants exist) from the chip marking.",
+  "eeprom": "separate serial EEPROM for adaptation/coding (95-series SPI on EGS5x boards); part number not confirmed by an open source - read it from the chip",
+  "bus": [
+    "kline",
+    "can"
+  ],
+  "protocols": [],
+  "read_methods": {
+    "obd": "unknown",
+    "bench": true,
+    "boot": true,
+    "notes": "Bench: supply, ground and K-line on C1; CAN on C2 (same EGS5x connector family as EGS52). OBD programming capability is not documented in a cited public source. Board-level boot: the ST10F276 on-chip bootstrap loader (access.boot). A complete flash read over diagnostics would need the TCU's security access; the class is noted in access.security but no key is shipped."
+  },
+  "checksum": "egs53",
+  "ecudef": null,
+  "vehicles": [
+    {
+      "make": "Mercedes-Benz",
+      "model": "722.6 5-speed automatic applications (later ST10 control units)",
+      "engine": null,
+      "years": null
+    },
+    {
+      "make": "Chrysler",
+      "model": "722.6 5-speed automatic applications (NAG1)",
+      "engine": null,
+      "years": null
+    }
+  ],
+  "part_number_examples": [],
+  "notes": "Later-generation external TCU for the Mercedes/Chrysler 722.6 (NAG1) 5-speed automatic, built on an STMicroelectronics ST10F276 (the EGS52 used an Infineon C167 with external AM29F400). The open-source ultimate_nag52 project is a drop-in replacement for EGS51/52/53 cars and documents EGS53 as a C166/ST10-based unit. Flash integrity: OpenTune's EGS53 NAG flash checksum (a reflected CRC-16/ARC over a table-driven descriptor range, seed 0xFFFF; see the OpenTune checksum module) verifies the stored module checksums; this is a content-integrity checksum, not a security key. Chip and connector facts below are from public datasheets, open-source projects and public pinout sites; confirm on your own board before wiring or strapping.",
+  "connectors": [
+    {
+      "name": "C1",
+      "description": "TCU connector C1 (vehicle side) - shared EGS5x pinout",
+      "pins": [
+        {
+          "pin": "1",
+          "function": "Diagnosis line to the data-link connector (K-line)",
+          "signal": "kline",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "29",
+          "function": "TCU voltage supply (+12 V)",
+          "signal": "12v_perm",
+          "note": "Sources do not say whether this is switched; feed +12 V on the bench. Confirm by continuity on your unit.",
+          "sources": [
+            0,
+            1
+          ]
+        },
+        {
+          "pin": "30",
+          "function": "TCU ground",
+          "signal": "gnd",
+          "sources": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C2",
+      "description": "TCU connector C2 (gearbox side)",
+      "pins": [
+        {
+          "pin": "H",
+          "function": "CAN-High",
+          "signal": "can_h",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        },
+        {
+          "pin": "L",
+          "function": "CAN-Low",
+          "signal": "can_l",
+          "confidence": "community",
+          "sources": [
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "bench": {
+    "power": [
+      "C1-29"
+    ],
+    "ground": [
+      "C1-30"
+    ],
+    "ign": [],
+    "can_h": [],
+    "can_l": [],
+    "kline": [
+      "C1-1"
+    ],
+    "boot": [],
+    "notes": "+12 V to C1-29, ground C1-30, K-line C1-1 (shared EGS5x pinout, same as EGS52). CAN-H/L are on C2 if your tool uses CAN. The EGS53 shares the EGS51/52/53 connector family (a community breakout board is sold for all three).",
+    "resistor_notes": "For CAN on the bench, terminate the bus (about 60 ohm across CAN-H/CAN-L)."
+  },
+  "pinout_confidence": "community",
+  "safety_note": "Bench safety: use a current-limited bench supply (12-13.8 V, start with a low current limit) and a fuse in the +12 V lead; connect ground first. Confirm every pin with a multimeter on YOUR unit before applying power - ground pins should show continuity to each other (and usually the housing), and hardware revisions differ. A CAN bus needs about 60 ohm between CAN-H and CAN-L (two 120 ohm terminations). Swapped CAN-H/CAN-L just gives timeouts; +12 V on a signal pin can destroy the unit. The ST10F276 bootstrap strap and any flash access are board-level (case open) - do not desolder or strap without confirming the chip and net on your board.",
+  "sources": [
+    {
+      "title": "ecupinouts.com: Siemens EGS52 / EGS53 bench pinout (shared EGS5x connectors)",
+      "url": "https://ecupinouts.com/en/siemens-egs5x/"
+    },
+    {
+      "title": "ATSG 722.6 service manual: TCM connectors and terminal identification",
+      "url": "https://www.manualslib.com/manual/1373460/Atsg-722-6.html?page=22"
+    },
+    {
+      "title": "rnd-ash/ultimate-nag52-fw-rs README (GPL-3.0): EGS52/53 are based on a C166/ST10 processor, EGS51 on an SEC51C810",
+      "url": "https://github.com/rnd-ash/ultimate-nag52-fw-rs"
+    },
+    {
+      "title": "STMicroelectronics ST10F276E datasheet (16-bit MCU, 832 KiB on-chip Flash; on-chip bootstrap loader entered with P0L.4 low at reset, ASC0 identification byte D5h, 32-byte loader)",
+      "url": "https://www.st.com/resource/en/datasheet/st10f276e.pdf"
+    },
+    {
+      "title": "STMicroelectronics UM0404 ST10F276 user manual: serial bootstrap loader via ASC0 (zero byte in, D5h acknowledge, 32 bytes of start code into internal RAM, watchdog disabled, BSL held until hardware reset)",
+      "url": "https://www.st.com/resource/en/user_manual/cd00153027-high-performance-st10f276z5-and-st10f276e-16-bit-microcontrollers-stmicroelectronics.pdf"
+    },
+    {
+      "title": "controls.is: EGS51/EGS52/EGS53 bench breakout board (corroborates the shared EGS5x connector family)",
+      "url": "https://controls.is/shop/index.php?route=product/product&product_id=123"
+    }
+  ],
+  "access": {
+    "obd": {
+      "mode": "unknown",
+      "protocol": "K-line diagnosis line to the data-link connector (C1-1); CAN on C2. The diagnostic protocol and whether a complete read/write works over the socket are not stated in a cited public source.",
+      "notes": "No cited public source documents a complete read or a write over the diagnostic socket for this unit. OpenTune does not talk to this TCU's diagnostics yet.",
+      "confidence": "community",
+      "sources": [
+        0,
+        1
+      ]
+    },
+    "bench": {
+      "possible": true,
+      "how": "On the desk through the EGS5x connectors: +12 V to C1-29, ground C1-30, K-line C1-1; CAN-H/L on C2 (same pinout as EGS52, both on ecupinouts and the community breakout board). Same diagnostic link and security access as in the car.",
+      "confidence": "community",
+      "sources": [
+        0,
+        5
+      ]
+    },
+    "boot": {
+      "possible": true,
+      "entry": "board-pad",
+      "mcu_mode": "ST10F276 on-chip bootstrap loader (BSL) on ASC0, 8N1: the chip enters the BSL when P0L.4 is held low at the end of a hardware reset; the host sends one zero byte, the BSL takes its baud rate from it and answers with the identification byte D5h, then receives exactly 32 bytes of start code into internal RAM. The watchdog is disabled in this mode (no time limit), and the chip stays in BSL until the next hardware reset. (Avoid overlapping the 32-byte loader with the register bank at 0xFA00 / stack at 0xFA40.)",
+      "points": [
+        {
+          "name": "P0L.4 strap (ST10F276 BSL select)",
+          "location": "pcb:P0L.4 net (not publicly located on the EGS53 board)",
+          "action": "pull-to-gnd",
+          "note": "No public source gives the pad on this board. Trace P0L.4 from the ST10F276 (confirm the pin for the fitted package from the ST10F276 datasheet) and confirm by continuity; hold it low at the end of reset and release once the BSL answers D5h.",
+          "confidence": "unverified"
+        }
+      ],
+      "reset_timing": "P0L.4 low at the end of the hardware reset; release the strap once the BSL has acknowledged (D5h). The watchdog is disabled during BSL so loading is not time-limited.",
+      "reachable": "open-case",
+      "notes": "Board level only: the TCU must be opened. The ST10F276 bootstrap loader is the processor's standard serial boot path (ST datasheet + UM0404); no open source gives the strap pad for this specific board, so the entry point is unverified for this unit. The Ultimate-NAG52 project works with EGS53 units at the board level.",
+      "confidence": "community",
+      "sources": [
+        3,
+        4,
+        2
+      ]
+    },
+    "security": {
+      "diag_read": "unknown",
+      "flash_write": "unknown",
+      "notes": "The EGS5x TCUs use diagnostic security access; what a complete read or a write over diagnostics needs on the EGS53 is not documented in a cited public source. The NAG coding/adaptation data lives in the ST10F276 flash + the serial EEPROM; OpenTune's EGS53 flash checksum is a content-integrity check, not a security key. OpenTune ships no OEM key.",
+      "confidence": "community",
+      "sources": [
+        2
+      ]
+    }
+  }
+}

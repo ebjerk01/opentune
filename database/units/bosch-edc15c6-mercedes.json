@@ -23,10 +23,10 @@
     "kwp2000"
   ],
   "read_methods": {
-    "obd": "read+write",
+    "obd": "unknown",
     "bench": true,
     "boot": true,
-    "notes": "Diagnostics/programming over K-line (ISO 14230 KWP2000, per OpenTune's bosch-edc15c6 definition); a full read needs the ECU's security access (access.security). Board-level boot mode (C167 bootstrap loader, case open) is described in access.boot and is unverified for this unit."
+    "notes": "Diagnostics run over K-line KWP2000 (ISO 14230). OpenTune's own clean-room bench work on an owner unit confirmed the datalink: 5-baud wake at 0x12 -> key bytes KB1 0xEF / KB2 0x8F, W4 ~40 ms (the inverted-KB2 echo window is ~25-50 ms), and BOTH frame forms accepted - length-in-format (82...) and separate-length (80...); see access.obd. Basic identify answers KEYLESS (access.obd). A COMPLETE calibration/flash read or any write over the socket is NOT validated: a complete read needs the programming-session SecurityAccess, which is unproven on-unit (access.security). The proven full-read paths are the board-level C167 bootstrap loader (access.boot) and a bench read; OBD full read/write is left unknown until validated."
   },
   "checksum": "edc15c6",
   "ecudef": "bosch-edc15c6",
@@ -259,17 +259,32 @@
     {
       "title": "OpenTune docs/C167-BSL.md: C167 bootstrap-mode read on EDC15 (sequence, strap, K-line link)",
       "url": "https://github.com/ebjerk01/opentune/blob/main/docs/C167-BSL.md"
+    },
+    {
+      "title": "ISO 14230-2 (KWP2000 data link layer): 5-baud initialisation, key-byte handshake, W1-W4 inter-byte timing",
+      "url": "https://www.iso.org/standard/23921.html"
+    },
+    {
+      "title": "ISO 14230-4 (KWP2000 for emissions-related systems): functional legislated-OBD addressing (0x33)",
+      "url": "https://www.iso.org/standard/23923.html"
+    },
+    {
+      "title": "OpenTune docs/DRIVERS.md section 3l (K-line): own clean-room EDC15C6 datalink facts - 5-baud wake 0x12, key bytes EF 8F, W4 ~40 ms (25-50 ms), separate-length-byte frame form, no legislated OBD at 0x33",
+      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/DRIVERS.md#3l-openport2-tactrix-openport-20-can-capture-and-k-line-identify-validated-can-transmit-pending"
     }
   ],
   "access": {
     "obd": {
-      "mode": "read+write",
-      "protocol": "KWP2000 (ISO 14230) on the K-line, connector pin 3-28",
-      "notes": "The K-line pin agrees between both pinout sources. That a complete read and a write work over the diagnostic link is carried over from OpenTune's bosch-edc15c6 definition: no cited source states it for this unit and it has not been tried on one yet. A complete read needs security access (see security).",
-      "confidence": "unverified",
+      "mode": "unknown",
+      "protocol": "KWP2000 over K-line, connector pin 3-28. The ECU accepts BOTH frame forms - length-in-format (82 tgt src svc ...) AND separate-length (80 tgt src len svc ...). The init blocker is W4 timing: use W4 ~40 ms (the inverted-KB2 echo window is ~25-50 ms; OP2's 50 ms default sits on the failing edge). 5-baud wake at 0x12 -> KB1 0xEF / KB2 0x8F; tx-id 0x12, source 0xF1 (source not checked). No legislated OBD on 0x33. (OpenTune own-unit clean-room; the generic 5-baud / key-byte / W4 mechanism is ISO 14230-2/-4, docs/DRIVERS.md section 3l.)",
+      "notes": "The K-line pin agrees between both pinout sources. CONFIRMED live over OBD/K-line by OpenTune's own clean-room bench work (own unit): the datalink (above) AND keyless basic identify - 1A 80/86 and several 1A subfunctions (e.g. 80/94/9B) return positive responses with NO SecurityAccess in the default session (live-read SW 1037351289CR2/C4B); some subfunctions (e.g. 1A 90/97) return subFunctionNotSupported (7F 1A 12) in the default session. UNVALIDATED over OBD: a COMPLETE calibration/flash read (it needs the held/unproven programming-session unlock) and any write. So obd.mode is 'unknown' about a full read/write, NOT about the bus - the link and keyless identify/diagnostic reads are live; the proven full-read paths are boot (C167 BSL) and bench.",
+      "confidence": "community",
       "sources": [
         0,
-        1
+        1,
+        9,
+        10,
+        11
       ]
     },
     "bench": {
@@ -311,10 +326,11 @@
     "security": {
       "diag_read": "required",
       "flash_write": "required",
-      "notes": "A complete flash read and programming over KWP2000 need the ECU's Mercedes security access (programming session); not yet confirmed on a unit. OpenTune ships no OEM key: supply your own through the off-by-default seed/key loader, or use the board-level boot read, which runs before the ECU software.",
-      "confidence": "unverified",
+      "notes": "Basic identify answers keyless (see access.obd); SecurityAccess (service 0x27) gates the secured operations. From OpenTune's own clean-room analysis of the owner's unit (live bus + own firmware dump): the default-session level uses a 2-byte seed/key (observed live on an owner unit). A programming session (10 85) exposes a separate SecurityAccess of the form 4-byte seed -> 8-byte key (4-byte seed observed live; 8-byte key length from own firmware-dump analysis) that gates a complete flash read. Both unlocks are UNVALIDATED here. OpenTune publishes NO key, seed/key formula or transform; OpenTune ships no OEM key for this ECU. Use your own key through the off-by-default seed/key loader, or the board-level boot read, which runs before the ECU software and needs no key.",
+      "confidence": "community",
       "sources": [
-        8
+        8,
+        11
       ]
     }
   }

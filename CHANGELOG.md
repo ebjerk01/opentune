@@ -14,14 +14,15 @@ section (alpha/bench builds) until they are vehicle-tested.
 ### Added
 - **OpenPort 2.0 K-line: request length form and five-baud W4.** New
   `length=auto|separate|format` option: `separate` always sends the additional
-  length byte (`80 tgt src len …`), for ECUs that announce both forms in KB1
-  but parse only the length byte. A five-baud init now writes W4 = 40 ms
+  length byte (`80 tgt src len …`), an override for an ECU that wants one
+  particular form. A five-baud init now writes W4 = 40 ms
   unless `w4_ms` is given: the cable's 50 ms sits on the late edge of the
   ISO 14230 25–50 ms window, where a real ECU stayed silent.
 - **EDC15C6 K-line address is `0x12`** (`ecudefs/bosch-edc15c6.json`, was an
   unsourced `0x01`): own-unit identify (`1A 86`) + own-dump analysis show a
-  five-baud wake at `0x12` (key bytes `EF 8F`), the W4 window and the
-  separate length byte; documented in docs/DRIVERS.md §3l.
+  five-baud wake at `0x12` (key bytes `EF 8F`) and the W4 window; the ECU
+  accepts both request length forms, and identify is keyless (validated on
+  hardware with this driver). Documented in docs/DRIVERS.md §3l.
 - **OpenPort 2.0 K-line defaults to host checksums** (`checksum=host`,
   `ISO9141_NO_CHECKSUM`): on a real cable the echo showed the appended sum on
   the wire, while cable-checksum mode (`checksum=cable`) is not yet confirmed
