@@ -8,7 +8,6 @@
     "722.6",
     "EGS52",
     "EGS51",
-    "EGS53",
     "NAG52"
   ],
   "cpu": "Infineon C167 family (SAK-C167; the open EGS52 emulator models a C167CS)",
@@ -25,7 +24,7 @@
     "boot": true,
     "notes": "Bench connection: supply, ground and K-line on C1 (ecupinouts); CAN is on the C2 connector (ATSG). OBD programming capability is not documented in the cited sources. Board-level boot: the C167 bootstrap loader (access.boot)."
   },
-  "checksum": null,
+  "checksum": "egs52",
   "ecudef": null,
   "vehicles": [
     {
@@ -42,7 +41,7 @@
     }
   ],
   "part_number_examples": [],
-  "notes": "External (body-mounted) TCU for the Mercedes 722.6 5-speed automatic, also used by Chrysler. Per ATSG, 1996-1999 units read the range switch on C1-25..28 while 2000+ units use CAN. The open-source ultimate_nag52 project is a drop-in replacement TCU for EGS51/52/53 cars. No OpenTune checksum applies. Hardware (open-source projects): a C167-family CPU with 512 KiB of external flash and a separate serial EEPROM (rnd-ash/EGS52_emu maps a 512 KiB flash image, models a C167CS and loads a separate EEPROM image; Ultimate-NAG52: EGS52/53 on C166/ST10). The flash and EEPROM part numbers are not confirmed by an open source - read them from the chips.",
+  "notes": "External (body-mounted) TCU for the Mercedes 722.6 5-speed automatic, also used by Chrysler. Per ATSG, 1996-1999 units read the range switch on C1-25..28 while 2000+ units use CAN. The open-source ultimate_nag52 project is a drop-in replacement TCU for EGS51/52/53 cars. OpenTune's egs52 checksum module verifies and corrects this unit's NAG flash module checksums (a reflected CRC-16/ARC, poly 0x8005, seed 0x7878, over the table-driven descriptor ranges; derived clean-room and validated 34/34 across 17 EGS52+EGS53 images). Hardware (open-source projects): a C167-family CPU with 512 KiB of external flash and a separate serial EEPROM (rnd-ash/EGS52_emu maps a 512 KiB flash image, models a C167CS and loads a separate EEPROM image; Ultimate-NAG52: EGS52/53 on C166/ST10). The flash and EEPROM part numbers are not confirmed by an open source - read them from the chips.",
   "connectors": [
     {
       "name": "C1",
