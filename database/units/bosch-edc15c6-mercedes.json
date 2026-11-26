@@ -270,7 +270,7 @@
     },
     {
       "title": "OpenTune docs/DRIVERS.md section 3l (K-line): own clean-room EDC15C6 datalink facts - 5-baud wake 0x12, key bytes EF 8F, W4 ~40 ms (25-50 ms), separate-length-byte frame form, no legislated OBD at 0x33",
-      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/DRIVERS.md#3l"
+      "url": "https://github.com/ebjerk01/opentune/blob/main/docs/DRIVERS.md#3l-openport2-tactrix-openport-20-can-capture-and-k-line-identify-validated-can-transmit-pending"
     }
   ],
   "access": {

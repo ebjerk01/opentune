@@ -738,7 +738,7 @@ transport. `ssmsim` is handled by the `log` command and the desktop's
 adapter opener (Live log, SSM transports), not the registry, like `obdsim`
 for `opentune obd`; `SsmSim` implements `Interface` for that.
 
-## 3l. `openport2`: Tactrix OpenPort 2.0 (capture validated; K-line and transmit pending)
+## 3l. `openport2`: Tactrix OpenPort 2.0 (CAN capture and K-line identify validated; CAN transmit pending)
 
 `crates/drivers/j2534-openport` (crate `opentune-driver-openport2`, id
 `openport2`) talks to an OpenPort 2.0 (OP2) or clone through its USB CDC-ACM
@@ -752,13 +752,18 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
 --driver openport2` captures raw CAN **receive-only** (see
 [Capture](#receive-only-capture-candump)).
 
-**Validation state (2026-11-25, a genuine OP2, firmware 1.17.4877):**
+**Validation state (2026-11-25/26, a genuine OP2, firmware 1.17.4877):**
 
 - **Receive-only CAN capture: validated on hardware.** `opentune candump
   --driver openport2` at 500 kbit/s on a live ECU captured every frame with
   none dropped, matching an independent wire-level reference capture.
-- **K-line: init and receive path proven on hardware; no ECU data reply
-  yet.** On a bench ECU the five-baud init at the OBD functional address 0x33
+- **K-line KWP2000 identify: validated on hardware with this driver.** On a
+  bench EDC15C6 a five-baud init at `0x12` (key bytes `EF 8F`, W4 40 ms)
+  followed by a keyless `identify` answered `1A 80`/`94`/`9B` positively;
+  the driver's default framing (length in the format byte) was used. See the
+  EDC15C6 facts below.
+- **K-line init and receive path.** On the same ECU the five-baud init at
+  the OBD functional address 0x33
   completed (the cable did the 55 / inverted-KB2 / inverted-address exchange)
   and returned key bytes `08 08`, i.e. the ECU woke as an ISO 9141-2 OBD
   participant (it then answered no OBD request: not a legislated-OBD ECU).
@@ -766,8 +771,8 @@ instead (ISO 14230 channel 4, ISO 9141 channel 3; read path only, see
   the cable's K-line receive records were captured: START (`0x80`) + a
   4-byte timestamp, the data record with the message bytes, END (`0x40`) + a
   4-byte timestamp (plus `0x20` on echoes), exactly what the reassembler
-  expects (pinned by a test with the captured bytes). An ECU KWP2000 reply
-  over this driver is still to come.
+  expects (pinned by a test with the captured bytes); real ECU answers
+  (START `0x80` / data / END `0x40`) arrive in the same shape.
 - **CAN transmit, ISO-TP and UDS over the cable: hardware validation
   pending.** Tested against the offline fake only.
 
