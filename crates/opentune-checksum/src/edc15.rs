@@ -83,8 +83,7 @@
 //! recognised when at least [`C6_EARLY_MIN_OK`] directory blocks verify (a
 //! higher bar than the late family's one, since there is no marker to
 //! corroborate a chance match). Constants and layout were confirmed against a
-//! 163-image corpus plus the C48 own dumps; see
-//! `/opt/nvme-fw/edc15c6-public-derivation/`.
+//! large corpus of EDC15C6 images plus independently-read C48 dumps.
 //!
 //! The image is only treated as EDC15C6 when it is exactly 1 MiB, the walk is
 //! well-formed and at least one block already verifies (a stock image matches
@@ -313,9 +312,9 @@ const C6_FIN_XOR: u16 = 0x4711;
 /// family above, but a different block layout: blocks are not `0xC058`-marked
 /// and the calibration data block opens `0x1400` after its section (vs `0x1000`
 /// late). The section grid, slot positions, program blocks and tail block are
-/// stable across every early image surveyed (38 corpus images + the C48 own
-/// dumps); absent sections in a partial read are all-fill and skipped. See the
-/// module docs and `/opt/nvme-fw/edc15c6-public-derivation/`.
+/// stable across every early image surveyed (dozens of corpus images plus
+/// independently-read C48 dumps); absent sections in a partial read are all-fill
+/// and skipped. See the module docs.
 const C6_EARLY_DIR: &[(usize, usize)] = &[
     (0x1_0000, 0x1_0FFC),
     (0x1_1400, 0x1_BFFC),
